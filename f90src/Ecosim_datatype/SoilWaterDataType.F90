@@ -35,10 +35,10 @@ module SoilWaterDataType
   real(r8),target,allocatable ::  TileWaterTable_col(:,:)                   !artificial water table depth, [m]
   real(r8),target,allocatable ::  TileWaterTableLocDepz_col(:,:)                                !depth of artificial water table adjusted for elevation,[m]
   real(r8),target,allocatable ::  WaterTableDepZi_col(:,:)                      !internal water table depth, [m]
-  real(r8),target,allocatable ::  ExtWaterTableLocDepz_col(:,:)                  !initial external water table depth, elevation corrected ,[m]
-  real(r8),target,allocatable ::  ExtWaterTable_col(:,:)                    !current external water table depth, elevation corrected (>0 lower than soil surface), [m]
-  real(r8),target,allocatable ::  NaturalWaterTableDepz_col(:,:)                      !external water table depth, [m]
-  real(r8),target,allocatable ::  EnergyImpact4Erosion_colM(:,:,:)              !total energy impact for erosion
+  real(r8),target,allocatable ::  NaturalWaterTableDepzTopoC_col(:,:)       !topography (slope and elevation) corrected local water table depth,[m]
+  real(r8),target,allocatable ::  NaturalWaterTableDepzLitrC_col(:,:)       !litter-layer corrected (on top of topography) water table depth (>0 lower than soil surface), [m]
+  real(r8),target,allocatable ::  NaturalWaterTableDepz_col(:,:)            !landscape external water table depth, [m]
+  real(r8),target,allocatable ::  EnergyImpact4Erosion_colM(:,:,:)          !total energy impact for erosion
   real(r8),target,allocatable ::  XVLMobileWaterLitRM(:,:,:)                !excess water+ice, [m3 d-2]
   real(r8),target,allocatable ::  XVLMobileWatMicPM(:,:,:)                  !excess water,[m3 d-2]
   real(r8),target,allocatable ::  XVLiceMicPM(:,:,:)                        !excess ice, [m3 d-2]
@@ -172,8 +172,8 @@ module SoilWaterDataType
   allocate(TileWaterTable_col(JY,JX));       TileWaterTable_col=0._r8
   allocate(TileWaterTableLocDepz_col(JY,JX));       TileWaterTableLocDepz_col=0._r8
   allocate(WaterTableDepZi_col(JY,JX));       WaterTableDepZi_col=0._r8
-  allocate(ExtWaterTableLocDepz_col(JY,JX));       ExtWaterTableLocDepz_col=0._r8
-  allocate(ExtWaterTable_col(JY,JX));       ExtWaterTable_col=0._r8
+  allocate(NaturalWaterTableDepzTopoC_col(JY,JX));       NaturalWaterTableDepzTopoC_col=0._r8
+  allocate(NaturalWaterTableDepzLitrC_col(JY,JX));       NaturalWaterTableDepzLitrC_col=0._r8
   allocate(NaturalWaterTableDepz_col(JY,JX));       NaturalWaterTableDepz_col=0._r8
   allocate(EnergyImpact4Erosion_colM(60,JY,JX));   EnergyImpact4Erosion_colM=0._r8
   allocate(XVLMobileWaterLitRM(60,JY,JX));   XVLMobileWaterLitRM=0._r8
@@ -282,8 +282,8 @@ module SoilWaterDataType
   call destroy(TileWaterTable_col)
   call destroy(TileWaterTableLocDepz_col)
   call destroy(WaterTableDepZi_col)
-  call destroy(ExtWaterTableLocDepz_col)
-  call destroy(ExtWaterTable_col)
+  call destroy(NaturalWaterTableDepzTopoC_col)
+  call destroy(NaturalWaterTableDepzLitrC_col)
   call destroy(NaturalWaterTableDepz_col)
   call destroy(EnergyImpact4Erosion_colM)
   call destroy(XVLMobileWaterLitRM)

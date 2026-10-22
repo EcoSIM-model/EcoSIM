@@ -7144,17 +7144,17 @@ implicit none
 
   if(flag=='read')then
     datpr1 => datrc_1d            
-    call restartvar(ncid, flag, varname='ExtWaterTableLocDepz_col', dim1name='column',&
-       long_name='initial external water table depth', units='m', &
+    call restartvar(ncid, flag, varname='NaturalWaterTableDepzTopoC_col', dim1name='column',&
+       long_name='Topography (slope and elevation) corrected natural water table depth', units='m', &
        interpinic_flag='skip', data=datpr1, missing_value=spval, &
        fill_value=spval)    
-    call cpcol(flag,NHW,NHE,NVN,NVS,ExtWaterTableLocDepz_col,datrc_1d) 
+    call cpcol(flag,NHW,NHE,NVN,NVS,NaturalWaterTableDepzTopoC_col,datrc_1d) 
   else
-    !print*,'ExtWaterTableLocDepz_col'
-    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,ExtWaterTableLocDepz_col,datrc_1d)   
+    !print*,'NaturalWaterTableDepzTopoC_col'
+    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,NaturalWaterTableDepzTopoC_col,datrc_1d)   
     datpr1 => datrc_1d              
-    call restartvar(ncid, flag, varname='ExtWaterTableLocDepz_col', dim1name='column',&
-       long_name='initial external water table depth', units='m', &
+    call restartvar(ncid, flag, varname='NaturalWaterTableDepzTopoC_col', dim1name='column',&
+       long_name='Topography (slope and elevation) corrected natural water table depth', units='m', &
        interpinic_flag='skip', data=datpr1, missing_value=spval, &
        fill_value=spval)    
   endif  
@@ -7487,10 +7487,10 @@ implicit none
        long_name='current external water table depth', units='m', &
        interpinic_flag='skip', data=datpr1, missing_value=spval, &
        fill_value=spval)    
-    call cpcol(flag,NHW,NHE,NVN,NVS,ExtWaterTable_col,datrc_1d) 
+    call cpcol(flag,NHW,NHE,NVN,NVS,NaturalWaterTableDepzLitrC_col,datrc_1d) 
   else
     !print*,'ExtWaterTable'
-    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,ExtWaterTable_col,datrc_1d)   
+    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,NaturalWaterTableDepzLitrC_col,datrc_1d)   
     datpr1 => datrc_1d        
     call restartvar(ncid, flag, varname='ExtWaterTable', dim1name='column',&
        long_name='current external water table depth', units='m', &

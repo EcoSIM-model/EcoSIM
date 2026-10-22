@@ -628,12 +628,12 @@ module InitSOMBGCMOD
       !     DRYLAND SOIL
       !
       !     CORGC,FORGC=SOC,minimum SOC for organic soil(g Mg-1)
-      !     DPTH,ExtWaterTableLocDepz_col=depth to layer midpoint,external water table(m)
+      !     DPTH,NaturalWaterTableDepzTopoC_col=depth to layer midpoint,external water table(m)
       !     FC0=partitioning to less resistant component at DPTH=0
       !     FCX=reduction in FC0 at DPTH
       !     CORGCX,CORGNX,CORGPX=C,N,P concentations in humus
 !
-      IF(CSoilOrgM_vr(ielmc,L,NY,NX).LE.FORGC .OR. SoilDepthMidLay_vr(L,NY,NX).LE.ExtWaterTableLocDepz_col(NY,NX) &
+      IF(CSoilOrgM_vr(ielmc,L,NY,NX).LE.FORGC .OR. SoilDepthMidLay_vr(L,NY,NX).LE.NaturalWaterTableDepzTopoC_col(NY,NX) &
         +CumDepz2LayBottom_vr(NU_col(NY,NX),NY,NX)-LandScape1stSoiLayDepth)THEN
         FCY=0.60_r8
         IF(CORGCX(k_humus).GT.1.0E-32_r8)THEN

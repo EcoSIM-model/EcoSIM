@@ -112,7 +112,7 @@ module HydrologyDiagMod
     DO L=NU_col(NY,NX),NL_col(NY,NX)
       IF(THETAirP_vr(L).GT.THETPW)cycle
       FoundWaterTable=.true.
-      IF(SoilDepthMidLay_vr(L,NY,NX).LT.ExtWaterTable_col(NY,NX))THEN
+      IF(SoilDepthMidLay_vr(L,NY,NX).LT.NaturalWaterTableDepzLitrC_col(NY,NX))THEN
         ! Reject a perched candidate separated from the external table (or
         ! profile bottom) by an unsaturated layer, including a dry bottom.
         DO LL=L+1,NL_col(NY,NX)
@@ -120,7 +120,7 @@ module HydrologyDiagMod
             FoundWaterTable=.false.
             exit
           ENDIF
-          IF(SoilDepthMidLay_vr(LL,NY,NX).GE.ExtWaterTable_col(NY,NX))exit
+          IF(SoilDepthMidLay_vr(LL,NY,NX).GE.NaturalWaterTableDepzLitrC_col(NY,NX))exit
         ENDDO
       ENDIF
       IF(.not.FoundWaterTable)cycle

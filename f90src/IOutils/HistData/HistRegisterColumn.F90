@@ -872,6 +872,11 @@ contains
     long_name='internal water table depth (<0 below soil surface)',&
     ptr_col=data1d_ptr)
 
+  data1d_ptr => this%h1D_WTBL_TopoC_col(beg_col:end_col)
+  call hist_addfld1d(fname='WTBL_TopoC_col',units='m',avgflag='A',&
+    long_name='Topography (slope and elevation) corrected natural water table depth (<0 below soil surface)',&
+    ptr_col=data1d_ptr)
+
   data1d_ptr => this%h1D_N2O_SEMIS_FLX_col(beg_col:end_col)
   call hist_addfld1d(fname='N2O_SEMIS_FLX_col',units='gN/m2/hr',&
     avgflag='A',long_name='Surface N2O flux (<0 into atmosphere), '// &

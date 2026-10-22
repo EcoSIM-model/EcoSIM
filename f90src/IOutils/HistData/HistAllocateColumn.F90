@@ -238,6 +238,7 @@ contains
   allocate(this%h1D_SURF_ICE_col(beg_col:end_col))        ;this%h1D_SURF_ICE_col(:)=spval
   allocate(this%h1D_ACTV_LYR_col(beg_col:end_col))        ;this%h1D_ACTV_LYR_col(:)=spval
   allocate(this%h1D_WTR_TBL_col(beg_col:end_col))         ;this%h1D_WTR_TBL_col(:)=spval
+  allocate(this%h1D_WTBL_TopoC_col(beg_col:end_col))      ;this%h1D_WTBL_TopoC_col(:)=spval
   allocate(this%h1D_N2O_SEMIS_FLX_col(beg_col:end_col))        ;this%h1D_N2O_SEMIS_FLX_col(:)=spval
   end procedure allocate_hist_columns
 

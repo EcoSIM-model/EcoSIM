@@ -306,7 +306,7 @@ module RedistMod
 !     begin_execution
 !     SolarNoonHour_col=hour of solar noon from weather file
 !     DTBLI,TileWaterTableDepz_col=depth of natural,artificial water table from readi.f
-!     ExtWaterTable,ExtWaterTableLocDepz_col=current,initial natural water table depth
+!     ExtWaterTable,NaturalWaterTableDepzTopoC_col=current,initial natural water table depth
 !     TileWaterTable_col,DTBLD=current,initial artificial water table depth
 !     IDWaterTable=water table flag from readi.f
 !        :0=none
@@ -320,13 +320,13 @@ module RedistMod
 
   !external water table from input file
   IF(J.EQ.INT(SolarNoonHour_col(NY,NX)) .AND. iSoilDisturbType_col(I,NY,NX).EQ.23)THEN
-    !natural water table depth from input file
+    !natural water table depth from input file, e.g. for rice paddy and wetland
     NaturalWaterTableDepz_col(NY,NX)     = DepzCorp_col(I,NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
     !
-    ExtWaterTableLocDepz_col(NY,NX) = NaturalWaterTableDepz_col(NY,NX)+ &
+    NaturalWaterTableDepzTopoC_col(NY,NX) = NaturalWaterTableDepz_col(NY,NX)+ &
       (SurfElevation_col(NY,NX)-RefSurfElevation_col(NY,NX))*(1.0_r8-WaterTable2GroundSlope_col(NY,NX))
     !add litter layer correction  
-    ExtWaterTable_col(NY,NX)   = ExtWaterTableLocDepz_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
+    NaturalWaterTableDepzLitrC_col(NY,NX)   = NaturalWaterTableDepzTopoC_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
   ENDIF
 
   !external water table from input file
@@ -353,9 +353,9 @@ module RedistMod
 !
   IF(IDWaterTable_col(NY,NX).EQ.2 .OR. IDWaterTable_col(NY,NX).EQ.4)THEN
 
-    ExtWaterTable_col(NY,NX) = ExtWaterTableLocDepz_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
-    ExtWaterTable_col(NY,NX) = ExtWaterTable_col(NY,NX)-QDischarg2WTBL_col(NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX) &
-      -0.00167_r8*(ExtWaterTable_col(NY,NX)-ExtWaterTableLocDepz_col(NY,NX)-CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX))
+    NaturalWaterTableDepzLitrC_col(NY,NX) = NaturalWaterTableDepzTopoC_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
+    NaturalWaterTableDepzLitrC_col(NY,NX) = NaturalWaterTableDepzLitrC_col(NY,NX)-QDischarg2WTBL_col(NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX) &
+      -0.00167_r8*(NaturalWaterTableDepzLitrC_col(NY,NX)-NaturalWaterTableDepzTopoC_col(NY,NX)-CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX))
   ENDIF
 
   !update mobile tile water table depth due to drainage

@@ -221,6 +221,7 @@ module HistDataType
   real(r8),pointer   :: h1D_SURF_ICE_col(:)     
   real(r8),pointer   :: h1D_ACTV_LYR_col(:)     
   real(r8),pointer   :: h1D_WTR_TBL_col(:)      
+  real(r8),pointer   :: h1D_WTBL_TopoC_col(:)
   real(r8),pointer   :: h1D_CO2_WetDep_FLX_col(:)
   real(r8),pointer   :: h1D_RootN_Fix_col(:)
   real(r8),pointer   :: h1D_AR_WetDep_FLX_col(:)

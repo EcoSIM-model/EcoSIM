@@ -213,7 +213,7 @@ module StartsMod
   !     DTBLI,TileWaterTableDepz_col=depth of natural,artificial water table
   !     WaterTable2GroundSlope_col=slope of natural water table relative to landscape surface
   !     in geography, slope =rise/run
-  !     ExtWaterTableLocDepz_col,DTBLD=depth of natural,artificial water table adjusted for elevn
+  !     NaturalWaterTableDepzTopoC_col,DTBLD=depth of natural,artificial water table adjusted for elevn
   !     WaterTableDepZi_col=depth to internal water table
   !
   implicit none
@@ -235,7 +235,7 @@ module StartsMod
   ! ALT: grid altitude
   ! DTBLI: external water table depth, before applying the altitude correction
   ! WaterTable2GroundSlope_col: slope of water table relative to surface slope
-  ! ExtWaterTableLocDepz_col: external water table depth
+  ! NaturalWaterTableDepzTopoC_col: external water table depth
   ! TileWaterTableDepz_col: depth of artificial water table
   ! WaterTableDepZi_col: internal water table depth
   ! DTBLD: artifical water table depth, before applying the altitude correction
@@ -243,15 +243,15 @@ module StartsMod
     DO  NY=NVN,NVS
       RefSurfElevation_col(NY,NX)=SurfElevLandscapeMin
       IF(SoilBulkDensity_vr(NU_col(NY,NX),NY,NX).GT.0.0_r8)THEN
-        ExtWaterTableLocDepz_col(NY,NX)  = NaturalWaterTableDepz_col(NY,NX)+ &
+        NaturalWaterTableDepzTopoC_col(NY,NX)  = NaturalWaterTableDepz_col(NY,NX)+ &
           (SurfElevation_col(NY,NX)-RefSurfElevation_col(NY,NX))*(1.0_r8-WaterTable2GroundSlope_col(NY,NX))
         TileWaterTableLocDepz_col(NY,NX) = AZMAX1(TileWaterTableDepz_col(NY,NX)+ &
           (SurfElevation_col(NY,NX)-RefSurfElevation_col(NY,NX))*(1.0_r8-WaterTable2GroundSlope_col(NY,NX)))
       ELSE
-        ExtWaterTableLocDepz_col(NY,NX)  = 0.0_r8
-        TileWaterTableLocDepz_col(NY,NX) = 0.0_r8
+        NaturalWaterTableDepzTopoC_col(NY,NX) = 0.0_r8
+        TileWaterTableLocDepz_col(NY,NX)      = 0.0_r8
       ENDIF
-      WaterTableDepZi_col(NY,NX)=ExtWaterTableLocDepz_col(NY,NX)
+      WaterTableDepZi_col(NY,NX)=NaturalWaterTableDepzTopoC_col(NY,NX)
     ENDDO
   ENDDO
 

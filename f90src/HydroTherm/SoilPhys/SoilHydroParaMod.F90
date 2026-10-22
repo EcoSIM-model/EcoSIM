@@ -365,7 +365,7 @@ contains
   call PrintInfo('beg '//subname)
   SaturateBelowWaterTable = (ISOIL_vr(isoi_fc,L,NY,NX).EQ.isoi_unset .OR. &
     ISOIL_vr(isoi_wp,L,NY,NX).EQ.isoi_unset) .AND. &
-    SoilDepthMidLay_vr(L,NY,NX).GE.ExtWaterTableLocDepz_col(NY,NX)
+    SoilDepthMidLay_vr(L,NY,NX).GE.NaturalWaterTableDepzTopoC_col(NY,NX)
   call EstimateSoilWaterLimits(L,NY,NX)
 
   IF(THW_vr(L,NY,NX).GT.1.0_r8 .OR. SaturateBelowWaterTable)THEN

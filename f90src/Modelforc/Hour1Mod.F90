@@ -581,7 +581,7 @@ module Hour1Mod
   !     SOIL SURFACE WATER STORAGE CAPACITY
   !
   !     IDWaterTable=water table flag from site file
-  !     ExtWaterTable,ExtWaterTableLocDepz_col=current,initial natural water table depth
+  !     ExtWaterTable,NaturalWaterTableDepzTopoC_col=current,initial natural water table depth
   !     TileWaterTable_col,DTBLD=current,initial artificial water table depth
   !     SoilSurfRoughness_col,ZW=soil,water surface roughness
   !     VLWatHeldCapSurf_col=soil surface water retention capacity
@@ -591,11 +591,11 @@ module Hour1Mod
   !
   !double check the water table defined below
   IF(IDWaterTable_col(NY,NX).LE.1 .OR. IDWaterTable_col(NY,NX).EQ.3)THEN
-    ExtWaterTable_col(NY,NX)=ExtWaterTableLocDepz_col(NY,NX)
+    NaturalWaterTableDepzLitrC_col(NY,NX)=NaturalWaterTableDepzTopoC_col(NY,NX)
     !Mobile water table
   ELSEIF(IDWaterTable_col(NY,NX).EQ.2 .OR. IDWaterTable_col(NY,NX).EQ.4)THEN
     !add litter layer correction
-    ExtWaterTable_col(NY,NX)=ExtWaterTableLocDepz_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
+    NaturalWaterTableDepzLitrC_col(NY,NX)=NaturalWaterTableDepzTopoC_col(NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
   ENDIF
 
   IF(IDWaterTable_col(NY,NX).EQ.3.OR.IDWaterTable_col(NY,NX).EQ.4)THEN
@@ -613,7 +613,7 @@ module Hour1Mod
     3.10_r8*SoilSurfRoughness_col(NY,NX)**2._r8 &
     -0.012_r8*SoilSurfRoughness_col(NY,NX)*SLOPE_col(0,NY,NX))*AREA_3D(3,NU_col(NY,NX),NY,NX)
 
-  VWatStoreCapSurf_col(NY,NX)=AMAX1(VLWatHeldCapSurf_col(NY,NX),-(ExtWaterTable_col(NY,NX)-&
+  VWatStoreCapSurf_col(NY,NX)=AMAX1(VLWatHeldCapSurf_col(NY,NX),-(NaturalWaterTableDepzLitrC_col(NY,NX)-&
     CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX))*AREA_3D(3,NU_col(NY,NX),NY,NX))
 
   SoilDepthMidLay_vr(NU_col(NY,NX),NY,NX)=CumDepz2LayBottom_vr(NU_col(NY,NX),NY,NX)-0.5_r8*DLYR_3D(3,NU_col(NY,NX),NY,NX)

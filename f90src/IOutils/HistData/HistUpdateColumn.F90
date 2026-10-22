@@ -32,7 +32,7 @@ submodule (HistDataType) HistUpdateColumn
     tMicBiome_col, tNH4_col, tNO3_col, tOMActC_vr, tSoilOrgM_col, TSolidOMActC_vr, TSolidOMC_vr
   use SoilPhysDataType, only: ActiveLayDepZ_col, CondGasXSurf_col
   use SoilHeatDatatype, only: HeatDischar_col, HeatFlx2Grnd_col, HeatStore_col, TCS_vr, VHeatCapacity_vr
-  use SoilWaterDataType, only: WaterTableDepZi_col, PSISoilMatricP_vr, QDischarg2WTBL_col, QDrain_col, &
+  use SoilWaterDataType, only: WaterTableDepZi_col, NaturalWaterTableDepzTopoC_col, PSISoilMatricP_vr, QDischarg2WTBL_col, QDrain_col, &
     QEvap_CumYr_col, Qinflx2Soil_col, QRain_CumYr_col, QRunSurf_col, ThetaH2OZ_vr, ThetaICEZ_vr, VLiceMicP_vr, &
     VLWatMicP_vr, WatMass_col
   use SnowDataType, only: SnowDepth_col, TCSnow_snvr, VcumSnowWE_col
@@ -290,6 +290,7 @@ contains
       this%h1D_ThetaI_litr_col(ncol)      = safe_adb(VLiceMicP_vr(0,NY,NX),VLitR_col(NY,NX))
       this%h1D_ACTV_LYR_col(ncol)         = -(ActiveLayDepZ_col(NY,NX)-CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX))
       this%h1D_WTR_TBL_col(ncol)          = -(WaterTableDepZi_col(NY,NX)-CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX))
+      this%h1D_WTBL_TopoC_col(ncol)       = -NaturalWaterTableDepzTopoC_col(NY,NX)
       this%h1D_N2O_SEMIS_FLX_col(ncol)         = SurfGasEmiss_all_flx_col(idg_N2O,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_N2_SEMIS_FLX_col(ncol)         = SurfGasEmiss_all_flx_col(idg_N2,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_NH3_SEMIS_FLX_col(ncol)         = SurfGasEmiss_all_flx_col(idg_NH3,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)

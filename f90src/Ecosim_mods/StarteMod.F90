@@ -422,8 +422,8 @@ module StarteMod
       trcg_gasml_vr(idg,L,NY,NX) = AtmGasCgperm3_col(idg,NY,NX)*VLsoiAirP_vr(L,NY,NX)
     ENDDO
 
-!   ExtWaterTableLocDepz_col: external water table depth
-    IF(CumDepz2LayBottom_vr(L-1,NY,NX).LT.ExtWaterTableLocDepz_col(NY,NX))THEN
+!   NaturalWaterTableDepzTopoC_col: external water table depth
+    IF(CumDepz2LayBottom_vr(L-1,NY,NX).LT.NaturalWaterTableDepzTopoC_col(NY,NX))THEN
       ! above water table
       DO idg=idg_beg,idg_NH3-1
         trcs_solml_vr(idg,L,NY,NX)=AtmGasCgperm3_col(idg,NY,NX)*gas_solubility(idg, ATCA_col(NY,NX)) &

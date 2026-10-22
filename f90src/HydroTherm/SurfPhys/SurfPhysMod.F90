@@ -1398,7 +1398,7 @@ contains
   ! ALT1,ALT2=elevation of source,destination
   ! XVOLT=excess surface water+ice
   ! VWatStoreCapSurf_col=ground surface water retention capacity
-  ! ExtWaterTable_col=natural water table depth, > 0 into soil
+  ! NaturalWaterTableDepzLitrC_col=natural water table depth, > 0 into soil
   ! XN=direction
   !
   ! RUNOFF
@@ -1415,7 +1415,7 @@ contains
   !depth is counting downward
   !Grid elevation is higher than outside the grid, and in grid water layer higher than external water table
   !grid discharges water to external water table
-  IF(ALT1.GT.ALT2 .AND. PondDepz.LT.ExtWaterTable_col(N2,N1))THEN
+  IF(ALT1.GT.ALT2 .AND. PondDepz.LT.NaturalWaterTableDepzLitrC_col(N2,N1))THEN
     !say y=WatFlx2LitRByRunoff_2DH: on the west/north, XN >0, so y <0, +y to update (N2,N1) ;
     !on the east/south, XN < 0, so y > 0, -y to update (N2,N1).
 
@@ -1428,9 +1428,9 @@ contains
     !when NN=1, (M5,M4) differs (N2,N1), so minus
    ! RUNON
    ! grid water table in lower than external water table, so water is recharged from external water table
-  ELSEIF(PondDepz.GT.ExtWaterTable_col(N2,N1))THEN
+  ELSEIF(PondDepz.GT.NaturalWaterTableDepzLitrC_col(N2,N1))THEN
     !elevation difference
-    VX                                    = AZMIN1((ExtWaterTable_col(N2,N1)-PondDepz)*AREA_3D(3,NUM_col(N2,N1),N2,N1))  !<0
+    VX                                    = AZMIN1((NaturalWaterTableDepzLitrC_col(N2,N1)-PondDepz)*AREA_3D(3,NUM_col(N2,N1),N2,N1))  !<0
     SurfRunoffPotentM_col(M,N2,N1)        = VX*dts_wat                                                            !<0
     RunoffVelocityM_col(M,N2,N1)          = 0.0_r8
 
