@@ -220,6 +220,8 @@ contains
   allocate(this%h1D_ZeroPlaneDisplacem_col(beg_col:end_col)); this%h1D_ZeroPlaneDisplacem_col(:)=spval
   allocate(this%h1D_O2_SEMIS_FLX_col(beg_col:end_col))          ;this%h1D_O2_SEMIS_FLX_col(:)=spval
   allocate(this%h1D_CO2_LITR_col(beg_col:end_col))        ;this%h1D_CO2_LITR_col(:)=spval
+  allocate(this%h1D_CH4_LITR_col(beg_col:end_col))        ;this%h1D_CH4_LITR_col(:)=spval
+  allocate(this%h1D_H2_LITR_col(beg_col:end_col))         ;this%h1D_H2_LITR_col(:)=spval
   allocate(this%h1D_EVAPG_col(beg_col:end_col))           ;this%h1D_EVAPG_col(:)=spval
   allocate(this%h1D_CondGasXSurf_col(beg_col:end_col)); this%h1D_CondGasXSurf_col(:)=spval
   allocate(this%h1D_CANET_col(beg_col:end_col))           ;this%h1D_CANET_col(:)=spval

@@ -204,6 +204,8 @@ module HistDataType
   real(r8),pointer   :: h1D_Ar_soilMass_col(:)
   real(r8),pointer   :: h1D_O2_SEMIS_FLX_col(:)  
   real(r8),pointer   :: h1D_CO2_LITR_col(:)      
+  real(r8),pointer   :: h1D_CH4_LITR_col(:)
+  real(r8),pointer   :: h1D_H2_LITR_col(:)
   real(r8),pointer   :: h1D_EVAPG_col(:)         
   real(r8),pointer   :: h1D_CANET_col(:)         
   real(r8),pointer   :: h1D_CanopyEvap_col(:)

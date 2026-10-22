@@ -74,7 +74,7 @@ def scan_file(path, tmin, tmax):
                 continue
 
             # Soil/air temperature is the cheapest physical tripwire we have.
-            if name in ("TEMP_vr", "TKS_vr") and vals.size:
+            if name in ("Temp_vr", "TEMP_vr", "TKS_vr") and vals.size:
                 lo, hi = float(vals.min()), float(vals.max())
                 if lo < tmin or hi > tmax:
                     issues.append(f"{name}: range [{lo:.4g}, {hi:.4g}] degC "

@@ -27,7 +27,7 @@ start_date  = '19990101000000'
 continue_run=.false.
 !set up simulation periods, spinup starts at 1, ends at 2, with 3 cycles, regular starts at 4, ends at 5.
 forc_periods=2008,2016,2,2008,2016,0,2008,2016,0
-!hist_fincl2='TEMP_vr','ECO_NEE_CO2_col' 
+!hist_fincl2='Temp_vr','ECO_NEE_CO2_col' 
 hist_fincl1='dCAN_GPP_CLIM_pft','dCAN_GPP_eLIM_pft','VSPore_vr','Root_N_FIX_col','RootLen_pft'
   'NH4_vr','NO3_vr','Root_C_pft','GRAIN_C_pft','SHOOT_C_pft','VmaxNH4Root_pvr','VmaxNO3Root_pvr',
   'VcMax25C_RUBISCO_pft','VcMax25C_PEP_pft','VoMax25C_RUBISCO_pft','JMax25C_photo_pft','cumN_FIXED_pft',

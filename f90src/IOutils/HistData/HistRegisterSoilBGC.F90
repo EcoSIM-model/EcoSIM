@@ -178,7 +178,7 @@ contains
     long_name='Aqueous N2 concentration in soil micropore water',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr => this%h2D_TEMP_vr(beg_col:end_col,1:JZ)         !TCS_vr(1:JZ,NY,NX)
-  call hist_addfld2d(fname='TEMP_vr',units='oC',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='Temp_vr',units='oC',type2d='levsoi',avgflag='A',&
     long_name='soil temperature profile',ptr_col=data2d_ptr)
 
   data2d_ptr => this%h2D_decomp_OStress_vr(beg_col:end_col,1:JZ)         !

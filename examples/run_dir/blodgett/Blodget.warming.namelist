@@ -12,7 +12,7 @@ clm_hour_file_in='../../inputs/blodgett/Blodget.clim.2012-2022.nc'
 clm_factor_in='NO'
 soil_mgmt_in='NO'
 atm_ghg_in='../../../input_data/fatm_hist_GHGs_1750-2023.nc'
-! Requires hourly TEMP_vr control history files in this run directory.
+! Requires hourly Temp_vr control history files in this run directory.
 ! Generate them with the control case before running cable warming.
 warming_exp='loc[1,1];type[Cable_heating];dT[4K];Depth[1m];hist_ctrl[Blodget.ctrl.ecosim.h1.xxxx-01-01-00000.nc];beg_time[2014/01/01];end_time[2018/12/31]'
 
@@ -36,7 +36,7 @@ NCYC_LITR=30
 NCYC_SNOW=20
 !set up output frequency
 hist_mfilt=7665 , 7665
-hist_fincl2 = 'TEMP_vr','PREC_col','SOIL_RN_col','SOIL_LE_col','SOIL_G_col','SOIL_H_col','SOL_RADN_col','EVAPGrnd_col',
+hist_fincl2 = 'Temp_vr','Precip_col','SOIL_RN_col','SOIL_LE_col','SOIL_G_col','SOIL_H_col','SolRad_col','EVAPGrnd_col',
   'RUNOFF_FLX_col','rWatFLP_vr','rIceFLP_vr','SNOWPACK_col','SURF_WTR_col'
 
 hist_nhtfrq=-24, -24

@@ -428,12 +428,12 @@ contains
     ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_HUM_col(beg_col:end_col)
-  call hist_addfld1d(fname='HMAX_AIR_col',units='kPa',avgflag='X',&
-    long_name='daily maximum vapor pressure',ptr_col=data1d_ptr,default='inactive')
+  call hist_addfld1d(fname='VaporP_max_col',units='kPa',avgflag='X',&
+    long_name='Daily maximum vapor pressure',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_HUM_col(beg_col:end_col)
-  call hist_addfld1d(fname='HMIN_AIR_col',units='kPa',avgflag='M',&
-    long_name='daily maximum vapor pressure',ptr_col=data1d_ptr,default='inactive')
+  call hist_addfld1d(fname='VaporP_min_col',units='kPa',avgflag='M',&
+    long_name='Daily maximum vapor pressure',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_PSI_SURF_col(beg_col:end_col)
   call hist_addfld1d(fname='PSI_LITR_col',units='MPa',avgflag='A',&
@@ -452,11 +452,11 @@ contains
     long_name='Column integrated NO3+NO2 content',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_TEMP_LITR_col(beg_col:end_col)
-  call hist_addfld1d(fname='TEMP_LITR_col',units='oC',avgflag='A',&
+  call hist_addfld1d(fname='Temp_Litr_col',units='oC',avgflag='A',&
     long_name='Litter layer temperature',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_TEMP_surf_col(beg_col:end_col)
-  call hist_addfld1d(fname='TEMP_SURF_col',units='oC',avgflag='A',&
+  call hist_addfld1d(fname='Temp_Surf_col',units='oC',avgflag='A',&
     long_name='Ground surface temperature',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_TEMP_SNOW_col(beg_col:end_col)
@@ -484,11 +484,11 @@ contains
     long_name='Total surface litter P, including microbes',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_ATM_CO2_col(beg_col:end_col)
-  call hist_addfld1d(fname='ATM_CO2_col',units='umol/mol',avgflag='A',&
+  call hist_addfld1d(fname='Atm_CO2_col',units='umol/mol',avgflag='A',&
     long_name='Atmospheric CO2 concentration',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_ATM_CH4_col(beg_col:end_col)
-  call hist_addfld1d(fname='ATM_CH4_col',units='umol/mol',avgflag='A',&
+  call hist_addfld1d(fname='Atm_CH4_col',units='umol/mol',avgflag='A',&
     long_name='Atmospheric CH4 concentration',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_NBP_col(beg_col:end_col)
@@ -605,11 +605,11 @@ contains
     long_name='NH3 solute concentration in soil micropores',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_SOL_RADN_col(beg_col:end_col)
-  call hist_addfld1d(fname='SOL_RADN_col',units='W/m2',avgflag='A',&
+  call hist_addfld1d(fname='SolRad_col',units='W/m2',avgflag='A',&
     long_name='Incoming shortwave radiation on the ecosystem',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_AIR_TEMP_col(beg_col:end_col)
-  call hist_addfld1d(fname='AIR_TEMP_col',units='oC',avgflag='A',&
+  call hist_addfld1d(fname='Air_Temp_col',units='oC',avgflag='A',&
     long_name='air temperature',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_FreeNFix_col(beg_col:end_col)
@@ -617,19 +617,19 @@ contains
     long_name='N fixation by free-living microbes',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_PATM_col(beg_col:end_col)
-  call hist_addfld1d(fname='PATM_col',units='kPa',avgflag='A',&
+  call hist_addfld1d(fname='PAtm_col',units='kPa',avgflag='A',&
     long_name='atmospheric pressure',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_HUM_col(beg_col:end_col)
-  call hist_addfld1d(fname='HUM_col',units='kPa',avgflag='A',&
-    long_name='vapor pressure',ptr_col=data1d_ptr)
+  call hist_addfld1d(fname='VaporP_col',units='kPa',avgflag='A',&
+    long_name='Atmospheric vapor pressure',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_WIND_col(beg_col:end_col)
-  call hist_addfld1d(fname='WIND_col',units='m/s',avgflag='A',&
-    long_name='wind speed',ptr_col=data1d_ptr)
+  call hist_addfld1d(fname='Wind_col',units='m/s',avgflag='A',&
+    long_name='Wind speed',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_PREC_col(beg_col:end_col)
-  call hist_addfld1d(fname='PREC_col',units='mm H2O/m2/hr',avgflag='A',&
+  call hist_addfld1d(fname='Precip_col',units='mm H2O/m2/hr',avgflag='A',&
     long_name='Total precipitation, excluding irrigation',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_Snofall_col(beg_col:end_col)
@@ -676,7 +676,7 @@ contains
     //' including canopy, snow, litter and exposed soil',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_O2_LITR_col(beg_col:end_col)
-  call hist_addfld1d(fname='O2w_conc_LITR_col',units='g/m3',avgflag='A',&
+  call hist_addfld1d(fname='O2w_conc_litr_col',units='g/m3',avgflag='A',&
     long_name='O2 solute concentration in litter layer',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_MIN_LWP_ptc(beg_ptc:end_ptc)
@@ -809,8 +809,16 @@ contains
     long_name='Surface O2 flux (<0 into atmosphere)',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_CO2_LITR_col(beg_col:end_col)
-  call hist_addfld1d(fname='CO2_LITR_col',units='gC/m3',avgflag='A',&
+  call hist_addfld1d(fname='CO2w_conc_litr_col',units='gC/m3',avgflag='A',&
     long_name='CO2 solute concentration in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h1D_CH4_LITR_col(beg_col:end_col)
+  call hist_addfld1d(fname='CH4w_conc_litr_col',units='gC/m3',avgflag='A',&
+    long_name='CH4 solute concentration in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h1D_H2_LITR_col(beg_col:end_col)
+  call hist_addfld1d(fname='H2w_conc_litr_col',units='gH/m3',avgflag='A',&
+    long_name='H2 solute concentration in litter',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_EVAPG_col(beg_col:end_col)
   call hist_addfld1d(fname='EVAPGrnd_col',units='mm H2O/m2/hr',avgflag='A',&

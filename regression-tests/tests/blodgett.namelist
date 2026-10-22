@@ -36,9 +36,9 @@ NCYC_LITR=20
 NCYC_SNOW=20
 !set up output frequency
 hist_mfilt=7665 ! 8760
-!hist_fincl2 = 'AIR_TEMP','TEMP_vr','PREC','SOIL_RN','SOIL_LE','SOIL_G','SOIL_H','SOL_RADN','WIND','EVAPN',
+!hist_fincl2 = 'AIR_TEMP','Temp_vr','PREC','SOIL_RN','SOIL_LE','SOIL_G','SOIL_H','SOL_RADN','WIND','EVAPN',
 !  'RUNOFF_FLX','rWatFILLP_vr','rIceFILLP_vr','SNOWPACK','SURF_WTR'
-!hist_fincl2='TEMP_vr'
+!hist_fincl2='Temp_vr'
 hist_nhtfrq=-24 !, -1
 /
 

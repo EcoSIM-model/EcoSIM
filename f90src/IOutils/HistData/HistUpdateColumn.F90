@@ -268,6 +268,8 @@ contains
       this%h1D_NH3_hydloss_flx_col(ncol)  = (GasHydroLoss_cumflx_col(idg_NH3,NY,NX)+Hydroloss_NH4_cumflx_col(NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_NO3_hydloss_flx_col(ncol)  = (Hydroloss_NO3_cumflx_col(NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CO2_LITR_col(ncol)         = trc_solcl_vr(idg_CO2,0,NY,NX)
+      this%h1D_CH4_LITR_col(ncol)         = trc_solcl_vr(idg_CH4,0,NY,NX)
+      this%h1D_H2_LITR_col(ncol)          = trc_solcl_vr(idg_H2,0,NY,NX)
       this%h1D_EVAPG_col(ncol)            = VapXAir2GSurf_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CondGasXSurf_col(ncol)     = CondGasXSurf_col(NY,NX)
       this%h1D_CanopyEvap_col(ncol)       = VapXAir2Canopy_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
