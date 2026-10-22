@@ -144,6 +144,14 @@ take precedence over repository guidance.
 
 ## Build and validation
 
+- Before building or testing, check whether the agent runs inside or is linked
+  to VSCode: treat it as true if any of `VSCODE_PID`, `VSCODE_IPC_HOOK`,
+  `VSCODE_IPC_HOOK_CLI`, or `VSCODE_CWD` is set, `TERM_PROGRAM` is `vscode`,
+  or `CLAUDE_CODE_ENTRYPOINT` is `claude-vscode`, for example
+  `env | grep -E '^(VSCODE_(PID|IPC_HOOK|IPC_HOOK_CLI|CWD)=|TERM_PROGRAM=vscode|CLAUDE_CODE_ENTRYPOINT=claude-vscode)'`.
+  `TERM_PROGRAM` alone is not sufficient: an extension-hosted agent shell may
+  not set it. If the check is true, apply the next item; otherwise use the
+  default shell and say so.
 - When the agent runs inside or is linked to VSCode, build and test in the
   environment of VSCode's integrated terminal rather than the agent's default
   shell, which may resolve a different compiler toolchain. Before building,

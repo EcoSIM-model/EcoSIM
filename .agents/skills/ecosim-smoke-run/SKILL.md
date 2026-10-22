@@ -25,6 +25,12 @@ For each eligible namelist under `examples/run_dir/*/` (see exclusions below):
 
 ## Workflow
 
+Build and run in the environment `AGENTS.md` ("Build and validation") prescribes:
+if the agent runs inside or is linked to VSCode, use the VSCode integrated
+terminal's shell and environment variables, and select a build directory whose
+compilers match that toolchain. The script's default `-b` is simply the newest
+directory under `build/` and does not check the toolchain.
+
 Confirm the build is current first — a stale binary invalidates the whole exercise:
 
 ```bash
@@ -44,6 +50,7 @@ and resolves the build directory before changing into scratch case directories.
 
 Options: `-d DAYS` (default 20), `-b BUILD_DIR` (default: newest under `build/`),
 `-o WORKDIR` (default: a `mktemp -d`), `-t CPU_SECS` per-case cap (default 1800).
+Relative `-b` and `-o` paths are resolved against the caller's working directory.
 
 The default run must complete 480 hourly steps (20 days x 24 hours). Use
 `-d DAYS` when the user explicitly requests a different duration.
@@ -74,8 +81,11 @@ python3 .agents/skills/ecosim-smoke-run/scripts/check_history.py <dir-with-h0-fi
 ```
 
 Historical 10-day reference run: all 17 namelists across 13 case directories pass at 10 days in
-roughly 45 s total on an arm64 Mac. That count includes `dryland2`, which is
-now excluded (see above), so expect 16 rows from a compliant run.
+roughly 45 s total on an arm64 Mac. That count includes `dryland/dryland2`,
+`dryland/dryland`, and `blodgett/Blodget.warming`, all excluded from the
+recommended case list above, so expect 14 rows from a compliant run.
+`jupyter_notebook` has no namelist; the `grep: ... No such file or directory`
+line it prints is harmless.
 
 ## Reading The Result
 

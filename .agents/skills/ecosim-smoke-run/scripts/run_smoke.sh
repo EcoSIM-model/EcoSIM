@@ -34,6 +34,19 @@ while getopts ":d:b:o:t:h" opt; do
 done
 shift $((OPTIND - 1))
 
+# Each case runs after `cd` into its directory, so relative -b/-o paths would
+# no longer resolve; anchor them to the caller's working directory.
+if [[ -n $BUILD_DIR ]]; then
+  abs=$(cd "$BUILD_DIR" 2>/dev/null && pwd) \
+    || { echo "ERROR: build directory not found: $BUILD_DIR" >&2; exit 2; }
+  BUILD_DIR=$abs
+fi
+if [[ -n $WORKDIR ]]; then
+  abs=$(mkdir -p "$WORKDIR" && cd "$WORKDIR" && pwd) \
+    || { echo "ERROR: cannot create workdir: $WORKDIR" >&2; exit 2; }
+  WORKDIR=$abs
+fi
+
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null) \
   || { echo "ERROR: not inside a git repository" >&2; exit 2; }
