@@ -29,7 +29,7 @@ submodule (HistDataType) HistUpdateSoil
     RCH4ProdHydrog_vr, RDen_N2OtoN2_vr, RDen_NO2toN2O_vr, RDen_NO3toNO2_vr, RFerment_vr, &
     RHydrolysisScalCmpK_vr, RN2OChemoProd_vr, RN2ONitProd_vr, RNit_NH3toNO2_vr, RNit_NO2toNO3_vr, &
     RO2DecompUptk_vr, ROQC4HeterMicActCmpK_vr, Soil_Gas_Frac_vr, Soil_Gas_pressure_vr, TempSensDecomp_vr, &
-    TMicHeterActivity_vr, trc_solcl_vr, trcs_solml_vr, tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr
+    TMicHeterActivity_vr, trc_solcl_vr, trcg_soilml_vr, trcs_solml_vr, tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr
   use AqueChemDatatype, only: ElectricConductivity_vr, TProd_CO2_geochem_soil_vr, trcx_solml_vr
   implicit none
 contains
@@ -59,6 +59,14 @@ contains
         DO jj=1,jcplx
           this%h3D_SOC_Cps_vr(ncol,L,jj) = SOMC(jj)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         ENDDO
+        this%h2D_CO2_MassL_vr(ncol,L) = trcg_soilml_vr(idg_CO2,L,NY,NX) &
+          /AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_O2_MassL_vr(ncol,L) = trcg_soilml_vr(idg_O2,L,NY,NX) &
+          /AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_CH4_MassL_vr(ncol,L) = trcg_soilml_vr(idg_CH4,L,NY,NX) &
+          /AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_H2_MassL_vr(ncol,L) = trcg_soilml_vr(idg_H2,L,NY,NX) &
+          /AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_Gas_Pressure_vr(ncol,L) = Soil_Gas_pressure_vr(L,NY,NX)
         this%h2D_CO2_Gas_ppmv_vr(ncol,L) = Soil_Gas_Frac_vr(idg_CO2,L,NY,NX)
         this%h2D_CH4_Gas_ppmv_vr(ncol,L) = Soil_Gas_Frac_vr(idg_CH4,L,NY,NX)
@@ -106,6 +114,9 @@ contains
         this%h2D_tSOP_vr(ncol,L)            = SoilOrgM_vr(ielmp,L,NY,NX)/DVOLL
         this%h2D_VHeatCap_vr(ncol,L)        = VHeatCapacity_vr(L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_Root_CO2_vr(ncol,L)        = trcg_root_vr(idg_CO2,L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_Root_O2_vr(ncol,L) = trcg_root_vr(idg_O2,L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_Root_CH4_vr(ncol,L) = trcg_root_vr(idg_CH4,L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h2D_Root_H2_vr(ncol,L) = trcg_root_vr(idg_H2,L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_NO3_vr(ncol,L)             = trc_solcl_vr(ids_NO3,L,NY,NX)
         this%h2D_NH4_vr(ncol,L)             = trc_solcl_vr(ids_NH4,L,NY,NX)
         this%h2D_Aqua_CO2_vr(ncol,L)        = trc_solcl_vr(idg_CO2,L,NY,NX)

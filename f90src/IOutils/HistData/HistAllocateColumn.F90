@@ -135,6 +135,10 @@ contains
   allocate(this%h1D_Ar_mass_col(beg_col:end_col))         ;this%h1D_Ar_mass_col(:) = spval
   allocate(this%h1D_CO2_mass_col(beg_col:end_col))         ;this%h1D_CO2_mass_col(:) = spval
   allocate(this%h1D_Gchem_CO2_prod_col(beg_col:end_col)) ; this%h1D_Gchem_CO2_prod_col(:)=spval
+  allocate(this%h1D_CO2_MassLit_col(beg_col:end_col)); this%h1D_CO2_MassLit_col(:)=spval
+  allocate(this%h1D_O2_MassLit_col(beg_col:end_col)); this%h1D_O2_MassLit_col(:)=spval
+  allocate(this%h1D_CH4_MassLit_col(beg_col:end_col)); this%h1D_CH4_MassLit_col(:)=spval
+  allocate(this%h1D_H2_MassLit_col(beg_col:end_col)); this%h1D_H2_MassLit_col(:)=spval
   allocate(this%h1D_Ar_soilMass_col(beg_col:end_col))     ;this%h1D_Ar_soilMass_col(:)=spval
   allocate(this%h1D_ATM_CO2_col(beg_col:end_col))         ;this%h1D_ATM_CO2_col(:)=spval
   allocate(this%h1D_ATM_CH4_col(beg_col:end_col))         ;this%h1D_ATM_CH4_col(:)=spval

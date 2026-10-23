@@ -75,7 +75,7 @@ contains
   ENDDO  
   end subroutine BegCheckBalances
 !------------------------------------------------------------------------------------------
-  subroutine SummarizeStorage(I,J,NHW,NHE,NVN,NVS)  
+  subroutine SumHeatWaterStorage(I,J,NHW,NHE,NVN,NVS)
 
   implicit none
   integer, intent(in) :: I,J,NHW,NHE,NVN,NVS
@@ -92,7 +92,7 @@ contains
 
     ENDDO
   ENDDO
-  end subroutine SummarizeStorage
+  end subroutine SumHeatWaterStorage
 !------------------------------------------------------------------------------------------
 
   subroutine SummarizeSnowMass(NY,NX)
@@ -456,8 +456,11 @@ contains
       trcg_root=0._r8
       trcg_soil=0._r8
       trcg_litr=0._r8
+      ! Recompute diagnostic storage; inactive soil slots must not retain mass.
+      trcg_soilml_vr(:,:,NY,NX)=0._r8
+      trcg_soilml_vr(:,0,NY,NX)=trcs_solml_vr(idg_beg:idg_end,0,NY,NX)
       DO idg=idg_beg,idg_NH3
-        trcg_litr(idg)=trcs_solml_vr(idg,0,NY,NX)
+        trcg_litr(idg)=trcg_soilml_vr(idg,0,NY,NX)
       enddo
       trcg_litr(idg_NH3)=trcg_litr(idg_NH3)+trcs_solml_vr(idg_NH3B,0,NY,NX)
       !note NL may change due to soil relayering, which can be tested using
@@ -465,12 +468,14 @@ contains
 
       DO L=NU_col(NY,NX),NL_col(NY,NX)
         DO idg=idg_beg,idg_NH3
-          trcg_soil(idg)=trcg_soil(idg) + trcg_gasml_vr(idg,L,NY,NX)
           trcg_root(idg)=trcg_root(idg) + trcg_root_vr(idg,L,NY,NX)
+          trcg_soilml_vr(idg,L,NY,NX)=trcg_gasml_vr(idg,L,NY,NX)
         ENDDO
 
         DO idg=idg_beg,idg_end  
-          trcg_soil(idg)=trcg_soil(idg) + trcs_solml_vr(idg,L,NY,NX) + trcs_soHml_vr(idg,L,NY,NX)
+          trcg_soilml_vr(idg,L,NY,NX)=trcg_soilml_vr(idg,L,NY,NX) &
+            +trcs_solml_vr(idg,L,NY,NX)+trcs_soHml_vr(idg,L,NY,NX)
+          trcg_soil(idg)=trcg_soil(idg)+trcg_soilml_vr(idg,L,NY,NX)
         ENDDO
       ENDDO
 
@@ -480,14 +485,16 @@ contains
 
       !Because idg_NH3B does not exist in snow
       !add now      
-      DO L=1,nsnol_col(NY,NX)          
+      DO L=1,JS
         DO idg=idg_beg,idg_NH3
           trcg_snow(idg)=trcg_snow(idg)+trcg_solsml_snvr(idg,L,NY,NX)
         ENDDO
       ENDDO    
+
       DO idg=idg_beg,idg_NH3  
         trcg_snowMass_col(idg,NY,NX)=trcg_snow(idg)
       ENDDO    
+
       DO idg=idg_beg,idg_NH3
         trcg_rootMass_col(idg,NY,NX) = trcg_root(idg)
       ENDDO
@@ -517,7 +524,7 @@ contains
   implicit none 
   integer, intent(in) :: I,J,NHW,NHE,NVN,NVS
 
-  call SummarizeStorage(I,J,NHW,NHE,NVN,NVS)
+  call SumHeatWaterStorage(I,J,NHW,NHE,NVN,NVS)
 
   call SummarizeTracers(I,J,NHW,NHE,NVN,NVS)
 

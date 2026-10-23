@@ -34,6 +34,7 @@ implicit none
   real(r8),target,allocatable ::  trcg_soilMass_col(:,:,:)              !column integrated volatile tracer mass in soil at the end of time step, [g d-2]
   real(r8),target,allocatable ::  trcg_soilMass_beg_col(:,:,:)          !column integrated volatile tracer mass in soil at the beginning of time step, [g d-2]  
   real(r8),target,allocatable ::  trcg_gasml_vr(:,:,:,:)                !layer mass of gases in micropores, [g d-2]
+  real(r8),target,allocatable ::  trcg_soilml_vr(:,:,:,:)               !volatile tracer mass in litter (0) and soil, dissolved plus gas, [g d-2]
   real(r8),target,allocatable ::  trcg_TotalMass_beg_col(:,:,:)         !column integrated volatile tracer mass at the begining of time step, [g d-2]
   real(r8),target,allocatable ::  trcg_TotalMass_col(:,:,:)             !column integrated volatile tracer mass at the moment, [g d-2]
   real(r8),target,allocatable ::  trcg_rootMass_col(:,:,:)              !column integrated volatile tracer mass in roots, [g d-2]
@@ -177,6 +178,7 @@ implicit none
   allocate(trcg_rootMass_beg_col(idg_beg:idg_NH3,JY,JX)); trcg_rootMass_beg_col=0._r8
   allocate(trcg_rootMass_col(idg_beg:idg_NH3,JY,JX)); trcg_rootMass_col=0._r8
   allocate(trcg_gasml_vr(idg_beg:idg_NH3,JZ,JY,JX)); trcg_gasml_vr=0._r8
+  allocate(trcg_soilml_vr(idg_beg:idg_end,0:JZ,JY,JX)); trcg_soilml_vr=0._r8
   allocate(trcs_soHml_vr(ids_beg:ids_end,JZ,JY,JX)); trcs_soHml_vr=0._r8
   allocate(trcs_solml_vr(ids_beg:ids_end,0:JZ,JY,JX)); trcs_solml_vr=0._r8
   allocate(trcs_netpro_vr(ids_beg:ids_end,0:JZ,JY,JX)); trcs_netpro_vr=0._r8
@@ -339,6 +341,7 @@ implicit none
   call destroy(RN2OChemoProd_vr)
   call destroy(RDen_N2OtoN2_vr)
   call destroy(trcg_gasml_vr)
+  call destroy(trcg_soilml_vr)
   call destroy(CPO4B_vr)
   call destroy(OxyDecompLimiter_vr)
   call destroy(RO2DecompUptk_vr)

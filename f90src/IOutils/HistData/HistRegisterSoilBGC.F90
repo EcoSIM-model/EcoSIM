@@ -15,6 +15,26 @@ contains
     beg_col=1; end_col=bounds%ncols
     beg_ptc=1; end_ptc=bounds%npfts
 
+  data2d_ptr => this%h2D_CO2_MassL_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='CO2_MassL_vr',units='gC/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved CO2 mass in soil, dissolved plus gas, excluding roots',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_O2_MassL_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='O2_MassL_vr',units='g/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved O2 mass in soil, dissolved plus gas, excluding roots',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_CH4_MassL_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='CH4_MassL_vr',units='gC/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved CH4 mass in soil, dissolved plus gas, excluding roots',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_H2_MassL_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='H2_MassL_vr',units='g/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved H2 mass in soil, dissolved plus gas, excluding roots',&
+    ptr_col=data2d_ptr,default='inactive')
+
   data2d_ptr => this%h2D_QDrainloss_vr(beg_col:end_col,1:JZ)
   call hist_addfld2d(fname='QDrainloss_vr',units='mm H2O/hr',type2d='levsoi',avgflag='A',&
     long_name='Vertically resolved water drainage',ptr_col=data2d_ptr,default='inactive')
@@ -132,6 +152,18 @@ contains
   data2d_ptr => this%h2D_Root_CO2_vr(beg_col:end_col,1:JZ)          !trc_solcl_vr(idg_CO2,1:JZ,NY,NX)
   call hist_addfld2d(fname='Root_CO2_mass_vr',units='gC/m2',type2d='levsoi',avgflag='A',&
     long_name='Layer resolved CO2 mass in roots',ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_Root_O2_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='Root_O2_mass_vr',units='g/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved O2 mass in roots',ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_Root_CH4_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='Root_CH4_mass_vr',units='gC/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved CH4 mass in roots',ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_Root_H2_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='Root_H2_mass_vr',units='g/m2',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved H2 mass in roots',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr => this%h2D_O2_rootconduct_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='O2_root_conductance_pvr',units='1/h',type2d='levsoi',avgflag='A',&

@@ -14,6 +14,10 @@ contains
     beg_col=1; end_col=bounds%ncols
     beg_ptc=1; end_ptc=bounds%npfts
 
+  allocate(this%h2D_CO2_MassL_vr(beg_col:end_col,1:JZ)); this%h2D_CO2_MassL_vr(:,:)=spval
+  allocate(this%h2D_O2_MassL_vr(beg_col:end_col,1:JZ)); this%h2D_O2_MassL_vr(:,:)=spval
+  allocate(this%h2D_CH4_MassL_vr(beg_col:end_col,1:JZ)); this%h2D_CH4_MassL_vr(:,:)=spval
+  allocate(this%h2D_H2_MassL_vr(beg_col:end_col,1:JZ)); this%h2D_H2_MassL_vr(:,:)=spval
   allocate(this%h2D_tSOC_vr(beg_col:end_col,1:JZ))    ;this%h2D_tSOC_vr(:,:)=spval
   allocate(this%h2D_POM_C_vr(beg_col:end_col,1:JZ)) ; this%h2D_POM_C_vr(:,:)=spval
   allocate(this%h2D_MAOM_C_vr(beg_col:end_col,1:JZ)); this%h2D_MAOM_C_vr(:,:)=spval
@@ -40,6 +44,9 @@ contains
   allocate(this%h2D_Aqua_Ar_vr(beg_col:end_col,1:JZ))        ;this%h2D_Aqua_Ar_vr(:,:)=spval
   allocate(this%h2D_Aqua_CO2_vr(beg_col:end_col,1:JZ))        ;this%h2D_Aqua_CO2_vr(:,:)=spval
   allocate(this%h2D_Root_CO2_vr(beg_col:end_col,1:JZ))  ; this%h2D_Root_CO2_vr(:,:)=spval
+  allocate(this%h2D_Root_O2_vr(beg_col:end_col,1:JZ)); this%h2D_Root_O2_vr(:,:)=spval
+  allocate(this%h2D_Root_CH4_vr(beg_col:end_col,1:JZ)); this%h2D_Root_CH4_vr(:,:)=spval
+  allocate(this%h2D_Root_H2_vr(beg_col:end_col,1:JZ)); this%h2D_Root_H2_vr(:,:)=spval
   allocate(this%h2D_RootNutupk_fClim_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_RootNutupk_fClim_pvr=spval
   allocate(this%h2D_RootNutupk_fNlim_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_RootNutupk_fNlim_pvr=spval
   allocate(this%h2D_RootNutupk_fPlim_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_RootNutupk_fPlim_pvr=spval

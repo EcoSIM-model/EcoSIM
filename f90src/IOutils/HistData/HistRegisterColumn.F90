@@ -366,6 +366,22 @@ contains
     long_name='Column integrated CO2 production rate from geochemistry',&
     ptr_col=data1d_ptr,default='inactive')
 
+  data1d_ptr => this%h1D_CO2_MassLit_col(beg_col:end_col)
+  call hist_addfld1d(fname='CO2_MassLit_col',units='gC/m2',avgflag='A',&
+    long_name='Dissolved CO2 mass in surface litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h1D_O2_MassLit_col(beg_col:end_col)
+  call hist_addfld1d(fname='O2_MassLit_col',units='g/m2',avgflag='A',&
+    long_name='Dissolved O2 mass in surface litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h1D_CH4_MassLit_col(beg_col:end_col)
+  call hist_addfld1d(fname='CH4_MassLit_col',units='gC/m2',avgflag='A',&
+    long_name='Dissolved CH4 mass in surface litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h1D_H2_MassLit_col(beg_col:end_col)
+  call hist_addfld1d(fname='H2_MassLit_col',units='g/m2',avgflag='A',&
+    long_name='Dissolved H2 mass in surface litter',ptr_col=data1d_ptr,default='inactive')
+
   data1d_ptr => this%h1D_Ar_soilMass_col(beg_col:end_col)
   call hist_addfld1d(fname='Ar_soil_mass_col',units='g/m2',avgflag='A',&
     long_name='total Ar mass of the soil column, excluding that in snow',&

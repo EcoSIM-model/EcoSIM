@@ -53,7 +53,7 @@ submodule (HistDataType) HistUpdateColumn
     RDen_N2OtoN2_vr, RDen_NO2toN2O_vr, RDen_NO3toNO2_vr, RFerment_vr, RN2OChemoProd_vr, RN2ONitProd_vr, &
     RNit_NH3toNO2_vr, RNit_NO2toNO3_vr, RO2DecompUptk_vr, SedmErossLoss_CumYr_col, StandingDeadStrutElms_col, &
     SurfGasEmiss_all_flx_col, TempSensDecomp_vr, TMicHeterActivity_vr, trc_solcl_vr, trcg_air2root_flx_col, &
-    trcg_ebu_flx_col, trcg_soilMass_col, trcg_TotalMass_col, trcs_drainage_flx_col, trcs_solml_vr, &
+    trcg_ebu_flx_col, trcg_soilml_vr, trcg_soilMass_col, trcg_TotalMass_col, trcs_drainage_flx_col, trcs_solml_vr, &
     tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr, tXPO4_col
   use AqueChemDatatype, only: TProd_CO2_geochem_soil_vr, trcg_mass_cumerr_col, trcx_solml_vr
   use SurfSoilDataType, only: FracSurfSnowCovered_col, HeatByRad2Surf_col, HeatEvapAir2Surf_col, HeatNet2Surf_col, &
@@ -383,6 +383,14 @@ contains
       this%h1D_TSolidOMActCDens_litr_col(ncol) = safe_adb(TSolidOMActC_vr(0,NY,NX),TSolidOMC_vr(0,NY,NX))
       this%h1D_tOMActCDens_litr_col(ncol)      = safe_adb(tOMActC_vr(0,NY,NX),(TSolidOMC_vr(0,NY,NX)+tOMActC_vr(0,NY,NX)))
       this%h1D_Ar_mass_col(ncol)               = trcg_TotalMass_col(idg_Ar,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_CO2_MassLit_col(ncol) = trcg_soilml_vr(idg_CO2,0,NY,NX) &
+        /AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_O2_MassLit_col(ncol) = trcg_soilml_vr(idg_O2,0,NY,NX) &
+        /AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_CH4_MassLit_col(ncol) = trcg_soilml_vr(idg_CH4,0,NY,NX) &
+        /AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_H2_MassLit_col(ncol) = trcg_soilml_vr(idg_H2,0,NY,NX) &
+        /AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_Ar_soilMass_col(ncol)           = trcg_soilMass_col(idg_Ar,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CO2_mass_col(ncol)               = trcg_TotalMass_col(idg_CO2,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_Gchem_CO2_prod_col(ncol)         = sum(TProd_CO2_geochem_soil_vr(1:JZ,NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
