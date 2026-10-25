@@ -20,6 +20,7 @@ module RestartMod
   use NumericalAuxMod
   use EcoSIMCtrlDataType  
   use restUtilMod  
+  use RestartMemoryMod, only : restart_process_memory, has_restart_memory
   use ncdio_pio
   use MicrobialDataType
   use SOMDataType
@@ -66,6 +67,7 @@ implicit none
 
   public :: restFile
   public :: get_restart_date
+  public :: has_restart_memory
   contains
 
 !------------------------------------------------------------------------------------------
@@ -97,6 +99,10 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   SUBROUTINE restartnc_plant(ncid,flag)  
+  use MiniMathMod, only : pMOD, AZMAX1
+  use EcosimConst, only : PiCON
+  use ElmIDMod, only : ielmc
+  use EcoSIMCtrlMod, only : lcoarseroot
 !
 !     THIS SUBROUTINE WRITES OUT ALL PLANT VARIABLES TO
 !     CHECKPOINT FILES AT THE FREQUENCY GIVEN IN THE OPTIONS
@@ -116,6 +122,7 @@ implicit none
   integer :: root_conc_varid
   type(var_desc_t) :: root_conc_vardesc
   logical :: has_root_conc, has_water_resistance, has_heat_resistance
+  real(r8) :: StalkHeightForRadius
   real(r8), target :: datrc_1d(bounds%begc:bounds%endc)
   integer, target  :: datic_1d(bounds%begc:bounds%endc)
   real(r8), target :: datrp_1d(bounds%begp:bounds%endp)
@@ -266,14 +273,14 @@ implicit none
   if(flag=='read')then
     datpr1 => datrc_1d
     call restartvar(ncid, flag, varname='RootCO2Autor_col', dim1name='column',&
-       long_name='Root autotrophic respiraiton', units='gC d-2 h-1', interpinic_flag='skip', &
+       long_name='Root autotrophic respiration', units='gC d-2 h-1', interpinic_flag='skip', &
        data=datpr1, missing_value=spval, fill_value=spval)
     call cpcol(flag,NHW,NHE,NVN,NVS,RootCO2Autor_col,datrc_1d)
   else     
     if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,RootCO2Autor_col,datrc_1d)
     datpr1 => datrc_1d
     call restartvar(ncid, flag, varname='RootCO2Autor_col', dim1name='column',&
-       long_name='Root autotrophic respiraiton', units='gC d-2 h-1', interpinic_flag='skip', &
+       long_name='Root autotrophic respiration', units='gC d-2 h-1', interpinic_flag='skip', &
        data=datpr1, missing_value=spval, fill_value=spval)
   endif
 
@@ -356,9 +363,11 @@ implicit none
 
   if(flag=='read')then
     datpr3 => datrp_3d(1:npfts,1:NumPlantChemElms,1:jsken)
-    call restartvar(ncid, flag, varname='StandDeadCompKElms_pft', dim1name='pft',dim2name='nkinecmp',&
-       dim3name='elmnts',long_name='standing dead element fraction', units='g d-2', &
+    call restartvar(ncid, flag, varname='StandDeadCompKElms_pft', dim1name='pft',dim2name='elmnts',&
+       dim3name='nkinecmp',long_name='standing dead element fraction', units='g d-2', &
        interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval)
+    ! The fifth slot is an unused zero sentinel, outside the four saved pools.
+    datrp_3d(:,1:NumPlantChemElms,jsken+1)=0._r8
     call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,StandDeadCompKElms_pft,datrp_3d)
 
   else
@@ -5088,6 +5097,50 @@ implicit none
       interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval) 
     endif  
   endif
+  if(flag=='read')then
+    ! Establishment replaces the initialization-time fungal radii. Restore
+    ! their saved nominal values and the matching primary specific length.
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        DO NZ=1,NP_col(NY,NX)
+          DO N=1,SIZE(Root1stMaxRadius1_pft,1)
+            if(Root1stMaxRadius1_pft(N,NZ,NY,NX).GT.0._r8)then
+              Root1stMaxRadius_pft(N,NZ,NY,NX)=Root1stMaxRadius1_pft(N,NZ,NY,NX)
+              Root1stSpecLen_pft(N,NZ,NY,NX)=FineRootVolPerMassC_pft(N,NZ,NY,NX) &
+                /(PiCON*Root1stMaxRadius1_pft(N,NZ,NY,NX)**2)
+            endif
+            if(Root2ndMaxRadius1_pft(N,NZ,NY,NX).GT.0._r8) &
+              Root2ndMaxRadius_pft(N,NZ,NY,NX)=Root2ndMaxRadius1_pft(N,NZ,NY,NX)
+          ENDDO
+        ENDDO
+      ENDDO
+    ENDDO
+  endif
+  if(flag=='read' .and. lcoarseroot)then
+    !Radius is derived geometry, absent from older checkpoints. Reconstruct
+    !the same cylindrical main-stalk radius used by PlantBranchMod before
+    !the first hydraulic call, rather than using a previous column's API value.
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        DO NZ=1,NP_col(NY,NX)
+          StalkAveRadius_pft(NZ,NY,NX)=0._r8
+          NB=MainBranchNum_pft(NZ,NY,NX)
+          if(NB.LT.1 .or. NB.GT.MaxNumBranches)cycle
+          if(PlantPopuLive_pft(NZ,NY,NX).LE.0._r8)cycle
+          K=pMOD(KHiestGroLeafNode_brch(NB,NZ,NY,NX),MaxNodesPerBranch)
+          StalkHeightForRadius=StalkNodeHeight_brch(K,NB,NZ,NY,NX)
+          if(StalkHeightForRadius.LE.0._r8)then
+            K=pMOD(KHiestGroLeafNode_brch(NB,NZ,NY,NX)-1,MaxNodesPerBranch)
+            StalkHeightForRadius=StalkNodeHeight_brch(K,NB,NZ,NY,NX)
+          endif
+          if(StalkHeightForRadius.GT.0._r8) &
+            StalkAveRadius_pft(NZ,NY,NX)=SQRT(StemSpecVolume_pft(NZ,NY,NX) &
+              *(AZMAX1(StalkStrutElms_brch(ielmc,NB,NZ,NY,NX))/PlantPopuLive_pft(NZ,NY,NX)) &
+              /(PiCON*StalkHeightForRadius))
+        ENDDO
+      ENDDO
+    ENDDO
+  endif
   call destroy(datrp_2d)
   call destroy(datrp_3d)
   call destroy(datrp_4d)  
@@ -5302,6 +5355,7 @@ implicit none
   call restartnc_soil_caches(ncid,flag)
   call restartnc_accumulators(ncid,flag)
   call restartnc_daily_irrigation(ncid,flag)
+  call restart_process_memory(ncid,flag)
 
   end subroutine restartnc
 !------------------------------------------------------------------------------------------

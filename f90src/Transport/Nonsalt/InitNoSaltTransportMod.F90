@@ -245,7 +245,7 @@ module InitNoSaltTransportMod
       enddo
 
       ! Accepted surface transfers run before the iterative state copy. Stage
-      ! nutrients too, rather than reusing the preceding hour's workspace.
+      ! all nutrients from persistent pools, including on the first restart hour.
       DO ids=ids_beg,ids_end
         trcs_solml2_vr(ids,0,NY,NX)=AZERO(trcs_solml_vr(ids,0,NY,NX))
       ENDDO
@@ -600,4 +600,4 @@ module InitNoSaltTransportMod
 
   end subroutine TracerFall2Grnd            
 
-end module InitNoSaltTransportMod  
+end module InitNoSaltTransportMod

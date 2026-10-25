@@ -19,6 +19,7 @@ set(IOUTILS_SOURCES
     MicrobeInfoMod.F90
     HistFileMod.F90
     restUtilMod.F90
+    RestartMemoryMod.F90
     RestartMod.F90
   	readimod.F90
 	  readsmod.F90

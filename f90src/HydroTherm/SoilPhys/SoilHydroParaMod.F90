@@ -158,9 +158,10 @@ contains
   ! double check is_cold_run() setup
   LOGPOROS_vr(L,NY,NX)=LOG(POROS_vr(L,NY,NX))
 
-  ! Cold-start volumes were initialized in STARTS before chemistry. Refresh
-  ! estimated hydraulic limits here without resetting water, ice or heat capacity.
-  if(is_cold_run())call EstimateSoilWaterLimits(L,NY,NX)
+  ! Refresh estimated constitutive limits in every run mode. This changes
+  ! neither water/ice volumes nor heat capacity; restricting it to cold runs
+  ! freezes FC/WP after restart while continuous runs keep updating them.
+  call EstimateSoilWaterLimits(L,NY,NX)
   LOGFldCapacity_vr(L,NY,NX) = LOG(FieldCapacity_vr(L,NY,NX))
   LOGWiltPoint_vr(L,NY,NX)   = LOG(WiltPoint_vr(L,NY,NX))
   PSD_vr(L,NY,NX)            = LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX)

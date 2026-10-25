@@ -57,6 +57,9 @@ implicit none
   integer, intent(in) :: NY,NX
 
   integer :: L,N,M,NN,NZ,K,NB
+  associate(CanopySnow => plt_ew%SnowOnCanopy_pft, &
+    StandingDead => plt_biom%StandDeadStrutElms_pft, &
+    GrowthThreshold => plt_biom%ZERO4Groth_pft)
 !  Integers
   plt_site%KoppenClimZone        = KoppenClimZone_col(NY,NX)
   plt_site%NP                    = NP_col(NY,NX)
@@ -127,6 +130,11 @@ implicit none
   plt_ew%BulkFactor4Snow_col       = BulkFactor4Snow_col(NY,NX)
   plt_site%POROS1                  = POROS_vr(NU_col(NY,NX),NY,NX)
   DO NZ=1,NP_col(NY,NX)
+    ! Radiation precedes PlantAPISend, including the first hour after restart.
+    ! Supply these inputs here instead of relying on the preceding plant call.
+    CanopySnow(NZ) = SnowOnCanopy_pft(NZ,NY,NX)
+    StandingDead(:,NZ) = StandDeadStrutElms_pft(:,NZ,NY,NX)
+    GrowthThreshold(NZ) = ZERO4Groth_pft(NZ,NY,NX)
     plt_site%PlantPopuDead_pft(NZ)          = PlantPopuDead_pft(NZ,NY,NX)
     ! Radiation runs before PlantModel refreshes the shared plant API state.
     ! Refill biomass, snow and leaf-angle inputs for this column and restart.
@@ -200,6 +208,7 @@ implicit none
     ENDDO
   ENDDO
 
+  end associate
   end subroutine PlantAPICanMSend
 
 !------------------------------------------------------------------------------------------

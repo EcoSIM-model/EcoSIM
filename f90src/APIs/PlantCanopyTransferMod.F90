@@ -237,6 +237,12 @@ contains
   use EcoSIMConfig, only : jsken=>jskenc,jcplx=>jcplxc
   integer, intent(in) :: NY,NX,NZ
   integer :: NB,NR,K,L,M,N,NE
+  associate(LeafCount => plt_morph%KLeafNumber_brch, &
+    RubiscoActivity => plt_photo%RubiscoActivity_brch)
+    ! Restore branch inputs before uptake/photosynthesis. Reverse transfers
+    ! alone leave a fresh API dependent on preceding branch initialization.
+    LeafCount(:,NZ)=KLeafNumber_brch(:,NZ,NY,NX)
+    RubiscoActivity(:,NZ)=RubiscoActivity_brch(:,NZ,NY,NX)
 
     plt_morph%RootSinkWeight_pvr(:,NZ)=RootSinkWeight_pvr(:,NZ,NY,NX)
     DO L=1,NK_col(NY,NX)
@@ -375,5 +381,6 @@ contains
       ENDDO
     enddo
 
+  end associate
   end subroutine SendPlantCanopy
 end module PlantCanopyTransferMod

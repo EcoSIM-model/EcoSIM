@@ -358,7 +358,7 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
   use StartqMod,       only: startq
   use StartsMod,       only: starts,InitControlParms
   use WthrMod,         only: PrepHourlyWeather
-  use RestartMod,      only: restFile
+  use RestartMod,      only: restFile, has_restart_memory
   use PlantInfoMod,    only: ReadPlantInfo
   use readsmod,        only: ReadClimSoilForcing
   use YearMod,         only: SetAnnualAccumlators
@@ -551,7 +551,10 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
           endif
 
           if(do_timing)call start_timer(t1)
-          call SummarizeTracerMass(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)          
+          ! New checkpoints retain the preceding process-boundary inventories.
+          ! Recomputing them here changes the lagged budget reference.
+          if(.not.has_restart_memory) &
+            call SummarizeTracerMass(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
           if(do_timing)call end_timer('SummarizeTracerMass',t1)
         endif
       endif
