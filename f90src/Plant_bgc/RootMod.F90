@@ -766,7 +766,8 @@ implicit none
   ENDDO
 
   ! apply turgor pressure limitation on elongation
-  Root2ndExtPot    = RootMycoNonst4Grow_Oltd(ielmc)*FracRootElmAllocm(ielmc,k_fine_comp)*Root2ndSpecLen_pft(N,NZ)
+  ! Specific length already converts structural C to cylindrical root length.
+  Root2ndExtPot    = RootMycoNonst4Grow_Oltd(ielmc)*Root2ndSpecLen_pft(N,NZ)
   Root2ndPopExtenz = Root2ndExtPot
 
   ! net growth=positive growth - senescence
