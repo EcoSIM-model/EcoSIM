@@ -243,6 +243,17 @@ contains
         this%h2D_tRespGrossHeterUlm_vr(ncol,L)= tRespGrossHeterUlm_vr(L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_tRespGrossHeter_vr(ncol,L)= tRespGrossHeter_vr(L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
 
+        associate(mid_ANME2d => micpar%mid_AutoAMOANME2D, mid_NC10 => micpar%mid_AutoAMONC10)
+          call SumMicbGroup(L,NY,NX,mid_ANME2d,MicbE,isauto=.true.)
+          this%h2D_ANME2dC_vr(ncol,L) = micBE(ielmc)/DVOLL
+          this%h2D_ANME2dN_vr(ncol,L) = micBE(ielmn)/DVOLL
+          this%h2D_ANME2dP_vr(ncol,L) = micBE(ielmp)/DVOLL
+          call SumMicbGroup(L,NY,NX,mid_NC10,MicbE,isauto=.true.)
+          this%h2D_NC10C_vr(ncol,L) = micBE(ielmc)/DVOLL
+          this%h2D_NC10N_vr(ncol,L) = micBE(ielmn)/DVOLL
+          this%h2D_NC10P_vr(ncol,L) = micBE(ielmp)/DVOLL
+        end associate
+
         call SumMicbGroup(L,NY,NX,micpar%mid_AutoH2GenoCH4GenArchea,MicbE,isauto=.true.)
         this%h2D_H2MethogenC_vr(ncol,L) = micBE(ielmc)/DVOLL
         this%h2D_H2MethogenN_vr(ncol,L) = micBE(ielmn)/DVOLL

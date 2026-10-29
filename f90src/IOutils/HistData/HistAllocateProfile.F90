@@ -212,6 +212,14 @@ contains
   allocate(this%h2D_NH3OxiBactE_litr_col(beg_col:end_col,1:NumPlantChemElms));this%h2D_NH3OxiBactE_litr_col(:,:)=spval
   allocate(this%h2D_NO2OxiBactE_litr_col(beg_col:end_col,1:NumPlantChemElms));this%h2D_NO2OxiBactE_litr_col(:,:)=spval
   allocate(this%h2D_CH4AeroOxiE_litr_col(beg_col:end_col,1:NumPlantChemElms));this%h2D_CH4AeroOxiE_litr_col(:,:)=spval
+  allocate(this%h2D_ANME2dC_vr(beg_col:end_col,1:JZ)); this%h2D_ANME2dC_vr(:,:)=spval
+  allocate(this%h2D_ANME2dN_vr(beg_col:end_col,1:JZ)); this%h2D_ANME2dN_vr(:,:)=spval
+  allocate(this%h2D_ANME2dP_vr(beg_col:end_col,1:JZ)); this%h2D_ANME2dP_vr(:,:)=spval
+  allocate(this%h2D_ANME2dE_litr_col(beg_col:end_col,1:NumPlantChemElms)); this%h2D_ANME2dE_litr_col(:,:)=spval
+  allocate(this%h2D_NC10C_vr(beg_col:end_col,1:JZ)); this%h2D_NC10C_vr(:,:)=spval
+  allocate(this%h2D_NC10N_vr(beg_col:end_col,1:JZ)); this%h2D_NC10N_vr(:,:)=spval
+  allocate(this%h2D_NC10P_vr(beg_col:end_col,1:JZ)); this%h2D_NC10P_vr(:,:)=spval
+  allocate(this%h2D_NC10E_litr_col(beg_col:end_col,1:NumPlantChemElms)); this%h2D_NC10E_litr_col(:,:)=spval
   allocate(this%h2D_H2MethogenE_litr_col(beg_col:end_col,1:NumPlantChemElms));this%h2D_H2MethogenE_litr_col(:,:)=spval
 
 

@@ -40,17 +40,17 @@ NCYC_LITR=20
 NCYC_SNOW=20
 !set up output frequency
 
-hist_fincl1='CH4_cumerr_col','Hygrogen_methanogenC_vr','Acetic_methanogenC_vr',
+hist_fincl1='CH4_cumerr_col','H2genoMethanoGC_vr','AcetoMethanoGC_vr',
   'CH4Prod_aceto_vr','CH4Prod_hydro_vr','CH4Oxi_Aero_vr','CH4Oxi_ANMO_vr','Acetate_vr',
   'FermentorC_vr','O2w_conc_vr','tSoilOrgC_col','tMICROB_C_col','Fermentation_vr',
   'AcetoMethgen_frac_vr','HydrogMethgen_frac_vr','Fermentor_frac_vr','MicrobAct_vr',
-  'Decomp_OStress_vr','RDecompC_SOM_vr','Aerobic_HetrBacterC_vr','Aerobic_HetrFungiC_vr',
+  'Decomp_OStress_vr','RDecompC_SOM_vr','AerobHetrBacterC_vr','AerobHetrFungiC_vr',
   'MicrobAct_folialitr_cplx_vr','MicrobAct_pom_cplx_vr','MicrobAct_humus_cplx_vr','RootC_2nd_pvr',
   'HydrolCSOM_folialitr_cplx_vr','HydrolCSOM_pom_cplx_vr','HydrolCSOM_humus_cplx_vr',
   'CH4_DIF_FLX_col','GasXSurfConduct_col','CH4w_conc_vr','WTBLi_col','FermOXYI_vr'
   'SOC_folialitr_cplx_vr','SOC_pom_cplx_vr','SOC_humus_cplx_vr','rIceFLP_vr',
   'dCAN_GPP_CLIM_pft','dCAN_GPP_eLIM_pft','ThetaW_litr_col','PSI_LITR_col','ThetaI_litr_col',
-  'MicroBiomE_litr','CH4Prod_HG_litr_col','CH4Prod_Acet_litr_col','RUB_ACTVN_pft',
+  'MicroBiomC_litr_col','MicroBiomN_litr_col','MicroBiomP_litr_col','CH4Prod_HG_litr_col','CH4Prod_Acet_litr_col','RUB_ACTVN_pft',
   'VcMax25C_RUBISCO_pft','VoMax25C_RUBISCO_pft','JMax25C_photo_pft','CH2OSunlit_pft',
   'CH2OSunsha_pft','Root_OXYSTRESS_pvr','PARSunlit_pft','PARSunsha_pft','Root1stSinkWeight_pvr',
   'Root2ndSinkWeight_pvr','C_PARTS_brch_01'

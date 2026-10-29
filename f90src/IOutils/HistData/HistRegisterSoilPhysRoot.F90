@@ -1,7 +1,7 @@
 submodule (HistDataType) HistRegisterSoilPhysRoot
   ! Register soil physical and root diagnostics with history metadata and pointers.
   use GridConsts, only: JZ, MaxNumBranches, NumCanopyLayers, NumOfPlantMorphUnits
-  use ElmIDMod, only: NumPlantChemElms
+  use ElmIDMod, only: ielmc, ielmn, ielmp
   use HistFileMod, only: hist_addfld1d, hist_addfld2d
   implicit none
 contains
@@ -31,11 +31,11 @@ contains
 
 !------
   data2d_ptr =>  this%h2D_AeroHrBactP_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrBacterP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrBacterP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic P biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_AeroHrFungP_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrFungiP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrFungiP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic fungi P profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_faculDenitP_vr(beg_col:end_col,1:JZ)
@@ -47,7 +47,7 @@ contains
     long_name='Fermentor P biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_acetometgP_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Acetic_methanogenP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AcetoMethanoGP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
     long_name='Aceticlastic methanogen P biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_aeroN2fixP_vr(beg_col:end_col,1:JZ)
@@ -67,65 +67,200 @@ contains
     long_name='Nitrite oxidize bacteria P profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_CH4AeroOxiP_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_methanotrophP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobMethanoTP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic methanotroph P biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_H2MethogenP_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Hygrogen_methanogenP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='H2genoMethanoGP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
     long_name='Hydrogenotrophic methanogen P biomass profile',ptr_col=data2d_ptr,default='inactive')
 !---
 
-  data2d_ptr =>  this%h2D_MicroBiomeE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='MicroBiomE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Total micorobial elemental biomass in litter',ptr_col=data2d_ptr)
+  ! Register each element as a column field using the existing biomass arrays.
+  data1d_ptr => this%h2D_MicroBiomeE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='MicroBiomC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Total microbial C biomass in litter',ptr_col=data1d_ptr)
 
-  data2d_ptr =>  this%h2D_AeroHrBactE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Aerobic_HetrBacterE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Aerobic heterotrophic bacterial elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_MicroBiomeE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='MicroBiomN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Total microbial N biomass in litter',ptr_col=data1d_ptr)
 
-  data2d_ptr =>  this%h2D_AeroHrFungE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Aerobic_HetrFungiE_litr',units='gP/m2',type2d='elements',avgflag='A',&
-    long_name='Aerobic heterotrophic fungi elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_MicroBiomeE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='MicroBiomP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Total microbial P biomass in litter',ptr_col=data1d_ptr)
 
-  data2d_ptr =>  this%h2D_faculDenitE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Facult_denitrifierE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Facultative denitrifier elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrBactE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='AerobHetrBacterC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic bacterial C biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_fermentorE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='FermentorE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Fermentor elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrBactE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='AerobHetrBacterN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic bacterial N biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_cyanoBactC_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='CynoBacterE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Cynobacterial elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrBactE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='AerobHetrBacterP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic bacterial P biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_acetometgE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Acetic_methanogenE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Aceticlastic methanogen elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrFungE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='AerobHetrFungiC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic fungi C biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_aeroN2fixE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Aerobic_N2fixerE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Aerobic N2 fixer elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrFungE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='AerobHetrFungiN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic fungi N biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_anaeN2FixE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Anaerobic_N2fixerE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Anaerobic N2 fixer elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_AeroHrFungE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='AerobHetrFungiP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Aerobic heterotrophic fungi P biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_NH3OxiBactE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Ammonia_OxidizerBactE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Ammonia oxidize bacteria elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_faculDenitE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='Facult_denitrifierC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Facultative denitrifier C biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_NO2OxiBactE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Nitrie_OxidizerBactE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Nitrite oxidize bacteria elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_faculDenitE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='Facult_denitrifierN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Facultative denitrifier N biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_CH4AeroOxiE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Aerobic_methanotrophE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Aerobic methanotroph elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_faculDenitE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='Facult_denitrifierP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Facultative denitrifier P biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
-  data2d_ptr =>  this%h2D_H2MethogenE_litr_col(beg_col:end_col,1:NumPlantChemElms)
-  call hist_addfld2d(fname='Hygrogen_methanogenE_litr',units='g/m2',type2d='elements',avgflag='A',&
-    long_name='Hydrogenotrophic methanogen elemental biomass in litter',ptr_col=data2d_ptr,default='inactive')
+  data1d_ptr => this%h2D_fermentorE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='FermentorC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Fermentor C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_fermentorE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='FermentorN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Fermentor N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_fermentorE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='FermentorP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Fermentor P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_cyanoBactC_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='CynoBacterC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Cynobacterial C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_cyanoBactC_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='CynoBacterN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Cynobacterial N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_cyanoBactC_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='CynoBacterP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Cynobacterial P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_acetometgE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='AcetoMethanoGC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Aceticlastic methanogen C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_acetometgE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='AcetoMethanoGN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Aceticlastic methanogen N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_acetometgE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='AcetoMethanoGP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Aceticlastic methanogen P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_aeroN2fixE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='Aerobic_N2fixerC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Aerobic N2 fixer C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_aeroN2fixE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='Aerobic_N2fixerN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Aerobic N2 fixer N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_aeroN2fixE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='Aerobic_N2fixerP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Aerobic N2 fixer P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_anaeN2FixE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='Anaerobic_N2fixerC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Anaerobic N2 fixer C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_anaeN2FixE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='Anaerobic_N2fixerN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Anaerobic N2 fixer N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_anaeN2FixE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='Anaerobic_N2fixerP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Anaerobic N2 fixer P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NH3OxiBactE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='Ammonia_OxidizerBactC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Ammonia oxidize bacteria C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NH3OxiBactE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='Ammonia_OxidizerBactN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Ammonia oxidize bacteria N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NH3OxiBactE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='Ammonia_OxidizerBactP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Ammonia oxidize bacteria P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NO2OxiBactE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='Nitrie_OxidizerBactC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Nitrite oxidize bacteria C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NO2OxiBactE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='Nitrie_OxidizerBactN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Nitrite oxidize bacteria N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NO2OxiBactE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='Nitrie_OxidizerBactP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Nitrite oxidize bacteria P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_CH4AeroOxiE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='AerobMethanoTC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Aerobic methanotroph C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_CH4AeroOxiE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='AerobMethanoTN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Aerobic methanotroph N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_CH4AeroOxiE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='AerobMethanoTP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Aerobic methanotroph P biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_ANME2dE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='ANME2dC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='ANME-2d anaerobic methanotroph C biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_ANME2dE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='ANME2dN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='ANME-2d anaerobic methanotroph N biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_ANME2dE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='ANME2dP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='ANME-2d anaerobic methanotroph P biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NC10E_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='NC10C_litr_col',units='gC/m2',avgflag='A',&
+    long_name='NC10 anaerobic methanotroph C biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NC10E_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='NC10N_litr_col',units='gN/m2',avgflag='A',&
+    long_name='NC10 anaerobic methanotroph N biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_NC10E_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='NC10P_litr_col',units='gP/m2',avgflag='A',&
+    long_name='NC10 anaerobic methanotroph P biomass in surface litter',&
+    ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_H2MethogenE_litr_col(beg_col:end_col,ielmc)
+  call hist_addfld1d(fname='H2genoMethanoGC_litr_col',units='gC/m2',avgflag='A',&
+    long_name='Hydrogenotrophic methanogen C biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_H2MethogenE_litr_col(beg_col:end_col,ielmn)
+  call hist_addfld1d(fname='H2genoMethanoGN_litr_col',units='gN/m2',avgflag='A',&
+    long_name='Hydrogenotrophic methanogen N biomass in litter',ptr_col=data1d_ptr,default='inactive')
+
+  data1d_ptr => this%h2D_H2MethogenE_litr_col(beg_col:end_col,ielmp)
+  call hist_addfld1d(fname='H2genoMethanoGP_litr_col',units='gP/m2',avgflag='A',&
+    long_name='Hydrogenotrophic methanogen P biomass in litter',ptr_col=data1d_ptr,default='inactive')
 
   data2d_ptr => this%h2D_HeatFlow_vr(beg_col:end_col,1:JZ)
   call hist_addfld2d(fname='HeatFlow_vr',units='MJ m-3 hr-1',type2d='levsoi',avgflag='A',&

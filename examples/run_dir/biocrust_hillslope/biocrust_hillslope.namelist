@@ -36,7 +36,7 @@ NCYC_SNOW=20
 hist_fincl1='O2w_conc_vr','N2w_conc_vr','Arw_conc_vr','H2w_conc_vr','NH3w_conc_vr',
   'N2Ow_conc_vr','CH4w_conc_vr','CO2w_conc_vr','CO2_gas_ppmv_vr','O2_gas_ppmv_vr',
   'N2O_gas_ppmv_vr','CH4_gas_ppmv_vr','N2_gas_ppmv_vr','H2_gas_ppmv_vr','NH3_gas_ppmv_vr',
-  'Ar_gas_ppmv_vr','CynoBacterE_litr','PAR_vr'
+  'Ar_gas_ppmv_vr','CynoBacterC_litr_col','CynoBacterN_litr_col','CynoBacterP_litr_col','PAR_vr'
 
 !set up output frequency
 hist_mfilt=1460

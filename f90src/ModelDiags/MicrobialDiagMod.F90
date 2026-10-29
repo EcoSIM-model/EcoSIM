@@ -456,11 +456,13 @@ module MicrobialDiagMod
   endif  
 
   micBE=0._r8
+  associate(mid_ANME2d => micpar%mid_AutoAMOANME2D, mid_NC10 => micpar%mid_AutoAMONC10)
   if(isauto_loc)then
     if(igroup /= micpar%mid_AutoAmmoniaOxidBacter        .and. &
        igroup /= micpar%mid_AutoNitriteOxidBacter        .and. & 
        igroup /= micpar%mid_AutoAeroCH4OxiBacter .and. &
-       igroup /= micpar%mid_AutoH2GenoCH4GenArchea) then
+       igroup /= micpar%mid_AutoH2GenoCH4GenArchea .and. &
+       igroup /= mid_ANME2d .and. igroup /= mid_NC10) then
       call endrun('undefined autotroph group in '//trim(mod_filename),__LINE__)
     endif
 
@@ -497,6 +499,7 @@ module MicrobialDiagMod
     enddo    
   endif
 
+  end associate
   call PrintInfo('end '//subname)
   end subroutine SumMicbGroup
 

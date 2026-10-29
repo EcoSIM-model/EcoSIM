@@ -387,7 +387,7 @@ contains
 
 !------
   data2d_ptr =>  this%h2D_AeroHrBactC_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrBacterC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrBacterC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic bacteria C profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_cyanoBactC_vr(beg_col:end_col,1:JZ)
@@ -395,7 +395,7 @@ contains
     long_name='Mixtrophic cyanobacteria C profile',ptr_col=data2d_ptr)
 
   data2d_ptr =>  this%h2D_AeroHrFungC_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrFungiC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrFungiC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic fungi C profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_faculDenitC_vr(beg_col:end_col,1:JZ)
@@ -419,7 +419,7 @@ contains
     long_name='Fraction of microbial C in hydrogenotrohpic methanogen',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_acetometgC_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Acetic_methanogenC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AcetoMethanoGC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
     long_name='Aceticlastic methanogen C biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_aeroN2fixC_vr(beg_col:end_col,1:JZ)
@@ -475,11 +475,41 @@ contains
     long_name='Nitrite oxidize bacteria C profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_CH4AeroOxiC_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_methanotrophC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobMethanoTC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic methanotroph C biomass profile',ptr_col=data2d_ptr,default='inactive')
 
+  data2d_ptr => this%h2D_ANME2dC_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='ANME2dC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved ANME-2d anaerobic methanotroph C biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_ANME2dN_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='ANME2dN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved ANME-2d anaerobic methanotroph N biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_ANME2dP_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='ANME2dP_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved ANME-2d anaerobic methanotroph P biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_NC10C_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='NC10C_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved NC10 anaerobic methanotroph C biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_NC10N_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='NC10N_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved NC10 anaerobic methanotroph N biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_NC10P_vr(beg_col:end_col,1:JZ)
+  call hist_addfld2d(fname='NC10P_vr',units='gP/m3',type2d='levsoi',avgflag='A',&
+    long_name='Layer resolved NC10 anaerobic methanotroph P biomass',&
+    ptr_col=data2d_ptr,default='inactive')
+
   data2d_ptr =>  this%h2D_H2MethogenC_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Hygrogen_methanogenC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='H2genoMethanoGC_vr',units='gC/m3',type2d='levsoi',avgflag='A',&
     long_name='Hydrogenotrophic methanogen C biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_TSolidOMActC_vr(beg_col:end_col,1:JZ)
@@ -556,11 +586,11 @@ contains
     long_name='Vertically resolved geochemical CO2 production rate',ptr_col=data2d_ptr,default='inactive')
 !------
   data2d_ptr =>  this%h2D_AeroHrBactN_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrBacterN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrBacterN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic bacteria N profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_AeroHrFungN_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_HetrFungiN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobHetrFungiN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic fungi N profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_faculDenitN_vr(beg_col:end_col,1:JZ)
@@ -572,7 +602,7 @@ contains
     long_name='Fermentor N biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_acetometgN_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Acetic_methanogenN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AcetoMethanoGN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
     long_name='Aceticlastic methanogen N biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_aeroN2fixN_vr(beg_col:end_col,1:JZ)
@@ -592,7 +622,7 @@ contains
     long_name='Nitrite oxidize bacteria N profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_CH4AeroOxiN_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Aerobic_methanotrophN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='AerobMethanoTN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
     long_name='Aerobic methanotroph N biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_tRespGrossHeterUlm_vr(beg_col:end_col,1:JZ)
@@ -604,7 +634,7 @@ contains
     long_name='Total oxygen gross respiraiton by heterotrophs',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_H2MethogenN_vr(beg_col:end_col,1:JZ)
-  call hist_addfld2d(fname='Hygrogen_methanogenN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
+  call hist_addfld2d(fname='H2genoMethanoGN_vr',units='gN/m3',type2d='levsoi',avgflag='A',&
     long_name='Hydrogenotrophic methanogen N biomass profile',ptr_col=data2d_ptr,default='inactive')
 
   data2d_ptr =>  this%h2D_MicrobAct_vr(beg_col:end_col,1:JZ)

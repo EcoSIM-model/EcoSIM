@@ -341,6 +341,13 @@ contains
       call SumMicbGroup(0,NY,NX,micpar%mid_AutoAeroCH4OxiBacter,MicbE,isauto=.true.)
       this%h2D_CH4AeroOxiE_litr_col(ncol,1:NumPlantChemElms) = MicbE/AREA_3D(3,NU_col(NY,NX),NY,NX)
 
+      associate(mid_ANME2d => micpar%mid_AutoAMOANME2D, mid_NC10 => micpar%mid_AutoAMONC10)
+        call SumMicbGroup(0,NY,NX,mid_ANME2d,MicbE,isauto=.true.)
+        this%h2D_ANME2dE_litr_col(ncol,1:NumPlantChemElms) = MicbE/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        call SumMicbGroup(0,NY,NX,mid_NC10,MicbE,isauto=.true.)
+        this%h2D_NC10E_litr_col(ncol,1:NumPlantChemElms) = MicbE/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      end associate
+
       call SumMicbGroup(0,NY,NX,micpar%mid_AutoH2GenoCH4GenArchea,MicbE,isauto=.true.)
       this%h2D_H2MethogenE_litr_col(ncol,1:NumPlantChemElms) = MicbE/AREA_3D(3,NU_col(NY,NX),NY,NX)
 

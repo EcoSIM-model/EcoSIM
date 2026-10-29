@@ -20,7 +20,7 @@ plant_model        = .false.
 microbial_model    = .true.
 soichem_model      = .true.
 disp_planttrait    = .false.
-hist_fincl1='CynoBacterE_litr','PAR_vr'
+hist_fincl1='CynoBacterC_litr_col','CynoBacterN_litr_col','CynoBacterP_litr_col','PAR_vr'
 
 !set up output variable lists
 !set up the first year of simulation
