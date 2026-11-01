@@ -104,7 +104,10 @@ ecosim_source_dir=$(pwd)
 
 ############## END EDIT ####################
 
-cmake_binary=$(which cmake)
+cmake_binary=$(command -v cmake) || {
+    echo "CMake was not found on PATH. Add its bin directory to PATH before running $0." >&2
+    exit 127
+}
 
 cputype=$(uname -m | sed "s/\\ /_/g")
 systype=$(uname -s)

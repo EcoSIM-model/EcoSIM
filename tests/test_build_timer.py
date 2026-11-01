@@ -26,6 +26,19 @@ class BuildTimerTest(unittest.TestCase):
              "--phase", phase, "--", sys.executable, "-c", code, *extra],
             env=env or self.env, capture_output=True, text=True)
 
+    def test_build_script_stops_before_configure_when_cmake_is_missing(self):
+        fixture = Path(self.temp.name) / "missing cmake"
+        fixture.mkdir()
+        empty_path = fixture / "empty-bin"
+        empty_path.mkdir()
+        result = subprocess.run(
+            [shutil.which("bash"), str(TIMER.parents[1] / "build_EcoSIM.sh")],
+            cwd=fixture, env=dict(self.env, PATH=str(empty_path)),
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 127)
+        self.assertIn("CMake was not found on PATH", result.stderr)
+        self.assertFalse((fixture / "build").exists())
+
     def records(self, path=None):
         with open(path or self.log, newline="") as stream:
             return list(csv.DictReader(stream, delimiter="\t"))
