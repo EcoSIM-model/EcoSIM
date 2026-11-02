@@ -19,6 +19,7 @@ module TillageMixMod
   use SurfLitterDataType
   use SoilHeatDataType
   use SoilWaterDataType
+  use BalanceCheckDataType, only: TillageLitr2SoilH2O_col
   use SoilPhysDataType
   USE SoilPropertyDataType
   USE ClimForcDataType
@@ -48,6 +49,7 @@ module TillageMixMod
   real(r8) :: ENGYV(0:JZ),ENGYL,ENGYM(0:JZ)
   real(r8) :: ORGM(1:NumPlantChemElms),litrOM(1:NumPlantChemElms)
   real(r8) :: HFLXD
+  real(r8) :: LitterWaterBeforeMix
   real(r8) :: TX,TL
   integer  :: NTX,NTP,NTG,NTSA,NTN,idom,MID,NE
   real(r8) :: FI(JZ),TI(JZ),TI1,FI1
@@ -194,9 +196,13 @@ module TillageMixMod
   HFLXD=ENGYM(0)+ENGYV(0)
 
   !mix
+  LitterWaterBeforeMix=VLWatMicP_vr(0,NY,NX)+DENSICE*VLiceMicP_vr(0,NY,NX)
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,VLWatMicP_vr(0:JZ,NY,NX),XCORP0)
 
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,VLiceMicP_vr(0:JZ,NY,NX),XCORP0)
+  ! Record incorporation for compartment checks; it is not infiltration or external water.
+  TillageLitr2SoilH2O_col(NY,NX)=TillageLitr2SoilH2O_col(NY,NX)+LitterWaterBeforeMix &
+    -VLWatMicP_vr(0,NY,NX)-DENSICE*VLiceMicP_vr(0,NY,NX)
 
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,ENGYV(0:JZ),XCORP0)
 

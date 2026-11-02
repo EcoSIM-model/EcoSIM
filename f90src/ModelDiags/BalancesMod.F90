@@ -45,6 +45,7 @@ contains
   DO  NX=NHW,NHE
     DO  NY=NVN,NVS
       WaterErr_col(NY,NX)           = WatMass_col(NY,NX)
+      TillageLitr2SoilH2O_col(NY,NX) = 0._r8
       HeatErr_col(NY,NX)            = HeatStore_col(NY,NX)
       SnowEngyBeg_col(NY,NX)        = SnowEngyEnd_col(NY,NX)
       CanopyWaterMassBeg_col(NY,NX) = CanopyWaterMassEnd_col(NY,NX)
@@ -202,13 +203,15 @@ contains
         SoilWatErr_test=SoilWatMassBeg_col(NY,NX)-SoilWatMassEnd_col(NY,NX)      
       else
         SoilWatErr_test=SoilWatMassBeg_col(NY,NX)-SoilWatMassEnd_col(NY,NX)+Qinflx2Soil_col(NY,NX) &
-          -QDrain_col(NY,NX)-QDischarg2WTBL_col(NY,NX)+TPlantRootH2OUptake_col(NY,NX)+QLaterFlow2Cell_col(NY,NX)
+          -QDrain_col(NY,NX)-QDischarg2WTBL_col(NY,NX)+TPlantRootH2OUptake_col(NY,NX)+QLaterFlow2Cell_col(NY,NX) &
+          +TillageLitr2SoilH2O_col(NY,NX)
       endif
       precipErr_test    = RainPrecThrufall_col(NY,NX)-Rain2LitR_col(NY,NX)-Rain2Soil_col(NY,NX)-RainPrec2Sno_col(NY,NX)
       prec2expSErr_test = Rain2ExposedSurf_col(NY,NX)-Rain2LitR_col(NY,NX)-Rain2Soil_col(NY,NX)
       prec2SnoErr_test  = Prec2Snow_col(NY,NX)-RainPrec2Sno_col(NY,NX)-SnoFalPrec_col(NY,NX)
 
-      literH2Oerr_test = LitWatMassBeg_col(NY,NX)-LitWatMassEnd_col(NY,NX)+QRunSurf_col(NY,NX)+WatFLo2LitR_col(NY,NX)
+      literH2Oerr_test = LitWatMassBeg_col(NY,NX)-LitWatMassEnd_col(NY,NX)+QRunSurf_col(NY,NX)+WatFLo2LitR_col(NY,NX) &
+        -TillageLitr2SoilH2O_col(NY,NX)
 
       SnowMassErr_test = SnowMassBeg_col(NY,NX)-SnowMassEnd_col(NY,NX)+Prec2Snow_col(NY,NX)-QSnowH2Oloss_col(NY,NX)
 

@@ -856,6 +856,7 @@ contains
   cumHeatSensAir2Soil   = 0.0_r8       !total water associated heat flux from air into soil
   NetWatFlxAir2LitR     = 0.0_r8       !total water flux from air to litter
   CumHeatSensAir2LitR   = 0.0_r8       !total water associated heat flux from air to litter
+  CdLitRHSens_col(NY,NX)= 0._r8       !no exposed-litter sensible exchange beneath snow
   end subroutine ZeroFlxOverSnowCoveredSoilM
 !------------------------------------------------------------------------------------------
 
@@ -1594,7 +1595,8 @@ contains
       !update snow state variables
       call UpdateSnowAtM(I,J,M,NY,NX)
 
-      if(FracSurfSnoFree_col(NY,NX)>ZEROL)call UpdateLitRAftRunoffM(I,J,M,NY,NX)
+      ! Snow cover suppresses atmospheric exchange, not accepted melt/runoff transfers.
+      call UpdateLitRAftRunoffM(I,J,M,NY,NX)
 
     ENDDO D9790
   ENDDO D9795
@@ -1776,7 +1778,8 @@ contains
       call AccumWaterVaporHeatFluxesM(I,J,M,NY,NX,LatentHeatAir2Sno,HeatSensEvapAir2Snow,HeatSensAir2Snow,&
         Radnet2Snow,VapXAir2TopLay)
 
-      if(FracSurfSnoFree_col(NY,NX)>ZEROL)call UpdateLitRBe4RunoffM(I,J,M,NY,NX)
+      ! Commit snowmelt and litter-soil exchange even under complete snow cover.
+      call UpdateLitRBe4RunoffM(I,J,M,NY,NX)
 
       if(present(Qinfl2MicP))Qinfl2MicP(NY,NX)=WaterFlow2Micpt_3D(3,NUM_col(NY,NX),NY,NX)
       if(present(Qinfl2MacP))Qinfl2MacP(NY,NX)=WaterFlow2Macpt_3D(3,NUM_col(NY,NX),NY,NX)
