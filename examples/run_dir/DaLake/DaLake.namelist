@@ -5,7 +5,7 @@
 &ecosim
 case_name          = 'DaLake'
 do_regression_test = .false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260915.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in       = '../../inputs/DaLake/DaLake_grid_20250902.nc'
 pft_mgmt_in        = '../../inputs/DaLake/DaLake_pft_20250902.nc'
 clm_hour_file_in='../../inputs/DaLake/dml_clim.hour.2004-2009.nc'
