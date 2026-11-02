@@ -35,9 +35,11 @@ module ATSEcoSIMAdvanceMod
   use ATSUtilsMod
   use EcoSIMHistMod
   !use PlantAPIData
-  use EcoSIMCtrlMod,      only: ldo_sp_mode
+  use EcoSIMCtrlMod,      only: ldo_sp_mode, microbial_model
   use EcosimBGCFluxType,  only: Eco_NetRad_col, Eco_Heat_Latent_col, &
     Eco_Heat_Sens_col, Eco_Heat_GrndSurf_col
+  use MicBGCAPI,          only : MicrobeModel
+  use ATSTracerMapMod,    only : UnpackMoleFracToEcoSIM, PackSourceFromEcoSIM
 
 
 implicit none
@@ -61,6 +63,8 @@ implicit none
   use WthrMod
   use PlantInfoMod
   use InitPlantMod
+  use Hour1Mod, only : GetChemicalConcsInSoil, GetSoluteConcentrations, &
+      Prep4PlantMicrobeUptake
   !use InitEcoSIM
   implicit none
   integer, intent(in) :: NYS  !Number of columns?
@@ -464,6 +468,21 @@ implicit none
   ! Specifically runs the CanopyEnergyH2Oiter_func
   if(ldo_sp_mode) call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
 
+  if (microbial_model) then
+    call UnpackMoleFracToEcoSIM(NYS)
+    do NY=1,NYS
+      call GetChemicalConcsInSoil(I,J,NY,NX)
+      call GetSoluteConcentrations(NY,NX)
+      call Prep4PlantMicrobeUptake(NY,NX)
+      !Do I need?
+      !call CalGasSolubility(NY,NX)
+      !call DiagActiveLayerDepth(NY,NX)
+      !if(do_instequil)call ForceGasAquaEquil(NY,NX)
+    enddo
+    call MicrobeModel(I,J,NHW,NHE,NVN,NVS)
+    call PackSourceFromEcoSIM(NYS)
+  endif
+
   DO NY=1,NYS
     !for every column send the top layer to the transfer var
     !Convert heat and water flux flux from the subcycled value
@@ -514,11 +533,7 @@ implicit none
         a_SSWS(L,NY) = a_SSWS(L,NY) + RPlantRootH2OUptk_pvr(1,L,NZ,NY,NX)
       ENDDO
 
-      if(microbe_bool)then
-        DO NK=1,num_components
-          a_MFrac_ss_source(L,NY,NK) = 0.1
-        ENDDO
-      endif
+      ! Mole fraction sources are now set by PackSourceFromEcoSIM above
 
     ENDDO
   ENDDO

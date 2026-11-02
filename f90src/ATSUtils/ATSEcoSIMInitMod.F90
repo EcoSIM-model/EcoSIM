@@ -19,6 +19,9 @@ module ATSEcoSIMInitMod
   use MiniMathMod
   use SnowDataType
   use EcoSiMParDataMod, only : micpar
+  use MicBGCAPI,        only : MicAPI_Init
+  use MicBGCMod,        only : initNitro1Layer
+  use ATSTracerMapMod,  only : InitSpeciesMap, UnpackMoleFracToEcoSIM
 implicit none
   character(len=*), private, parameter :: mod_filename=&
   __FILE__
@@ -57,7 +60,7 @@ implicit none
   column_mode      = .true.
   plant_model      = pheno_bool
   ldo_sp_mode      = pheno_bool
-  microbial_model  = .false.
+  microbial_model  = microbe_bool
   soichem_model    = .false.
   snowRedist_model = .false.
   disp_planttrait  = .false.
@@ -99,6 +102,8 @@ implicit none
     DV_col(NY,NX) = sqrt(column_area(NY))
     NU_col(NY,NX)               = a_NU(NY)
     NL_col(NY,NX)               = a_NL(NY)
+    NUI_col(NY,NX)              = a_NU(NY)
+    NLI_col(NY,NX)              = a_NL(NY)
 
     do L=NU_col(NY,NX),NL_col(NY,NX)
       CumDepz2LayBottom_vr(L,NY,NX)=a_CumDepz2LayBottom_vr(L,NY)
@@ -131,13 +136,9 @@ implicit none
       SoilBulkDensity_vr(L,NY,NX)=a_BKDSI(L,NY)/1.0e3_r8
       SoilFracAsMicP_vr(L,NY,NX) = 1.0
           
-      !CSoilOrgM_vr(ielmc,L,NY,NX)=a_CORGC(L,NY)
-      !CSoilOrgM_vr(ielmn,L,NY,NX)=a_CORGN(L,NY)
-      !CSoilOrgM_vr(ielmp,L,NY,NX)=a_CORGP(L,NY)
-      
-      CSoilOrgM_vr(ielmc,L,NY,NX)=0.0_r8
-      CSoilOrgM_vr(ielmn,L,NY,NX)=0.0_r8
-      CSoilOrgM_vr(ielmp,L,NY,NX)=0.0_r8
+      CSoilOrgM_vr(ielmc,L,NY,NX)=a_CORGC(L,NY)
+      CSoilOrgM_vr(ielmn,L,NY,NX)=a_CORGN(L,NY)
+      CSoilOrgM_vr(ielmp,L,NY,NX)=a_CORGP(L,NY)
 
     ENDDO
   ENDDO
@@ -146,6 +147,13 @@ implicit none
   PSIAtWiltPoint_col = pressure_at_wilting_point
   
   call startsim(NHW,NHE,NVN,NVS)
+
+  if (microbial_model) then
+    call MicAPI_Init()
+    call initNitro1Layer()
+    call InitSpeciesMap(num_components)
+    call UnpackMoleFracToEcoSIM(NYS)
+  endif
 
   end subroutine Init_EcoSIM_Soil
 

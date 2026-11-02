@@ -117,6 +117,9 @@ module EcoContainers_module
      integer (c_int) :: num_components
      integer (c_int) :: num_columns
      integer (c_int) :: num_pfts
+     integer (c_int) :: microbe_model      ! 0 or 1
+     integer (c_int) :: num_heter_guilds   ! heterotrophic guilds per complex (default 7)
+     integer (c_int) :: num_autor_guilds   ! autotrophic guild types (default 6)
   end type EcoSizes
 
   ! --------------------------------------------------------------------------

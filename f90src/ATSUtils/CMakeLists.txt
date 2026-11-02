@@ -2,6 +2,7 @@ set(ATSUTILS_MOD_SOURCES
   SharedDataMod.F90
   ATSUtilsMod.F90
   ATSCPLMod.F90
+  ATSTracerMapMod.F90
   ATSEcoSIMInitMod.F90
   ATSEcoSIMAdvanceMod.F90
   ATSStateRegistryMod.F90
@@ -32,6 +33,7 @@ target_include_directories(ATSUtils_mods  PRIVATE
    ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/
    ${CMAKE_BINARY_DIR}/f90src/Prescribed_pheno/
    ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
+   ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Box_Micmodel
    ${CMAKE_BINARY_DIR}/f90src/APIs/
 )
 

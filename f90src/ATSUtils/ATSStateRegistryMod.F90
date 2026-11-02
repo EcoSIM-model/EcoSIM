@@ -26,7 +26,7 @@ module ATSStateRegistryMod
 
   integer, parameter, public :: kRolePrivate = 0
   integer, parameter, public :: kRoleOutput = 1
-  integer, parameter, public :: kLayoutVersion = 1
+  integer, parameter, public :: kLayoutVersion = 2
 
   integer, parameter, public :: kNameLen = 64
   integer, parameter, public :: kUnitsLen = 32
@@ -59,6 +59,8 @@ contains
   ! The list. With bind = .false. only the layout is built, so it can be
   ! queried before EcoSIM allocates its arrays.
   use GridConsts,         only : JS, JP
+  use ElmIDMod,           only : NumPlantChemElms
+  use EcoSIMConfig,       only : jcplx => jcplxc, NumLiveMicrbCompts
   use SnowDataType,       only : VLDrySnoWE_snvr, VLWatSnow_snvr, VLIceSnow_snvr, &
     TKSnow_snvr, TCSnow_snvr, SnoDens_snvr, SnowThickL_snvr, VLSnoDWIprev_snvr, &
     VLHeatCapSnow_snvr
@@ -70,16 +72,20 @@ contains
   use ClimForcDataType,   only : TLEX_col, TSHX_col
   use SharedDataMod,      only : a_Transpiration, a_EvapCan, a_EvapGrnd, a_EvapLitr, &
     a_EvapSnow, a_Sublim
+  use MicrobialDataType,  only : mBiomeHeter_vr, mBiomeAutor_vr
   implicit none
   type(EcoSizes), intent(in) :: sizes
   logical, intent(in) :: bind
-  integer :: npft
+  integer :: npft, nHeterBioms, nAutorBioms, nlay
 
   npft = min(sizes%num_pfts, JP)
+  nHeterBioms = NumLiveMicrbCompts * sizes%num_heter_guilds
+  nAutorBioms = NumLiveMicrbCompts * sizes%num_autor_guilds
+  nlay = sizes%ncells_per_col_ + 1  ! +1 for the surface litter layer (index 0)
   bind_arrays = bind
   ncol_bind = sizes%num_columns
   if (allocated(entries)) deallocate(entries)
-  allocate(entries(32))
+  allocate(entries(48))
   nentries = 0
 
   ! state carried between advances (checkpointed by ATS)
@@ -125,6 +131,16 @@ contains
   call add2('canopy_sensible_heat', 'TSHX_col', 'MJ m-1', kRolePrivate, &
     'carry-over, not a heat flux: sensible heat flux x boundary-layer resistance, summed over previous step', &
     TSHX_col)
+
+  ! Microbe biomass state (only when microbe model is active)
+  if (sizes%microbe_model > 0) then
+    call add6('heter_biomass', 'mBiomeHeter_vr', 'g d-2', kRolePrivate, &
+      'heterotrophic microbial biomass: element x guild x complex x layer', &
+      mBiomeHeter_vr, NumPlantChemElms, nHeterBioms, jcplx, nlay)
+    call add5('autor_biomass', 'mBiomeAutor_vr', 'g d-2', kRolePrivate, &
+      'autotrophic microbial biomass: element x guild x layer', &
+      mBiomeAutor_vr, NumPlantChemElms, nAutorBioms, nlay)
+  endif
 
   ! EcoSIM-only outputs (visualized by ATS, not used by ATS physics)
   !call add1('transpiration', 'a_Transpiration', 'm3 d-2 h-1', kRoleOutput, &
@@ -212,6 +228,52 @@ contains
     entries(nentries)%p(1:1, 1:ncol_bind) => a(1:ncol_bind)
   endif
   end subroutine add1
+
+!------------------------------------------------------------------------------------------
+
+  subroutine add5(ats_name, ecosim_name, units, role, description, a, n1, n2, n3)
+  ! (d1, d2, d3, NY, NX) array; first 3 dims flattened into ncomp = n1*n2*n3
+  implicit none
+  character(len=*), intent(in) :: ats_name, ecosim_name, units, description
+  integer, intent(in) :: role, n1, n2, n3
+  real(r8), allocatable, target, intent(inout) :: a(:,:,:,:,:)
+  integer :: ncomp
+
+  ncomp = n1 * n2 * n3
+  call new_entry(ats_name, ecosim_name, units, role, description, ncomp)
+  if (bind_arrays) then
+    if (.not. allocated(a)) call endrun(trim(mod_filename)//' at line', __LINE__)
+    if (size(a,1)*size(a,2)*size(a,3) /= ncomp) then
+      write(*,*) 'add5 dimension mismatch for ', trim(ats_name), ': expected ', &
+        ncomp, ' got ', size(a,1)*size(a,2)*size(a,3)
+      call endrun(trim(mod_filename)//' at line', __LINE__)
+    endif
+    entries(nentries)%p(1:ncomp, 1:ncol_bind) => a(:,:,:, 1:ncol_bind, 1)
+  endif
+  end subroutine add5
+
+!------------------------------------------------------------------------------------------
+
+  subroutine add6(ats_name, ecosim_name, units, role, description, a, n1, n2, n3, n4)
+  ! (d1, d2, d3, d4, NY, NX) array; first 4 dims flattened into ncomp = n1*n2*n3*n4
+  implicit none
+  character(len=*), intent(in) :: ats_name, ecosim_name, units, description
+  integer, intent(in) :: role, n1, n2, n3, n4
+  real(r8), allocatable, target, intent(inout) :: a(:,:,:,:,:,:)
+  integer :: ncomp
+
+  ncomp = n1 * n2 * n3 * n4
+  call new_entry(ats_name, ecosim_name, units, role, description, ncomp)
+  if (bind_arrays) then
+    if (.not. allocated(a)) call endrun(trim(mod_filename)//' at line', __LINE__)
+    if (size(a,1)*size(a,2)*size(a,3)*size(a,4) /= ncomp) then
+      write(*,*) 'add6 dimension mismatch for ', trim(ats_name), ': expected ', &
+        ncomp, ' got ', size(a,1)*size(a,2)*size(a,3)*size(a,4)
+      call endrun(trim(mod_filename)//' at line', __LINE__)
+    endif
+    entries(nentries)%p(1:ncomp, 1:ncol_bind) => a(:,:,:,:, 1:ncol_bind, 1)
+  endif
+  end subroutine add6
 
 !------------------------------------------------------------------------------------------
 
