@@ -6,7 +6,7 @@
 case_name='BareSoil'
 prefix='../../inputs/bare_soil/'
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260915.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../../examples/inputs/bare_soil/BareSoil_grid_20250203.nc'
 pft_mgmt_in='NO'
 clm_hour_file_in='../../../examples/inputs/bare_soil/BareSoil_clim_20250203.nc'
