@@ -640,8 +640,15 @@ module InitPlantMod
   character(len=*), parameter :: subname='InitPlantPhenoMorphoBio'
 
   integer :: K,L,M,N,NB
+  real(r8) :: NumVessels
   associate(                                                                           &
     AREA3                             => plt_site%AREA3                               ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
+    AlphaVesselAxialResist_pft        => plt_morph%AlphaVesselAxialResist_pft         ,& !input  :axial resistance corrector for a single 1 m water transport vessel, [-]
+    RootVesselRadius_pft              => plt_morph%RootVesselRadius_pft               ,& !input  :typical radius of the water transport vessel in primary roots, [m]
+    Root2ndMaxRadius_pft              => plt_morph%Root2ndMaxRadius_pft               ,& !input  :maximum radius of secondary roots, [m]
+    RootSingleVesselRstaxial_pft      => plt_morph%RootSingleVesselRstaxial_pft       ,& !output :axial resistance for a single 1 m water transport vessel, [MPa h m-4]
+    RootSingleVesselArea_pft          => plt_morph%RootSingleVesselArea_pft           ,& !output :cross-sectional area of a single water transport vessel, [m2]
+    Root2ndAxialResist_pft            => plt_morph%Root2ndAxialResist_pft             ,& !output :root axial resistivity, [MPa h m-4]
     MatureGroup_pft                   => plt_pheno%MatureGroup_pft                    ,& !input  :acclimated plant maturity group, [-]
     NU                                => plt_site%NU                                  ,& !input  :current soil surface layer number, [-]
     PPX_pft                           => plt_site%PPX_pft                             ,& !input  :plant population, [plants m-2]
@@ -719,6 +726,11 @@ module InitPlantMod
   HypocotHeight_pft(NZ)              = 0._r8
   CanopyHeightLive_pft(NZ)               = 0._r8
   Cytokinin2ndConc_rpvr(:,:,:,NZ)    = 0._r8
+  !recompute vessel axial resistances from the current PFT traits, which may change between plantings
+  RootSingleVesselRstaxial_pft(NZ)     = AlphaVesselAxialResist_pft(NZ)*Rax_ref*(1.e-6_r8/RootVesselRadius_pft(NZ))**4
+  RootSingleVesselArea_pft(NZ)         = PICON*RootVesselRadius_pft(NZ)**2
+  NumVessels                           = 0.2_r8*PICON*Root2ndMaxRadius_pft(ipltroot,NZ)**2/RootSingleVesselArea_pft(NZ)
+  Root2ndAxialResist_pft(ipltroot,NZ)  = RootSingleVesselRstaxial_pft(NZ)/NumVessels
   D10: DO NB=1,MaxNumBranches
     plt_pheno%doInitLeafOut_brch(NB,NZ)           = iTrue
     plt_pheno%EnablePlantLeafOut_brch(NB,NZ)      = iTrue

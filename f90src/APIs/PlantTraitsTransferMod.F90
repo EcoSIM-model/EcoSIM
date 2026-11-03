@@ -111,6 +111,8 @@ contains
     plt_morph%StalkAxialResist_pft(NZ) =StalkAxialResist_pft(NZ,NY,NX)
     plt_morph%RootSingleVesselRstaxial_pft(NZ)  = RootSingleVesselRstaxial_pft(NZ,NY,NX)
     plt_morph%RootSingleVesselArea_pft(NZ)    = RootSingleVesselArea_pft(NZ,NY,NX)
+    plt_morph%RootVesselRadius_pft(NZ)        = RootVesselRadius_pft(NZ,NY,NX)
+    plt_morph%AlphaVesselAxialResist_pft(NZ)  = AlphaVesselAxialResist_pft(NZ,NY,NX)
     !initial root values
     DO N=1,Myco_pft(NZ,NY,NX)
       plt_morph%Root1stMaxRadius_pft(N,NZ) = Root1stMaxRadius_pft(N,NZ,NY,NX)
