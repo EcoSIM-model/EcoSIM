@@ -114,6 +114,10 @@ contains
     CMinPO4Root_pft(2,NZ,NY,NX)      = plt_rbgc%CMinPO4Root_pft(2,NZ)
     RootRadialResist_pft(2,NZ,NY,NX) = plt_morph%RootRadialResist_pft(2,NZ)
     Root2ndAxialResist_pft(2,NZ,NY,NX)  = plt_morph%Root2ndAxialResist_pft(2,NZ)
+    !vessel axial resistances are recomputed at planting in StartPlants
+    Root2ndAxialResist_pft(ipltroot,NZ,NY,NX) = plt_morph%Root2ndAxialResist_pft(ipltroot,NZ)
+    RootSingleVesselRstaxial_pft(NZ,NY,NX)    = plt_morph%RootSingleVesselRstaxial_pft(NZ)
+    RootSingleVesselArea_pft(NZ,NY,NX)        = plt_morph%RootSingleVesselArea_pft(NZ)
     CRootActVolPerMassC_pft(NZ,NY,NX)= plt_morph%CRootActVolPerMassC_pft(NZ)
     DO N=1,Myco_pft(NZ,NY,NX)
       RootMycoNonstElms_pft(1:NumPlantChemElms,N,NZ,NY,NX) = plt_biom%RootMycoNonstElms_pft(1:NumPlantChemElms,N,NZ)
