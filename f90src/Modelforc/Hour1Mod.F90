@@ -65,6 +65,7 @@ module Hour1Mod
   public :: GetChemicalConcsInSoil
   public :: GetSoluteConcentrations
   public :: Prep4PlantMicrobeUptake
+  public :: CalGasSolubility
 
   real(r8), pointer :: THETRX(:)
 !
@@ -1650,7 +1651,7 @@ module Hour1Mod
 
   GasSolbility_vr(idg_NH3B,L,NY,NX)=GasSolbility_vr(idg_NH3,L,NY,NX)
 
-  DO  L=1,NL_col(NY,NX)+1
+  DO  L=1,NL_col(NY,NX)
     ! S*L=solubility of gas in water
     ! TCS=soil temperature (oC)
     ! 5.56E+04_r8 := mole H2O / m3

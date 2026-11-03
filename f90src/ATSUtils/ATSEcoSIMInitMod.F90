@@ -12,7 +12,8 @@ module ATSEcoSIMInitMod
       FracSoiPAsIce_vr, FracAirFilledSoilPore_vr!need the only as some vars
   use CanopyDataType, only: RadSWGrnd_col
   use ClimForcDataType, only : LWRadSky_col, TairK_col, &
-      VPA_col, WindSpeedAtm_col, RainH, VPK_col
+      VPA_col, WindSpeedAtm_col, RainH, VPK_col, &
+      CO2E_col, CH4E_col, OXYE_col, Z2GE_col, Z2OE_col, ZNH3E_col, H2GE_col
   use SoilPropertyDataType
   use SurfLitterDataType
   use EcoSIMConfig
@@ -22,6 +23,8 @@ module ATSEcoSIMInitMod
   use MicBGCAPI,        only : MicAPI_Init
   use MicBGCMod,        only : initNitro1Layer
   use ATSTracerMapMod,  only : InitSpeciesMap, UnpackMoleFracToEcoSIM
+  use MicrobialDataType, only : mBiomeHeter_vr, mBiomeAutor_vr
+  use ElmIDMod,          only : ielmc
 implicit none
   character(len=*), private, parameter :: mod_filename=&
   __FILE__
@@ -115,6 +118,14 @@ implicit none
     DORGE(NY,NX)            = 0.0_r8
     QRunSurf_col(NY,NX)     = 0.0_r8
     ASP_col(NY,NX)          = a_ASP(NY)
+    ! atm_* are mol/mol from ATS; EcoSIM *E_col are umol/mol (ppm)
+    CO2E_col(NY,NX)  = atm_co2 * 1.0e6_r8
+    CH4E_col(NY,NX)  = atm_ch4 * 1.0e6_r8
+    OXYE_col(NY,NX)  = atm_o2  * 1.0e6_r8
+    Z2GE_col(NY,NX)  = atm_n2  * 1.0e6_r8
+    Z2OE_col(NY,NX)  = atm_n2o * 1.0e6_r8
+    ZNH3E_col(NY,NX) = atm_nh3 * 1.0e6_r8
+    H2GE_col(NY,NX)  = atm_H2  * 1.0e6_r8
     TairK_col(NY,NX)=tairc(NY) !it's already in K??
     !convert VPA from ATS units (Pa) to EcoSIM (MPa)
     VPK_col(NY,NX)          = vpair(NY)/1.0e3 !vapor pressure in kPa
@@ -135,7 +146,12 @@ implicit none
       SoiBulkDensityt0_vr(L,NY,NX)=a_BKDSI(L,NY)/1.0e3_r8
       SoilBulkDensity_vr(L,NY,NX)=a_BKDSI(L,NY)/1.0e3_r8
       SoilFracAsMicP_vr(L,NY,NX) = 1.0
-          
+
+      if (a_CORGC(L,NY) .LT. 1.0e-6_r8) then
+        a_CORGC(L,NY) = 20.0_r8 * exp(-0.3_r8 * real(L,r8))
+        a_CORGN(L,NY) = a_CORGC(L,NY) / 12.0_r8
+        a_CORGP(L,NY) = a_CORGC(L,NY) / 150.0_r8
+      endif
       CSoilOrgM_vr(ielmc,L,NY,NX)=a_CORGC(L,NY)
       CSoilOrgM_vr(ielmn,L,NY,NX)=a_CORGN(L,NY)
       CSoilOrgM_vr(ielmp,L,NY,NX)=a_CORGP(L,NY)
@@ -153,6 +169,18 @@ implicit none
     call initNitro1Layer()
     call InitSpeciesMap(num_components)
     call UnpackMoleFracToEcoSIM(NYS)
+
+    write(*,*) '=== MICROBE INIT DIAGNOSTICS ==='
+    do NY=1,NYS
+      do L=a_NU(NY),a_NL(NY)
+        write(*,'(A,2I4,4E12.4)') ' L,NY, CSoilOrgM_C, biomH_C, biomA_C, SolidOM_C:', &
+          L, NY, CSoilOrgM_vr(ielmc,L,NY,1), &
+          SUM(mBiomeHeter_vr(ielmc,:,:,L,NY,1)), &
+          SUM(mBiomeAutor_vr(ielmc,:,L,NY,1)), &
+          SUM(SolidOM_vr(ielmc,:,:,L,NY,1))
+      enddo
+    enddo
+    write(*,*) '=== END MICROBE INIT DIAGNOSTICS ==='
   endif
 
   end subroutine Init_EcoSIM_Soil

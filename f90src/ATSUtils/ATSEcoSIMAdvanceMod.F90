@@ -28,6 +28,7 @@ module ATSEcoSIMAdvanceMod
   use UnitMod    , only : units
   use EcoSIMCtrlDataType
   use MiniMathMod
+  use MiniFuncMod, only : TortMicporew, FilmThickness
   use ClimForcDataType
   use PrescribePhenolMod
   use RootDataType
@@ -40,6 +41,9 @@ module ATSEcoSIMAdvanceMod
     Eco_Heat_Sens_col, Eco_Heat_GrndSurf_col
   use MicBGCAPI,          only : MicrobeModel
   use ATSTracerMapMod,    only : UnpackMoleFracToEcoSIM, PackSourceFromEcoSIM
+  use SoilBGCDataType,    only : trcs_RMicbUptake_vr, RNut_MicbRelease_vr, trc_solcl_vr
+  use ChemTranspDataType, only : GasSolbility_vr
+  use TracerIDMod
 
 
 implicit none
@@ -64,7 +68,7 @@ implicit none
   use PlantInfoMod
   use InitPlantMod
   use Hour1Mod, only : GetChemicalConcsInSoil, GetSoluteConcentrations, &
-      Prep4PlantMicrobeUptake
+      Prep4PlantMicrobeUptake, CalGasSolubility
   !use InitEcoSIM
   implicit none
   integer, intent(in) :: NYS  !Number of columns?
@@ -172,13 +176,14 @@ implicit none
 
     ASP_col(NY,NX)=a_ASP(NY)
     !TairKClimMean_col(NY,NX) = a_ATKA(NY)
-    !CO2E_col(NY,NX)      = atm_co2
-    !CH4E_col(NY,NX)      = atm_ch4
-    !OXYE_col(NY,NX)      = atm_o2
-    !Z2GE_col(NY,NX)      = atm_n2
-    !Z2OE_col(NY,NX)      = atm_n2o
-    !ZNH3E_col(NY,NX)     = atm_nh3
-    !H2GE_col(NY,NX)      = atm_H2
+    ! atm_* are mol/mol from ATS; EcoSIM *E_col are umol/mol (ppm)
+    CO2E_col(NY,NX)      = atm_co2 * 1.0e6_r8
+    CH4E_col(NY,NX)      = atm_ch4 * 1.0e6_r8
+    OXYE_col(NY,NX)      = atm_o2  * 1.0e6_r8
+    Z2GE_col(NY,NX)      = atm_n2  * 1.0e6_r8
+    Z2OE_col(NY,NX)      = atm_n2o * 1.0e6_r8
+    ZNH3E_col(NY,NX)     = atm_nh3 * 1.0e6_r8
+    H2GE_col(NY,NX)      = atm_H2  * 1.0e6_r8
     TairK_col(NY,NX)      = tairc(NY)
     !convert VPA from ATS units (Pa) to EcoSIM (MPa)
     !VPA(NY,NX) = vpair(NY)/1.0e6_r8
@@ -242,6 +247,13 @@ implicit none
       ! get it out of the ATS WRM model
       HYCDMicP4RootUptake_vr(L,NY,NX) = 0.000571
       THETW_vr(L,NY,NX) = a_LSAT(L,NY) !relative Saturation of soil micropores in layerL
+      do M=1,NPH
+        TortMicPM_vr(M,L,NY,NX) = TortMicporew(THETW_vr(L,NY,NX)) * (1.0_r8 - SoilFracAsMacP_vr(L,NY,NX))
+        VLWatMicPM_vr(M,L,NY,NX) = VLWatMicP_vr(L,NY,NX)
+        ! WatsubMod doesn't run in ATS coupling; compute water film thickness here.
+        ! PSISoilMatricP_vr stays at 0 (saturated) since ATS doesn't set it via PSI.
+        FILMM_vr(M,L,NY,NX) = FilmThickness(PSISoilMatricP_vr(L,NY,NX))
+      enddo
 
       !Parameters needed for water balance after phenology is added:
       !Do I need to compute VGeom or is it already there
@@ -474,13 +486,40 @@ implicit none
       call GetChemicalConcsInSoil(I,J,NY,NX)
       call GetSoluteConcentrations(NY,NX)
       call Prep4PlantMicrobeUptake(NY,NX)
-      !Do I need?
-      !call CalGasSolubility(NY,NX)
+      call CalGasSolubility(NY,NX)
       !call DiagActiveLayerDepth(NY,NX)
       !if(do_instequil)call ForceGasAquaEquil(NY,NX)
     enddo
     call MicrobeModel(I,J,NHW,NHE,NVN,NVS)
     call PackSourceFromEcoSIM(NYS)
+
+    write(*,*) '=== MICROBE ADVANCE DIAGNOSTICS ==='
+    do NY=1,NYS
+      do L=a_NU(NY),a_NL(NY)
+        write(*,'(A,2I4,4E12.4)') ' L,NY CO2_src, O2_src, CH4_src, GasSolO2:', &
+          L, NY, &
+          trcs_RMicbUptake_vr(idg_CO2,L,NY,1), &
+          trcs_RMicbUptake_vr(idg_O2,L,NY,1), &
+          trcs_RMicbUptake_vr(idg_CH4,L,NY,1), &
+          GasSolbility_vr(idg_O2,L,NY,1)
+        write(*,'(A,2I4,2E12.4)') ' L,NY dissolvedO2_cl, AtmGasO2:', &
+          L, NY, &
+          trc_solcl_vr(idg_O2,L,NY,1), &
+          AtmGasCgperm3_col(idg_O2,NY,1)
+        write(*,'(A,2I4,4E12.4)') ' L,NY THETW_vr, TortMicPM(1), VLWatMicPM(1), VLWatMicPM(NPH):', &
+          L, NY, &
+          THETW_vr(L,NY,1), &
+          TortMicPM_vr(1,L,NY,1), &
+          VLWatMicPM_vr(1,L,NY,1), &
+          VLWatMicPM_vr(NPH,L,NY,1)
+        write(*,'(A,2I4,3E12.4)') ' L,NY NH4_rel, NO3_rel, a_MFrac_src_CO2:', &
+          L, NY, &
+          RNut_MicbRelease_vr(ids_NH4,L,NY,1), &
+          RNut_MicbRelease_vr(ids_NO3,L,NY,1), &
+          a_MFrac_ss_source(L,NY,1)
+      enddo
+    enddo
+    write(*,*) '=== END MICROBE ADVANCE DIAGNOSTICS ==='
   endif
 
   DO NY=1,NYS

@@ -478,13 +478,6 @@ implicit none
   trcs_RMicbUptake_vr(idg_N2O,L,NY,NX) = micflx%RN2ONetUptkMicb
   tRespGrossHeterUlm_vr(L,NY,NX)       = naqfdiag%tRespGrossHeterUlm
   tRespGrossHeter_vr(L,NY,NX)          = naqfdiag%tRespGrossHeter
-  !artificial source
-  if(L>0 .and. L<5)then
-    trcs_RMicbUptake_vr(idg_Ar,L,NY,NX)  = -0.01_r8
-  else
-    trcs_RMicbUptake_vr(idg_Ar,L,NY,NX)  = 0._r8
-  endif  
-
   RNut_MicbRelease_vr(ids_NH4,L,NY,NX)    = micflx%RNH4MicbReliz2Soil
   RNut_MicbRelease_vr(ids_NO3,L,NY,NX)    = micflx%RNO3MicbReliz2Soil
   RNut_MicbRelease_vr(ids_NO2,L,NY,NX)    = micflx%RNO2MicbReliz2Soil

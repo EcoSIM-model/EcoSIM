@@ -19,7 +19,11 @@ implicit none
   logical :: is_top_layer_loc
   is_top_layer_loc=.false.
   if(PRESENT(is_top_layer))is_top_layer_loc=is_top_layer
-  if(is_top_layer_loc)then
+  ! For saturated conditions (PSISM >= 0), LOG(-PSISM) is undefined.
+  ! Return a large film thickness representing pore-filling water.
+  if(PSISM >= 0._r8)then
+    ans = 1.0e-3_r8
+  elseif(is_top_layer_loc)then
     ans=AMAX1(ppmc,EXP(-13.650_r8-0.857_r8*LOG(-PSISM)))
   else
     ans=AMAX1(ppmc,EXP(-13.833_r8-0.857_r8*LOG(-PSISM)))

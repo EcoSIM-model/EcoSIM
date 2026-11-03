@@ -124,12 +124,13 @@ contains
           ! mol/mol * mol/m³ * g/mol = g/m³
           conc_g_m3 = a_MFrac(L,NY,species_map(k)%ats_index+1) &
                     * a_LDENS(L,NY) * species_map(k)%mol_weight
-
+          
           if (species_map(k)%phase == PHASE_GAS) then
             trcg_gascl_vr(eid, L, NY, NX) = conc_g_m3
-            ! mass = concentration * gas-filled pore volume
-            ! For now approximate with layer volume * air-filled fraction
             trcg_gasml_vr(eid, L, NY, NX) = conc_g_m3 * VGeomLayer_vr(L,NY,NX)
+            ! ATS passes dissolved concentrations; populate solml so GetChemicalConcsInSoil
+            ! can compute trc_solcl_vr correctly (gas mass alone is zeroed in saturated soil)
+            trcs_solml_vr(eid, L, NY, NX) = conc_g_m3 * VLWatMicP_vr(L, NY, NX)
           else
             trc_solcl_vr(eid, L, NY, NX)  = conc_g_m3
             ! mass = concentration * liquid water volume in layer
