@@ -149,6 +149,7 @@ module PlantMorphologyAPIData
   real(r8), pointer :: Root2ndMaxRadius_pft(:,:)      => null() !maximum radius of secondary roots,    [m]
   real(r8), pointer :: RootSingleVesselRstaxial_pft(:)       => null() !axial resistance for a single 1 m water transport vessel [MPa h m-4]
   real(r8), pointer :: RootVesselRadius_pft(:)        => null() !typical radius of the water transport vessel in primary roots, [m]
+  real(r8), pointer :: AlphaVesselAxialResist_pft(:)  => null() !axial resistance corrector for a single 1 m water transport vessel, [-]
   real(r8), pointer :: RootRadialResist_pft(:,:)      => null() !root radial resistivity,              [MPa h m-2]
   real(r8), pointer :: Root2ndAxialResist_pft(:,:)       => null() !root axial resistivity,               [MPa h m-4]
   real(r8), pointer :: totRootLenDens_vr(:)           => null() !total root length density,            [m m-3]
@@ -362,6 +363,7 @@ contains
   allocate(this%RootRadialResist_pft(jroots,JP1));this%RootRadialResist_pft=spval
   allocate(this%RootSingleVesselRstaxial_pft(JP1));      this%RootSingleVesselRstaxial_pft=spval
   allocate(this%RootVesselRadius_pft(JP1));      this%RootVesselRadius_pft=spval
+  allocate(this%AlphaVesselAxialResist_pft(JP1)); this%AlphaVesselAxialResist_pft=spval
   allocate(this%Root2ndAxialResist_pft(jroots,JP1));this%Root2ndAxialResist_pft=spval
   allocate(this%iPlantGrainType_pft(JP1));this%iPlantGrainType_pft=0
   end subroutine plt_morph_init
