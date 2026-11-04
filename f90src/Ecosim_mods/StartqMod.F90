@@ -94,7 +94,7 @@ module StartqMod
 !
 !     FILL OUT UNUSED ARRAYS
 !
-      D9986: DO NZ=NP_col(NY,NX)+1,JP
+      D9986: DO NZ=NP0_col(NY,NX)+1,JP
         SurfLitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ,NY,NX) = 0._r8
         LitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ,NY,NX)     = 0._r8
         StandDeadStrutElms_pft(1:NumPlantChemElms,NZ,NY,NX)         = 0._r8
@@ -736,7 +736,7 @@ module StartqMod
   !
   !     INITIALIZE MASS BALANCE CHECKS
   !
-  IF(.not.is_restart().AND.is_first_year)THEN
+  IF(is_cold_run().AND.is_first_year)THEN
     GrossCO2Fix_pft(NZ,NY,NX)                                   = 0._r8
     SurfLitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ,NY,NX) = 0._r8
     GrossResp_pft(NZ,NY,NX)                                     = 0._r8

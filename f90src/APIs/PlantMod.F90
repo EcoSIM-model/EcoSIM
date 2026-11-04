@@ -4,7 +4,7 @@ module PlantMod
   use PlantPhenolMod,    only: PhenologyUpdate
   use UptakesMod,        only: RootUptakes
   use PlantDisturbMod,   only: PrepLandscapeGrazing
-  use PlantMgmtDataType, only: NP_col
+  use PlantMgmtDataType, only: NP_col, NP0_col
   use MiniMathMod,       only: fixEXConsumpFlux
   use EcoSIMCtrlMod,     only: lverb, ldo_sp_mode
   use PlantDebugMod,     only: PrintRootTracer
@@ -71,7 +71,7 @@ implicit none
       
         call  PlantAPISend(yearIJ,NY,NX)
 
-        call EnterPlantBalance(yearIJ,NP_col(NY,NX))
+        call EnterPlantBalance(yearIJ,NP0_col(NY,NX))
 
         if(yearIJ%J.eq.1) then          
           SeedCDeposition_1d = SeedCDeposition_pft(:,NY,NX)
@@ -93,7 +93,7 @@ implicit none
         
         Call ReSeedPlants(yearIJ,NP_col(NY,NX))
         
-        call ExitPlantBalance(yearIJ,NP_col(NY,NX))
+        call ExitPlantBalance(yearIJ,NP0_col(NY,NX))
 
         call PlantAPIRecv(yearIJ%I,yearIJ%J,NY,NX)
         

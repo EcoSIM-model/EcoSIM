@@ -63,6 +63,7 @@ module InitPlantMod
     PPX_pft               => plt_site%PPX_pft                 ,& !output :plant population, [plants m-2]    
     NL                    => plt_site%NL                      ,& !input  :lowest soil layer number,[-]
     NP                    => plt_site%NP                      ,& !input  :current number of plant species,[-]
+    NP0                   => plt_site%NP0                     ,& !input  :number of tracked slots, including fallow residue,[-]
     NU                    => plt_site%NU                      ,& !input  :current soil surface layer number, [-]
     PlantPopuLive_pft     => plt_site%PlantPopuLive_pft       ,& !input  :plant population, [d-2]
     PlantPopuDead_pft     => plt_site%PlantPopuDead_pft       ,& !input  :live+standing dead plant population, [d-2]
@@ -142,7 +143,7 @@ module InitPlantMod
 !
 !     FILL OUT UNUSED ARRAYS
 !
-  D9986: DO NZ=NP+1,JP1
+  D9986: DO NZ=NP0+1,JP1
     plt_bgcr%SurfLitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ) = 0._r8
     plt_bgcr%LitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ)     = 0._r8
     plt_biom%StandDeadStrutElms_pft(1:NumPlantChemElms,NZ)         = 0._r8
@@ -891,7 +892,7 @@ module InitPlantMod
 !
 !     INITIALIZE MASS BALANCE CHECKS
 !  
-  IF(.not.is_restart().AND.is_first_year)THEN
+  IF(is_cold_run().AND.is_first_year)THEN
     GrossCO2Fix_pft(NZ)                                   = 0._r8
     SurfLitrfalStrutElms_CumYr_pft(1:NumPlantChemElms,NZ) = 0._r8
     GrossResp_pft(NZ)                                     = 0._r8

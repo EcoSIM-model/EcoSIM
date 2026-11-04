@@ -88,7 +88,8 @@ implicit none
 
   D9995: DO NX=NHW,NHE
     D9990: DO NY=NVN,NVS
-      D9985: DO NZ=1,NP_col(NY,NX)
+      !fallow slots NP_col+1..NP0_col reload the traits of their residue PFT
+      D9985: DO NZ=1,NP0_col(NY,NX)
 !
 !       OPEN PFT(11), PFT MANAGEMENT(12) FILES FROM
 !       FILE NAMES IN DATA ARRAYS LOADED IN MAIN.F
@@ -299,7 +300,7 @@ implicit none
   ! initialize the disturbance arrays
   DO NX=NHW,NHE
     DO NY=NVN,NVS
-      DO NZ=1,NP_col(NY,NX)
+      DO NZ=1,NP0_col(NY,NX)
         DO M=1,366
           iHarvstType_pft(NZ,M,NY,NX)                                   = -1
           jHarvstType_pft(NZ,M,NY,NX)                                   = 0     !do not terminate
@@ -825,6 +826,9 @@ implicit none
     loc=DATAPI(NZ,NY,NX)
   else
     loc=get_pft_loc(KoppenClimZone_col(NY,NX),DATAP(NZ,NY,NX)(1:6),pft_lname,koppen_climl,koppen_clims)
+    !trait-table index of the PFT in this slot, kept in restart files so that a
+    !fallow slot can reload the traits of the PFT whose residue it holds
+    DATAPI(NZ,NY,NX)=loc
   endif
   StemSpecVolume_pft(NZ,NY,NX) = 1.e-6_r8/StemMassDensity_tab(loc)
   iEmbryophyteType_pft(NZ,NY,NX)     = iEmbryophyteType_pft_tab(loc)
@@ -1611,6 +1615,7 @@ implicit none
   integer :: IDATE
   integer :: NPP(JY,JX)
   integer :: IYR,NX,NY,NZ,NN,NH1,NH2,NV1,NV2,NS
+  integer :: NA        !number of PFT slots named for this year; the rest of the NS slots are fallow
   CHARACTER(len=2) :: CLIMATE
   integer :: ntopou,NTOPO
   type(file_desc_t) :: pftinfo_nfid
@@ -1623,7 +1628,7 @@ implicit none
   character(len=10) :: pft_gtype(JP)
 
   call PrintInfo('beg '//subname)
-  IF(is_first_year)THEN
+  IF(is_first_year .and. is_cold_run())THEN
     D9999: DO NX=NHW,NHE
       DO  NY=NVN,NVS
         DO NZ=1,JP
@@ -1724,6 +1729,7 @@ implicit none
           ENDDO D4990
         ENDDO D4995
 
+        NA=0
         IF(NS.GT.0)THEN
           ! a vegetated topo unit
           call check_var(pftinfo_nfid, 'pft_type', vardesc, readvar)
@@ -1734,9 +1740,23 @@ implicit none
             start = (/1,1,NTOPO,iyear/),count = (/len(pft_gtype(1)),JP,1,1/)), &
             trim(mod_filename)//':: at line '//trim(int2str(__LINE__)))
 
+          ! A blank pft_type marks a fallow slot for this year. Named slots come first,
+          ! so slots NA+1..NS are fallow and keep only the residue of their last crop.
+          DO NZ=1,NS
+            if(is_blank_pft(pft_gtype(NZ)))exit
+            NA=NZ
+          ENDDO
+          DO NZ=NA+1,NS
+            if(.not.is_blank_pft(pft_gtype(NZ)))then
+              write(iulog,*)subname//': topo unit ',NTOPO,' year record ',iyear, &
+                ' names PFT slot ',NZ,' after blank slot ',NA+1
+              call endrun('fallow (blank) pft_type slots must follow the named slots in '//subname,__LINE__)
+            endif
+          ENDDO
+
           D4975: DO NX=NH1,NH2
             D4970: DO NY=NV1,NV2
-              D4965: DO NZ=1,NS
+              D4965: DO NZ=1,NA
                 flag_active_pft(NZ,NY,NX)=.true.
                 !modify pft name 
                 IF(KoppenClimZone_col(NY,NX).GT.0)THEN
@@ -1757,6 +1777,7 @@ implicit none
                 flag_active_pft(2:NS,NY,NX)=.false.
                 NP0_col(NY,NX)=1
                 NS=1
+                NA=MIN(NA,1)
               endif  
             ENDDO D4970
           ENDDO D4975
@@ -1764,13 +1785,23 @@ implicit none
 
         D8995: DO NX=NH1,NH2
           D8990: DO NY=NV1,NV2
-            NP_col(NY,NX)=NS
-            !DATAP(NZ,NY,NX) and DATAM(NZ,NY,NX) are to be read in readqmod.F90
-            D100: DO NZ=1,NP_col(NY,NX)
+            call CheckPFTSlotChange(NTOPO,NA,NS,NY,NX)
+            !NP_col slots grow; slots NP_col+1..NP0_col are fallow
+            NP_col(NY,NX)=NA
+            !PFT names for this year; their traits are read in readq
+            D100: DO NZ=1,NA
               DATAP(NZ,NY,NX)=DATAX_pft(NZ)
             ENDDO D100
+            !a fallow slot keeps the name of the PFT whose residue it holds
+            D102: DO NZ=NA+1,NS
+              if(DATAPI(NZ,NY,NX).GT.0)then
+                DATAP(NZ,NY,NX)=pftss_tab(DATAPI(NZ,NY,NX))
+              else
+                DATAP(NZ,NY,NX)='NO'
+              endif
+            ENDDO D102
 
-            D101: DO NZ=NP_col(NY,NX)+1,JP
+            D101: DO NZ=NS+1,JP
               DATAP(NZ,NY,NX)='NO'
             ENDDO D101
           ENDDO D8990
@@ -1781,6 +1812,68 @@ implicit none
   endif
   call PrintInfo('end '//subname)
   end subroutine ReadPlantInfoNC
+!------------------------------------------------------------------------------------------
+
+  logical function is_blank_pft(pft_name)
+  !
+  !Description
+  !true when a pft_type entry is empty (blank or NetCDF null characters), i.e. a fallow slot
+  implicit none
+  character(len=*), intent(in) :: pft_name
+
+  is_blank_pft=len_trim(pft_name)==0 .or. ichar(pft_name(1:1))==0
+  end function is_blank_pft
+!------------------------------------------------------------------------------------------
+
+  subroutine CheckPFTSlotChange(NTOPO,NA,NS,NY,NX)
+  !
+  !Description
+  !Check the PFT slots of a column before this year's PFT names are assigned.
+  !Slots NA+1..NS turn fallow: their plants must already be dead, because fallow
+  !slots get no growth, respiration or senescence. Slots 1..NA that change PFT while
+  !holding standing dead must keep the same woody status, because the litter class
+  !and decay rate of standing dead are taken from the current PFT traits.
+  use ElmIDMod, only : ielmc
+  implicit none
+  integer, intent(in) :: NTOPO   !topographic unit
+  integer, intent(in) :: NA      !number of named PFT slots this year
+  integer, intent(in) :: NS      !number of PFT slots of the column
+  integer, intent(in) :: NY,NX
+
+  character(len=*), parameter :: subname='CheckPFTSlotChange'
+  character(len=40) :: pft_lname
+  character(len=64) :: koppen_climl
+  character(len=3)  :: koppen_clims
+  integer :: NZ,loc_old,loc_new
+  logical :: woody_old,woody_new
+
+  call PrintInfo('beg '//subname)
+  DO NZ=NA+1,NS
+    if(iPlantStateLive_pft(NZ,NY,NX).EQ.iTrue)then
+      write(iulog,*)subname//': topo unit ',NTOPO,' column ',NY,NX,' PFT slot ',NZ, &
+        ' (',trim(DATAP(NZ,NY,NX)),') is still alive at the start of its fallow year'
+      call endrun('schedule a harvest that kills the plant before a fallow year in '//subname,__LINE__)
+    endif
+  ENDDO
+
+  DO NZ=1,NA
+    loc_old=DATAPI(NZ,NY,NX)
+    if(loc_old.LE.0 .or. StandDeadStrutElms_pft(ielmc,NZ,NY,NX).LE.0._r8)cycle
+    loc_new=get_pft_loc(KoppenClimZone_col(NY,NX),DATAX_pft(NZ)(1:6),pft_lname,koppen_climl,koppen_clims)
+    if(loc_new.EQ.loc_old)cycle
+    woody_old=iPlantTurnoverPattern_tab(loc_old).NE.0 .and. &
+      is_plant_woody_vascular(iPlantRootProfile_tab(loc_old),iPlant2ndGrothPattern_tab(loc_old))
+    woody_new=iPlantTurnoverPattern_tab(loc_new).NE.0 .and. &
+      is_plant_woody_vascular(iPlantRootProfile_tab(loc_new),iPlant2ndGrothPattern_tab(loc_new))
+    if(woody_old.NEQV.woody_new)then
+      write(iulog,*)subname//': topo unit ',NTOPO,' column ',NY,NX,' PFT slot ',NZ,' changes from ', &
+        trim(pftss_tab(loc_old)),' to ',trim(DATAX_pft(NZ)),' with standing dead C ', &
+        StandDeadStrutElms_pft(ielmc,NZ,NY,NX)
+      call endrun('woody and non-woody PFTs cannot share a slot holding standing dead in '//subname,__LINE__)
+    endif
+  ENDDO
+  call PrintInfo('end '//subname)
+  end subroutine CheckPFTSlotChange
 
 !------------------------------------------------------------------------------------------
 

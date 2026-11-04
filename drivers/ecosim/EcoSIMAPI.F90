@@ -508,6 +508,21 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
           if(do_timing)call start_timer(t1)
           call restFile(flag='read')
           if(do_timing)call end_timer('RestartRead',t1)
+          ! A January checkpoint precedes the new year's plant-management read.
+          ! Restore last year's state first, then apply this year's slot counts,
+          ! planting records and traits, as in an uninterrupted annual transition.
+          if(I==1 .and. J==1)then
+            call ReadAtmosComposition(iYearCurrent,NHW,NHE,NVN,NVS)
+            if(plant_model)then
+              if(do_timing)call start_timer(t1)
+              call ReadPlantInfo(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
+              if(do_timing)call end_timer('ReadPlantInfo',t1)
+            endif
+            ! Checkpoints also contain the previous year's soil-management
+            ! state. Re-read the annual schedule against the restored geometry.
+            call ReadClimSoilForcing(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS,RefreshRainChem)
+            if(soichem_model)call STARTE(NHW,NHE,NVN,NVS,RefreshRainChem)
+          endif
           call CompleteDailySetup(I,J,NHW,NHE,NVN,NVS)
           if (j==1)then
             if(do_timing)call start_timer(t1)

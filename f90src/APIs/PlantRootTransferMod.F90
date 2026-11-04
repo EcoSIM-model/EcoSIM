@@ -181,6 +181,11 @@ contains
   integer, intent(in) :: NY,NX,NZ
   integer :: L,N,NE
 
+    ! Unrooted layers retain these caches until roots regrow into them.
+    plt_ew%RootRadialKond2H2O_pvr(:,:,NZ)=RootRadialKond2H2O_pvr(:,:,NZ,NY,NX)
+    plt_ew%RootAxialKond2H2O_pvr(:,:,NZ)=RootAxialKond2H2O_pvr(:,:,NZ,NY,NX)
+    plt_rbgc%RootAtmGasConductance_rpvr(:,:,:,NZ)=RootAtmGasConductance_rpvr(:,:,:,NZ,NY,NX)
+
     DO L=1,NL_col(NY,NX)
       DO NE=1,NumPlantChemElms
         plt_biom%RootNodulStrutElms_rpvr(NE,L,NZ) =RootNodulStrutElms_rpvr(NE,L,NZ,NY,NX)

@@ -3,7 +3,7 @@ module SoilLayerDynMod
 ! subroutines to do soil relayering
   use data_kind_mod,     only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod,  only: micpar
-  use PlantMgmtDataType, only: NP_col
+  use PlantMgmtDataType, only: NP_col, NP0_col
   use minimathmod,       only: AZMAX1
   use UnitMod,           only: units
   use EcoSIMConfig,      only: ndbiomcp => NumDeadMicrbCompts,NumMicbAFunGrupsPerCmplx,NumMicbHFunGrupsPerCmplx
@@ -1112,7 +1112,7 @@ implicit none
     ENDDO
 
     ! Root and mycorrhizal pools.
-    DO  NZ=1,NP_col(NY,NX)
+    DO  NZ=1,NP0_col(NY,NX)
       IF(RootMycoActiveBiomC_pvr(ipltroot,L0,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX) &
         .AND. RootMycoActiveBiomC_pvr(ipltroot,L1,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX))THEN
 
@@ -1301,7 +1301,7 @@ implicit none
     ENDDO
 
     ! Root and mycorrhizal pools.
-    DO  NZ=1,NP_col(NY,NX)
+    DO  NZ=1,NP0_col(NY,NX)
       IF(RootMycoActiveBiomC_pvr(ipltroot,L0,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX) &
         .AND. RootMycoActiveBiomC_pvr(ipltroot,L1,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX))THEN
         DO NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)

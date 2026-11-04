@@ -139,7 +139,7 @@ module StarteMod
                     solutevar%CSOZ = trcsalt_rain_mole_conc_col(idsalt_SO4,NY,NX)
                     solutevar%CCLZ = trcsalt_rain_mole_conc_col(idsalt_Cl,NY,NX)
                   endif
-                ELSEIF(K.EQ.micpar%k_POM.AND.(.not.is_restart()).AND.is_first_year)THEN
+                ELSEIF(K.EQ.micpar%k_POM.AND.is_cold_run().AND.is_first_year)THEN
 !
 !     INITIALIZE SOIL WATER
 
@@ -354,7 +354,7 @@ module StarteMod
 ! for the POM complex, on the first day in the first year
 ! U means surface irrigation
 ! first year and not a restart run
-  ELSEIF(K.EQ.micpar%k_POM.AND.I.EQ.1 .AND. (.not.is_restart()).AND.is_first_year)THEN
+  ELSEIF(K.EQ.micpar%k_POM.AND.I.EQ.1 .AND. is_cold_run().AND.is_first_year)THEN
     CCOU                           = solutevar%H2CO3_aque_mole_conc*catomw
     CCHU                           = solutevar%CH4_aque_mole_conc*catomw
     COXU                           = 0._r8
@@ -534,7 +534,7 @@ module StarteMod
 !
 !     INITIAL STATE VARIABLES FOR MINERALS IN SURFACE RESIDUE
 ! not restart run and first year
-  IF(.not.is_restart().AND.is_first_year)THEN
+  IF(is_cold_run().AND.is_first_year)THEN
     trcs_solml_vr(ids_nuts_beg:ids_nuts_end,0,NY,NX)=0._r8
 
     trcx_solml_vr(idx_NH4,0,NY,NX)    = 0._r8
