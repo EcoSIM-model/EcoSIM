@@ -148,6 +148,10 @@ module grosubsMod
     NH3Emis_CumYr_pft              => plt_bgcr%NH3Emis_CumYr_pft               ,& !input  :total canopy NH3 flux, [gN d-2 ]
     NH3byFire_CumYr_pft            => plt_distb%NH3byFire_CumYr_pft            ,& !input  :plant NH3 emission from fire, [g d-2 ]
     NP0                            => plt_site%NP0                             ,& !input  :intitial number of plant species,[-]
+    NP                             => plt_site%NP                              ,& !input  :current number of plant species,[-]
+    NU                             => plt_site%NU                              ,& !input  :current soil surface layer number, [-]
+    TKS_vr                         => plt_ew%TKS_vr                            ,& !input  :mean annual soil temperature, [K]
+    TempOffset_pft                 => plt_pheno%TempOffset_pft                 ,& !input  :adjustment of Arhhenius curves for plant thermal acclimation, [oC]
     NetCumElmntFlx2Plant_pft       => plt_pheno%NetCumElmntFlx2Plant_pft       ,& !input  :effect of canopy element status on seed set, [-]
     NumOfBranches_pft              => plt_morph%NumOfBranches_pft              ,& !input  :number of branches,[-]
     PO4byFire_CumYr_pft            => plt_distb%PO4byFire_CumYr_pft            ,& !input  :plant PO4 emission from fire, [g d-2 ]
@@ -158,7 +162,7 @@ module grosubsMod
     ShootElms_pft                  => plt_biom%ShootElms_pft                   ,& !input  :canopy shoot structural chemical element mass, [g d-2]
     EnablePlantLeafOut_brch        => plt_pheno%EnablePlantLeafOut_brch        ,& !input  :branch phenology flag, [-]
     iPlant2ndGrothPattern_pft      => plt_pheno%iPlant2ndGrothPattern_pft      ,& !input  :plant expression of secondary growth, [-]                
-    fTCanopyGroth_pft              => plt_pheno%fTCanopyGroth_pft              ,& !input  :canopy temperature growth function, [-]
+    fTCanopyGroth_pft              => plt_pheno%fTCanopyGroth_pft              ,& !inoput :canopy temperature growth function, [-]
     iPlantRootProfile_pft          => plt_pheno%iPlantRootProfile_pft          ,& !input  :plant growth type (vascular, non-vascular),[-]
     iPlantTurnoverPattern_pft      => plt_pheno%iPlantTurnoverPattern_pft      ,& !input  :phenologically-driven above-ground turnover: all, foliar only, none,[-]
     iYearCurrent                   => plt_site%iYearCurrent                    ,& !input  :current year,[-]
@@ -178,6 +182,11 @@ module grosubsMod
   )
   call PrintInfo('beg '//subname)
   D9975: DO NZ=1,NP0
+    if(NZ.GT.NP)then
+      !fallow slot: residue only, so the canopy temperature function is not
+      !updated by the uptake model; use the soil surface temperature instead
+      fTCanopyGroth_pft(NZ)=calc_canopy_grow_tempf(real_truncate(TKS_vr(NU)+TempOffset_pft(NZ),1.e-3_r8))
+    endif
     if(iPlantTurnoverPattern_pft(NZ).EQ.0 .OR. .NOT.is_plant_woody_vascular(iPlantRootProfile_pft(NZ),iPlant2ndGrothPattern_pft(NZ)))then
       StandingDeadKd=StandingDeadKd_decid
     else

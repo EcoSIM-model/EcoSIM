@@ -270,6 +270,17 @@ contains
   use EcoSIMConfig, only : jsken=>jskenc,jcplx=>jcplxc
   integer, intent(in) :: I,NY,NX,NZ
 
+    ! Restore prior-step response caches for this column, including dead slots.
+    plt_photo%TFN_Carboxy_pft(NZ) = TFN_Carboxy_pft(NZ,NY,NX)
+    plt_photo%TFN_Oxygen_pft(NZ) = TFN_Oxygen_pft(NZ,NY,NX)
+    plt_photo%TFN_eTranspt_pft(NZ) = TFN_eTranspt_pft(NZ,NY,NX)
+    plt_ew%CdH2ORootxSoil_pft(NZ) = CdH2ORootxSoil_pft(NZ,NY,NX)
+    plt_pheno%CanPhenoMoistStress_pft(NZ) = CanPhenoMoistStress_pft(NZ,NY,NX)
+    plt_pheno%CanPhenoTempStress_pft(NZ) = CanPhenoTempStress_pft(NZ,NY,NX)
+    plt_morph%StalkAveRadius_pft(NZ) = StalkAveRadius_pft(NZ,NY,NX)
+    plt_rbgc%TurgEff4CanopyResp_pft(NZ) = TurgEff4CanopyResp_pft(NZ,NY,NX)
+    plt_morph%Root1stTipSinkWeight_pft(NZ) = Root1stTipSinkWeight_pft(NZ,NY,NX)
+    plt_bgcr%PTSHTR_pft(NZ) = PTSHTR_pft(NZ,NY,NX)
     plt_biom%StomatalStress_pft(NZ) = StomatalStress_pft(NZ,NY,NX)
     plt_biom%RootNoduleElms_pft(1:NumPlantChemElms,NZ)             = RootNoduleElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%ShootNoduleElms_pft(1:NumPlantChemElms,NZ)            = ShootNoduleElms_pft(1:NumPlantChemElms,NZ,NY,NX)
