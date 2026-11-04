@@ -1649,7 +1649,6 @@ implicit none
         NP_col(NY,NX)=0
         DO NZ=1,NP0_col(NY,NX)
           DATAP(NZ,NY,NX)='NO'
-          DATAM(NZ,NY,NX)='NO'
         enddo
       enddo
     ENDDO D5995
@@ -1673,7 +1672,6 @@ implicit none
           NP_col(NY,NX)=0
           DO NZ=1,NP0_col(NY,NX)
             DATAP(NZ,NY,NX)='NO'
-            DATAM(NZ,NY,NX)='NO'
           enddo
         enddo
       ENDDO
