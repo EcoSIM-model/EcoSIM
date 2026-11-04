@@ -15,12 +15,12 @@ module ATSTracerMapMod
 
   character(len=*), parameter :: mod_filename = __FILE__
 
-  integer, parameter, public :: PHASE_GAS = 1, PHASE_SOLUTE = 2
+  integer, parameter, public :: PHASE_GAS = 1, PHASE_SOLUTE = 2, PHASE_DOM = 3
 
   type, public :: tracer_map_entry
     integer  :: ats_index       ! 0-based index in a_MFrac
     integer  :: ecosim_index    ! TracerIDMod index (idg_* or ids_*)
-    integer  :: phase           ! PHASE_GAS or PHASE_SOLUTE
+    integer  :: phase           ! PHASE_GAS, PHASE_SOLUTE, or PHASE_DOM
     real(r8) :: mol_weight      ! g/mol
     character(len=16) :: name
   end type
@@ -87,6 +87,21 @@ contains
       species_map(k) = tracer_map_entry(k-1, ids_H2PO4, PHASE_SOLUTE, 97.99_r8, 'H2PO4')
     endif
 
+    ! DOM pools (if num_components > 13)
+    ! ecosim_index here is an idom_* index (separate namespace from ids_*)
+    if (num_components > k) then; k=k+1
+      species_map(k) = tracer_map_entry(k-1, idom_DOC,     PHASE_DOM, 12.011_r8, 'DOC')
+    endif
+    if (num_components > k) then; k=k+1
+      species_map(k) = tracer_map_entry(k-1, idom_DON,     PHASE_DOM, 14.007_r8, 'DON')
+    endif
+    if (num_components > k) then; k=k+1
+      species_map(k) = tracer_map_entry(k-1, idom_DOP,     PHASE_DOM, 30.974_r8, 'DOP')
+    endif
+    if (num_components > k) then; k=k+1
+      species_map(k) = tracer_map_entry(k-1, idom_acetate, PHASE_DOM, 59.044_r8, 'acetate')
+    endif
+
     n_mapped_species = k
 
     write(*,*) '(ATSTracerMapMod) Initialized species map with ', n_mapped_species, ' species'
@@ -110,6 +125,7 @@ contains
                                      trc_solcl_vr, trcs_solml_vr
     use SoilWaterDataType,    only : VLWatMicP_vr
     use SoilPropertyDataType, only : VGeomLayer_vr
+    use SOMDataType,          only : DOM_MicP_vr, CDOM_vr
     implicit none
     integer, intent(in) :: NYS
 
@@ -131,10 +147,13 @@ contains
             ! ATS passes dissolved concentrations; populate solml so GetChemicalConcsInSoil
             ! can compute trc_solcl_vr correctly (gas mass alone is zeroed in saturated soil)
             trcs_solml_vr(eid, L, NY, NX) = conc_g_m3 * VLWatMicP_vr(L, NY, NX)
-          else
+          else if (species_map(k)%phase == PHASE_SOLUTE) then
             trc_solcl_vr(eid, L, NY, NX)  = conc_g_m3
-            ! mass = concentration * liquid water volume in layer
             trcs_solml_vr(eid, L, NY, NX) = conc_g_m3 * VLWatMicP_vr(L,NY,NX)
+          else  ! PHASE_DOM: eid is an idom_* index, routes to separate DOM arrays
+            ! Only overwrite complexity class K=1 (labile pool); K=2:jcplx evolve internally.
+            CDOM_vr(eid, 1, L, NY, NX)     = conc_g_m3
+            DOM_MicP_vr(eid, 1, L, NY, NX) = conc_g_m3 * VLWatMicP_vr(L, NY, NX)
           endif
         enddo
       enddo
@@ -157,11 +176,12 @@ contains
   !   Units: same conversion.
   !
     use SharedDataMod,    only : a_MFrac_ss_source, a_Volume, a_NU, a_NL
-    use SoilBGCDataType,  only : trcs_RMicbUptake_vr, RNut_MicbRelease_vr
+    use SoilBGCDataType,  only : trcs_RMicbUptake_vr, RNut_MicbRelease_vr, &
+                                 REcoDOMProd_vr
     implicit none
     integer, intent(in) :: NYS
 
-    integer  :: NY, L, k, eid, NX
+    integer  :: NY, L, k, eid, NX, Kcplx
     real(r8) :: rate_g, rate_mol_m3_s
 
     NX = 1
@@ -181,9 +201,20 @@ contains
             rate_mol_m3_s = (-rate_g / species_map(k)%mol_weight) &
                           / a_Volume(L,NY) / 3600.0_r8
 
-          else ! PHASE_SOLUTE
+          else if (species_map(k)%phase == PHASE_SOLUTE) then
             rate_g = RNut_MicbRelease_vr(eid, L, NY, NX)
             ! Same sign: EcoSIM positive=release = ATS positive=production
+            rate_mol_m3_s = (rate_g / species_map(k)%mol_weight) &
+                          / a_Volume(L,NY) / 3600.0_r8
+
+          else  ! PHASE_DOM: eid is an idom_* index
+            ! REcoDOMProd_vr [g m-2_horiz h-1]: net plant+microbial DOM flux into soil.
+            ! Sum over all complexity classes; positive = net production into DOM pool.
+            rate_g = 0._r8
+            do Kcplx = 1, size(REcoDOMProd_vr, 2)
+              rate_g = rate_g + REcoDOMProd_vr(eid, Kcplx, L, NY, NX)
+            enddo
+            ! Same sign: EcoSIM positive=production = ATS positive=source
             rate_mol_m3_s = (rate_g / species_map(k)%mol_weight) &
                           / a_Volume(L,NY) / 3600.0_r8
           endif
