@@ -7,11 +7,12 @@ case_name          = 'SatePhenol'
 do_regression_test = .false.
 pft_file_in      = '../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../inputs/blodgett/Blodget_grid_20251115.nc'
-pft_mgmt_in='../../inputs/blodgett/Blodget_pft_20251112.ndlf.nc'
+pft_mgmt_in='NO' !PFT names and slot counts come from sp_phenol_in
 clm_hour_file_in = '../../inputs/blodgett/Blodget.clim.2012-2022.nc'
 clm_factor_in    = 'NO'
 soil_mgmt_in     = 'NO'
 atm_ghg_in       = '../../../input_data/fatm_hist_GHGs_1750-2023.nc'
+sp_phenol_in='../../inputs/blodgett/Blodget_sp_phenol_20261103.nc'
 
 lverbose        = .false.
 ldo_sp_mode     = .true.

@@ -103,6 +103,7 @@ implicit none
   logical :: soil_mgmt_use_model_year = .false.
   character(len=300) :: clm_factor_in           !file for climate change factors
   character(len=300) :: atm_ghg_in              !file for atmospheric GHG concentrations
+  character(len=300) :: sp_phenol_in  =''    !file for monthly LAI, SAI and canopy height in prescribed phenology mode
   character(len=300) :: micpar_file_in=''       !file of microbial parameters 
   integer :: iVerbLevel = 0        
   logical :: do_budgets = .false.

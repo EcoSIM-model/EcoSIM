@@ -77,6 +77,10 @@ contains
 
       DO NZ=1,NP0_col(NY,NX)
         nptc=get_pft(NZ,NY,NX)
+        ! Reset live diagnostics before filling this step's branches and roots.
+        ! Unused axes/layers must not retain a previous fallow year's zeros in
+        ! one run and fresh-history fill values in a restarted run.
+        if(PlantPopuLive_pft(NZ,NY,NX)>0._r8)call this%ZeroPlantHistVars(nptc)
         this%h1D_CanopyCutProxy_ptc(nptc)   = CanopyCutProxy_pft(NZ,I,NY,NX)
         this%h1D_POPN_ptc(nptc)             = PlantPopuLive_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_EXUD_CumYr_C_FLX_ptc(nptc) = PlantExudElm_CumYr_pft(ielmc,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)

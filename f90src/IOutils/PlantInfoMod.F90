@@ -26,6 +26,7 @@ module PlantInfoMod
   use GridDataType
   use EcoSIMCtrlMod
   use EcoSIMConfig
+  use Read4SatePhenolMod, only: ReadSatePhenol
 
 implicit none
 
@@ -49,7 +50,11 @@ implicit none
 ! RECOVER PLANT SPECIES DISTRIBUTION IN 'ROUTQ'
 !
  
-  CALL ReadPlantInfoNC(yeari,NHW,NHE,NVN,NVS)
+  if(ldo_sp_mode)then
+    call ReadSatePhenol(yeari,NHW,NHE,NVN,NVS)
+  else
+    CALL ReadPlantInfoNC(yeari,NHW,NHE,NVN,NVS)
+  endif
 !
 !   READ INPUT DATA FOR PLANT SPECIES AND MANAGEMENT IN 'READQ'
 !   AND SET UP OUTPUT AND CHECKPOINT FILES IN 'FOUTP'
@@ -78,7 +83,14 @@ implicit none
 
 ! begin_execution
   call PrintInfo('beg '//subname)
-  call ReadPlantManagementNC(yearc,yeari,NHW,NHE,NVN,NVS,pft_changed)
+  if(ldo_sp_mode)then
+    ! Prescribed vegetation has no planting or harvest schedule to read.
+    ! Its species and slot counts were loaded from sp_phenol_in above.
+    pft_changed=.true.
+    call InitPlantMgmnt(NHW,NHE,NVN,NVS)
+  else
+    call ReadPlantManagementNC(yearc,yeari,NHW,NHE,NVN,NVS,pft_changed)
+  endif
 
   if(disp_planttrait .and. pft_changed)then
     nu_plt=getavu()

@@ -146,16 +146,16 @@ implicit none
   real(r8) :: dangle
   integer  :: N,L,NZ,NB
 
-  associate(                                                 &
-    CanopyStemSurfAreaZ_pft   => plt_morph%CanopyStemSurfAreaZ_pft  ,& !input  :plant canopy layer stem area, [m2 d-2]
-    CanopyLeafAreaZ_pft   => plt_morph%CanopyLeafAreaZ_pft  ,& !inoput :total leaf area, [m2 d-2]
-    LeafStalkAreaAct_pft     => plt_morph%LeafStalkAreaAct_pft    ,& !inoput :plant leaf+stem/stalk area, [m2 d-2]
-    LeafStalkAreaAll_col     => plt_morph%LeafStalkAreaAll_col    ,& !inoput :stalk area of combined, each PFT canopy,[m^2 d-2]
-    StemArea_col          => plt_morph%StemArea_col         ,& !input  :grid canopy stem area, [m2 d-2]
-    LeafAngleClass_pft    => plt_morph%LeafAngleClass_pft   ,& !input  :fractionction of leaves in different angle classes, [-]
-    CanopyLeafArea_col    => plt_morph%CanopyLeafArea_col   ,& !input  :grid canopy leaf area, [m2 d-2]
-    LeafAreaZsec_brch     => plt_morph%LeafAreaZsec_brch    ,& !input  :leaf surface area, [m2 d-2]
-    NP                    => plt_site%NP                     & !input  :current number of plant species,[-]
+  associate(                                                        &
+    CanopyStemSurfAreaZ_pft  => plt_morph%CanopyStemSurfAreaZ_pft  ,& !input  :plant canopy layer stem area, [m2 d-2]
+    CanopyLeafAreaZ_pft      => plt_morph%CanopyLeafAreaZ_pft      ,& !inoput :total leaf area, [m2 d-2]
+    LeafStalkAreaAct_pft     => plt_morph%LeafStalkAreaAct_pft     ,& !inoput :plant leaf+stem/stalk area, [m2 d-2]
+    LeafStalkAreaAll_col     => plt_morph%LeafStalkAreaAll_col     ,& !inoput :stalk area of combined, each PFT canopy,[m^2 d-2]
+    StemArea_col             => plt_morph%StemArea_col             ,& !input  :grid canopy stem area, [m2 d-2]
+    LeafAngleClass_pft       => plt_morph%LeafAngleClass_pft       ,& !input  :fractionction of leaves in different angle classes, [-]
+    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col       ,& !input  :grid canopy leaf area, [m2 d-2]
+    LeafAreaZsec_brch        => plt_morph%LeafAreaZsec_brch        ,& !input  :leaf surface area, [m2 d-2]
+    NP                       => plt_site%NP                         & !input  :current number of plant species,[-]
   )
 
 
@@ -205,9 +205,6 @@ implicit none
   real(r8) :: DZL  !canopy interval height
   real(r8) :: PlantPopCol  !default plant population of the column root type, unused [1/m2]
   !==========================================
-  !example inputs
-  real(r8) :: lai(12)=(/1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343, 1.3941, 1.2721, 1.2218/)
-  real(r8) :: sai(12)=(/0.3190, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084, 0.3292, 0.3656, 0.3249/)
   !integer  :: irootType=1
   REAL(R8) :: PerPlantRootC_vr(1:JZ)
   REAL(R8) :: PerPlantRootLen_vr(1:JZ)
@@ -219,30 +216,25 @@ implicit none
   !irootType=1
   PerPlantRootC_vr = 0.0_r8
   PerPlantRootLen_vr = 0.0_r8
-  DO NX=NHW,NHE
-    DO NY=NVN,NVS
-      !NP_col(NY,NX)=1
-      DO NZ=1,NP_col(NY,NX)
-        !FOR test only
-        tlai_mon_pft(:,NZ,NY,NX)       = LAI
-        tsai_mon_pft(:,NZ,NY,NX)       = SAI
-        height_top_mon_pft(:,NZ,NY,NX) = 17._r8
-        LeafAngleClass_pft(:,NZ,NY,NX) = 1._r8/real(NumLeafInclinationClasses,kind=r8)
-      ENDDO
-    ENDDO
-  ENDDO
 
   if(ats_cpl_mode)then
+    !ATS supplies daily LAI, SAI and height; keep uniform leaf inclination
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        DO NZ=1,NP_col(NY,NX)
+          LeafAngleClass_pft(:,NZ,NY,NX) = 1._r8/real(NumLeafInclinationClasses,kind=r8)
+        ENDDO
+      ENDDO
+    ENDDO
     dofmon = day_of_month
     kmo = current_month
     ndaysmon = total_days_in_month
   else
-    !ndaysmon = etimer%get_curr_mon_days()
-    !dofmon   = etimer%get_curr_dom()
-    !kmo      = etimer%get_curr_mon()
-    ndaysmon = 31
-    kmo = 1
-    dofmon = 1
+    !monthly LAI, SAI and height are read from sp_phenol_in (Read4SatePhenolMod);
+    !leaf inclination is the PFT trait from pft_file_in
+    ndaysmon = etimer%get_curr_mon_days()
+    dofmon   = etimer%get_curr_dom()
+    kmo      = etimer%get_curr_mon()
   end if
 
   t = (dofmon-0.5_r8) / ndaysmon
