@@ -63,6 +63,13 @@ take precedence over repository guidance.
 - Follow nearby Fortran conventions, precision kinds, array ordering, and module
   interfaces. Update allocation, initialization, API mapping, history, and restart
   handling as needed when adding persistent state or flux variables.
+- Every Fortran module must include a header comment describing its purpose and
+  responsibilities.
+- Every subroutine and function must include a description comment explaining
+  its purpose.
+- For new subroutines, declare `intent(in)`, `intent(out)`, or `intent(inout)`
+  for each data argument and annotate its declaration with a comment explaining
+  its meaning, units, and array dimensions where applicable.
 - New Fortran procedures should declare
   `character(len=*), parameter :: subname='procedure_name'`, using the actual
   procedure name as the string value. Include `call PrintInfo('beg '//subname)`
