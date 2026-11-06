@@ -2453,9 +2453,13 @@ module WatsubMod
     endif
 
     PSISWT=PSISWT-PSISWD
-    ! Upstream Ksat for tiles; ECOSIM_ZM K(theta) for natural outlets only.
-    FLWT=PSISWT*outlet_conductivity*AREA_3D(N,N3,N2,N1)*(1.0_r8-FracLayVolBelowWTBL)/(RechargDist2WTBL+1.0_r8) &
-      *Recharg2WTBLScal*dts_HeatWatTP
+    if(PSISWT<0._r8)then
+      ! Upstream Ksat for tiles; ECOSIM_ZM K(theta) for natural outlets only.
+      FLWT=PSISWT*outlet_conductivity*AREA_3D(N,N3,N2,N1)*(1.0_r8-FracLayVolBelowWTBL)/(RechargDist2WTBL+1.0_r8) &
+        *Recharg2WTBLScal*dts_HeatWatTP
+    else
+      FLWT = 0._r8
+    endif
 
     watflx                          = XN*FLWT
     heatflx                         = cpw*TKSoil1_vr(N3,N2,N1)*watflx
@@ -2492,14 +2496,17 @@ module WatsubMod
   !
   IF(DoMacPDischarg2ExtWTBL .AND. (.not.isclose(Recharg2WTBLScal,0._r8)) .AND. VLMacroPores1_vr(N3,N2,N1).GT.ZEROS2(N2,N1))THEN
     
-    PSISWD  = XN*0.5_r8*mGravAccelerat*SLOPE_col(N,N2,N1)*DLYR_3D(N,N3,N2,N1)*(1.0_r8-WaterTable2GroundSlope_col(N2,N1))    
+    PSISWD = XN*0.5_r8*mGravAccelerat*SLOPE_col(N,N2,N1)*DLYR_3D(N,N3,N2,N1)*(1.0_r8-WaterTable2GroundSlope_col(N2,N1))
     
     PSISWTH = mGravAccelerat*(AMIN1(Surf2MacPDepz,WaterTableDepZi_col(N2,N1))-TargetWaterTBL)
 
-    IF(PSISWTH.LT.0.0_r8)PSISWTH=PSISWTH-PSISWD
-
-    FLWTH=PSISWTH*HydroCondMacP1_vr(N3,N2,N1)*AREA_3D(N,N3,N2,N1) &
-      *(1.0_r8-FracLayVolBelowWTBL)/(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    PSISWTH = PSISWTH-PSISWD
+    if(PSISWTH<0._r8)then
+      FLWTH=PSISWTH*HydroCondMacP1_vr(N3,N2,N1)*AREA_3D(N,N3,N2,N1) &
+        *(1.0_r8-FracLayVolBelowWTBL)/(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    else
+      FLWTH=0._r8
+    endif
 
     MacPoreDischarg=AMAX1(FLWTH,AZMIN1(-(VLWatMacP1_vr(N3,N2,N1)*dts_wat &
       +WaterFlow2Macpt_3D(3,N3,N2,N1)-WaterFlow2Macpt_3D(3,N3+1,N2,N1))))
@@ -2559,10 +2566,13 @@ module WatsubMod
       mGravAccelerat*(SoilDepthMidLay_vr(N3,N2,N1)-ExtWaterTable_col(N2,N1)))
 
     !outflow/drainage  (>0.)
-    IF(PSISUT.GT.0.0_r8)PSISUT=PSISUT+PSISWD
-
-    FLWU = PSISUT*HydroCond_3D(N,1,N3,N2,N1)*AREA_3D(N,N3,N2,N1)*FracLayVolBelowExtWTBL_vr(N3,N2,N1) &
-      /(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    PSISUT=PSISUT+PSISWD
+    IF(PSISUT.GT.0.0_r8)then
+      FLWU = PSISUT*HydroCond_3D(N,1,N3,N2,N1)*AREA_3D(N,N3,N2,N1)*FracLayVolBelowExtWTBL_vr(N3,N2,N1) &
+        /(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    else
+      FLWU = 0._r8
+    endif
 
     !within a time step, the incoming flow cannot exceed avaiable air-filled pores   
     IF(SoilBulkDensity_vr(N3,N2,N1).GT.ZERO)THEN
@@ -2600,9 +2610,13 @@ module WatsubMod
     PSISUTH = mGravAccelerat*(Surf2MacPDepz-ExtWaterTable_col(N2,N1))
 
     !outflow/drainage
-    IF(PSISUTH.GT.0.0_r8)PSISUTH = PSISUTH+PSISWD
-    FLWUH  = PSISUTH*HydroCondMacP1_vr(N3,N2,N1)*AREA_3D(N,N3,N2,N1)*FracLayVolBelowExtWTBL_vr(N3,N2,N1) &
-      /(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    PSISUTH = PSISUTH+PSISWD
+    IF(PSISUTH.GT.0.0_r8)then
+      FLWUH  = PSISUTH*HydroCondMacP1_vr(N3,N2,N1)*AREA_3D(N,N3,N2,N1)*FracLayVolBelowExtWTBL_vr(N3,N2,N1) &
+        /(RechargDist2WTBL+1.0_r8)*Recharg2WTBLScal*dts_HeatWatTP
+    else
+      FLWUH  = 0._r8
+    endif
 
     FLWUHL                         = AMIN1(FLWUH,AirfMacP)
     watflx                         = XN*FLWUHL
