@@ -409,13 +409,13 @@ module TranspNoSaltMod
   end subroutine SummaryFluxes
 !------------------------------------------------------------------------------------------
   subroutine PassSlow2FastIterationM(I,J,M,NHE,NHW,NVS,NVN)
+  ! Stage slow-substep states and species coefficients for fast gas subcycles.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: M
   integer, intent(in) :: NHE,NHW,NVS,NVN
   character(len=*), parameter :: subname='PassSlow2FastIterationM'
   integer :: NY,NX,L,N
-  real(r8) :: PARGM
 
   call PrintInfo('beg '//subname)
   WaterFlow2SoilMM_3D=(WaterFlow2MicPM_3D(M,:,:,:,:)+WaterFlow2MacPM_3D(M,:,:,:,:))*dt_GasCyc
@@ -427,15 +427,9 @@ module TranspNoSaltMod
       !
       ! PARG=boundary layer conductance above soil surface from watsub.f
       !
-      PARGM                       = CondGasXSnowM_col(M,NY,NX)*dt_GasCyc
-      PARGas_CefMM(idg_CO2,NY,NX) = PARGM*0.74_r8
-      PARGas_CefMM(idg_CH4,NY,NX) = PARGM*1.04_r8
-      PARGas_CefMM(idg_O2,NY,NX)  = PARGM*0.83_r8
-      PARGas_CefMM(idg_N2,NY,NX)  = PARGM*0.86_r8
-      PARGas_CefMM(idg_N2O,NY,NX) = PARGM*0.74_r8
-      PARGas_CefMM(idg_NH3,NY,NX) = PARGM*1.02_r8
-      PARGas_CefMM(idg_H2,NY,NX)  = PARGM*2.08_r8
-      PARGas_CefMM(idg_AR,NY,NX)  = PARGM*0.72_r8
+      ! Species dependence was assembled in the molecular film/pore segments;
+      ! aerodynamic transport stays common to gases. Apply only the subcycle time.
+      PARGas_CefMM(:,NY,NX) = CondGasXSnowM_col(:,M,NY,NX)*dt_GasCyc
 
       VLWatMicPXA_vr(0,NY,NX)          = natomw*VLWatMicPM_vr(M,0,NY,NX)
 

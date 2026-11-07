@@ -642,6 +642,7 @@ module InitPlantMod
 
   integer :: K,L,M,N,NB
   associate(                                                                           &
+    CanopyNonstOMConc_pft             => plt_biom%CanopyNonstOMConc_pft                 ,& !output :canopy nonstructural C+N+P concentration, [g gC-1]
     AREA3                             => plt_site%AREA3                               ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     MatureGroup_pft                   => plt_pheno%MatureGroup_pft                    ,& !input  :acclimated plant maturity group, [-]
     NU                                => plt_site%NU                                  ,& !input  :current soil surface layer number, [-]
@@ -836,6 +837,7 @@ module InitPlantMod
   ENDDO D35
   plt_biom%CanopyNonstElms_pft(1:NumPlantChemElms,NZ)     = 0._r8
   plt_biom%CanopyNonstElmConc_pft(1:NumPlantChemElms,NZ)  = 0._r8
+  CanopyNonstOMConc_pft(NZ) = 0._r8
   plt_biom%CanopyNoduleNonstCConc_pft(NZ)                 = 0._r8
   plt_biom%ShootElms_pft(1:NumPlantChemElms,NZ)           = 0._r8
   plt_biom%LeafStrutElms_pft(1:NumPlantChemElms,NZ)       = 0._r8
@@ -1014,6 +1016,8 @@ module InitPlantMod
     RootPoreVol_pvr               => plt_morph%RootPoreVol_pvr                ,& !output :root layer volume air, [m2 d-2]
     RootVH2O_pvr                  => plt_morph%RootVH2O_pvr                   ,& !output :root space volume occupied by water in each layer, [m2 d-2]   
     NumStructuralRootAxes_pft     => plt_morph%NumStructuralRootAxes_pft      ,& !output :number of structural root axes,[-]
+    RootMyco2ndStrutElms_pvr       => plt_biom%RootMyco2ndStrutElms_pvr        ,& !output :secondary structural elements summed over active NR, [g element cell-1]
+    RootNonstOMConc_pvr           => plt_biom%RootNonstOMConc_pvr            ,& !output :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     PSIRootTurg_vr                => plt_ew%PSIRootTurg_vr                    ,& !output :root turgor water potential, [Mpa]
     Root1stTransptArea_pvr        => plt_morph%Root1stTransptArea_pvr         ,& !output :transport area by 1st order root, [m2 d-2]         
     RootMedTransptArea_pvr        => plt_morph%RootMedTransptArea_pvr         ,& !output  :transport area by medisum size roots, [-]        
@@ -1032,6 +1036,8 @@ module InitPlantMod
   !
 
   NumStructuralRootAxes_pft(NZ)=0
+  RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
+  RootNonstOMConc_pvr(:,:,NZ)=0._r8
   plt_rbgc%RootNH4Uptake_pft(NZ)   = 0._r8
   plt_rbgc%RootNO3Uptake_pft(NZ)   = 0._r8
   plt_rbgc%RootH2PO4Uptake_pft(NZ) = 0._r8
@@ -1051,7 +1057,7 @@ module InitPlantMod
       PSIRootOSMO_vr(N,L,NZ)                                       = OrganOsmoPsi0pt_pft(NZ)+PSIRoot_pvr(N,L,NZ)
       PSIRootTurg_vr(N,L,NZ)                                       = AZMAX1(PSIRoot_pvr(N,L,NZ)-PSIRootOSMO_vr(N,L,NZ))
       plt_biom%RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ)   = 0._r8
-      plt_biom%RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ) = 0._r8
+      plt_biom%RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ) = 0._r8
       RootProteinConc_rpvr(N,L,NZ)                                  = RootProteinCMax_pft(NZ)
       plt_biom%RootMycoActiveBiomC_pvr(N,L,NZ)                     = 0._r8
       plt_biom%PopuRootMycoC_pvr(N,L,NZ)=0._r8

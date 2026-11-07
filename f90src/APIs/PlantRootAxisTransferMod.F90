@@ -127,12 +127,22 @@ contains
       Root1stXSecArea_pft(N,NZ,NY,NX)                      = plt_morph%Root1stXSecArea_pft(N,NZ)
       Root2ndXSecArea_pft(N,NZ,NY,NX)                      = plt_morph%Root2ndXSecArea_pft(N,NZ)
     enDDO
+    ! Rebuild the native layer totals after receiving the authoritative axes.
+    RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=sum( &
+      RootMyco2ndStrutElms_rpvr(:,:,:,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX),dim=4)
   end subroutine ReceivePlantRootAxes
 
   subroutine SendPlantRootAxes(NY,NX,NZ)
   use EcoSIMConfig, only : jsken=>jskenc,jcplx=>jcplxc
   integer, intent(in) :: NY,NX,NZ
   integer :: NR,K,L,M,N,NE
+
+    ! Native axis pools may have moved with the soil layers since the last step.
+    RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=sum( &
+      RootMyco2ndStrutElms_rpvr(:,:,:,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX),dim=4)
+    plt_biom%RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
+    plt_biom%RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ)= &
+      RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ,NY,NX)
 
     DO NR=1,pltpar%MaxNumRootAxes
       plt_morph%NRoot1stTipLay_raxes(NR,NZ)=NRoot1stTipLay_raxes(NR,NZ,NY,NX)

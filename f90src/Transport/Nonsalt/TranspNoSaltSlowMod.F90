@@ -1,4 +1,5 @@
 module TranspNoSaltSlowMod
+  ! Compute slow gas/solute transport and exchange among soil, litter and atmosphere.
   use SoilFaceMappingMod, only: SoilFaceSlot,SoilFaceIncomingRange,GetSoilFaceGeometry
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use abortutils,       only: destroy, endrun, iulog
@@ -1339,6 +1340,7 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine AtmosLitterExchangeM(I,J,M,NY,NX,trcs_cl_litr)
+  ! Exchange atmospheric gases with litter using the matching surface-substep coefficient.
   implicit none
   integer, intent(in) :: I,J,NY,NX,M
   real(r8),intent(out) :: trcs_cl_litr(ids_beg:ids_end) !tracer concentration
@@ -1354,7 +1356,8 @@ implicit none
   IF(VGeomLayer_vr(0,NY,NX).GT.ZEROS2(NY,NX) .AND. VLWatMicPM_vr(M,0,NY,NX).GT.ZEROS2(NY,NX))THEN
 
     DLYR0 = AMAX1(ZERO2,DLYR_3D(3,0,NY,NX)) !vertical layer thickness
-    TORT0 = TortMicPM_vr(M,0,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)/(0.5_r8*DLYR0)*FracSurfByLitR_col(NY,NX)
+    ! Use the producer's M-specific footprint, not the last surface substep.
+    TORT0 = TortMicPM_vr(M,0,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)/(0.5_r8*DLYR0)*FracSurfByLitRM_col(M,NY,NX)
 
     DO idg=idg_beg,idg_NH3
       DFGcc(idg)=SoluteDifusivitytscaledM_vr(idg,0,NY,NX)*TORT0
@@ -1368,12 +1371,18 @@ implicit none
     trcs_cl_litr(idg_NH3B)=trcs_cl_litr(idg_NH3)
     trcs_cl_litr(ids_NH4B:ids_H2PO4B)=trcs_cl_litr(ids_NH4:ids_H2PO4)
 !
-!     PARR=boundary layer conductance above litter surface from watsub.f
+!     GasXferCoeffLitr2Atm_col: litter-patch gas path, including litter area/time [m3]
 !
     DO idg=idg_beg,idg_NH3
+      ! At zero litter area both interface coefficients vanish. There is no
+      ! atmospheric transfer; retain the litter concentration for consumers.
+      if(DFGcc(idg)+GasXferCoeffLitr2Atm_col(idg,M,NY,NX).LE.0._r8)then
+        RGasAtmDisol2LitrM_col(idg,NY,NX)=0._r8
+        cycle
+      endif
       !equilbrium concentration at the air-litter interface
-      trc_gasq(idg)=(PARR_col(NY,NX)*GasSolbility_vr(idg,0,NY,NX)*AtmGasCgperm3_col(idg,NY,NX) &
-        +DFGcc(idg)*trcs_cl_litr(idg))/(DFGcc(idg)+PARR_col(NY,NX))
+      trc_gasq(idg)=(GasXferCoeffLitr2Atm_col(idg,M,NY,NX)*GasSolbility_vr(idg,0,NY,NX)*AtmGasCgperm3_col(idg,NY,NX) &
+        +DFGcc(idg)*trcs_cl_litr(idg))/(DFGcc(idg)+GasXferCoeffLitr2Atm_col(idg,M,NY,NX))
 
       !Dissolution into litter water, based on two-point gradient flow
       RGasAtmDisol2LitrM_col(idg,NY,NX)=(trc_gasq(idg)-trcs_cl_litr(idg))*AMIN1(VLWatMicPM_vr(M,0,NY,NX),DFGcc(idg))
@@ -1400,7 +1409,7 @@ implicit none
   real(r8) :: DLYR1,TORT1,VLWatMicPOA,VLWatMicPOB,VLWatMicPPA,VLWatMicPPB
   real(r8) :: DiffusivitySolutEff
   real(r8) :: trc_gsolc,trc_gsolc2
-  integer  :: K,idg,idom
+  integer  :: K,idg,idom,SurfaceGasID
 !
 !     SURFACE EXCHANGE OF AQUEOUS CO2, CH4, O2, N2, NH3
 !     THROUGH VOLATILIZATION-DISSOLUTION FROM AQUEOUS
@@ -1475,9 +1484,12 @@ implicit none
     ! include NH3B
 
     DO idg=idg_beg,idg_end
+      ! Banded NH3 has the same gas transport properties as unbanded NH3.
+      SurfaceGasID=idg
+      if(idg.EQ.idg_NH3B)SurfaceGasID=idg_NH3
       DiffusivitySolutEff = SoluteDifusivitytscaledM_vr(idg,NU_col(NY,NX),NY,NX)*TORT1
-      trc_gsolc           = (CondGasXSnowM_col(M,NY,NX)*AtmGasCgperm3_col(idg,NY,NX)*GasSolbility_vr(idg,NU_col(NY,NX),NY,NX) &
-        +DiffusivitySolutEff*trcs_cl_soil(idg))/(DiffusivitySolutEff+CondGasXSnowM_col(M,NY,NX))
+      trc_gsolc           = (CondGasXSnowM_col(SurfaceGasID,M,NY,NX)*AtmGasCgperm3_col(idg,NY,NX)*GasSolbility_vr(idg,NU_col(NY,NX),NY,NX) &
+        +DiffusivitySolutEff*trcs_cl_soil(idg))/(DiffusivitySolutEff+CondGasXSnowM_col(SurfaceGasID,M,NY,NX))
 
       RGasAtmDisol2SoilM_col(idg,NY,NX)=(trc_gsolc-trcs_cl_soil(idg)) &
         *AMIN1(VLWatMicPM_vr(M,NU_col(NY,NX),NY,NX)*trcs_VLN_vr(idg,NU_col(NY,NX),NY,NX),DiffusivitySolutEff)

@@ -1,13 +1,15 @@
 submodule (HistDataType) HistUpdatePlant
+  ! Populate plant and root history diagnostics from current model state.
   use GridConsts, only: JZ, MaxNodesPerBranch, MaxNumRootAxes, NumCanopyLayers, NumGrowthStages, &
     NumOfPlantMorphUnits
   use ElmIDMod, only: ielmc, ielmn, ielmp, imycorr_arbu, imycorrhz, ipltroot, iTrue, NumPlantChemElms
-  use EcosimConst, only: natomw
+  use EcosimConst, only: natomw, BndlResistCO2ToH2ORatio
   use data_const_mod, only: spval  => DAT_CONST_SPVAL
   use MiniMathMod, only: safe_adb, AZERO
   use GridMod, only: get_pft
   use GridDataType, only: AREA_3D, DLYR_3D, NU_col
   use EcoSIMCtrlDataType, only: ZEROS
+  use EcoSIMCtrlMod, only: ldo_sp_mode
   use FlagDataType, only: IsPlantActive_pft
   use PlantTraitDataType, only: CanopyHeightLive_pft, CanopyLeafArea_pft, CanopySeedNum_pft, &
     CanPhenoMoistStress_pft, CanPhenoTempStress_pft, ClumpFactorNow_pft, fTCanopyGroth_pft, &
@@ -25,7 +27,7 @@ submodule (HistDataType) HistUpdatePlant
     ShootRootXferElm_pft, SurfLitrfalStrutElms_CumYr_pft, VmaxNH4Root_pvr, VmaxNO3Root_pvr
   use ClimForcDataType, only: RadPARSolarBeam_col
   use CanopyDataType, only: canopy_growth_pft, CanopyEvapTransLHeat_pft, CanopyGasCO2_pft, CanopyLeafAreaZ_pft, &
-    CanopyMinStomaResistH2O_pft, CanopyNLimFactor_brch, CanopyNonstElmConc_pft, CanopyNonstElms_pft, &
+    CanopyMinStomaResistH2O_pft, CanopyNLimFactor_brch, CanopyNonstElmConc_pft, CanopyNonstOMConc_pft, CanopyNonstElms_pft, &
     CanopyPLimFactor_brch, CanopyVcMaxPEP25C_pft, CanopyVcMaxRubisco25C_pft, CanopyVoMaxRubisco25C_pft, &
     CanPStomaResistH2O_pft, CdH2ORootxSoil_pft, CH2OSunlit_pft, CH2OSunsha_pft, CO2FixCL_pft, CO2FixLL_pft, &
     CO2NetFix_pft, DynCi2CaRatio_pft, EarStrutElms_pft, ElectronTransptJmax25C_pft, fNCLFW_pft, fPCLFW_pft, &
@@ -33,7 +35,7 @@ submodule (HistDataType) HistUpdatePlant
     HuskStrutElms_pft, Km4RubiscoCarboxy_pft, LeafAreaSunlit_pft, LeafC3ChlCperm2LA_pft, LeafC4ChlCperm2LA_pft, &
     LeafPEPCperm2LA_pft, LeafProteinCperm2LA_pft, LeafRubiscoCperm2LA_pft, LeafStrutElms_pft, O2L_pft, &
     PARSunlit_pft, PARSunsha_pft, PetolShethStrutElms_pft, ProteinCperm2LeafArea_node, PSICanopy_pft, &
-    PSICanopyTurg_pft, RadNet2Canopy_pft, RadPARCanopyAbsorption_pft, RawCanopy2Atm_pft, RCanMaintDef_CO2_pft, &
+    PSICanopyTurg_pft, RadNet2Canopy_pft, RadPARCanopyAbsorption_pft, RawH2OCanopy2Atm_pft, RawHeatCanopy2Atm_pft, RCanMaintDef_CO2_pft, &
     RLeafAppear_pft, RNodeInitiate_pft, RubiscoActivity_brch, SeasonalNonstElms_pft, ShootElms_pft, &
     ShootNoduleElms_pft, SpecificLeafArea_pft, StalkRsrvElms_pft, StalkStrutElms_pft, StandDeadStrutElms_pft, &
     StomatalStress_pft, TdegCCanopy_pft, TFN_Carboxy_pft, TFN_eTranspt_pft, TFN_Oxygen_pft, Transpiration_pft, &
@@ -43,11 +45,12 @@ submodule (HistDataType) HistUpdatePlant
     Nutruptk_fProtC_rpvr, PopuRootMycoC_pvr, PSIRoot_pvr, Root1stActStruct_pvr, Root1stDepz_raxes, &
     Root1stLenPP_rpvr, Root1stLigStruct_pvr, Root1stRadius_pvr, Root1stSinkWeight_pvr, &
     Root1stTipSinkWeight_pft, Root1stTransptArea_pvr, Root1stXNumL_pvr, Root2ndSinkWeight_pvr, &
-    Root2ndXNumL_rpvr, RootAtmGasConductance_rpvr, RootAxialKond2H2O_pvr, RootElms_pft, RootH2OUptkStress_pvr, &
+    Root2ndXNumL_rpvr, Root2ndLen_rpvr, MeanSecondaryAxisLength_pft, &
+    RootAtmGasConductance_rpvr, RootAxialKond2H2O_pvr, RootElms_pft, RootH2OUptkStress_pvr, &
     RootLenDensPerPlant_pvr, RootLenPerPlant_pvr, RootMaintDef_CO2_pvr, RootMediumLength_pvr, &
     RootMediumRadius_rpvr, RootMediumXNum_pvr, RootMedStruct_pvr, RootMSinkWeight_pvr, &
-    RootMyco1stStrutElms_rpvr, RootMyco2ndStrutElms_rpvr, RootMycoMassElm_pvr, RootMycoNonstElms_pft, &
-    RootMycoNonstElms_rpvr, ROOTNLim_rpvr, RootNoduleElms_pft, RootNonstructElmConc_rpvr, ROOTPLim_rpvr, &
+    RootMyco1stStrutElms_rpvr, RootMyco2ndStrutElms_pvr, RootMycoMassElm_pvr, RootMycoNonstElms_pft, &
+    RootMycoNonstElms_rpvr, ROOTNLim_rpvr, RootNoduleElms_pft, RootNonstructElmConc_pvr, RootNonstOMConc_pvr, ROOTPLim_rpvr, &
     RootProteinC_pvr, RootRadialKond2H2O_pvr, RootResist4H2O_pvr, RootSAreaPerPlant_pvr, RootShootExch_pvr, &
     RootSinkWeight_pvr, RootStrutElms_pft, RPlantRootH2OUptk_pvr, SapFlowVlinear_pvr
   use SoilWaterDataType, only: QdewCanopy_CumYr_pft
@@ -57,6 +60,7 @@ submodule (HistDataType) HistUpdatePlant
 contains
 
   module procedure update_hist_plants
+    ! Fill instantaneous plant diagnostics for history averaging and output.
     integer :: nptc
     integer :: L
     integer :: NZ
@@ -163,13 +167,13 @@ contains
         this%h1D_cTNC_ptc(nptc)          = CanopyNonstElmConc_pft(ielmc,NZ,NY,NX)
         this%h1D_cTNN_ptc(nptc)          = CanopyNonstElmConc_pft(ielmn,NZ,NY,NX)
         this%h1D_cTNP_ptc(nptc)          = CanopyNonstElmConc_pft(ielmp,NZ,NY,NX)
-        this%h1D_CanopyNonstOMConc_ptc(nptc) = sum(CanopyNonstElmConc_pft(1:NumPlantChemElms,NZ,NY,NX))
+        this%h1D_CanopyNonstOMConc_ptc(nptc) = CanopyNonstOMConc_pft(NZ,NY,NX)
         this%h1D_STOML_RSC_CO2_ptc(nptc) = CanPStomaResistH2O_pft(NZ,NY,NX)*1.56_r8*secs1hour
         this%h1D_STOML_Min_RSC_CO2_ptc(nptc)=CanopyMinStomaResistH2O_pft(NZ,NY,NX)*1.56_r8*secs1hour
         this%h1D_Km_CO2_carboxy_ptc(nptc)= Km4RubiscoCarboxy_pft(NZ,NY,NX)
         this%h1D_DynCi2CaRatio_ptc(nptc) = DynCi2CaRatio_pft(NZ,NY,NX)
 
-        this%h1D_BLYR_RSC_CO2_ptc(nptc)  = RawCanopy2Atm_pft(NZ,NY,NX)*1.34_r8*secs1hour
+        this%h1D_BLYR_RSC_CO2_ptc(nptc)  = RawH2OCanopy2Atm_pft(NZ,NY,NX)*BndlResistCO2ToH2ORatio*secs1hour
         this%h1D_CAN_CO2_ptc(nptc)       = CanopyGasCO2_pft(NZ,NY,NX)
         this%h1D_O2L_ptc(nptc)           = O2L_pft(NZ,NY,NX)
         this%h1D_LAI_ptc(nptc)           = LeafStalkAreaAct_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
@@ -178,7 +182,8 @@ contains
         this%h1D_PSI_CAN_ptc(nptc)       = PSICanopy_pft(NZ,NY,NX)
         this%h1D_TURG_CAN_ptc(nptc)      = PSICanopyTurg_pft(NZ,NY,NX)
         this%h1D_STOML_RSC_H2O_ptc(nptc)  = CanPStomaResistH2O_pft(NZ,NY,NX)*secs1hour
-        this%h1D_BLYR_RSC_H2O_ptc(nptc)  = RawCanopy2Atm_pft(NZ,NY,NX)*secs1hour
+        this%h1D_BLYR_RSC_H2O_ptc(nptc)  = RawH2OCanopy2Atm_pft(NZ,NY,NX)*secs1hour
+        this%h1D_BLYR_RSC_HEAT_ptc(nptc)  = RawHeatCanopy2Atm_pft(NZ,NY,NX)*secs1hour
         this%h1D_CdH2ORootxSoil_ptc(nptc) = CdH2ORootxSoil_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_TRANSPN_ptc(nptc)       = Transpiration_pft(NZ,NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_QTRANSP_col(ncol)       = this%h1D_QTRANSP_col(ncol)+this%h1D_TRANSPN_ptc(nptc)
@@ -360,9 +365,10 @@ contains
           this%h2D_Root2ndStrutC_pvr(nptc,L)     = 0._r8
           this%h2D_Root2ndStrutN_pvr(nptc,L)     = 0._r8
           this%h2D_Root2ndStrutP_pvr(nptc,L)     = 0._r8
+          this%h2D_Root2ndMeanLen_pvr(nptc,L)    = 0._r8
           this%h2D_RootAct1stC_pvr(nptc,L)       = 0._r8
           this%h2D_RootLig1stC_pvr(nptc,L)       = 0._r8
-          this%h2D_NonstC_conc_pvr(nptc,L)       = RootNonstructElmConc_rpvr(ielmc,ipltroot,L,NZ,NY,NX)
+          this%h2D_NonstC_conc_pvr(nptc,L)       = RootNonstructElmConc_pvr(ielmc,ipltroot,L,NZ,NY,NX)
           if(DVOLL>1.e-8_r8)then
             this%h2d_RootPop_pvr(nptc,L)=PopuRootMycoC_pvr(ipltroot,L,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
             this%h2D_MycoPop_pvr(nptc,L)=PopuRootMycoC_pvr(imycorrhz,L,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
@@ -388,7 +394,7 @@ contains
             this%h2D_PSI_RT_pvr(nptc,L)            = PSIRoot_pvr(ipltroot,L,NZ,NY,NX)
             this%h2D_RootH2OUptkStress_pvr(nptc,L) = RootH2OUptkStress_pvr(ipltroot,L,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
             this%h2D_SapFlowVlinear_pvr(nptc,L) = (SapFlowVlinear_pvr(L,NZ,NY,NX))
-            this%h2D_RootH2OUptk_pvr(nptc,L) = AZERO(1.e3*RPlantRootH2OUptk_pvr(ipltroot,L,NZ,NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h2D_RootH2OUptk_pvr(nptc,L) = AZERO(m2mm*RPlantRootH2OUptk_pvr(ipltroot,L,NZ,NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
             this%h2D_RootMaintDef_CO2_pvr(nptc,L)=RootMaintDef_CO2_pvr(ipltroot,L,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
             this%h2D_prtUP_NH4_pvr(nptc,L)    = (sum(RootNutUptake_pvr(ids_NH4,:,L,NZ,NY,NX))+&
               sum(RootNutUptake_pvr(ids_NH4B,:,L,NZ,NY,NX)))/AREA_3D(3,L,NY,NX)
@@ -400,15 +406,15 @@ contains
               PlantPopuLive_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)*1.e-4_r8
             this%h1D_RootLenPerPlant_ptc(nptc)=this%h1D_RootLenPerPlant_ptc(nptc)+RootLenPerPlant_pvr(ipltroot,L,NZ,NY,NX)
 
-            this%h2D_ROOTNLim_rpvr(nptc,L) = ROOTNLim_rpvr(ipltroot,L,NZ,NY,NX)
-            this%h2D_ROOTPLim_rpvr(nptc,L) = ROOTPLim_rpvr(ipltroot,L,NZ,NY,NX)
-            this%h2D_RootNonstC_rpvr(nptc,L)=RootMycoNonstElms_rpvr(ielmc,ipltroot,L,NZ,NY,NX)
-            this%h2D_RootSinkWeight_pvr(nptc,L)=RootSinkWeight_pvr(L,NZ,NY,NX)
-            this%h2D_RootMSinkWeight_pvr(nptc,L)=RootMSinkWeight_pvr(L,NZ,NY,NX)
-            this%h2D_Root2ndSinkWeight_pvr(nptc,L)=Root2ndSinkWeight_pvr(L,ipltroot,NZ,NY,NX)
-            this%h2D_Root1stSinkWeight_pvr(nptc,L)=Root1stSinkWeight_pvr(L,NZ,NY,NX)
-            this%h2D_Root1stRadius_rpvr(nptc,L)=Root1stRadius_pvr(ipltroot,L,NZ,NY,NX)*1.e3_r8
-            this%h2D_RootNonstBConc_pvr(nptc,L)=sum(RootNonstructElmConc_rpvr(1:NumPlantChemElms,ipltroot,L,NZ,NY,NX))
+            this%h2D_ROOTNLim_rpvr(nptc,L)         = ROOTNLim_rpvr(ipltroot,L,NZ,NY,NX)
+            this%h2D_ROOTPLim_rpvr(nptc,L)         = ROOTPLim_rpvr(ipltroot,L,NZ,NY,NX)
+            this%h2D_RootNonstC_rpvr(nptc,L)       = RootMycoNonstElms_rpvr(ielmc,ipltroot,L,NZ,NY,NX)
+            this%h2D_RootSinkWeight_pvr(nptc,L)    = RootSinkWeight_pvr(L,NZ,NY,NX)
+            this%h2D_RootMSinkWeight_pvr(nptc,L)   = RootMSinkWeight_pvr(L,NZ,NY,NX)
+            this%h2D_Root2ndSinkWeight_pvr(nptc,L) = Root2ndSinkWeight_pvr(L,ipltroot,NZ,NY,NX)
+            this%h2D_Root1stSinkWeight_pvr(nptc,L) = Root1stSinkWeight_pvr(L,NZ,NY,NX)
+            this%h2D_Root1stRadius_rpvr(nptc,L)    = Root1stRadius_pvr(ipltroot,L,NZ,NY,NX)*m2mm
+            this%h2D_RootNonstBConc_pvr(nptc,L)    = RootNonstOMConc_pvr(ipltroot,L,NZ,NY,NX)
 
             this%h2D_Rootmedlength_pvr(nptc,L) = RootMediumLength_pvr(L,NZ,NY,NX)*RootMediumXNum_pvr(L,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
             if(PlantPopuLive_pft(NZ,NY,NX).GT.0._r8)then
@@ -419,26 +425,37 @@ contains
               this%h2D_RootMedAxesNumL_pvr(nptc,L)=0._r8
             endif
             this%h2D_Root2ndAxesNumL_pvr(nptc,L)= Root2ndXNumL_rpvr(ipltroot,L,NZ,NY,NX)
+            if(Root2ndXNumL_rpvr(ipltroot,L,NZ,NY,NX)>0._r8)then
+              if(ldo_sp_mode)then
+                this%h2D_Root2ndMeanLen_pvr(nptc,L)=MeanSecondaryAxisLength_pft(NZ,NY,NX)
+              else
+                ! Count-weighted mean from actual secondary-root geometry;
+                ! unlike hydraulic effective length, this has no tip-length floor.
+                this%h2D_Root2ndMeanLen_pvr(nptc,L)= &
+                  sum(Root2ndLen_rpvr(ipltroot,L,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX)) &
+                  /Root2ndXNumL_rpvr(ipltroot,L,NZ,NY,NX)
+              endif
+            endif
             this%h2D_RootKond2H2O_pvr(nptc,L)= safe_adb(1._r8,RootResist4H2O_pvr(ipltroot,L,NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX))*1.e7/3600._r8
             this%h2D_RootMedC_pvr(nptc,L) = RootMedStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL
             this%h2D_RootAct1stC_pvr(nptc,L) = Root1stActStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL
             this%h2D_RootLig1stC_pvr(nptc,L) = Root1stLigStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL
-            this%h2D_Root1stLenPP_pvr(nptc,L)=0._r8
-            this%h2D_RootmedRadius_pvr(nptc,L)=0._r8
+            this%h2D_Root1stLenPP_pvr(nptc,L)   = 0._r8
+            this%h2D_RootmedRadius_pvr(nptc,L)  = 0._r8
+            this%h2D_Root2ndStrutC_pvr(nptc,L)  = RootMyco2ndStrutElms_pvr(ielmc,ipltroot,L,NZ,NY,NX)
+            this%h2D_Root2ndStrutN_pvr(nptc,L)  = RootMyco2ndStrutElms_pvr(ielmn,ipltroot,L,NZ,NY,NX)
+            this%h2D_Root2ndStrutP_pvr(nptc,L)  = RootMyco2ndStrutElms_pvr(ielmp,ipltroot,L,NZ,NY,NX)
+            this%h2D_MycoBiomC_pvr(nptc,L)      = RootMyco2ndStrutElms_pvr(ielmc,imycorr_arbu,L,NZ,NY,NX)
+            this%h1D_MycorrizhalBiomC_ptc(nptc) = this%h1D_MycorrizhalBiomC_ptc(nptc)+this%h2D_MycoBiomC_pvr(nptc,L)
             DO NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
               this%h2D_RootmedRadius_pvr(nptc,L)=this%h2D_RootmedRadius_pvr(nptc,L)+RootMediumRadius_rpvr(L,NR,NZ,NY,NX)
               this%h2D_Root1stLenPP_pvr(nptc,L)=this%h2D_Root1stLenPP_pvr(nptc,L)+Root1stLenPP_rpvr(L,NR,NZ,NY,NX)
               this%h2D_CRootLumenArea_pvr(nptc,L)    = this%h2D_CRootLumenArea_pvr(nptc,L)+CRootLumenArea_rpvr(L,NR,NZ,NY,NX)
-              this%h2D_MycoBiomC_pvr(nptc,L)         = this%h2D_MycoBiomC_pvr(nptc,L)+RootMyco2ndStrutElms_rpvr(ielmc,imycorr_arbu,L,NR,NZ,NY,NX)
               this%h2D_Cytokinin1stConc_pvr(nptc,L)  = this%h2D_Cytokinin1stConc_pvr(nptc,L)+Cytokinin1stConc_rpvr(L,NR,NZ,NY,NX)
               this%h2D_Cytok_scalar_pvr(nptc,L)      = this%h2D_Cytok_scalar_pvr(nptc,L)+fctyok_scalar_rpvr(L,NR,NZ,NY,NX)
               this%h2D_Root1stStrutC_pvr(nptc,L)     = this%h2D_Root1stStrutC_pvr(nptc,L) + RootMyco1stStrutElms_rpvr(ielmc,L,NR,NZ,NY,NX)
               this%h2D_Root1stStrutN_pvr(nptc,L)     = this%h2D_Root1stStrutN_pvr(nptc,L) + RootMyco1stStrutElms_rpvr(ielmn,L,NR,NZ,NY,NX)
               this%h2D_Root1stStrutP_pvr(nptc,L)     = this%h2D_Root1stStrutP_pvr(nptc,L) + RootMyco1stStrutElms_rpvr(ielmp,L,NR,NZ,NY,NX)
-              this%h2D_Root2ndStrutC_pvr(nptc,L)     = this%h2D_Root2ndStrutC_pvr(nptc,L) + RootMyco2ndStrutElms_rpvr(ielmc,ipltroot,L,NR,NZ,NY,NX)
-              this%h2D_Root2ndStrutN_pvr(nptc,L)     = this%h2D_Root2ndStrutN_pvr(nptc,L) + RootMyco2ndStrutElms_rpvr(ielmn,ipltroot,L,NR,NZ,NY,NX)
-              this%h2D_Root2ndStrutP_pvr(nptc,L)     = this%h2D_Root2ndStrutP_pvr(nptc,L) + RootMyco2ndStrutElms_rpvr(ielmp,ipltroot,L,NR,NZ,NY,NX)
-              this%h1D_MycorrizhalBiomC_ptc(nptc)    = this%h1D_MycorrizhalBiomC_ptc(nptc) + RootMyco2ndStrutElms_rpvr(ielmc,imycorr_arbu,L,NR,NZ,NY,NX)
             ENDDO
 
             if(NumStructuralRootAxes_pft(NZ,NY,NX).GT.0)THEN

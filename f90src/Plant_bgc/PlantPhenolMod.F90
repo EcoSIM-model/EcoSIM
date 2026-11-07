@@ -418,6 +418,7 @@ module PlantPhenolMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine StagePlantPhenology(I,J,NZ)
+  ! Refresh nonstructural element concentrations and their canopy C+N+P sum.
   implicit none
   integer, intent(in) :: I,J,NZ
   character(len=*), parameter :: subname='StagePlantPhenology'
@@ -443,7 +444,9 @@ module PlantPhenolMod
     CanopyNoduleNonstCConc_pft  => plt_biom%CanopyNoduleNonstCConc_pft ,& !output :canopy nodule nonstructural C concentration, [gC (gC)-1]
     LeafPetoNonstElmConc_brch   => plt_biom%LeafPetoNonstElmConc_brch  ,& !output :branch nonstructural C concentration, [g d-2]
     CanopyNonstElmConc_pft      => plt_biom%CanopyNonstElmConc_pft     ,& !output :canopy nonstructural element concentration, [g d-2]
-    RootNonstructElmConc_rpvr   => plt_biom%RootNonstructElmConc_rpvr  ,& !output :root layer nonstructural C concentration, [g g-1]
+    CanopyNonstOMConc_pft       => plt_biom%CanopyNonstOMConc_pft      ,& !output :canopy nonstructural C+N+P concentration, [g gC-1]
+    RootNonstructElmConc_pvr   => plt_biom%RootNonstructElmConc_pvr  ,& !output :root layer nonstructural C concentration, [g g-1]
+    RootNonstOMConc_pvr        => plt_biom%RootNonstOMConc_pvr       ,& !output :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     MaxSoilLays4Root_pft        => plt_morph%MaxSoilLays4Root_pft       & !output :maximum soil layer number for all root axes,[-]
   )
   call PrintInfo('beg '//subname)
@@ -479,13 +482,14 @@ module PlantPhenolMod
     D160: DO L=NU,MaxSoilLays4Root_pft(NZ)
       IF(RootMycoActiveBiomC_pvr(N,L,NZ).GT.ZERO4LeafVar_pft(NZ))THEN
         DO NE=1,NumPlantChemElms
-          RootNonstructElmConc_rpvr(NE,N,L,NZ)=AZMAX1(RootMycoNonstElms_rpvr(NE,N,L,NZ)/RootMycoActiveBiomC_pvr(N,L,NZ))
+          RootNonstructElmConc_pvr(NE,N,L,NZ)=AZMAX1(RootMycoNonstElms_rpvr(NE,N,L,NZ)/RootMycoActiveBiomC_pvr(N,L,NZ))
         ENDDO
       ELSE
         DO NE=1,NumPlantChemElms
-          RootNonstructElmConc_rpvr(NE,N,L,NZ)=1.0_r8
+          RootNonstructElmConc_pvr(NE,N,L,NZ)=1.0_r8
         ENDDO
       ENDIF
+      RootNonstOMConc_pvr(N,L,NZ)=sum(RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ))
     ENDDO D160
   ENDDO D180
   !
@@ -504,6 +508,8 @@ module PlantPhenolMod
     CanopyNonstElmConc_pft(1:NumPlantChemElms,NZ) = 1.0_r8
     CanopyNoduleNonstCConc_pft(NZ)                = 1.0_r8
   ENDIF
+  CanopyNonstOMConc_pft(NZ)=CanopyNonstElmConc_pft(ielmc,NZ) &
+    +CanopyNonstElmConc_pft(ielmn,NZ)+CanopyNonstElmConc_pft(ielmp,NZ)
   
   D190: DO NB=1,NumOfBranches_pft(NZ)
     IF(CanopyLeafSheathC_brch(NB,NZ).GT.ZERO4Groth_pft(NZ))THEN
@@ -1531,4 +1537,4 @@ module PlantPhenolMod
   end subroutine InitiateBranchFloral
   ![tail]
 end module PlantPhenolMod
-    
+

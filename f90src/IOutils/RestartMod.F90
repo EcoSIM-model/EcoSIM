@@ -11,7 +11,7 @@ module RestartMod
   use EcoSIMConfig      , only : case_name,hostname,version,source,username
   use EcoSiMParDataMod  , only : micpar,pltpar
   use TracerIDMod       , only : trc_confs
-  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model
+  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode
   use ecosim_log_mod   , only : errMsg => shr_log_errMsg
   use abortutils        , only : endrun,destroy,iulog
   use UnitMod           , only : units
@@ -105,6 +105,7 @@ implicit none
 !
   use PlantTraitTableMod, only : RootVesselRadius_tab, AlphaVesselAxialResist_tab
   use PlantBGCPars, only : Rax_ref
+  use EcoSimConst, only : BndlResistH2OToHeatRatio
   implicit none
   character(len=*) , intent(in) :: flag
   type(file_desc_t), intent(inout) :: ncid ! netcdf id
@@ -112,6 +113,9 @@ implicit none
   integer :: NHW,NHE,NVN,NVS
   integer :: K,L,NX,NY,NZ,N,NB,NR,M,loc,ig
   character(len=64) :: root_cache_name
+  integer :: root_conc_varid
+  type(var_desc_t) :: root_conc_vardesc
+  logical :: has_root_conc, has_water_resistance, has_heat_resistance
   real(r8), target :: datrc_1d(bounds%begc:bounds%endc)
   integer, target  :: datic_1d(bounds%begc:bounds%endc)
   real(r8), target :: datrp_1d(bounds%begp:bounds%endp)
@@ -4608,16 +4612,20 @@ implicit none
 
     if(flag=='read')then
       datpr4 => datrp_4d(1:npfts,1:NumPlantChemElms, 1:pltpar%jroots,1:JZ)
-      call restartvar(ncid, flag, varname='RootNonstructElmConc_rpvr', dim1name='pft',dim2name='elmnts', &
+      root_cache_name='RootNonstructElmConc_pvr'
+      call ncd_inqvid(ncid,trim(root_cache_name),root_conc_varid,root_conc_vardesc,readvar=has_root_conc)
+      ! Accept checkpoints written before the component-array rename.
+      if(.not.has_root_conc)root_cache_name='RootNonstructElmConc_rpvr'
+      call restartvar(ncid, flag, varname=trim(root_cache_name), dim1name='pft',dim2name='elmnts', &
       dim3name='rootyps',dim4name='levsoi',long_name='root layer nonstructural element concentration', units='none', &
       interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
-      call cppft(flag,NHW,NHE,NVN,NVS,NP0_col, RootNonstructElmConc_rpvr,datrp_4d,NumActivePlants=restart_num_plants,&
+      call cppft(flag,NHW,NHE,NVN,NVS,NP0_col, RootNonstructElmConc_pvr,datrp_4d,NumActivePlants=restart_num_plants,&
         IsPlantActive_pft=restart_active_pft)
     else
-      if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col, RootNonstructElmConc_rpvr,datrp_4d,&
+      if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col, RootNonstructElmConc_pvr,datrp_4d,&
         NumActivePlants=restart_num_plants,IsPlantActive_pft=restart_active_pft)
       datpr4 => datrp_4d(1:npfts,1:NumPlantChemElms, 1:pltpar%jroots,1:JZ)
-      call restartvar(ncid, flag, varname='RootNonstructElmConc_rpvr', dim1name='pft',dim2name='elmnts', &
+      call restartvar(ncid, flag, varname='RootNonstructElmConc_pvr', dim1name='pft',dim2name='elmnts', &
       dim3name='rootyps',dim4name='levsoi',long_name='root layer nonstructural element concentration', units='none', &
       interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
     endif  
@@ -5136,7 +5144,26 @@ implicit none
   call restart_pft_memory(ncid,flag,'CanopyEvapTransLHeat_pft',CanopyEvapTransLHeat_pft,'MJ d-2 h-1')
   call restart_pft_memory(ncid,flag,'HeatXAir2PCan_pft',HeatXAir2PCan_pft,'MJ d-2 h-1')
   call restart_pft_memory(ncid,flag,'HeatStorCanopy_pft',HeatStorCanopy_pft,'MJ d-2 h-1')
-  call restart_pft_memory(ncid,flag,'RawCanopy2Atm_pft',RawCanopy2Atm_pft,'h m-1')
+  ! Read the former water-resistance name from checkpoints predating the split.
+  has_water_resistance=.true.
+  has_heat_resistance=.true.
+  if(flag=='read')then
+    call ncd_inqvid(ncid,'RawH2OCanopy2Atm_pft',root_conc_varid,root_conc_vardesc,readvar=has_water_resistance)
+    call ncd_inqvid(ncid,'RawHeatCanopy2Atm_pft',root_conc_varid,root_conc_vardesc,readvar=has_heat_resistance)
+  endif
+  if(has_water_resistance)then
+    call restart_pft_memory(ncid,flag,'RawH2OCanopy2Atm_pft',RawH2OCanopy2Atm_pft,'h m-1')
+  else
+    call restart_pft_memory(ncid,flag,'RawCanopy2Atm_pft',RawH2OCanopy2Atm_pft,'h m-1')
+  endif
+  if(has_heat_resistance)then
+    call restart_pft_memory(ncid,flag,'RawHeatCanopy2Atm_pft',RawHeatCanopy2Atm_pft,'h m-1')
+  else
+    ! Heat resistance is derived; preserve inactive/missing entries unchanged.
+    RawHeatCanopy2Atm_pft=RawH2OCanopy2Atm_pft
+    where(RawH2OCanopy2Atm_pft/=spval) &
+      RawHeatCanopy2Atm_pft=RawH2OCanopy2Atm_pft/BndlResistH2OToHeatRatio
+  endif
   call restart_pft_memory(ncid,flag,'Transpiration_pft',Transpiration_pft,'m3 d-2 h-1')
   call restart_pft_memory(ncid,flag,'VapXAir2Canopy_pft',VapXAir2Canopy_pft,'m3 d-2 h-1')
   call restart_pft_memory(ncid,flag,'CO2NetFix_pft',CO2NetFix_pft,'gC d-2 h-1')
@@ -5169,6 +5196,28 @@ implicit none
           RootSingleVesselArea_pft(NZ,NY,NX)=PICON*RootVesselRadius_tab(loc)**2
           RootSingleVesselRstaxial_pft(NZ,NY,NX)= &
             AlphaVesselAxialResist_tab(loc)*Rax_ref*(1.e-6_r8/RootVesselRadius_tab(loc))**4
+        ENDDO
+      ENDDO
+    ENDDO
+  endif
+  if(flag=='read')then
+    ! Recover the aggregate from its mode-specific source, without a second
+    ! checkpoint copy. Daily SP setup subsequently refreshes its root profile.
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        DO NZ=1,NP0_col(NY,NX)
+          RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+          if(ldo_sp_mode)then
+            RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=0._r8
+            if(NZ<=NP_col(NY,NX))then
+              ! SP PopuRootMycoC stores the prescribed stock per square meter.
+              RootMyco2ndStrutElms_pvr(ielmc,ipltroot,:,NZ,NY,NX)= &
+                PopuRootMycoC_pvr(ipltroot,:,NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)
+            endif
+          else
+            RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=sum( &
+              RootMyco2ndStrutElms_rpvr(:,:,:,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX),dim=4)
+          endif
         ENDDO
       ENDDO
     ENDDO

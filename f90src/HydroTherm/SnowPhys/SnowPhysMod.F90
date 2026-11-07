@@ -354,7 +354,7 @@ contains
           VapCond2         = AirFilledFracSnow**2*H2OVapDifsc_snvr(L2,NY,NX)
           VapSnoDest       = vapsat(TKSnow1_snvr(L2,NY,NX))  !*dssign(VLWatSnow0M_snvr(L2,NY,NX))
           VapCondSnoWeited = 2.0_r8*VapCond1*VapCond2/(VapCond1*SnowThickL0_snvr(L2,NY,NX)+VapCond2*SnowThickL0_snvr(L,NY,NX))
-          H2OVapFlx        = VapCondSnoWeited*(VapSnoSrc-VapSnoDest)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX)*dt_SnoHeat
+          H2OVapFlx        = VapCondSnoWeited*(VapSnoSrc-VapSnoDest)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)*dt_SnoHeat
           VPY              = (VapSnoSrc*VLairSno1+VapSnoDest*VLairSno2)/(VLairSno1+VLairSno2)
           !
           !H2OVapFlxMax>0, moves out from layer L
@@ -404,7 +404,7 @@ contains
 
         HeatCnductMax = (TKSnow1_snvr(L,NY,NX)-TKY)*VLHeatCapSnowM1_snvr(L,NY,NX)*dts_sno
         HeatCnduct    = ATCNDW*(TKSnow1_snvr(L,NY,NX)-TKSnow1_snvr(L2,NY,NX))*AREA_3D(3,NUM_col(NY,NX),NY,NX) &
-          *FracSurfAsSnow_col(NY,NX)*dt_SnoHeat
+          *FracSurfSnowCovered_col(NY,NX)*dt_SnoHeat
 
         IF(HeatCnduct.GE.0.0_r8)THEN
           HeatCndFlxInSno=AZMAX1(AMIN1(HeatCnductMax,HeatCnduct))
@@ -875,9 +875,9 @@ contains
   !     RAG,RAGW=isothermal blrs at ground,snowpack surfaces
   !
   RI   = RichardsonNumber(RIB_col(NY,NX),TKQ_col(NY,NX),TKSnow1_snvr(1,NY,NX))
-  RAGX = AMAX1(RAM,0.8_r8*ResistAreodynOverSnow_col(NY,NX), &
-    AMIN1(1.2_r8*ResistAreodynOverSnow_col(NY,NX),RawIsoTSoil2ATM_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
-  ResistAreodynOverSnow_col(NY,NX) = RAGX
+  RAGX = AMAX1(RAM,0.8_r8*RawH2OSnow2CanAir_col(NY,NX), &
+    AMIN1(1.2_r8*RawH2OSnow2CanAir_col(NY,NX),RawIsoTSoil2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
+  RawH2OSnow2CanAir_col(NY,NX) = RAGX
   RAa                              = RAGX
   !
   ! PARAMETERS FOR CALCULATING LATENT AND SENSIBLE HEAT FLUXES
@@ -1432,6 +1432,8 @@ contains
   end subroutine ZeroSnowFluxM
 !------------------------------------------------------------------------------------------
   FUNCTION CalcSnowBNDResistance(NY,NX)result(RAS)
+  ! Snow-pore gas resistance using column-mean depth; the gas-path assembler
+  ! converts it to snow-covered-patch depth before mixing surface pathways.
   implicit none
   integer, intent(in) :: NY,NX
   real(r8) :: RAS
@@ -1562,7 +1564,7 @@ contains
     IF(VLairSno1.GT.ZEROS2(NY,NX) .AND. FracAirFilledSoilPoreM_vr(M,0,NY,NX).GT.AirFillPore_Min)THEN
       VapSnow0=vapsat(TK0X)  !*dssign(VLWatSnow0M_snvr(L,NY,NX)) !snow vapor pressure, saturated
       !snow -> residue vapor flux (>0)
-      H2OVapFlx=AvgVaporCondctSnowLitR*(VapSnow0-VPR)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX) &
+      H2OVapFlx=AvgVaporCondctSnowLitR*(VapSnow0-VPR)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX) &
         *FracSurfByLitR_col(NY,NX)*dts_litrvapht
       !equilibrium vapor pressure
       VPY          = (VapSnow0*VLairSno1+VPR*VLsoiAirPM_vr(M,0,NY,NX))/(VLairSno1+VLsoiAirPM_vr(M,0,NY,NX))
@@ -1591,7 +1593,7 @@ contains
     ! VLSnowHeatCapMM= volumetric heat capacity in snow layer
     TKY           = (TK0X*VLHeatCapSnowM1_snvr(L,NY,NX)+TKXR*VHeatCapacityLitR)/(VLHeatCapSnowM1_snvr(L,NY,NX)+VHeatCapacityLitR)
     HeatCnductMax = (TK0X-TKY)*VLHeatCapSnowM1_snvr(L,NY,NX)*dt_watvap
-    HeatCnduct    = AvgThermCondctSnoLitR*(TK0X-TKXR)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
+    HeatCnduct    = AvgThermCondctSnoLitR*(TK0X-TKXR)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
     IF(HeatCnduct.GE.0.0_r8)THEN
       !sensible heat flux from snow to litter
       HeatCndFlxSno2Litr=AZMAX1(AMIN1(HeatCnductMax,HeatCnduct))
@@ -1614,7 +1616,7 @@ contains
     !both litter layer and topsoil are not-saturated
     IF(VLsoiAirPM_vr(M,0,NY,NX).GT.ZEROS(NY,NX) .AND. VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX).GT.ZEROS(NY,NX))THEN
       VP1       = vapsat(TK1X)*EXP(18.0_r8*PSISV1/(RGASC*TK1X))
-      H2OVapFlx = AvgVaporCondctSoilLitR*(VPR-VP1)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
+      H2OVapFlx = AvgVaporCondctSoilLitR*(VPR-VP1)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
 
       VPY=(VPR*VLsoiAirPM_vr(M,0,NY,NX)+VP1*VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX)) &
         /(VLsoiAirPM_vr(M,0,NY,NX)+VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX))
@@ -1654,7 +1656,7 @@ contains
     !
     TKY           = (TKXR*VHeatCapacityLitR+TK1X*VHeatCapacitySoil)/(VHeatCapacityLitR+VHeatCapacitySoil)
     HeatCnductMax = (TKXR-TKY)*VHeatCapacityLitR*dt_watvap
-    HeatCnduct    = AvgThermCondctSoilLitR*(TKXR-TK1X)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
+    HeatCnduct    = AvgThermCondctSoilLitR*(TKXR-TK1X)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
 
     IF(HeatCnduct.GE.0.0_r8)THEN
       !sensible heat flux from litter to soil
@@ -1929,14 +1931,14 @@ contains
       *FracAirFilledSoilPoreM_vr(M,NUM_col(NY,NX),NY,NX)/POROS_vr(NUM_col(NY,NX),NY,NX)
 
     AvgVaporCondctSoilLitR = 2.0_r8*VapCond1*VapCond2/(VapCond1*DLYR_3D(3,NUM_col(NY,NX),NY,NX)+VapCond2*SnowThickL0_snvr(L,NY,NX))
-    H2OVapFlx              = AvgVaporCondctSoilLitR*(VapSnoSrc-VapSoiDest)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfAsSnow_col(NY,NX)&
+    H2OVapFlx              = AvgVaporCondctSoilLitR*(VapSnoSrc-VapSoiDest)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)&
       *FracSurfBareSoil_col(NY,NX)*dt_SnoHeat
     VPY          = (VapSnoSrc*VLairSno1+VapSoiDest*VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX))/(VLairSno1+VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX))
     H2OVapFlxMax = (VapSnoSrc-VPY)*VLairSno1*dts_sno
 
     if(abs(H2OVapFlx)>1.e10)then
       print*,'hev',vapsat(TKSoil1_vr(NUM_col(NY,NX),NY,NX)),PSISV1,RGASC,TKSoil1_vr(NUM_col(NY,NX),NY,NX)
-      print*,'h2ovapflx',AvgVaporCondctSoilLitR,VapSnoSrc,VapSoiDest,FracSurfAsSnow_col(NY,NX)*FracSurfBareSoil_col(NY,NX)
+      print*,'h2ovapflx',AvgVaporCondctSoilLitR,VapSnoSrc,VapSoiDest,FracSurfSnowCovered_col(NY,NX)*FracSurfBareSoil_col(NY,NX)
     endif
     IF(H2OVapFlx.GE.0.0_r8)THEN
       !water/heat flux goes into soil
@@ -1992,7 +1994,7 @@ contains
     /(VLHeatCapSnowM1_snvr(L,NY,NX)+VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX))
   HeatCnductMax = (TKSnow1_snvr(L,NY,NX)-TKY)*VLHeatCapSnowM1_snvr(L,NY,NX)*dts_sno
   HeatCnduct    = AvgThermCondctSoilLitR*(TKSnow1_snvr(L,NY,NX)-TKWX1)*AREA_3D(3,NUM_col(NY,NX),NY,NX) &
-    *FracSurfAsSnow_col(NY,NX)*FracSurfBareSoil_col(NY,NX)*dt_SnoHeat
+    *FracSurfSnowCovered_col(NY,NX)*FracSurfBareSoil_col(NY,NX)*dt_SnoHeat
   IF(HeatCnduct.GE.0.0_r8)THEN
     HeatCndFlxSno2Soi=AZMAX1(AMIN1(HeatCnductMax,HeatCnduct))
   ELSE

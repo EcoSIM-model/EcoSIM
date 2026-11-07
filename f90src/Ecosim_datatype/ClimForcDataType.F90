@@ -139,10 +139,11 @@ implicit none
   real(r8),target,allocatable ::  PrecHeat_col(:,:)                      !precipitation heat to surface, [MJ/d2/h]
   real(r8),target,allocatable ::  RainLitr_col(:,:)                      !water from aboveground falling litter,[m3 d-2]
   real(r8),target, allocatable :: trcs_solcoef_col(:,:,:)                !parameter for computing RGasSinkScalar_vr,[-]  
+  real(r8),target,allocatable :: sp_popdens_pft(:,:,:) !prescribed annual population density, [plants m-2]
   real(r8),target,allocatable ::  tlai_mon_pft(:,:,:,:)                  !monthly lai for different pft used in prescribed phenology, [m2/m2]
   real(r8),target,allocatable ::  tsai_mon_pft(:,:,:,:)                  !monthly sai for different pft used in prescribed phenology, [m2/m2]
-  real(r8),target,allocatable ::  tlai_day_pft(:,:,:)                    !interpolated daily lai for different pft used in prescribed phenology, [m2/m2]
-  real(r8),target,allocatable ::  tsai_day_pft(:,:,:)                    !interpolated daily sai for different pft used in prescribed phenology, [m2/m2]
+  real(r8),target,allocatable ::  tlai_day_pft(:,:,:)                    !daily prescribed leaf area for each PFT, [m2 cell-1]
+  real(r8),target,allocatable ::  tsai_day_pft(:,:,:)                    !daily prescribed stem area for each PFT, [m2 cell-1]
   real(r8),target,allocatable ::  height_top_mon_pft(:,:,:,:)            !monthly canopy top height used in prescribed phenology, [m]
   real(r8),target,allocatable ::  height_bot_mon_pft(:,:,:,:)            !monthly canopy bottom height used in prescribed phenology, [m]
   REAL(R8),target,allocatable ::  NWetDep_col(:,:)                       !atmospheric inorganic N wet deposition, [gN m-2 h-1]
@@ -174,6 +175,7 @@ implicit none
   allocate(fAeroScalar_col(JY,JX));fAeroScalar_col=0._r8
   allocate(SeedCDeposition_pft(JP,JY,JX));SeedCDeposition_pft=0._r8
   allocate(NWetDep_col(JY,JX)); NWetDep_col=0._r8
+  allocate(sp_popdens_pft(JP,JY,JX));sp_popdens_pft=0._r8
   allocate(tlai_mon_pft(12,JP,JY,JX));tlai_mon_pft=0._r8
   allocate(tsai_mon_pft(12,JP,JY,JX));tsai_mon_pft=0._r8
   allocate(tlai_day_pft(JP,JY,JX));tlai_day_pft=0._r8
@@ -289,6 +291,7 @@ implicit none
   call destroy(NWetDep_col)
   call destroy(height_bot_mon_pft)  
   call destroy(height_top_mon_pft)
+  call destroy(sp_popdens_pft)
   call destroy(tlai_mon_pft)
   call destroy(tsai_mon_pft)
   call destroy(tlai_day_pft)

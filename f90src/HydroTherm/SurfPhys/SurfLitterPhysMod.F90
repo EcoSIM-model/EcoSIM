@@ -321,12 +321,12 @@ implicit none
       ! CdLitREvap,CdLitRHSens=conductance for litter latent,sensible heat fluxes
       !
       RI   = RichardsonNumber(RIB_col(NY,NX),TKQ_col(NY,NX),TKR1)
-      RAGX = ResistAreodynOverLitr_col(NY,NX)
+      RAGX = RawH2OLitr2CanAir_col(NY,NX)
 
       !update aerodynamic resistance over litter
-      ResistAreodynOverLitr_col(NY,NX) = AMAX1(RAM,0.8_r8*RAGX,AMIN1(1.2_r8*RAGX,RawIsoTLitr2ATM_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
-      CdLitREvap  = AScaledCdWOverLitr_col(NY,NX)/(ResistAreodynOverLitr_col(NY,NX)+RZ)
-      CdLitRHSens = AScaledCdHOverLitr_col(NY,NX)/ResistAreodynOverLitr_col(NY,NX)
+      RawH2OLitr2CanAir_col(NY,NX) = AMAX1(RAM,0.8_r8*RAGX,AMIN1(1.2_r8*RAGX,RawIsoTLitr2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
+      CdLitREvap  = AScaledCdWOverLitr_col(NY,NX)/(RawH2OLitr2CanAir_col(NY,NX)+RZ)
+      CdLitRHSens = AScaledCdHOverLitr_col(NY,NX)/RawH2OLitr2CanAir_col(NY,NX)
       !
       !     NET RADIATION AT RESIDUE SURFACE
       !

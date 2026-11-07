@@ -1,9 +1,11 @@
 submodule (HistDataType) HistRegisterPlant
+  ! Register PFT-level plant diagnostics with history metadata and pointers.
   use HistFileMod, only: hist_addfld1d
   implicit none
 contains
 
   module procedure register_hist_plants
+    ! Expose supported plant history fields to the output system.
     integer :: beg_col, end_col, beg_ptc, end_ptc
     real(r8), pointer :: data1d_ptr(:)
 
@@ -87,8 +89,7 @@ contains
 
   data1d_ptr => this%h1D_CanopyNonstOMConc_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='CanopyNonstOMConc_pft',units='g/gC',avgflag='A',&
-    long_name='Canopy nonstructural C+N+P concentration per unit leaf/sheath carbon',ptr_patch=data1d_ptr,&
-    default='inactive')
+    long_name='Canopy nonstructural C+N+P concentration per unit leaf/sheath carbon',ptr_patch=data1d_ptr)
 
   data1d_ptr => this%h1D_STOML_RSC_CO2_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='STOML_RSC_CO2_pft',units='s/m',avgflag='A',&
@@ -161,6 +162,11 @@ contains
   data1d_ptr => this%h1D_BLYR_RSC_H2O_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='BLYR_RSC_H2O_pft',units='s/m',avgflag='A',&
     long_name='Canopy boundary layer resistance for H2O',ptr_patch=data1d_ptr,&
+    default='inactive')
+
+  data1d_ptr => this%h1D_BLYR_RSC_HEAT_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='BLYR_RSC_HEAT_pft',units='s/m',avgflag='A',&
+    long_name='Canopy boundary layer resistance for sensible heat',ptr_patch=data1d_ptr,&
     default='inactive')
 
   data1d_ptr => this%h1D_CdH2ORootxSoil_ptc(beg_ptc:end_ptc)

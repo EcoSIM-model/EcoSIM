@@ -3,6 +3,7 @@ module PlantInfoMod
 ! DESCRIPTION
 ! code to read plant information
   use data_kind_mod, only: r8 => DAT_KIND_R8
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use fileUtil,      only: open_safe, check_read, int2str, getavu, relavu, opnfil
   use minimathmod,   only: isLeap
   use abortutils,    only: endrun, iulog
@@ -947,8 +948,20 @@ implicit none
   RCS_pft(NZ,NY,NX)           = RCS_tab(loc)
   CuticleResist_pft(NZ,NY,NX) = CuticleResist_tab(loc)
 
-  if(ats_cpl_mode)then
+  if(ats_cpl_mode .or. ldo_sp_mode)then
     irootType_pft(NZ,NY,NX)       = irootType_tab(loc)
+    MeanSecondaryAxisLength_pft(NZ,NY,NX) = MeanSecondaryAxisLength_tab(loc)
+    if(.not.ieee_is_finite(CanopyNonstOMConc_tab(loc)))then
+      write(iulog,*)'Invalid CCPOLT for PFT table record:',loc,CanopyNonstOMConc_tab(loc)
+      call endrun('prescribed PFT CCPOLT must be finite and nonnegative',__LINE__)
+    endif
+    if(CanopyNonstOMConc_tab(loc)<0._r8)then
+      write(iulog,*)'Negative CCPOLT for PFT table record:',loc,CanopyNonstOMConc_tab(loc)
+      call endrun('prescribed PFT CCPOLT must be finite and nonnegative',__LINE__)
+    endif
+    CanopyNonstOMConc_pft(NZ,NY,NX) = CanopyNonstOMConc_tab(loc)
+  endif
+  if(ats_cpl_mode)then
     CanopyHeightLive_pft(NZ,NY,NX) = CanopyHeightLive_tab(loc)
   endif
 
@@ -2088,8 +2101,12 @@ implicit none
   call ncd_getvar(pft_nfid, 'CPGR', rPCGrain_tab)
   call ncd_getvar(pft_nfid, 'CPRT', rPCRootr_tab)
   call ncd_getvar(pft_nfid, 'CPND', rPCNoduler_tab)
-  if(ats_cpl_mode)then
+  if(ats_cpl_mode .or. ldo_sp_mode)then
     call ncd_getvar(pft_nfid, 'IROOTJK', irootType_tab)
+    call ncd_getvar(pft_nfid, 'MFRUTL', MeanSecondaryAxisLength_tab)
+    call ncd_getvar(pft_nfid, 'CCPOLT', CanopyNonstOMConc_tab)
+  endif
+  if(ats_cpl_mode)then
     call ncd_getvar(pft_nfid, 'CANHT', CanopyHeightLive_tab)
   endif
   call ncd_pio_closefile(pft_nfid)

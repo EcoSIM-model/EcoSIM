@@ -1,4 +1,5 @@
 submodule (HistDataType) HistAllocateProfile
+  ! Allocate soil- and PFT-layer history storage and initialize missing values.
   use data_const_mod, only: spval => DAT_CONST_SPVAL
   use GridConsts, only: JZ, MaxNodesPerBranch, MaxNumBranches, MaxNumRootAxes, NumCanopyLayers, NumOfPlantMorphUnits
   use ElmIDMod, only: NumPlantChemElms
@@ -7,6 +8,7 @@ submodule (HistDataType) HistAllocateProfile
 contains
 
   module procedure allocate_hist_profiles
+    ! Allocate the layer diagnostics registered with the history system.
     integer :: beg_col, end_col, beg_ptc, end_ptc
 
     beg_col=1; end_col=bounds%ncols
@@ -262,6 +264,7 @@ contains
   allocate(this%h2D_Root2ndStrutN_pvr(beg_ptc:end_ptc,1:JZ)) ;this%h2D_Root2ndStrutN_pvr=spval
   allocate(this%h2D_Root2ndStrutP_pvr(beg_ptc:end_ptc,1:JZ)) ;this%h2D_Root2ndStrutP_pvr=spval
   allocate(this%h2D_Root2ndAxesNumL_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_Root2ndAxesNumL_pvr=spval
+  allocate(this%h2D_Root2ndMeanLen_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_Root2ndMeanLen_pvr=spval
   allocate(this%h2D_RootKond2H2O_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_RootKond2H2O_pvr=spval
   allocate(this%h2D_Root1stLenPP_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_Root1stLenPP_pvr=spval
   allocate(this%h2D_Rootmedlength_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_Rootmedlength_pvr=spval

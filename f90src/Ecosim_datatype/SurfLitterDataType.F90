@@ -1,6 +1,8 @@
 module SurfLitterDataType
+  ! Own native surface-litter state, transfer coefficients and flux accumulators.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
+  use TracerIDMod, only: idg_beg,idg_NH3
   use EcoSIMConfig, only : jcplx=> jcplxc, jcplx1=>jcplxcm1
   implicit none
   public
@@ -9,13 +11,14 @@ module SurfLitterDataType
   __FILE__
 
   real(r8) ,target,allocatable ::   BulkDensLitR(:)                   !surface litter bulk density,	[Mg m-3]
-  real(r8) ,target,allocatable ::   PARR_col(:,:)                     !surface litter boundary layer conductance, [m t-1]
+  real(r8) ,target,allocatable ::   GasXferCoeffLitr2Atm_col(:,:,:,:) !litter-area/time-scaled gas coefficient (gas,M,NY,NX) [m3]
   integer  ,target,allocatable ::   iLitrType_col(:,:,:)              !surface litter type:1 = plant, 2 = manure,[-]
   real(r8) ,target,allocatable ::   XTillCorp_col(:,:)                !factor for surface litter incorporation and soil mixing
   real(r8) ,target,allocatable ::   WatFLoLitr2SoilM_col(:,:,:)        !water transfer between soil surface and surface litter, [g d-2 t-1]
   real(r8) ,target,allocatable ::   WatFLoLitr2MacPM_col(:,:,:)        !accepted litter-to-macropore water volume per soil substep, [m3 d-2]
   real(r8) ,target,allocatable ::   WatFlowSno2LitRM_col(:,:,:)       !meltwater flux into surface litter, [m3 d-2 h-1]
   real(r8) ,target,allocatable ::   FracSurfByLitR_col(:,:)           !fraction of soil surface covered by surface litter, [-]
+  real(r8) ,allocatable ::   FracSurfByLitRM_col(:,:,:)               !litter fraction used by gas/liquid interface coefficients (M,NY,NX) [-]
   real(r8) ,target,allocatable ::   HeatFLoByWat2LitR_col(:,:)        !net heat transfer to surface litter, [MJ d-2 t-1]
   real(r8) ,target,allocatable ::   VLitR_col(:,:)                    !surface litter volume, [m3 d-2]
   real(r8) ,target,allocatable ::   VHeatCapLitRMin_col(:,:)          !threshold surface litter heat capacity, [MJ d-2 K-1]
@@ -36,6 +39,7 @@ module SurfLitterDataType
 !----------------------------------------------------------------------
 
   subroutine InitSurfLitter(NumOfLitrCmplxs)
+  ! Initialize litter state and gas-transfer work arrays for the configured grid.
 
   implicit none
   integer, intent(in) :: NumOfLitrCmplxs
@@ -45,6 +49,7 @@ module SurfLitterDataType
 !----------------------------------------------------------------------
 
   subroutine InitAllocate(NumOfLitrCmplxs)
+  ! Allocate and zero litter state, fluxes and species/substep gas coefficients.
 
   implicit none
   integer, intent(in) :: NumOfLitrCmplxs
@@ -53,13 +58,14 @@ module SurfLitterDataType
   allocate(LitWatMassBeg_col(JY,JX)); LitWatMassBeg_col = 0._r8
   allocate(LitWatMassEnd_col(JY,JX)); LitWatMassEnd_col = 0._r8
   allocate(BulkDensLitR(1:NumOfLitrCmplxs));    BulkDensLitR =0._r8
-  allocate(PARR_col(JY,JX));         PARR_col=0._r8
+  allocate(GasXferCoeffLitr2Atm_col(idg_beg:idg_NH3,60,JY,JX)); GasXferCoeffLitr2Atm_col=0._r8
   allocate(iLitrType_col(2,JY,JX));      iLitrType_col=0
   allocate(XTillCorp_col(JY,JX));        XTillCorp_col=0._r8
   allocate(WatFLoLitr2SoilM_col(60,JY,JX));     WatFLoLitr2SoilM_col=0._r8
   allocate(WatFLoLitr2MacPM_col(60,JY,JX));     WatFLoLitr2MacPM_col=0._r8
   allocate(WatFlowSno2LitRM_col(60,JY,JX));     WatFlowSno2LitRM_col=0._r8
   allocate(FracSurfByLitR_col(JY,JX));         FracSurfByLitR_col=0._r8
+  allocate(FracSurfByLitRM_col(60,JY,JX));     FracSurfByLitRM_col=0._r8
   allocate(HeatFLoByWat2LitR_col(JY,JX));        HeatFLoByWat2LitR_col=0._r8
   allocate(VLitR_col(JY,JX));         VLitR_col=0._r8
   allocate(VHeatCapLitRMin_col(JY,JX));       VHeatCapLitRMin_col=0._r8
@@ -76,6 +82,7 @@ module SurfLitterDataType
 
 !----------------------------------------------------------------------
   subroutine DestructSurfLitter
+  ! Release native litter state, fluxes and gas-transfer work arrays.
   use abortutils, only : destroy
   implicit none
 
@@ -83,13 +90,14 @@ module SurfLitterDataType
   call destroy(LitWatMassBeg_col)
   call destroy(LitWatMassEnd_col)
   call destroy(BulkDensLitR)
-  call destroy(PARR_col)
+  call destroy(GasXferCoeffLitr2Atm_col)
   call destroy(iLitrType_col)
   call destroy(XTillCorp_col)
   call destroy(WatFLoLitr2SoilM_col)
   call destroy(WatFLoLitr2MacPM_col)
   call destroy(WatFlowSno2LitRM_col)
   call destroy(FracSurfByLitR_col)
+  call destroy(FracSurfByLitRM_col)
   call destroy(HeatFLoByWat2LitR_col)
   call destroy(VLitR_col)
   call destroy(VHeatCapLitRMin_col)
