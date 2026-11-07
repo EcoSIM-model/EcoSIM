@@ -71,7 +71,7 @@ contains
         Nutruptk_fProtC_rpvr(N,L,NZ,NY,NX)                         = plt_bgcr%Nutruptk_fProtC_rpvr(N,L,NZ)
         fRootGrowPSISense_pvr(N,L,NZ,NY,NX)                        = plt_pheno%fRootGrowPSISense_pvr(N,L,NZ)
         RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX)    = plt_biom%RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ)
-        RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX) = plt_biom%RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ)
+        RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ,NY,NX) = plt_biom%RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ)
         RootProteinConc_rpvr(N,L,NZ,NY,NX)                         = plt_biom%RootProteinConc_rpvr(N,L,NZ)
         trcg_rootml_pvr(idg_beg:idg_NH3,N,L,NZ,NY,NX)              = plt_rbgc%trcg_rootml_pvr(idg_beg:idg_NH3,N,L,NZ)
         trcs_rootml_pvr(idg_beg:idg_NH3,N,L,NZ,NY,NX)              = plt_rbgc%trcs_rootml_pvr(idg_beg:idg_NH3,N,L,NZ)
@@ -174,6 +174,7 @@ contains
       ENDDO
     ENDDO
 
+    RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
   end subroutine ReceivePlantRoots
 
   subroutine SendPlantRoots(NY,NX,NZ)
@@ -182,6 +183,8 @@ contains
   integer :: L,N,NE
 
     ! Unrooted layers retain these caches until roots regrow into them.
+    RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+    plt_biom%RootNonstOMConc_pvr(:,:,NZ)=0._r8
     plt_ew%RootRadialKond2H2O_pvr(:,:,NZ)=RootRadialKond2H2O_pvr(:,:,NZ,NY,NX)
     plt_ew%RootAxialKond2H2O_pvr(:,:,NZ)=RootAxialKond2H2O_pvr(:,:,NZ,NY,NX)
     plt_rbgc%RootAtmGasConductance_rpvr(:,:,:,NZ)=RootAtmGasConductance_rpvr(:,:,:,NZ,NY,NX)
@@ -199,7 +202,8 @@ contains
       plt_morph%MRootLumenArea_pvr(L,NZ)   = MRootLumenArea_pvr(L,NZ,NY,NX)
       DO N=1,Myco_pft(NZ,NY,NX)
         plt_biom%RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ) = RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX)
-        plt_biom%RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ) = RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX)
+        plt_biom%RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ) = RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ,NY,NX)
+        plt_biom%RootNonstOMConc_pvr(N,L,NZ)=RootNonstOMConc_pvr(N,L,NZ,NY,NX)
         plt_biom%RootProteinConc_rpvr(N,L,NZ)                         = RootProteinConc_rpvr(N,L,NZ,NY,NX)
 
         plt_rbgc%trcs_rootml_pvr(idg_beg:idg_NH3,N,L,NZ)           = trcs_rootml_pvr(idg_beg:idg_NH3,N,L,NZ,NY,NX)

@@ -98,7 +98,7 @@ module WatsubMod
   integer :: K0,K1
   integer :: KL,L,L2,LL,M,MM,M1,M2,M3,M4,M5,M6,NX,NY
   integer :: N,N1,N2,N3,N4,N5,N6,NN,N4B,N5B,NUX
-  real(r8):: ResistanceLitRLay(JY,JX),HeatFluxAir2Soi(JY,JX)
+  real(r8):: ResistVapThroughLitr(JY,JX),HeatFluxAir2Soi(JY,JX)
   REAL(R8):: RainEkReducedKsat(JY,JX)
 
   REAL(R8) :: TopLayWatVol_col(JY,JX)
@@ -126,7 +126,7 @@ module WatsubMod
   call BeginMassCheck(NHW,NHE,NVN,NVS,twatmass0)
   twatmasstM=twatmass0
   ! 
-  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistanceLitRLay)
+  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
   !
   call InitSoilHydrauics(NHW,NHE,NVN,NVS)
 
@@ -139,7 +139,7 @@ module WatsubMod
     ! dtime=dtime+dts_HeatWatTP
     call PrepHydroThermIterM(M,NHW,NHE,NVN,NVS,TopLayWatVol_col,NUX0)
 
-    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
+    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr,RainEkReducedKsat,&
       TopLayWatVol_col,HeatFluxAir2Soi,dHGrnddTKsoi1,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
     
     call CopySoilWatVolIterateM(I,J,M,NHW,NHE,NVN,NVS,TopLayWatVol_col)

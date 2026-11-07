@@ -1,4 +1,5 @@
 module EcosimConst
+  ! Physical constants and unit conversions shared across EcoSIM processes.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use data_const_mod, only: GravAcceleration=>DAT_CONST_G  
   implicit none
@@ -30,6 +31,10 @@ module EcosimConst
   real(r8), parameter :: SublmHTC             = LtHeatIceMelt+EvapLHTC      !sublimation of ice,                                                        [kJ/kg]
   real(r8), parameter :: TCNDG                = 8.1E-03_r8                  !assumed thermal conductivity below lower soil boundary,                    [MJ m-1 h-1 K-1]
   real(r8), parameter :: RGASC                = 8.3143_r8                   !universal gas constant,                                                    [J (mole K)^-1]
+  ! Leaf/surface boundary-layer resistance ratio: r_b(CO2)/r_b(H2O), [-].
+  real(r8), parameter :: BndlResistCO2ToH2ORatio = 1.34_r8
+  ! Chilton-Colburn analogy: r_b(H2O)/r_b(heat), [-]; r_heat = r_H2O/ratio.
+  real(r8), parameter :: BndlResistH2OToHeatRatio = 0.92_r8
   real(r8), parameter :: OMCMassFrac          = 0.55_r8                     !C fraction in organic matter,                                              [gC /g OM] 
   real(r8), parameter :: DensitySolidOM       = 1.30_r8                     !Consolidated dry organic matter density, [g cm-3]~[Mg m-3]
   real(r8), parameter :: DensitySolidMineral  = 2.66_r8                     !mass density of mineral solids, [g cm-3]

@@ -10,6 +10,7 @@ module Read4SatePhenolMod
 !   int   NZ(ntopou)                        : tracked PFT slots (NP0_col)
 !   int   year(year)                         : calendar year of each record
 !   char  pft_type(year,ntopou,maxpfts,nchar1): PFT names; trailing blanks are fallow
+!   double PlantPopuLive_pft(year,ntopou,maxpfts): population density, [plants m-2]
 !   float LAI(year,ntopou,maxpfts,month)     : leaf area index, [m2 m-2]
 !   float SAI(year,ntopou,maxpfts,month)     : stem area index, [m2 m-2]
 !   float HTOP(year,ntopou,maxpfts,month)    : canopy top height, [m]
@@ -22,6 +23,7 @@ module Read4SatePhenolMod
   use abortutils,        only: endrun, iulog
   use DebugToolMod,      only: PrintInfo
   use ncdio_pio
+  use GridDataType,      only: AREA_3D, NU_col
   use GridConsts,        only: JX, JY, JP
   use EcoSIMCtrlMod,     only: sp_phenol_in, first_topou, first_pft
   use EcoSIMHistMod,     only: DATAP, DATAPI
@@ -30,7 +32,7 @@ module Read4SatePhenolMod
   use PlantTraitDataType, only: PlantPopuLive_pft, LeafStalkAreaAct_pft
   use PlantTraitTableMod, only: pftss_tab
   use PlantMgmtDataType, only: NP_col, NP0_col, LSG_pft, flag_active_pft
-  use ClimForcDataType,  only: tlai_mon_pft, tsai_mon_pft, height_top_mon_pft
+  use ClimForcDataType,  only: tlai_mon_pft, tsai_mon_pft, height_top_mon_pft, sp_popdens_pft
 implicit none
   private
 
@@ -44,7 +46,7 @@ implicit none
   subroutine ReadSatePhenol(yeari,NHW,NHE,NVN,NVS)
   !
   !Description:
-  !load PFT names, slot counts and monthly canopy structure for forcing year yeari
+  ! Load PFT names, population densities, slot counts and monthly canopy structure for forcing year yeari.
   implicit none
   integer, intent(in) :: yeari    !forcing calendar year, [AD]
   integer, intent(in) :: NHW,NHE  !inclusive west/east column indices, [-]
@@ -59,6 +61,7 @@ implicit none
   logical :: readvar
   character(len=2) :: climate
   character(len=10), allocatable :: pft_type(:)
+  real(r8), allocatable :: popdens(:,:) !(maxpfts,ntopou), [plants m-2]
   real(r8), allocatable :: lai(:,:,:)    !(month,maxpfts,ntopou), [m2 m-2]
   real(r8), allocatable :: sai(:,:,:)    !(month,maxpfts,ntopou), [m2 m-2]
   real(r8), allocatable :: htop(:,:,:)   !(month,maxpfts,ntopou), [m]
@@ -100,6 +103,10 @@ implicit none
     endif
   endif
 
+  call check_var(sp_nfid,'PlantPopuLive_pft',vardesc,readvar)
+  if(.not.readvar)call endrun('missing PlantPopuLive_pft in '//mod_filename,__LINE__)
+  allocate(popdens(npfts,ntopou))
+  call ncd_getvar(sp_nfid,'PlantPopuLive_pft',irec,popdens)
   allocate(lai(12,npfts,ntopou),sai(12,npfts,ntopou),htop(12,npfts,ntopou))
   call ncd_getvar(sp_nfid,'LAI',irec,lai)
   call ncd_getvar(sp_nfid,'SAI',irec,sai)
@@ -107,6 +114,8 @@ implicit none
   allocate(pft_type(npfts))
 
   ! This file owns the standalone SP distribution, including bare columns.
+  sp_popdens_pft(:,NVN:NVS,NHW:NHE)       = 0._r8
+  PlantPopuLive_pft(:,NVN:NVS,NHW:NHE)    = 0._r8
   NP_col(NVN:NVS,NHW:NHE)                 = 0
   NP0_col(NVN:NVS,NHW:NHE)                = 0
   DATAP(:,NVN:NVS,NHW:NHE)                = 'NO'
@@ -178,6 +187,16 @@ implicit none
             write(iulog,*)subname//': negative or missing value, topo unit ',NTOPO,' PFT ',NZ
             call endrun('bad LAI/SAI/HTOP in '//mod_filename,__LINE__)
           endif
+          if(.not.ieee_is_finite(popdens(NZ,NTOPO)))then
+            write(iulog,*)subname//': nonfinite population density, topo/PFT=',NTOPO,NZ
+            call endrun('prescribed PlantPopuLive_pft must be finite and positive in '//mod_filename,__LINE__)
+          endif
+          if(popdens(NZ,NTOPO)<=0._r8 .or. popdens(NZ,NTOPO)>1.e10_r8)then
+            write(iulog,*)subname//': invalid population density, topo/PFT/value=',NTOPO,NZ,popdens(NZ,NTOPO)
+            call endrun('prescribed PlantPopuLive_pft must be finite and positive in '//mod_filename,__LINE__)
+          endif
+          sp_popdens_pft(NZ,NY,NX)=popdens(NZ,NTOPO)
+          PlantPopuLive_pft(NZ,NY,NX)=popdens(NZ,NTOPO)*AREA_3D(3,NU_col(NY,NX),NY,NX)
           tlai_mon_pft(1:12,NZ,NY,NX)       = lai(1:12,NZ,NTOPO)
           tsai_mon_pft(1:12,NZ,NY,NX)       = sai(1:12,NZ,NTOPO)
           height_top_mon_pft(1:12,NZ,NY,NX) = htop(1:12,NZ,NTOPO)
@@ -196,7 +215,7 @@ implicit none
   ENDDO
 
   call ncd_pio_closefile(sp_nfid)
-  deallocate(lai,sai,htop,pft_type)
+  deallocate(lai,sai,htop,pft_type,popdens)
   call PrintInfo('end '//subname)
   end subroutine ReadSatePhenol
 

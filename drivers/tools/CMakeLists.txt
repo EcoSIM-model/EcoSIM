@@ -8,6 +8,7 @@ set(TOOLS_SOURCES
   NamelistTest.F90
   HFileTest.F90
   SoilWarmReadTest.F90
+  GroundResistanceTest.F90
 	EcoATSTest.F90
 )
 include(add_ecosim_library)
@@ -116,3 +117,15 @@ if (NOT CMAKE_INSTALL_PREFIX STREQUAL "INSTALL_DISABLED")
   file(GLOB HEADERS *.mod)
   install(FILES ${HEADERS} DESTINATION include/)
 endif()
+
+add_ecosim_executable(GroundResistanceTest.x GroundResistanceTest.F90)
+target_include_directories(GroundResistanceTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Minimath/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Modelpars/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SurfPhys/)

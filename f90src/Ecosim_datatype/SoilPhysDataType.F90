@@ -1,4 +1,5 @@
 module SoilPhysDataType
+  ! Own soil physical properties, radiation fields and surface-exchange diagnostics.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
 implicit none
@@ -35,7 +36,7 @@ implicit none
   real(r8),target,allocatable ::  VHeatCapSolidSoil_vr(:,:,:)                  !soil solid heat capacity, [MPa m-3 K-1]
   real(r8),target,allocatable ::  VHeatCapMineralSoil_vr(:,:,:)                !mineral soil heat capacity, [MPa m-3 K-1]
   real(r8),target,allocatable ::  ActiveLayDepZ_col(:,:)                       !active layer depth of a permafrost soil, [m]
-  real(r8),target,allocatable ::  CondGasXSurf_col(:,:)                        !gas conductance for soil-atmosphere exchange, [m/h]
+  real(r8),target,allocatable ::  CondGasXSurf_col(:,:)                        !H2O-reference diagnostic of the soil-to-atmosphere gas network [m/h]
   real(r8),target,allocatable ::  HBAconst_vr(:,:,:)                           !A factor degraded root stress, for the the Hardin & Black method with OM, [sqrt(MPa)]
   real(r8),target,allocatable ::  HBAMin_vr(:,:,:)                             !A factor of mineral soil for the Hardin & Black method without OM, [sqrt(MPa)] 
 !----------------------------------------------------------------------

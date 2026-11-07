@@ -14,8 +14,8 @@ module PlantMorphologyAPIData
   real(r8), pointer :: StalkAxialResist_pft(:)         => null() !stalk axial resistance per m for water transport, [MPa h m-4]
   real(r8), pointer :: RootSingleVesselArea_pft(:)               => null() !
   REAL(R8), POINTER :: enh_cyto_pft(:)                 => null() !cytokinin sensitivity of corase root thickening, [-]
-  real(r8), pointer :: tlai_day_pft(:)                 => null() !prescribed leaf area, [m2 m-2]
-  real(r8), pointer :: tsai_day_pft(:)                 => null() !prescribed stem area, [m2 m-2]
+  real(r8), pointer :: tlai_day_pft(:)                 => null() !prescribed leaf area, [m2 cell-1]
+  real(r8), pointer :: tsai_day_pft(:)                 => null() !prescribed stem area, [m2 cell-1]
   real(r8), pointer :: PARTS_brch(:,:,:)               => null() !fraction of C allocated to each morph unit,                                 [-]
   real(r8), pointer :: FineRootVolPerMassC_pft(:,:)    => null() !Fine root volume:mass ratio,                                                     [m3 g-1]
   real(r8), pointer :: CRootActVolPerMassC_pft(:)    => null()   !Coarse root active zone volume:mass ratio,  [m3 g-1]

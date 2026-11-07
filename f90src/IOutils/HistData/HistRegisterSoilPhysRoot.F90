@@ -1,4 +1,5 @@
 submodule (HistDataType) HistRegisterSoilPhysRoot
+  ! Register soil physical and root diagnostics with history metadata and pointers.
   use GridConsts, only: JZ, MaxNumBranches, NumCanopyLayers, NumOfPlantMorphUnits
   use ElmIDMod, only: NumPlantChemElms
   use HistFileMod, only: hist_addfld1d, hist_addfld2d
@@ -6,6 +7,7 @@ submodule (HistDataType) HistRegisterSoilPhysRoot
 contains
 
   module procedure register_hist_soil_phys_root
+    ! Expose supported soil and root history fields to the output system.
     integer :: beg_col, end_col, beg_ptc, end_ptc
     real(r8), pointer :: data1d_ptr(:)
     real(r8), pointer :: data2d_ptr(:,:)
@@ -353,7 +355,7 @@ contains
 
   data2d_ptr => this%h2D_RootNonstBConc_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='RootNonstBConc_pvr',units='g/gC',type2d='levsoi',avgflag='A',&
-    long_name='Primary root nonstructural biomass density',ptr_patch=data2d_ptr,default='inactive')
+    long_name='Plant-root nonstructural C+N+P concentration per unit active root carbon',ptr_patch=data2d_ptr)
 
   data2d_ptr => this%h2D_Root1stStrutN_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='RootN_1st_pvr',units='gN/m3',type2d='levsoi',avgflag='A',&
@@ -377,7 +379,7 @@ contains
 
   data2d_ptr => this%h2D_Root1stAxesNumL_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='Root1st_AxesNumL_pvr',units='# plant-1',type2d='levsoi',avgflag='A',&
-    long_name='Primary root axes number in soil layer',ptr_patch=data2d_ptr,default='inactive')
+    long_name='Primary root axes number in soil layer',ptr_patch=data2d_ptr)
 
   data2d_ptr => this%h2D_Rootmedlength_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='RootMed_length_pvr',units='m root m-2',type2d='levsoi',avgflag='A',&
@@ -397,7 +399,11 @@ contains
 
   data2d_ptr => this%h2D_Root2ndAxesNumL_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='Root2nd_AxesNumL_pvr',units='1/d2',type2d='levsoi',avgflag='A',&
-    long_name='Secondary root axes number in soil layer',ptr_patch=data2d_ptr,default='inactive')
+    long_name='Secondary root axes number in soil layer',ptr_patch=data2d_ptr)
+
+  data2d_ptr => this%h2D_Root2ndMeanLen_pvr(beg_ptc:end_ptc,1:JZ)
+  call hist_addfld2d(fname='Root2ndMeanLen_pvr',units='m',type2d='levsoi',avgflag='A',&
+    long_name='Mean secondary plant-root axis length in soil layer',ptr_patch=data2d_ptr)
 
   data2d_ptr => this%h2D_RootKond2H2O_pvr(beg_ptc:end_ptc,1:JZ)
   call hist_addfld2d(fname='RootKond2H2O_pvr',units='x1.e7 m s-1 MPa-1',type2d='levsoi',avgflag='A',&

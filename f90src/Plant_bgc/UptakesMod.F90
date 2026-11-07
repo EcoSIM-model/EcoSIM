@@ -1,4 +1,5 @@
 module UptakesMod
+  ! Solve plant water uptake, canopy energy balance and coupled gas exchange.
   use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
   use abortutils, only : endrun
   use data_kind_mod , only : r8 => DAT_KIND_R8,yearIJ_type
@@ -83,7 +84,7 @@ module UptakesMod
   real(r8) :: DIFF
   real(r8) :: PSIGravCanopyHeight               !gravitation potential at effective canopy height [MPa]
   real(r8) :: cumPRootH2OUptake,HeatEvapSens
-  real(r8) :: CumPlantHeatLoss2Soil,RawAtm2CanopySinkZ_pft
+  real(r8) :: CumPlantHeatLoss2Soil,RawH2OAtm2CanopySinkZ_pft,RawHeatAtm2CanopySinkZ_pft
   real(r8) :: FDMP
   logical  :: HydroActivePlant
   logical  :: HydraulicPathAvailable
@@ -93,7 +94,8 @@ module UptakesMod
     AREA3                     => plt_site%AREA3                    ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     CanopyBiomWater_pft       => plt_ew%CanopyBiomWater_pft        ,& !input  :canopy water content, [m3 d-2]
     CanopyStemSurfArea_pft    => plt_morph%CanopyStemSurfArea_pft  ,& !input  :plant stem area, [m2 d-2]    
-    RawCanopy2Atm_pft         => plt_photo%RawCanopy2Atm_pft       ,& !input  :canopy boundary layer resistance, [h m-1]
+    RawH2OCanopy2Atm_pft      => plt_photo%RawH2OCanopy2Atm_pft    ,& !input  :canopy boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft      => plt_photo%RawHeatCanopy2Atm_pft    ,& !input  :canopy sensible-heat boundary layer resistance, [h m-1]
     CanopyLeafArea_col        => plt_morph%CanopyLeafArea_col      ,& !input  :grid canopy leaf area, [m2 d-2]
     CanopyLeafSheathC_pft     => plt_biom%CanopyLeafSheathC_pft    ,& !input  :canopy leaf + sheath C, [g d-2]
     CanopySapwoodC_pft        => plt_biom%CanopySapwoodC_pft       ,& !input  :canopy active stalk C, [g d-2]
@@ -149,7 +151,7 @@ module UptakesMod
 
 !     STOMATE=solve for minimum canopy stomatal resistance
       
-      CALL StomatalDynamics(yearIJ%I,yearIJ%J,NZ)
+      CALL StomatalDynamics(yearIJ,NZ)
       !
       call UpdateRootProperty(yearIJ,NZ,RadialMeanLen_rvr,FineRootRadius_rvr,AllRootC_vr,FracPRoot4Uptake_pvr,&
         FracMinRoot4Uptake_rpvr,FracSoilLBy1stRoots_pvr,RootEffLen4Absorption_pvr)
@@ -159,6 +161,7 @@ module UptakesMod
       !     [SpecStalkVolume]=[m3/gC], assuming mean sapwood thicknees is 2.5 mm.
       CanopyMassC4H2OStorage = CanopyLeafSheathC_pft(NZ)+AMIN1(CanopySapwoodC_pft(NZ),&
         2.5e-3_r8*CanopyStemSurfArea_pft(NZ)/StemSpecVolume_pft(NZ))
+
       ! A negative reservoir cannot be repaired by changing pressure. Reject it
       ! before exchanging water; silently clipping it would create water.
       if (.not.ieee_is_finite(CanopyBiomWater_pft(NZ)) .or. CanopyBiomWater_pft(NZ)<0._r8 &
@@ -167,6 +170,7 @@ module UptakesMod
           yearIJ%year,yearIJ%I,yearIJ%J,NZ,CanopyBiomWater_pft(NZ),CanopyMassC4H2OStorage
         call endrun('Invalid canopy hydraulic storage; use a valid checkpoint or an accounted water correction',__LINE__)
       endif
+
       CanopyMassC4H2OStorage=MAX(0._r8,CanopyMassC4H2OStorage)
       VHeatCapCanopyPrev_pft = cpo*gOC_to_m3_OM(CanopyMassC4H2OStorage)+cpw*(WatHeldOnCanopy_pft(NZ)+CanopyBiomWater_pft(NZ)) &
         +cps*SnowOnCanopy_pft(NZ)
@@ -223,7 +227,7 @@ module UptakesMod
         !
         !     CONVERGENCE SOLUTION
         !
-        NN=CanopyEnergyH2OIter_func(yearIJ%I,yearIJ%J,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,&
+        NN=CanopyEnergyH2OIter_func(yearIJ,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,&
           TotalSoilPSIMPa_vr,CdHeatCanopyAir,DIFF,cumPRootH2OUptake,CumPlantHeatLoss2Soil,&
           HeatEvapSens,FDMP,SoilRootResist4H2O_pvr,FracPRoot4Uptake_pvr,AirMicPore4Fill_vr,&
           WatAvail4Uptake_vr,TKCX,CdH2ORootxSoil,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,&
@@ -250,9 +254,10 @@ module UptakesMod
         call HandleBareSoil(NZ,TotalSoilPSIMPa_vr,FDMP)
       ENDIF
       !
-      RawAtm2CanopySinkZ_pft    = RawCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
-      Air_Heat_Latent_store_col = Air_Heat_Latent_store_col+CanopyEvapTransLHeat_pft(NZ)*RawAtm2CanopySinkZ_pft
-      Air_Heat_Sens_store_col   = Air_Heat_Sens_store_col+HeatXAir2PCan_pft(NZ)*RawAtm2CanopySinkZ_pft
+      RawH2OAtm2CanopySinkZ_pft    = RawH2OCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+      RawHeatAtm2CanopySinkZ_pft = RawHeatCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+      Air_Heat_Latent_store_col = Air_Heat_Latent_store_col+CanopyEvapTransLHeat_pft(NZ)*RawH2OAtm2CanopySinkZ_pft
+      Air_Heat_Sens_store_col   = Air_Heat_Sens_store_col+HeatXAir2PCan_pft(NZ)*RawHeatAtm2CanopySinkZ_pft
       TdegCCanopy_pft(NZ)       = units%Kelvin2Celcius(TKC_pft(NZ))
       
       if(.not.ldo_sp_mode) then      
@@ -604,7 +609,7 @@ module UptakesMod
   associate(                                                               &
     AREA3                       => plt_site%AREA3                         ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft         => plt_ew%OrganOsmoPsi0pt_pft             ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
-    CanopyNonstElmConc_pft      => plt_biom%CanopyNonstElmConc_pft        ,& !input  :canopy nonstructural element concentration, [g d-2]
+    CanopyNonstOMConc_pft       => plt_biom%CanopyNonstOMConc_pft         ,& !input  :canopy nonstructural C+N+P concentration, [g gC-1]
     FracPARads2Canopy_pft       => plt_rad%FracPARads2Canopy_pft          ,& !input  :fraction of incoming PAR absorbed by canopy, [-]
     MaxSoilLays4Root_pft        => plt_morph%MaxSoilLays4Root_pft         ,& !input  :maximum soil layer number for all root axes,[-]
     EMS_Modify_Scalar_col       => plt_ew%EMS_Modify_Scalar_col           ,& !input  :canopy longwave radiation emissivity scalar      
@@ -616,7 +621,7 @@ module UptakesMod
     PSIRootOSMO_vr              => plt_ew%PSIRootOSMO_vr                  ,& !input  :root osmotic water potential, [Mpa]
     PSIRootTurg_vr              => plt_ew%PSIRootTurg_vr                  ,& !input  :root turgor water potential, [Mpa]
     RawIsoTCanopy2Atm_pft       => plt_ew%RawIsoTCanopy2Atm_pft           ,& !input  :isothermal aerodynamic resistance from canopy to free atmosphere (where wind speed is measured) 
-    RootNonstructElmConc_rpvr   => plt_biom%RootNonstructElmConc_rpvr     ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstOMConc_pvr         => plt_biom%RootNonstOMConc_pvr           ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     ShootElms_pft               => plt_biom%ShootElms_pft                 ,& !input  :canopy shoot structural chemical element mass, [g d-2]
     TKS_vr                      => plt_ew%TKS_vr                          ,& !input  :mean annual soil temperature, [K]
     TairK                       => plt_ew%TairK                           ,& !input  :air temperature, [K]
@@ -628,7 +633,8 @@ module UptakesMod
     RPlantRootH2OUptk_pvr       => plt_ew%RPlantRootH2OUptk_pvr           ,& !output :whole population root water uptake, [m3 d-2 h-1]
     RootH2OUptkStress_pvr       => plt_ew%RootH2OUptkStress_pvr           ,& !output :pontential root water uptake rate, [m3 d-2 h-1]
     CanPStomaResistH2O_pft      => plt_photo%CanPStomaResistH2O_pft       ,& !output :canopy stomatal resistance, [h m-1]
-    RawCanopy2Atm_pft           => plt_photo%RawCanopy2Atm_pft            ,& !output :canopy boundary layer resistance, [h m-1]
+    RawH2OCanopy2Atm_pft        => plt_photo%RawH2OCanopy2Atm_pft         ,& !output :canopy boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft        => plt_photo%RawHeatCanopy2Atm_pft         ,& !output :canopy sensible-heat boundary layer resistance, [h m-1]
     LWRadCanopy_pft             => plt_rad%LWRadCanopy_pft                ,& !output :canopy longwave radiation, [MJ d-2 h-1]
     VHeatCapCanopy_pft          => plt_ew%VHeatCapCanopy_pft               & !output :canopy heat capacity, [MJ d-2 K-1]
   )
@@ -654,15 +660,14 @@ module UptakesMod
       FTHRM               = EMMC*stefboltz_const*FracPARads2Canopy_pft(NZ)*AREA3(NU)*EMS_Modify_Scalar_col
       LWRadCanopy_pft(NZ) = FTHRM*TKC_pft(NZ)**4
       PSICanopy_pft(NZ)   = TotalSoilPSIMPa_vr(NGTopRootLayer_pft(NZ))
-      if(ldo_sp_mode)then
-        CCPOLT=0.1_r8
-      else
-        CCPOLT  = CanopyNonstElmConc_pft(ielmc,NZ)+CanopyNonstElmConc_pft(ielmn,NZ) +CanopyNonstElmConc_pft(ielmp,NZ)
-      endif
+
+      CCPOLT  = CanopyNonstOMConc_pft(NZ)
+
       CALL update_osmo_turg_pressure(PSICanopy_pft(NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKC_pft(NZ), &
         PSICanopyOsmo_pft(NZ),PSICanopyTurg_pft(NZ),FDMP)
 
-      RawCanopy2Atm_pft(NZ)      = RawIsoTCanopy2Atm_pft(NZ)
+      RawH2OCanopy2Atm_pft(NZ)      = RawIsoTCanopy2Atm_pft(NZ)
+      RawHeatCanopy2Atm_pft(NZ) = RawH2OCanopy2Atm_pft(NZ)/BndlResistH2OToHeatRatio
       VHeatCapCanopy_pft(NZ)     = cpw*(ShootElms_pft(ielmc,NZ)*10.0E-06_r8)
       DeltaTKC_pft(NZ)           = 0.0_r8
       CanPStomaResistH2O_pft(NZ) = CalcStomataResist4H2O(NZ)
@@ -671,9 +676,9 @@ module UptakesMod
         DO  L=NU,MaxSoilLays4Root_pft(NZ)
           PSIRoot_pvr(N,L,NZ) = TotalSoilPSIMPa_vr(L)
           if(ldo_sp_mode)then
-            CCPOLT=0.4_r8
+            CCPOLT=0.1_r8
           else
-            CCPOLT   = sum(RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ))
+            CCPOLT   = RootNonstOMConc_pvr(N,L,NZ)
           endif
           CALL update_osmo_turg_pressure(PSIRoot_pvr(N,L,NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKS_vr(L),&
             PSIRootOSMO_vr(N,L,NZ),PSIRootTurg_vr(N,L,NZ))
@@ -689,7 +694,7 @@ module UptakesMod
   end subroutine HandlingDivergence
 
 !----------------------------------------------------------------------------------------------------
-  function CanopyEnergyH2OIter_func(I,J,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,  &
+  function CanopyEnergyH2OIter_func(yearIJ,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,  &
     CdHeatCanopyAir,DIFF,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,FDMP,                       &
     SoilRootResist4H2O_pvr,FracPRoot4Uptake_pvr,AirMicPore4Fill_vr,WatAvail4Uptake_vr,TKCX,CdH2ORootxSoil,&
     VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,PSIGravCanopyHeight,SoiLayerHasRoot_rvr,HydraulicPathAvailable) result(NN)
@@ -701,7 +706,7 @@ module UptakesMod
   !Positive flux represents water release into soil
   !Two processses together support hydraulic redistribution and transpiration.
   implicit none
-  integer  , intent(in) :: I, J
+  type(yearIJ_type), intent(in) :: yearIJ
   integer  , intent(in) :: NZ
   real(r8) , intent(in) :: FracGridPFTCovered
   real(r8) , intent(in) :: CanopyMassC4H2OStorage
@@ -746,7 +751,8 @@ module UptakesMod
   real(r8) :: CumHeatPlant2Soil,CumHeatSoil2Plant
   real(r8) :: CumWaterPlant2Soil,CumWaterSoil2Plant
   real(r8) :: dRadNetdT
-  
+  integer :: I, J
+
   character(len=*), parameter :: subname='CanopyEnergyH2OIter_func'
   integer  :: IC
   logical :: LIterationExit
@@ -765,7 +771,7 @@ module UptakesMod
     AREA3                       => plt_site%AREA3                         ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft         => plt_ew%OrganOsmoPsi0pt_pft             ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
     CanopyBiomWater_pft         => plt_ew%CanopyBiomWater_pft             ,& !input  :canopy water content, [m3 d-2]
-    CanopyNonstElmConc_pft      => plt_biom%CanopyNonstElmConc_pft        ,& !input  :canopy nonstructural element concentration, [g d-2]
+    CanopyNonstOMConc_pft       => plt_biom%CanopyNonstOMConc_pft         ,& !input  :canopy nonstructural C+N+P concentration, [g gC-1]
     FracPARads2Canopy_pft       => plt_rad%FracPARads2Canopy_pft          ,& !input  :fraction of incoming PAR absorbed by canopy, [-]
     LWRadGrnd_col               => plt_rad%LWRadGrnd_col                  ,& !input  :longwave radiation emitted by ground surface, [MJ m-2 h-1]
     LWRadSky_col                => plt_rad%LWRadSky_col                   ,& !input  :sky longwave radiation , [MJ d-2 h-1]
@@ -790,7 +796,8 @@ module UptakesMod
     PSICanopy_pft               => plt_ew%PSICanopy_pft                   ,& !inoput :canopy total water potential, [Mpa]
     TKCanopy_pft                => plt_ew%TKCanopy_pft                    ,& !inoput :canopy/vegetation temperature, [K]
     CanPStomaResistH2O_pft      => plt_photo%CanPStomaResistH2O_pft       ,& !output :canopy stomatal resistance, [h m-1]
-    RawCanopy2Atm_pft           => plt_photo%RawCanopy2Atm_pft            ,& !output :canopy boundary layer resistance, [h m-1]
+    RawH2OCanopy2Atm_pft        => plt_photo%RawH2OCanopy2Atm_pft         ,& !output :canopy boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft        => plt_photo%RawHeatCanopy2Atm_pft         ,& !output :canopy sensible-heat boundary layer resistance, [h m-1]
     CanopyEvapTransLHeat_pft    => plt_ew%CanopyEvapTransLHeat_pft        ,& !output :canopy latent heat flux, [MJ d-2 h-1]
     LWRadCanopy_pft             => plt_rad%LWRadCanopy_pft                ,& !output :canopy longwave radiation, [MJ d-2 h-1]
     RadNet2Canopy_pft           => plt_rad%RadNet2Canopy_pft              ,& !output :canopy net radiation, [MJ d-2 h-1]
@@ -806,19 +813,14 @@ module UptakesMod
     RootH2OUptkStress_pvr       => plt_ew%RootH2OUptkStress_pvr            & !output :root water uptake stress indicated by rate, [m3 d-2 h-1]
   )
   call PrintInfo('beg '//subname)
-  
+  I=yearIJ%I;J=yearIJ%J
   !CCPOLT: total nonstructural canopy C,N,P concentration
   !FTHRM:coefficient for LW emitted by canopy
   !LWRad2Canopy:long-wave absorbed by canopy
   FTHRM        = EMMC*stefboltz_const*FracPARads2Canopy_pft(NZ)*AREA3(NU)*EMS_Modify_Scalar_col
   LWRad2Canopy = (LWRadSky_col+LWRadGrnd_col)*FracPARads2Canopy_pft(NZ)
 
-  if(ldo_sp_mode)then
-    CCPOLT=0.1_r8
-  else
-    CCPOLT   = CanopyNonstElmConc_pft(ielmc,NZ)+CanopyNonstElmConc_pft(ielmn,NZ) &
-      +CanopyNonstElmConc_pft(ielmp,NZ)
-  endif  
+  CCPOLT = CanopyNonstOMConc_pft(NZ)
   !      
   CanopyAvailWater    = CanopyBiomWater_pft(NZ)+WatHeldOnCanopy_pft(NZ)+RainIntcptByCanopy_pft(NZ)
   CanopyAvailSnow     = SnowOnCanopy_pft(NZ)+SnowIntcptByCanopy_pft(NZ)
@@ -863,10 +865,11 @@ module UptakesMod
     !     EvapConductCanopy,CdHeatCanopyAir=canopy latent,sensible heat conductance
     !
     RichardsNO            = RichardsonNumber(RIB,TairK,TKC1)
-    RawCanopy2Atm_pft(NZ) = AMAX1(MinRawCanopy2Atm_pft,0.9_r8*RA1,AMIN1(1.1_r8*RA1,RawIsoTCanopy2Atm_pft(NZ)/(1.0_r8-10.0_r8*RichardsNO)))    
-    RA1                   = RawCanopy2Atm_pft(NZ)
-    CdVapCanopyAir        = EffPFTGridArea4H2O/RawCanopy2Atm_pft(NZ)
-    CdHeatCanopyAir       = EffPFTGridArea4Heat/RawCanopy2Atm_pft(NZ) !canopy-air heat conductance for sensible heat
+    RawH2OCanopy2Atm_pft(NZ) = AMAX1(RawMinH2OCanopy2Atm_pft,0.9_r8*RA1,AMIN1(1.1_r8*RA1,RawIsoTCanopy2Atm_pft(NZ)/(1.0_r8-10.0_r8*RichardsNO)))
+    RA1                   = RawH2OCanopy2Atm_pft(NZ)
+    RawHeatCanopy2Atm_pft(NZ) = RawH2OCanopy2Atm_pft(NZ)/BndlResistH2OToHeatRatio
+    CdVapCanopyAir        = EffPFTGridArea4H2O/RawH2OCanopy2Atm_pft(NZ)
+    CdHeatCanopyAir       = EffPFTGridArea4Heat/RawHeatCanopy2Atm_pft(NZ) !canopy-air heat conductance for sensible heat
     !
     !     CANOPY WATER AND OSMOTIC POTENTIALS
     !
@@ -899,7 +902,7 @@ module UptakesMod
     !
     !area-scaled air to canopy water vap gradient, [m/h]*[ton/m3] = [ton H2O/(h*m2)] < 0, transpire into air
     EX                     = CdVapCanopyAir*(VPA-VPLeaf)
-    VapXAir2Canopy_pft(NZ) = EX*RawCanopy2Atm_pft(NZ)/(RawCanopy2Atm_pft(NZ)+ResistLeafSurf)
+    VapXAir2Canopy_pft(NZ) = EX*RawH2OCanopy2Atm_pft(NZ)/(RawH2OCanopy2Atm_pft(NZ)+ResistLeafSurf)
     !
     !Dew condensation to canopy >0 to canopy
     QdewCanopy_pft(NZ)     = 0._r8
@@ -940,7 +943,7 @@ module UptakesMod
     !Transpiration_pft<0 means canopy lose water through transpiration
     !CanopyEvapTransLHeat_pft:latent heat flux, negative means into atmosphere
     !
-    Transpiration_pft(NZ)        = EX*RawCanopy2Atm_pft(NZ)/(RawCanopy2Atm_pft(NZ)+CanPStomaResistH2O_pft(NZ))
+    Transpiration_pft(NZ)        = EX*RawH2OCanopy2Atm_pft(NZ)/(RawH2OCanopy2Atm_pft(NZ)+CanPStomaResistH2O_pft(NZ))
     if (.not.HydraulicPathAvailable) Transpiration_pft(NZ)=0._r8
     CanopyEvapTransLHeat_pft(NZ) = (Transpiration_pft(NZ)+VapXAir2CanopyLiq_pft(NZ))*EvapLHTC+SnoSub2AirCanopy_pft(NZ)*SublmHTC
     HeatEvapSens                 = HeatEvapSens + Transpiration_pft(NZ)*cpw*TKC1
@@ -1133,7 +1136,7 @@ module UptakesMod
       IF(DIFF.LT.DIFFY)THEN
         IF(LIterationExit)EXIT
         LIterationExit=.true.
-        CALL StomatalDynamics(I,J,NZ)
+        CALL StomatalDynamics(yearIJ,NZ,RawH2OCanopy2Atm_pft(NZ))
         CYCLE
       ENDIF
       !
@@ -1186,7 +1189,7 @@ module UptakesMod
       IF((NN.GE.30 .AND. ABS(DPSI).LT.1.0E-03_r8 .and. DIFF.LT.DIFFY) .OR. NN.GE.MaxIterNum)then
         IF(LIterationExit)EXIT
         LIterationExit=.true.
-        CALL StomatalDynamics(I,J,NZ)
+        CALL StomatalDynamics(yearIJ,NZ,RawH2OCanopy2Atm_pft(NZ))
       ELSE
         !prepare for next iteration
         PSICanPPre           = PSICanopy_pft(NZ)
@@ -1430,7 +1433,7 @@ module UptakesMod
     AREA3                          => plt_site%AREA3                             ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft            => plt_ew%OrganOsmoPsi0pt_pft                 ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
     CanopyHeightLive_pft           => plt_morph%CanopyHeightLive_pft             ,& !input  :canopy height, [m]
-    CanopyNonstElmConc_pft         => plt_biom%CanopyNonstElmConc_pft            ,& !input  :canopy nonstructural element concentration, [g d-2]
+    CanopyNonstOMConc_pft          => plt_biom%CanopyNonstOMConc_pft             ,& !input  :canopy nonstructural C+N+P concentration, [g gC-1]
     FracPARads2Canopy_pft          => plt_rad%FracPARads2Canopy_pft              ,& !input  :fraction of incoming PAR absorbed by canopy, [-]
     MaxSoilLays4Root_pft           => plt_morph%MaxSoilLays4Root_pft             ,& !input  :maximum soil layer number for all root axes,[-]
     Myco_pft                       => plt_morph%Myco_pft                         ,& !input  :mycorrhizal type (no or yes),[-]
@@ -1441,7 +1444,7 @@ module UptakesMod
     PSIRootTurg_vr                 => plt_ew%PSIRootTurg_vr                      ,& !input  :root turgor water potential, [Mpa]
     EMS_Modify_Scalar_col          => plt_ew%EMS_Modify_Scalar_col               ,& !input  :canopy longwave radiation emissivity scalar
     RawIsoTCanopy2Atm_pft          => plt_ew%RawIsoTCanopy2Atm_pft               ,& !input  :canopy roughness height, [m]
-    RootNonstructElmConc_rpvr      => plt_biom%RootNonstructElmConc_rpvr         ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstOMConc_pvr           => plt_biom%RootNonstOMConc_pvr              ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     ShootElms_pft                  => plt_biom%ShootElms_pft                     ,& !input  :canopy shoot structural chemical element mass, [g d-2]
     SnowDepth                      => plt_ew%SnowDepth                           ,& !input  :snowpack depth, [m]
     MaxNumRootLays                 => plt_site%MaxNumRootLays                    ,& !input  :maximum root layer number,[-]
@@ -1456,7 +1459,8 @@ module UptakesMod
     RPlantRootH2OUptk_pvr          => plt_ew%RPlantRootH2OUptk_pvr               ,& !output :whole population root water uptake, [m3 d-2 h-1]
     RootH2OUptkStress_pvr          => plt_ew%RootH2OUptkStress_pvr               ,& !output :pontential root water uptake rate, [m3 d-2 h-1]
     CanPStomaResistH2O_pft         => plt_photo%CanPStomaResistH2O_pft           ,& !output :canopy stomatal resistance, [h m-1]
-    RawCanopy2Atm_pft              => plt_photo%RawCanopy2Atm_pft                ,& !output :canopy boundary layer resistance, [h m-1]
+    RawH2OCanopy2Atm_pft           => plt_photo%RawH2OCanopy2Atm_pft             ,& !output :canopy boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft          => plt_photo%RawHeatCanopy2Atm_pft            ,& !output :canopy sensible-heat boundary layer resistance, [h m-1]
     DeltaTKC_pft                   => plt_ew%DeltaTKC_pft                        ,& !output :change in canopy temperature, [K]
     CanopyEvapTransLHeat_pft       => plt_ew%CanopyEvapTransLHeat_pft            ,& !output :canopy latent heat flux, [MJ d-2 h-1]
     HeatStorCanopy_pft             => plt_ew%HeatStorCanopy_pft                  ,& !output :canopy storage heat flux, [MJ d-2 h-1]
@@ -1490,17 +1494,14 @@ module UptakesMod
   FTHRM                  = EMMC*stefboltz_const*FracPARads2Canopy_pft(NZ)*AREA3(NU)*EMS_Modify_Scalar_col
   LWRadCanopy_pft(NZ)    = FTHRM*TKC_pft(NZ)**4
   PSICanopy_pft(NZ)      = TotalSoilPSIMPa_vr(NGTopRootLayer_pft(NZ))
-  if(ldo_sp_mode)then
-    CCPOLT = 0.1_r8
-  else
-    CCPOLT  = sum(CanopyNonstElmConc_pft(1:NumPlantChemElms,NZ))
-  endif
+  CCPOLT = CanopyNonstOMConc_pft(NZ)
   call update_osmo_turg_pressure(PSICanopy_pft(NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKC_pft(NZ)&
     ,PSICanopyOsmo_pft(NZ),PSICanopyTurg_pft(NZ),FDMP)
   !
   CanPStomaResistH2O_pft(NZ) = CalcStomataResist4H2O(NZ)
   !
-  RawCanopy2Atm_pft(NZ)  = RawIsoTCanopy2Atm_pft(NZ)
+  RawH2OCanopy2Atm_pft(NZ)  = RawIsoTCanopy2Atm_pft(NZ)
+  RawHeatCanopy2Atm_pft(NZ) = RawH2OCanopy2Atm_pft(NZ)/BndlResistH2OToHeatRatio
   VHeatCapCanopy_pft(NZ) = cpw*(ShootElms_pft(ielmc,NZ)*10.0E-06_r8)
   DeltaTKC_pft(NZ)       = 0.0_r8
 
@@ -1510,7 +1511,7 @@ module UptakesMod
       if(ldo_sp_mode)then
         CCPOLT =0.4_r8
       else
-        CCPOLT = sum(RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ))
+        CCPOLT = RootNonstOMConc_pvr(N,L,NZ)
       endif
       RPlantRootH2OUptk_pvr(N,L,NZ) = 0.0_r8
       RootH2OUptkStress_pvr(N,L,NZ)   = 0._r8
@@ -1557,7 +1558,7 @@ module UptakesMod
     PSIRootTurg_vr            => plt_ew%PSIRootTurg_vr               ,& !input  :root turgor water potential, [Mpa]
     RainIntcptByCanopy_pft    => plt_ew%RainIntcptByCanopy_pft       ,& !input  :water flux into canopy, [m3 d-2 h-1]
     SnowIntcptByCanopy_pft    => plt_ew%SnowIntcptByCanopy_pft       ,& !input  :Snow intercepted by canopy, [m3 d-2 h-1]
-    RootNonstructElmConc_rpvr => plt_biom%RootNonstructElmConc_rpvr  ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstOMConc_pvr      => plt_biom%RootNonstOMConc_pvr       ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     TKCanopy_pft              => plt_ew%TKCanopy_pft                 ,& !input  :canopy temperature, [K]
     RootResist4H2O_pvr        => plt_ew%RootResist4H2O_pvr           ,& !input  :total root (axial+radial) resistance for water uptake
     TKS_vr                    => plt_ew%TKS_vr                       ,& !input  :mean annual soil temperature, [K]
@@ -1619,7 +1620,7 @@ module UptakesMod
       if(ldo_sp_mode)then
         CCPOLT=0.4_r8
       else
-        CCPOLT=sum(RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ))
+        CCPOLT=RootNonstOMConc_pvr(N,L,NZ)
       endif
 
       CALL update_osmo_turg_pressure(PSIRoot_pvr(N,L,NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKS_vr(L),&

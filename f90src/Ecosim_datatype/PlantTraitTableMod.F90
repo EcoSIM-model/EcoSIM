@@ -1,4 +1,5 @@
 module PlantTraitTableMod
+  ! Own PFT parameter tables read from the plant-trait NetCDF input.
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use GridConsts,    only: NumLeafInclinationClasses
   implicit none
@@ -131,6 +132,8 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: rPCRootr_tab(:)
   real(r8), target, allocatable :: rPCNoduler_tab(:)
   integer , target, allocatable :: irootType_tab(:)
+  real(r8), target, allocatable :: MeanSecondaryAxisLength_tab(:) !MFRUTL: prescribed mean secondary axis length [m]
+  real(r8), target, allocatable :: CanopyNonstOMConc_tab(:) !CCPOLT: prescribed canopy nonstructural C+N+P concentration [g gC-1]
   real(r8), target, allocatable :: CanopyHeightLive_tab(:)
   character(len=10),allocatable :: pftss_tab(:)               !pft trait record name, including short pft-type name and koppen climate zone code
   character(len=40),allocatable :: pft_long_tab(:)            !long pft-type name
@@ -274,6 +277,8 @@ module PlantTraitTableMod
   allocate(rPCRootr_tab(npfts));rPCRootr_tab=0._r8
   allocate(rPCNoduler_tab(npfts));rPCNoduler_tab=0._r8
   allocate(irootType_tab(npfts));irootType_tab=0
+  allocate(MeanSecondaryAxisLength_tab(npfts));MeanSecondaryAxisLength_tab=0._r8
+  allocate(CanopyNonstOMConc_tab(npfts));CanopyNonstOMConc_tab=0._r8
   allocate(CanopyHeightLive_tab(npfts));CanopyHeightLive_tab=0._r8
   allocate(pftss_tab(npfts))
   allocate(pft_long_tab(npft))
@@ -416,6 +421,8 @@ module PlantTraitTableMod
   call destroy(rPCRootr_tab)
   call destroy(rPCNoduler_tab)
   call destroy(irootType_tab)
+  call destroy(MeanSecondaryAxisLength_tab)
+  call destroy(CanopyNonstOMConc_tab)
   call destroy(CanopyHeightLive_tab)
   end Subroutine DestructPlantTraitTable
 

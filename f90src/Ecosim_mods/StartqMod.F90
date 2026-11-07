@@ -12,6 +12,7 @@ module StartqMod
   use EcosimConst
   use TracerIDMod
   use EcoSIMCtrlDataType
+  use EcoSIMCtrlMod, only: ldo_sp_mode
   use PlantDataRateType
   use ClimForcDataType
   use PlantTraitDataType
@@ -699,6 +700,8 @@ module StartqMod
   ENDDO D35
   CanopyNonstElms_pft(1:NumPlantChemElms,NZ,NY,NX)    = 0._r8
   CanopyNonstElmConc_pft(1:NumPlantChemElms,NZ,NY,NX) = 0._r8
+  ! SP's prescribed CCPOLT was loaded with the traits before this state reset.
+  if(.not.ldo_sp_mode)CanopyNonstOMConc_pft(NZ,NY,NX)=0._r8
 
   ShootElms_pft(1:NumPlantChemElms,NZ,NY,NX)     = 0._r8
   LeafStrutElms_pft(1:NumPlantChemElms,NZ,NY,NX)      = 0._r8
@@ -803,6 +806,8 @@ module StartqMod
   !     OXYA,OXYP=root,myco gaseous,aqueous O2 content (g)
   !
   NumStructuralRootAxes_pft(NZ,NY,NX) = 0
+  RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=0._r8
+  RootNonstOMConc_pvr(:,:,NZ,NY,NX)=0._r8
   RootNH4Uptake_pft(NZ,NY,NX)    = 0._r8
   RootNO3Uptake_pft(NZ,NY,NX)    = 0._r8
   RootH2PO4Uptake_pft(NZ,NY,NX)  = 0._r8
@@ -822,7 +827,7 @@ module StartqMod
       PSIRootOSMO_vr(N,L,NZ,NY,NX)                               = OrganOsmoPsi0pt_pft(NZ,NY,NX)+PSIRoot_pvr(N,L,NZ,NY,NX)
       PSIRootTurg_vr(N,L,NZ,NY,NX)                               = AZMAX1(PSIRoot_pvr(N,L,NZ,NY,NX)-PSIRootOSMO_vr(N,L,NZ,NY,NX))
       RootMycoNonstElms_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX)    = 0._r8
-      RootNonstructElmConc_rpvr(1:NumPlantChemElms,N,L,NZ,NY,NX) = 0._r8
+      RootNonstructElmConc_pvr(1:NumPlantChemElms,N,L,NZ,NY,NX) = 0._r8
       RootProteinConc_rpvr(N,L,NZ,NY,NX)                         = RootProteinCMax_pft(NZ,NY,NX)
       RootMycoActiveBiomC_pvr(N,L,NZ,NY,NX)                      = 0._r8
       PopuRootMycoC_pvr(N,L,NZ,NY,NX)                            = 0._r8

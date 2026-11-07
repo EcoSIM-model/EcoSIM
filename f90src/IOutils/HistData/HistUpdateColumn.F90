@@ -56,7 +56,7 @@ submodule (HistDataType) HistUpdateColumn
     trcg_ebu_flx_col, trcg_soilMass_col, trcg_TotalMass_col, trcs_drainage_flx_col, trcs_solml_vr, &
     tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr, tXPO4_col
   use AqueChemDatatype, only: TProd_CO2_geochem_soil_vr, trcg_mass_cumerr_col, trcx_solml_vr
-  use SurfSoilDataType, only: FracSurfAsSnow_col, HeatByRad2Surf_col, HeatEvapAir2Surf_col, HeatNet2Surf_col, &
+  use SurfSoilDataType, only: FracSurfSnowCovered_col, HeatByRad2Surf_col, HeatEvapAir2Surf_col, HeatNet2Surf_col, &
     HeatSensAir2Surf_col, HeatSensVapAir2Surf_col, VapXAir2GSurf_col
   use TracerPropMod, only: GramPerHr2umolPerSec
   implicit none
@@ -140,7 +140,7 @@ contains
       else
         this%h1D_TEMP_SNOW_col(ncol)   = TCSnow_snvr(1,NY,NX)
       endif
-      this%h1D_FracBySnow_col(ncol) = FracSurfAsSnow_col(NY,NX)
+      this%h1D_FracBySnow_col(ncol) = FracSurfSnowCovered_col(NY,NX)
       this%h1D_FracByLitr_col(ncol) = FracSurfByLitR_col(NY,NX)
       this%h1D_tLITR_C_col(ncol)    = tLitrOM_col(ielmc,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
 
