@@ -1,10 +1,8 @@
 module SnowPhysMod
 !
 ! Description
-! the snow model
-! required input
-!
-! codes for snow physics
+! Evolve snow water, ice, temperature and surface exchange, and accumulate
+! accepted mass and energy transfers for the surface and hourly balances.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use data_const_mod, only : spval => DAT_CONST_SPVAL
   use abortutils,    only: endrun, iulog
@@ -521,6 +519,8 @@ contains
   subroutine SolveSnowpackM(I,J,M,NY,NX,LatentHeatAir2Sno,Radnet2Snow,HeatSensEvapAir2Snow,HeatSensAir2Snow,&
     HeatNetFlx2Snow,CumWatFlx2SoiMacP,CumWatFlx2SoiMicP,CumWatXFlx2SoiMicP,CumSnowWatFLow2LitR,&
     CumNetHeatFlow2LitR,cumNetHeatFlow2Soil)
+  ! Subcycle snow mass, heat and phase change with linearized longwave and
+  ! sensible exchange; accumulate the same accepted fluxes for outer updates.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: M     !soil heat-flow iteration id
@@ -534,6 +534,7 @@ contains
   real(r8), intent(out) :: CumNetHeatFlow2LitR
   real(r8), intent(out) :: cumNetHeatFlow2Soil
   real(r8), intent(out) :: CumWatFlx2SoiMacP,CumWatFlx2SoiMicP,CumWatXFlx2SoiMicP
+  character(len=*), parameter :: subname='SolveSnowpackM'
   integer :: MM,L,L2
 
   real(r8) :: TotWatXFlx2SoiMicP,TotHeatFlow2Soi
@@ -547,6 +548,8 @@ contains
   real(r8) :: dt_SnoHeat   !time step size for snow model iteration
   real(r8) :: cphwat,vhcp0
   real(r8) :: LongwaveDeriv,LongwaveCorrection
+  real(r8) :: SnowSensibleDeriv,SensibleDeriv,BoundaryHeatDeriv !step-integrated coefficients [MJ/K]
+  real(r8) :: SensibleCorrection                             !additional outgoing sensible heat [MJ/cell]
   real(r8) :: SnoFallWE,Rainfall,IceFallVol,HeatSnofall2Snow
   real(r8) :: TopLaySnoVol      !sum of constituent-volume weights for empirical albedo [m3]
   real(r8), parameter :: tinyw=1.e-14_r8,tinyw0=1.e-16_r8
@@ -567,6 +570,7 @@ contains
   !     TKSnow1=snowpack surface temperature
   !     RadNet2Sno2=net radiation
 
+  call PrintInfo('beg '//subname)
   CumWatFlx2SoiMacP   = 0._r8
   cumNetHeatFlow2Soil = 0._r8
   CumWatFlx2SoiMicP   = 0._r8
@@ -589,13 +593,14 @@ contains
 
   D3000: DO MM = 1, NPS
 
+    SnowSensibleDeriv=0._r8
     TopLaySnoVol=(VLDrySnoWE0M_snvr(1,NY,NX)+SnoFallWE)+(VLIceSnow0M_snvr(1,NY,NX)+IceFallVol) &
       +VLWatSnow0M_snvr(1,NY,NX)+Rainfall
 
     if(TopLaySnoVol.GT.0._r8)then
 
       call SnowAtmosExchangeMM(I,J,M,NY,NX,SnoFallWE,Rainfall,IceFallVol,TopLaySnoVol,HeatSnofall2Snow,LatentHeatAir2Sno,&
-        HeatSensEvapAir2Snow,HeatNetFlx2Snow,Radnet2Snow,HeatSensAir2Snow)
+        HeatSensEvapAir2Snow,HeatNetFlx2Snow,Radnet2Snow,HeatSensAir2Snow,SnowSensibleDeriv)
 
       call SnowPackIterationMM(dt_snoHeat,I,J,M,NY,NX,TotWatXFlx2SoiMicP,TotHeatFlow2Soi,WatFlowSno2MacP,&
         TotSnoWatFlow2Litr,TotSnoHeatFlow2Litr,CumWatFlx2SoiMacP,CumWatFlx2SoiMicP,&
@@ -673,20 +678,24 @@ contains
       ENGY0           = VLHeatCapSnowM1_snvr(L,NY,NX)*TKSnow1_snvr(L,NY,NX)
       VLHeatCapSnowMX = cps*VOLS0X+cpw*VOLW0X+cpi*VOLI0X
 
-      ! Linearized emitted longwave energy for this snow substep [MJ/K].
+      ! Freeze resistance and local air during this substep. Both boundary
+      ! heat losses respond to the new top-snow temperature [MJ/K].
+      SensibleDeriv=0._r8
+      if(L==1)SensibleDeriv=SnowSensibleDeriv
       LongwaveDeriv=0._r8
       if(L==1 .and. VLHeatCapSnowMX>VLHeatCapSnowMin_col(NY,NX)*1.e-4_r8)then
         LongwaveDeriv=4._r8*LWEmscefSnow_col(NY,NX)*TKSnow1_snvr(L,NY,NX)**3/real(NPS,kind=r8)
       endif
+      BoundaryHeatDeriv=LongwaveDeriv+SensibleDeriv
 
       IF(VLHeatCapSnowMX.GT.VLHeatCapSnowMin_col(NY,NX))THEN
         !apparent temperature before freeze-thaw
-        TKApp=(ENGY0+NetHeat2LayL+LongwaveDeriv*TKSnow1_snvr(L,NY,NX))/(VLHeatCapSnowMX+LongwaveDeriv)
+        TKApp=(ENGY0+NetHeat2LayL+BoundaryHeatDeriv*TKSnow1_snvr(L,NY,NX))/(VLHeatCapSnowMX+BoundaryHeatDeriv)
 
         IF((TKApp.LT.TFice .AND. VOLW0X.GT.ZERO*VcumSnoDWI_col(NY,NX)) &
           .OR.(TKApp.GT.TFice .AND. VOLI0X+VOLS0X.GT.ZERO*VcumSnoDWI_col(NY,NX)))THEN
           !freeze-thaw condition met
-          TFLX1=(VLHeatCapSnowMX+LongwaveDeriv)*(TFice-TKApp)/Kirchhoff_cf*dts_wat
+          TFLX1=(VLHeatCapSnowMX+BoundaryHeatDeriv)*(TFice-TKApp)/Kirchhoff_cf*dts_wat
 
           IF(TFLX1.LT.0.0_r8)THEN
             TotSnowLMass=VOLS0X+VOLI0X*DENSICE
@@ -750,8 +759,8 @@ contains
       TK1X                          = TKSnow1_snvr(L,NY,NX)
 
       IF(VLHeatCapSnowM1_snvr(L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX)*1.e-4_r8)THEN
-        TKSnow1_snvr(L,NY,NX)=(ENGY0+NetHeat2LayL+HeatByFrezThaw+LongwaveDeriv*TK1X) &
-          /(VLHeatCapSnowM1_snvr(L,NY,NX)+LongwaveDeriv)
+        TKSnow1_snvr(L,NY,NX)=(ENGY0+NetHeat2LayL+HeatByFrezThaw+BoundaryHeatDeriv*TK1X) &
+          /(VLHeatCapSnowM1_snvr(L,NY,NX)+BoundaryHeatDeriv)
       ELSEIF(L.EQ.1)THEN
         TKSnow1_snvr(L,NY,NX)=TairK_col(NY,NX)
       ELSE
@@ -767,6 +776,14 @@ contains
         LWRadBySurf_col(NY,NX)=LWRadBySurf_col(NY,NX)+LongwaveCorrection
         Radnet2Snow=Radnet2Snow-LongwaveCorrection
         HeatNetFlx2Snow=HeatNetFlx2Snow-LongwaveCorrection
+        ! Replace K_H*(Tq-Told) by K_H*(Tq-Tnew) in every accepted heat
+        ! ledger. The outer reconstruction consumes these corrected fluxes.
+        SensibleCorrection=SensibleDeriv*(TKSnow1_snvr(L,NY,NX)-TK1X)
+        NetHeat2LayL=NetHeat2LayL-SensibleCorrection
+        HeatX2SnoLay_snvr(1,NY,NX)=HeatX2SnoLay_snvr(1,NY,NX)-SensibleCorrection
+        HeatXfer2SnoLay_snvr(1,NY,NX)=HeatXfer2SnoLay_snvr(1,NY,NX)-SensibleCorrection
+        HeatSensAir2Snow=HeatSensAir2Snow-SensibleCorrection
+        HeatNetFlx2Snow=HeatNetFlx2Snow-SensibleCorrection
       endif
       CumSno2SnowLM_snvr(L,NY,NX)      = CumSno2SnowLM_snvr(L,NY,NX)+NetSno2LayL
       CumWat2SnowLM_snvr(L,NY,NX)      = CumWat2SnowLM_snvr(L,NY,NX)+NetWat2LayL
@@ -779,13 +796,13 @@ contains
 
       if(VLHeatCapSnowM1_snvr(L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX)*1.e-4_r8 .and. &
         (TK1X/=spval .and. abs(TK1X-TKSnow1_snvr(L,NY,NX))>20._r8 .or. TKSnow1_snvr(L,NY,NX)<200._r8))then
-        write(*,*)'dh, TK1X, TKSnow1',I+J/24.,M,L,TK1X,TKSnow1_snvr(L,NY,NX)
-        write(*,*)'VH, VHMX, tair,TKSnow0',VLHeatCapSnowM1_snvr(L,NY,NX), VLHeatCapSnowMX,TairK_col(NY,NX),TKSnow_snvr(L,NY,NX)
-        write(*,*)'TKS_1, TKS_0',TKS_vr(NUM_col(NY,NX),NY,NX),TKS_vr(0,NY,NX),VLHeatCapSnowMin_col(NY,NX)
-        write(*,*)'energy(ENGY0, NetHeat2LayL, HeatByFT ', ENGY0, NetHeat2LayL, HeatByFrezThaw
-        write(*,*)'mass0 (dry, wat, ice): ',vdry,vwat,vice
-        write(*,*)'masst (dry, wat, ice): ',VLDrySnoWE0M_snvr(L,NY,NX),VLWatSnow0M_snvr(L,NY,NX),VLIceSnow0M_snvr(L,NY,NX)
-        write(*,*)'NYNX',NY,NX
+        write(iulog,*)'dh, TK1X, TKSnow1',I+J/24.,M,L,TK1X,TKSnow1_snvr(L,NY,NX)
+        write(iulog,*)'VH, VHMX, tair,TKSnow0',VLHeatCapSnowM1_snvr(L,NY,NX), VLHeatCapSnowMX,TairK_col(NY,NX),TKSnow_snvr(L,NY,NX)
+        write(iulog,*)'TKS_1, TKS_0',TKS_vr(NUM_col(NY,NX),NY,NX),TKS_vr(0,NY,NX),VLHeatCapSnowMin_col(NY,NX)
+        write(iulog,*)'energy(ENGY0, NetHeat2LayL, HeatByFT ', ENGY0, NetHeat2LayL, HeatByFrezThaw
+        write(iulog,*)'mass0 (dry, wat, ice): ',vdry,vwat,vice
+        write(iulog,*)'masst (dry, wat, ice): ',VLDrySnoWE0M_snvr(L,NY,NX),VLWatSnow0M_snvr(L,NY,NX),VLIceSnow0M_snvr(L,NY,NX)
+        write(iulog,*)'NYNX',NY,NX
         call endrun('crazy snow temperature '//trim(mod_filename),__LINE__)
       endif
 
@@ -809,10 +826,13 @@ contains
   !  write(99,*) TKSnow1_snvr(1,NY,NX), " " , ENGY0, " " , NetHeat2LayL, " " , HeatByFrezThaw
   !endif
 
+  call PrintInfo('end '//subname)
  end subroutine SolveSnowpackM
 !------------------------------------------------------------------------------------------
   subroutine SnowAtmosExchangeMM(I,J,M,NY,NX,SnoFallWE,Rainfall,IceFallVol,TopLaySnoVol,HeatSnofall2Snow,&
-    LatentHeatAir2Sno,HeatSensEvapAir2Snow,HeatNetFlx2Snow,Radnet2Snow,HeatSensAir2Snow)
+    LatentHeatAir2Sno,HeatSensEvapAir2Snow,HeatNetFlx2Snow,Radnet2Snow,HeatSensAir2Snow,SnowSensibleDeriv)
+  ! Evaluate snow-atmosphere exchange at the old state and return the frozen
+  ! sensible coefficient for the semi-implicit snow-temperature correction.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: M    !soil heat-flow iteration id
@@ -823,6 +843,7 @@ contains
   real(r8), intent(inout) :: HeatSensEvapAir2Snow    !cumulated heat by vapor advection from air to snow [MJ]
   real(r8), intent(inout) :: HeatNetFlx2Snow,Radnet2Snow
   real(r8), intent(inout) :: HeatSensAir2Snow
+  real(r8), intent(out) :: SnowSensibleDeriv !area/time-scaled sensible coefficient for this inner step [MJ/K]
   character(len=*), parameter :: subname='SnowAtmosExchangeMM'
   real(r8) :: SnowAlbedo    !snow surface albedo for reflecting short wave radiation
   real(r8) :: RFLX0         !net radiation (from sun + canopy) on snow surface [MJ]
@@ -832,7 +853,7 @@ contains
   real(r8) :: RAGX
   real(r8):: Raa
   real(r8) :: CdSnoEvap        !time scaled conductance for snowpack latent heat flux, [m2 h]/[h/m] =[m3],
-  real(r8) :: CdSnoHSens       !tile scaled conductance for snowpack sensible heat flux, [m2 h]/[h/m] =[m3],
+  real(r8) :: CdSnoHSens       !area/time-scaled snow sensible coefficient [MJ/K]
   real(r8) :: VPSno0           !vapor pressure, kg H2O/m3
   real(r8) :: EVAPW2           !snow loss as evaporation [kg H2O]
   real(r8) :: EVAPX2
@@ -878,7 +899,7 @@ contains
   RAGX = AMAX1(RAM,0.8_r8*RawH2OSnow2CanAir_col(NY,NX), &
     AMIN1(1.2_r8*RawH2OSnow2CanAir_col(NY,NX),RawIsoTSoil2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
   RawH2OSnow2CanAir_col(NY,NX) = RAGX
-  RAa                              = RAGX
+  RAa                          = RAGX
   !
   ! PARAMETERS FOR CALCULATING LATENT AND SENSIBLE HEAT FLUXES
   !
@@ -894,6 +915,7 @@ contains
   !
   CdSnoEvap      = AScaledCdWOverSnow_col(NY,NX)/(RAa+RZ)
   CdSnoHSens     = AScaledCdHOverSnow_col(NY,NX)/RAa
+  SnowSensibleDeriv=CdSnoHSens
   VPSno0         = vapsat(TKSnow1_snvr(1,NY,NX))  !*dssign(VLWatSnow0M_snvr(1,NY,NX))
   MaxVapXAir2Sno = CdSnoEvap*(VPQ_col(NY,NX)-VPSno0)
 
@@ -932,6 +954,8 @@ contains
 !
 
   HeatSensAir2Sno2 = CdSnoHSens*(TKQ_col(NY,NX)-TKSnow1_snvr(1,NY,NX))
+  ! The hourly air predictor holds accepted surface temperatures fixed.
+  ! Its partial derivative remains K_H after the implicit flux correction.
   SurfSensHeatConduct_col(NY,NX)=SurfSensHeatConduct_col(NY,NX)+CdSnoHSens
   !occasionally, RadNet2Sno2 and HeatSensAir2Sno2 go to infinity
   HeatNetFlx2Sno1      = RadNet2Sno2+LatentHeatAir2Sno2+HeatSensAir2Sno2
