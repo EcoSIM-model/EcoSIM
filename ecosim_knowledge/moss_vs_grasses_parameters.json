@@ -1,0 +1,181 @@
+{
+  "source_file": "EcoSIM/input_data/ecosim_pftpar_20261021.nc",
+  "sha256": "2d87b783807fabd109da88dda798e62579f50e09e16c6ca60f262c44b2d1e59a",
+  "source_commit": "1493162ddf75ecdcc4cba860d4c177d65641aac4",
+  "records": {
+    "moss62": {
+      "ICTYP": 3,
+      "IEBTYP": 0,
+      "IGTYP": 0,
+      "ISTYP": 1,
+      "IDTYP": 1,
+      "INTYP": 5,
+      "IWTYP": 1,
+      "IBTYP": 3,
+      "I2EXP": 0,
+      "ISNTYP": 0,
+      "MY": 2,
+      "IROOTJK": 10,
+      "RCS": 100.0,
+      "RSMX": 150.0,
+      "PORT": 0.0,
+      "SLA1": 0.0016700000269338489,
+      "GRDM": 0.0010000000474974513,
+      "VCMX": 45.0,
+      "CHL": 0.11999999731779099,
+      "RUBP": 0.125,
+      "ETMX": 405.0,
+      "OSMO": -1.25,
+      "ANGSH": 45.0,
+      "WDLF": 1.0,
+      "CNRT": 0.019999999552965164
+    },
+    "gr3s62": {
+      "ICTYP": 3,
+      "IEBTYP": 3,
+      "IGTYP": 1,
+      "ISTYP": 1,
+      "IDTYP": 0,
+      "INTYP": 0,
+      "IWTYP": 1,
+      "IBTYP": 0,
+      "I2EXP": 0,
+      "ISNTYP": 1,
+      "MY": 2,
+      "IROOTJK": 6,
+      "RCS": 0.20000000298023224,
+      "RSMX": 2500.0,
+      "PORT": 0.05000000074505806,
+      "SLA1": 0.003329999977722764,
+      "GRDM": 0.004999999888241291,
+      "VCMX": 45.0,
+      "CHL": 0.18000000715255737,
+      "RUBP": 0.125,
+      "ETMX": 405.0,
+      "OSMO": -1.25,
+      "ANGSH": 90.0,
+      "WDLF": 5.0,
+      "CNRT": 0.02500000037252903
+    }
+  },
+  "field_metadata": {
+    "ICTYP": {
+      "long_name": "photosynthesis type",
+      "units": "none"
+    },
+    "IEBTYP": {
+      "long_name": "Embrophyte type",
+      "units": "none"
+    },
+    "IGTYP": {
+      "long_name": "root profile",
+      "units": "none"
+    },
+    "ISTYP": {
+      "long_name": "growth habit",
+      "units": "none"
+    },
+    "IDTYP": {
+      "long_name": "growth pattern",
+      "units": "none"
+    },
+    "INTYP": {
+      "long_name": "N2 fixation",
+      "units": "none"
+    },
+    "IWTYP": {
+      "long_name": "phenology type",
+      "units": "none"
+    },
+    "IBTYP": {
+      "long_name": "turnover of aboveground biomass",
+      "units": "none"
+    },
+    "I2EXP": {
+      "long_name": "secondary growth expression",
+      "units": "none"
+    },
+    "ISNTYP": {
+      "long_name": "snow interception vegetation class",
+      "units": "none"
+    },
+    "MY": {
+      "long_name": "mycorrhizal",
+      "units": "none"
+    },
+    "IROOTJK": {
+      "long_name": "Jackson et al. (1997) biome root type index",
+      "units": "none"
+    },
+    "RCS": {
+      "long_name": "e-folding turgor pressure for stomatal resistance",
+      "units": "MPa"
+    },
+    "RSMX": {
+      "long_name": "cuticular resistance",
+      "units": "s m-1"
+    },
+    "PORT": {
+      "long_name": "root porosity",
+      "units": "m3 m-3"
+    },
+    "SLA1": {
+      "long_name": "growth in leaf area vs mass",
+      "units": "m2 gC-1"
+    },
+    "GRDM": {
+      "long_name": "seed C mass at planting",
+      "units": "gC seed-1"
+    },
+    "VCMX": {
+      "long_name": "specific C3 rubisco carboxylase",
+      "units": "umol C g-1 s-1"
+    },
+    "CHL": {
+      "long_name": "Fraction of leaf protein binded with chlorophyll",
+      "units": "none"
+    },
+    "RUBP": {
+      "long_name": "fraction of leaf protein in rubisco",
+      "units": "none"
+    },
+    "ETMX": {
+      "long_name": "specific chlorophyll activity",
+      "units": "umol e- g-1 s-1"
+    },
+    "OSMO": {
+      "long_name": "leaf osmotic potential at zero leaf water potential",
+      "units": "MPa"
+    },
+    "ANGSH": {
+      "long_name": "petiole angle from horizontal",
+      "units": "degree"
+    },
+    "WDLF": {
+      "long_name": "leaf length vs width ratio",
+      "units": "none"
+    },
+    "CNRT": {
+      "long_name": "NC ratio in plant root",
+      "units": "gN gC-1"
+    }
+  },
+  "moss_codes": [
+    "moss62",
+    "moss43",
+    "moss33",
+    "moss32",
+    "moss61",
+    "moss22"
+  ],
+  "SOAP_active_codes": [
+    "bdlf35",
+    "gr3s35",
+    "ndlf35",
+    "shru35"
+  ],
+  "notes": [
+    "Illustrative catalog comparison at the same climate suffix 62; not the active SOAP PFT pair.",
+    "Current SOAP catalog and standard catalog do not contain moss35; the selected SOAP grid climate is 35. No input was changed and no moss/grass simulation was run."
+  ]
+}

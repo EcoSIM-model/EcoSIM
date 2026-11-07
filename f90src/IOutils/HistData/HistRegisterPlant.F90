@@ -419,7 +419,7 @@ contains
 
   data1d_ptr => this%h1D_Stalk_HT_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='Stalk_HT_pft',units='m',avgflag='A',&
-    long_name='Canopy stalk height',ptr_patch=data1d_ptr, default='inactive')
+    long_name='Canopy stalk height',ptr_patch=data1d_ptr)
 
   data1d_ptr => this%h1D_EmergeHeight_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='EmergHeight_pft',units='m',avgflag='A',&
