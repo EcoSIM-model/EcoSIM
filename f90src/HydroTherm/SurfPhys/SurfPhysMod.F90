@@ -735,6 +735,7 @@ contains
   subroutine AtmLandSurfExchangeM(I,J,M,NY,NX,Prec2LitR2,RainHeat2LitR2,PrecNet2SoiMicP,&
     PrecNet2SoiMacP,RainPrecHeatAir2LitR,TopLayWatVol,LatentHeatAir2Sno,&
     HeatSensEvapAir2Snow,HeatSensAir2Snow,Radnet2Snow,VapXAir2TopLay,HeatFluxAir2Soi1)
+  ! Exchange water and heat with resolved snow and exposed ground at substep M.
   implicit none
   integer, intent(in) :: M           !soil heat-flow iteration id
   integer, intent(in) :: NY,NX,I,J
@@ -776,9 +777,9 @@ contains
   cumSnoHeatFlow2Soil  = 0._r8
   HeatFluxAir2Soi1     = 0._r8
 
-  !solve for energy balance over significant snow layer
-  IF(VLSnowHeatCapM_snvr(M,1,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
-    !   VHCPW,VLHeatCapSnowMin_col=current, minimum snowpack heat capacities
+  ! Solve every numerically resolved snow store, including thin snow. The
+  ! physical layer-merging threshold must not switch surface heat exchange.
+  IF(VLSnowHeatCapM_snvr(M,1,NY,NX).GT.ZEROS(NY,NX))THEN
     call SolveSnowpackM(I,J,M,NY,NX,LatentHeatAir2Sno,Radnet2Snow,HeatSensEvapAir2Snow,HeatSensAir2Snow,&
       HeatNetFlx2Snow,CumWatFlx2SoiMacP,CumWatFlx2SoiMicP,CumWatXFlx2SoiMicP,CumSnowWatFlow2LitR,&
       CumSnoHeatFlow2LitR,cumSnoHeatFlow2Soil)
@@ -1655,7 +1656,7 @@ contains
   ! PrecHeat2Snowt_col=convective heat flux from snow,water,ice to snowpack
   !
 
-  IF(VLSnowHeatCapM_snvr(M,1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) .AND. SnowFallt_col(NY,NX)+Rain2Snowt_col(NY,NX).GT.ZEROS(NY,NX))THEN
+  IF(VLSnowHeatCapM_snvr(M,1,NY,NX).LE.ZEROS(NY,NX) .AND. SnowFallt_col(NY,NX)+Rain2Snowt_col(NY,NX).GT.ZEROS(NY,NX))THEN
 
     SnoXfer2SnoLay_snvr(1,NY,NX)  = SnoXfer2SnoLay_snvr(1,NY,NX)+SnowFallt_col(NY,NX)
     WatXfer2SnoLay_snvr(1,NY,NX)  = WatXfer2SnoLay_snvr(1,NY,NX)+Rain2Snowt_col(NY,NX)
@@ -1665,7 +1666,8 @@ contains
     PrecHeat2Snow_col(NY,NX)      = PrecHeat2Snow_col(NY,NX)+PrecHeat2Snowt_col(NY,NX)
     RainPrec2Sno_col(NY,NX)       = RainPrec2Sno_col(NY,NX)+Rain2Snowt_col(NY,NX)
 
-    !accumulate new snallfall
+    ! Create snow only when its energy solve was skipped. Use the identical
+    ! activation criterion so precipitation is accepted exactly once.
     VLSnowHeatCap0 = cps*VLDrySnoWE0_snvr(1,NY,NX)+cpw*VLWatSnow0_snvr(1,NY,NX)+cpi*VLIceSnow0_snvr(1,NY,NX)
 
     VLDrySnoWE0_snvr(1,NY,NX)      = VLDrySnoWE0_snvr(1,NY,NX)+SnowFallt_col(NY,NX)

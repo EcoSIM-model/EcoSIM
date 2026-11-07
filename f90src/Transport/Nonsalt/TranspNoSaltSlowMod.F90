@@ -2031,12 +2031,12 @@ implicit none
       ! Hydrology can create snow in slot 1 before nsnol_col is updated.
       ! Scan fixed slots; substep heat capacity determines drainage donors.
       DO  L=1,JS
-        !check having meaningful snow mass
-        IF(VLSnowHeatCapM_snvr(M,L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX)*1.e-4_r8)THEN
+        ! Match the thermal donor criterion, including thin occupied layers.
+        IF(VLSnowHeatCapM_snvr(M,L,NY,NX).GT.ZEROS(NY,NX))THEN
           !next layer index
           L2=MIN(JS,L+1)
           !L is an inner layer, because L2 is well defined
-          IF(L.LT.JS .AND. VLSnowHeatCapM_snvr(M,L2,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+          IF(L.LT.JS .AND. VLSnowHeatCapM_snvr(M,L2,NY,NX).GT.ZEROS(NY,NX))THEN
             !some flowout
             IF(VLWatSnow_snvr(L,NY,NX).GT.ZEROS2(NY,NX))THEN
               VFLWW=AZMAX1(AMIN1(1.0_r8,WatFlowInSnowM_snvr(M,L2,NY,NX)/VLWatSnow_snvr(L,NY,NX)))

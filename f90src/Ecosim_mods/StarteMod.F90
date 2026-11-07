@@ -1,4 +1,5 @@
 module StarteMod
+  ! Initialize soil and snow biogeochemical pools and dissolved concentrations.
   use AtmosCompositionMod, only: UpdateAtmosGasMassConcentrations
   use data_kind_mod,      only: r8 => DAT_KIND_R8
   use SoluteChemDataType, only: solutedtype
@@ -525,6 +526,7 @@ module StarteMod
 !------------------------------------------------------------------------------------------
 
   subroutine InitialState(NY,NX)
+  ! Initialize dissolved pools in the surface residue and every occupied snow layer.
 
   implicit none
   integer, intent(in) :: NY, NX
@@ -565,7 +567,7 @@ module StarteMod
 !     INITIAL STATE VARIABLES FOR MINERAL N AND P IN SNOWPACK
 !
     D9985: DO L=1,JS
-      IF(VLHeatCapSnow_snvr(L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+      IF(VLHeatCapSnow_snvr(L,NY,NX).GT.ZEROS(NY,NX))THEN
         VOLWW                             = VLWatSnow_snvr(L,NY,NX)+VLDrySnoWE_snvr(L,NY,NX)+VLIceSnow_snvr(L,NY,NX)*DENSICE
 
         DO idg=idg_beg,idg_NH3

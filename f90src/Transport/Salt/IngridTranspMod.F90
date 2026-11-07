@@ -1,4 +1,5 @@
 module IngridTranspMod
+  ! Route dissolved salts through surface, snow and soil water pathways.
   use SoilFaceMappingMod, only: SoilFaceSlot,SoilFaceIncomingRange,GetSoilFaceGeometry
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use minimathmod, only : AZMAX1,AZMIN1,isclose
@@ -577,17 +578,17 @@ module IngridTranspMod
 
   subroutine AccumSaltTranspInSnowM(M,NY,NX)
 !
-!     Description:
+!     Accumulate accepted salt transfers through every resolved snow store.
 !
   integer, intent(in) :: M,NY,NX
   integer :: LS,LS2,idsalt
 !     begin_execution
 
   D1205: DO LS=1,JS
-    IF(VLSnowHeatCapM_snvr(M,LS,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+    IF(VLSnowHeatCapM_snvr(M,LS,NY,NX).GT.ZEROS(NY,NX))THEN
       LS2=MIN(JS,LS+1)
       ! IF LOWER LAYER IS IN THE SNOWPACK
-      IF(LS.LT.JS.AND.VLSnowHeatCapM_snvr(M,LS2,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+      IF(LS.LT.JS.AND.VLSnowHeatCapM_snvr(M,LS2,NY,NX).GT.ZEROS(NY,NX))THEN
         DO idsalt=idsalt_beg,idsalt_end
           trcSalt_Aqua_flxM_snvr(idsalt,LS,NY,NX)=trcSalt_Aqua_flxM_snvr(idsalt,LS,NY,NX) &
             +trcSalt_AquaAdv_flxM_snvr(idsalt,LS,NY,NX)-trcSalt_AquaAdv_flxM_snvr(idsalt,LS2,NY,NX)
@@ -619,7 +620,7 @@ module IngridTranspMod
 
   subroutine SnowSaltTranptM(M,NY,NX,band_snow_donor)
 !
-!     Description:
+!     Route salt with drainage from resolved snow layers to snow and soil.
 !
   implicit none
   integer, intent(in) :: M,NY,NX
@@ -642,11 +643,11 @@ module IngridTranspMod
   ICHKL=.false.
   DO L=1,JS
     !
-    IF(VLSnowHeatCapM_snvr(M,L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+    IF(VLSnowHeatCapM_snvr(M,L,NY,NX).GT.ZEROS(NY,NX))THEN
       L2=MIN(JS,L+1)
 
       !Not bottom layer, next layer has significant snow
-      IF(L.LT.JS .AND. VLSnowHeatCapM_snvr(M,L2,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+      IF(L.LT.JS .AND. VLSnowHeatCapM_snvr(M,L2,NY,NX).GT.ZEROS(NY,NX))THEN
         IF(VLWatSnow_snvr(L,NY,NX).GT.ZEROS2(NY,NX))THEN
           VFLWW=AZMAX1(AMIN1(1.0_r8,WatFlowInSnowM_snvr(M,L2,NY,NX)/VLWatSnow_snvr(L,NY,NX)))
         ELSE
