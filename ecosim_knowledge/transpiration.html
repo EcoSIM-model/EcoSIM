@@ -30,7 +30,7 @@
 CdVapCanopyAir = EffPFTGridArea4H2O / ra
 EX = CdVapCanopyAir * (VPA - VPLeaf)
 Transpiration_pft(NZ) = EX * ra / (ra + rs)</code></pre>
-  <p>Here <code>ra</code> abbreviates <code>RawCanopy2Atm_pft(NZ)</code> and <code>rs</code> abbreviates <code>CanPStomaResistH2O_pft(NZ)</code>.</p>
+  <p>Here <code>ra</code> abbreviates <code>RawH2OCanopy2Atm_pft(NZ)</code> and <code>rs</code> abbreviates <code>CanPStomaResistH2O_pft(NZ)</code>.</p>
   <p class="note"><strong>Sign and area conventions:</strong> <code>Transpiration_pft</code> is negative for water loss from the canopy. The local calculation includes effective PFT area; it should not be interpreted directly as a per-leaf-area flux. The equation above reverses the code’s sign to describe evaporation as positive.</p>
   <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 770, 807, 837–841, and 878.</p>
 
