@@ -245,7 +245,7 @@ def main():
     # The standalone driver replays its clock from January 1 before loading
     # the checkpoint. Its stop counter includes those skipped hours. Express
     # the requested additional duration as an absolute model-step endpoint.
-    raw_step = get_value(text, "delta_time") or "3600."
+    raw_step = get_value(text, "delta_time") or "1800."
     step_seconds = float(raw_step.split("!", 1)[0].strip().replace("D", "E").replace("d", "e"))
     if step_seconds <= 0:
         ap.error("delta_time must be positive")
