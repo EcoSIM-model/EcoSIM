@@ -2,6 +2,9 @@ module SoilPhysParaMod
   ! Description:
   ! Evaluate soil/pond pressure and thermal properties. Hydraulic callers share
   ! the current retention curve and named auxiliary water-content calculations.
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
+  use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use DebugToolMod,     only: PrintInfo,DebugPrint
@@ -268,25 +271,25 @@ implicit none
 
   subroutine ComputePsiMCM(N6,N5,N4,THETWL,PSISM1)
   ! Description:
-  !Compute soil matric pressure
+  ! Dispatch ordinary-soil pressure to the selected scheme. Litter and pond-table
+  ! calls retain the current curve; ambient pond/ice pressure uses ComputePSIPond.
   implicit none
   integer, intent(in) :: N6,N5,N4
   real(r8), intent(inout) :: THETWL  !liquid content [m3 m-3 soil]; set to porosity near saturation
   real(r8), intent(out) :: PSISM1    !Soil matric pressure [MPa]
   character(len=*), parameter :: subname='ComputePsiMCM'
 
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: surface_model
+
   call PrintInfo('beg '//subname)
-  IF(THETWL.LT.FieldCapacity_vr(N6,N5,N4))THEN
-    !less than field capacity
-    PSISM1=AMAX1(PSIHY,-EXP(LOGPSIFLD_col(N5,N4)+((LOGFldCapacity_vr(N6,N5,N4)-LOG(THETWL)) &
-      /FCD_vr(N6,N5,N4)*LOGPSIMND_col(N5,N4))))
-  ELSEIF(THETWL.LT.POROS_vr(N6,N5,N4)-DTHETW)THEN
-    PSISM1=-EXP(LOGPSIAtSat(N5,N4)+(((LOGPOROS_vr(N6,N5,N4)-LOG(THETWL)) &
-      /PSD_vr(N6,N5,N4))**SRP_vr(N6,N5,N4)*LOGPSIMXD_col(N5,N4)))
+  parameters=GetSoilHydraulicParameters(N6,N5,N4,DTHETW)
+  IF(N6.EQ.0 .OR. SoilBulkDensity_vr(N6,N5,N4).LE.ZERO)THEN
+    PSISM1=surface_model%matric_potential(parameters,THETWL)
   ELSE
-    !saturated
-    THETWL = POROS_vr(N6,N5,N4)
-    PSISM1 = PSI_at_Sautration_vr(N6,N5,N4)
+    model=>GetSoilHydraulicModel()
+    PSISM1=model%matric_potential(parameters,THETWL)
   ENDIF
   call PrintInfo('end '//subname)
   END subroutine ComputePsiMCM
@@ -302,8 +305,18 @@ implicit none
   real(r8), intent(out) :: WaterContent ! dry-branch liquid content [m3 m-3 soil]
   character(len=*), parameter :: subname='ComputeSoilAirDryContent'
 
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: litter_model
+
   call PrintInfo('beg '//subname)
-  WaterContent=EXP((LOGPSIFLD_col(NY,NX)-LOG(-PSIHY))*FCD_vr(L,NY,NX)/LOGPSIMND_col(NY,NX)+LOGFldCapacity_vr(L,NY,NX))
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  IF(L.EQ.0)THEN
+    WaterContent=litter_model%dry_content(parameters)
+  ELSE
+    model=>GetSoilHydraulicModel()
+    WaterContent=model%dry_content(parameters)
+  ENDIF
   call PrintInfo('end '//subname)
   end subroutine ComputeSoilAirDryContent
 !------------------------------------------------------------------------------------------
@@ -317,9 +330,13 @@ implicit none
   real(r8) :: WaterContent ! returned reference liquid content [m3 m-3 soil]
   character(len=*), parameter :: subname='ComputeKsatReferenceContent'
 
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+
   call PrintInfo('beg '//subname)
-  WaterContent=AMIN1(POROS_vr(L,NY,NX),EXP((LOGPSIAtSat(NY,NX)-LOG(0.033_r8)) &
-    *(LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX))/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  model=>GetSoilHydraulicModel()
+  WaterContent=model%ksat_reference_content(parameters)
   call PrintInfo('end '//subname)
   end function ComputeKsatReferenceContent
 !------------------------------------------------------------------------------------------

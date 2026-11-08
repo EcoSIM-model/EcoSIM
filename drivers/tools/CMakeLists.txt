@@ -12,6 +12,7 @@ set(TOOLS_SOURCES
   ThinSnowEnergyTest.F90
   SaltTransportDataTest.F90
   SoilHydraulicTest.F90
+  SoilHydraulicSchemeTest.F90
 	EcoATSTest.F90
 )
 include(add_ecosim_library)
@@ -167,3 +168,24 @@ target_include_directories(SoilHydraulicTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SoilPhys/)
 add_test(NAME soil_hydraulic_properties COMMAND SoilHydraulicTest.x)
+
+add_ecosim_executable(SoilHydraulicSchemeTest.x SoilHydraulicSchemeTest.F90)
+target_include_directories(SoilHydraulicSchemeTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/IOutils/)
+foreach(mode matching legacy unknown_option scheme_mismatch revision_mismatch policy_mismatch incomplete)
+  add_test(NAME soil_hydraulic_scheme_${mode} COMMAND SoilHydraulicSchemeTest.x ${mode})
+endforeach()
+set_tests_properties(soil_hydraulic_scheme_matching soil_hydraulic_scheme_legacy
+  PROPERTIES PASS_REGULAR_EXPRESSION "SoilHydraulicSchemeTest passed")
+set_tests_properties(soil_hydraulic_scheme_unknown_option
+  PROPERTIES PASS_REGULAR_EXPRESSION "Unsupported soil hydraulic scheme")
+set_tests_properties(soil_hydraulic_scheme_scheme_mismatch
+  PROPERTIES PASS_REGULAR_EXPRESSION "Soil hydraulic restart scheme mismatch")
+set_tests_properties(soil_hydraulic_scheme_revision_mismatch
+  PROPERTIES PASS_REGULAR_EXPRESSION "Soil hydraulic restart revision mismatch")
+set_tests_properties(soil_hydraulic_scheme_policy_mismatch
+  PROPERTIES PASS_REGULAR_EXPRESSION "Soil hydraulic restart drainage-policy mismatch")
+set_tests_properties(soil_hydraulic_scheme_incomplete
+  PROPERTIES PASS_REGULAR_EXPRESSION "Incomplete soil hydraulic restart metadata")

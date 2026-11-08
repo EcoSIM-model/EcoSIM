@@ -22,6 +22,10 @@ program SoilHydraulicTest
   use SoilPhysParaMod, only: ComputePsiMCM,ComputeSoilAirDryContent, &
     ComputeKsatReferenceContent,getMoistK
   use HydrologyDiagMod, only: ComputeWaterTableEquilContent
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
+  use SoilHydraulicSchemeMod, only: InitializeSoilHydraulicScheme,FinalizeSoilHydraulicScheme, &
+    GetSoilHydraulicModel,GetSoilHydraulicSchemeName,GetSoilHydraulicParameters
   implicit none
   integer, parameter :: classes(4)=[1,11,51,100]
   real(r8), parameter :: expected_pressure(4,4)=reshape([ &
@@ -60,8 +64,19 @@ program SoilHydraulicTest
     0.69600000000000006_r8]
   real(r8) :: theta,psi,content
   integer :: mode,k,j
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
 
   call initialize_state()
+  call InitializeSoilHydraulicScheme()
+  call require('default scheme identity',GetSoilHydraulicSchemeName()=='ecosim')
+  model=>GetSoilHydraulicModel()
+  select type(model)
+  type is(EcoSIMSoilHydraulicModel)
+    call require('default concrete scheme',.true.)
+  class default
+    call require('default concrete scheme',.false.)
+  end select
   do mode=1,4
     CSoilOrgM_vr=0._r8
     if(mode==2)CSoilOrgM_vr(ielmc,1,1,1)=60000._r8
@@ -78,6 +93,16 @@ program SoilHydraulicTest
     enddo
     call check_close('air-entry policy',PSISoilAirEntry_vr(1,1,1),expected_entry(mode))
     call check_close('ThetaSat policy',ThetaSat_vr(1,1,1),expected_theta_sat(mode))
+    parameters=GetSoilHydraulicParameters(1,1,1,1.e-6_r8)
+    do j=1,11
+      theta=.1_r8+.034_r8*(j-1)
+      psi=model%matric_potential(parameters,theta)
+      call check_close('forward/inverse retention',model%water_content(parameters,psi),theta)
+    enddo
+    call check_close('inverse dry bound',model%water_content(parameters,-25000._r8),SoilWatAirDry_vr(1,1,1))
+    call check_close('inverse saturation bound',model%water_content(parameters,0._r8),.45_r8)
+    call check_close('relative conductivity dispatch',model%relative_conductivity(parameters,.225_r8), &
+      expected_vertical(3,mode))
     do k=1,100
       call check_close('horizontal anisotropy',HydroCond_3D(1,k,1,1,1),2._r8*HydroCond_3D(3,k,1,1,1))
       call require('finite positive conductivity',ieee_is_finite(HydroCond_3D(3,k,1,1,1)) &
@@ -158,6 +183,7 @@ program SoilHydraulicTest
     call require('no horizontal litter transport',all(HydroCond_3D(1:2,:,0,1,1)==0._r8))
     call check_close('saturated litter conductivity',HydroCond_3D(3,1,0,1,1),.98_r8)
   enddo
+  call FinalizeSoilHydraulicScheme()
   write(*,*) 'SoilHydraulicTest passed'
 contains
 !------------------------------------------------------------------------------------------

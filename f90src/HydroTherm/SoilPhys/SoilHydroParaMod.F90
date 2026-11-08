@@ -3,6 +3,9 @@ module SoilHydroParaMod
   ! Initialize and refresh hydraulic limits, conductivity tables and thresholds.
   ! Ordinary-soil and litter property setup retain their separate domain rules.
 
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
+  use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use minimathmod,      only: isclose, AZMAX1, AZMIN1, Viscosity_H2O
@@ -243,53 +246,28 @@ contains
 !------------------------------------------------------------------------------------------
   subroutine BuildSoilConductivityTable(L,NY,NX)
   ! Description:
-  ! Sample the current soil retention curve and build the 100-class Green-Corey
-  ! conductivity cache. Keep summation/multiplication order for reproducibility.
+  ! Build the 100-class conductivity cache with the selected ordinary-soil scheme.
+  ! Pond tables retain the current curve; litter has its own builder below.
   ! Threshold policy is applied separately after the complete table is available.
   implicit none
   integer, intent(in) :: L       ! ordinary-soil or pond layer index [-]
   integer, intent(in) :: NY,NX   ! row and column indices [-]
   real(r8) :: H2OSOIK(100),PSISK(100) ! sampled liquid contents [m3 m-3] and potentials [MPa]
-  real(r8) :: XK,YK,SUM1,SUM2
-  integer :: K,M,N,N100
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: pond_model
   character(len=*), parameter :: subname='BuildSoilConductivityTable'
 
   call PrintInfo('beg '//subname)
-  SUM2=0.0_r8;N100=100
-  ! Green and Corey (1971): weighted inverse-square pressure sums.
-  DO  K=1,n100
-    !air-filled relative pore volume
-    XK  = (K-1._r8)/n100
-    !moisture content
-    H2OSOIK(K) = POROS_vr(L,NY,NX)*(1._r8-XK)
-    call ComputePsiMCM(L,NY,NX,H2OSOIK(K),PSISK(K))
-    SUM2=SUM2+(2._r8*K-1)/(PSISK(K)**2)
-  ENDDO
-
-  ! Progress from saturation toward the driest stored class.
-  ! The driest stored class has 1% relative saturation.
-  DO  K=1,N100
-    
-    !air-filled relative pore volume
-    XK   = (K-1._r8)/N100
-    !saturation at K
-    YK   = (1._r8-XK)**1.33_r8
-    SUM1 = 0.0_r8
-    DO M    = K, N100
-      SUM1=SUM1+(2*(M-K)+1._r8)/(PSISK(M)**2)
-    ENDDO
-
-    DO  N=1,3
-      IF(N.EQ.3)THEN
-        !vertical
-        HydroCond_3D(N,K,L,NY,NX)=SatHydroCondVert_vr(L,NY,NX)*YK*SUM1/SUM2
-
-      ELSE
-        !horizontal
-        HydroCond_3D(N,K,L,NY,NX)=SatHydroCondHrzn_vr(L,NY,NX)*YK*SUM1/SUM2
-      ENDIF
-    ENDDO
-  ENDDO
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  IF(L.EQ.0 .OR. SoilBulkDensity_vr(L,NY,NX).LE.ZERO)THEN
+    call pond_model%conductivity_table(parameters,SatHydroCondVert_vr(L,NY,NX),SatHydroCondHrzn_vr(L,NY,NX), &
+      H2OSOIK,PSISK,HydroCond_3D(:,:,L,NY,NX))
+  ELSE
+    model=>GetSoilHydraulicModel()
+    call model%conductivity_table(parameters,SatHydroCondVert_vr(L,NY,NX),SatHydroCondHrzn_vr(L,NY,NX), &
+      H2OSOIK,PSISK,HydroCond_3D(:,:,L,NY,NX))
+  ENDIF
 
   call UpdateHydraulicThresholds(L,NY,NX,H2OSOIK,PSISK)
   call PrintInfo('end '//subname)

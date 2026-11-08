@@ -2,6 +2,8 @@ module HydrologyDiagMod
   ! Description:
   ! Diagnose water/ice contents, connected water-table depth and active-layer depth
   ! from model state without changing water inventories.
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use minimathmod,   only: isclose, AZMAX1, AZMIN1, safe_adb
   use EcosimConst,   only: mGravAccelerat
@@ -28,9 +30,8 @@ module HydrologyDiagMod
 
   subroutine ComputeWaterTableEquilContent(L,NY,NX,Potential,MaxWaterContent,WaterContent)
   ! Description:
-  ! Preserve the equilibrium-content approximation used by water-table diagnosis.
-  ! It extrapolates the log-linear wet relation without SRP or a dry-branch switch;
-  ! replacing it with a full retention inverse would change existing diagnostics.
+  ! Delegate equilibrium content to the scheme. The default EcoSIM implementation
+  ! explicitly preserves the existing SRP-free diagnostic approximation.
   implicit none
   integer, intent(in) :: L       ! soil layer above the diagnosed saturated zone [-]
   integer, intent(in) :: NY,NX   ! row and column indices [-]
@@ -39,13 +40,13 @@ module HydrologyDiagMod
   real(r8), intent(out) :: WaterContent   ! bounded equilibrium liquid content [m3 m-3 soil]
   character(len=*), parameter :: subname='ComputeWaterTableEquilContent'
 
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+
   call PrintInfo('beg '//subname)
-  IF(Potential.GE.-EXP(LOGPSIAtSat(NY,NX)))THEN
-    WaterContent=MaxWaterContent
-  ELSE
-    WaterContent=AMIN1(MaxWaterContent,EXP((LOGPSIAtSat(NY,NX)-LOG(-Potential)) &
-      *PSD_vr(L,NY,NX)/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
-  ENDIF
+  parameters=GetSoilHydraulicParameters(L,NY,NX,0._r8)
+  model=>GetSoilHydraulicModel()
+  WaterContent=model%equilibrium_content(parameters,Potential,MaxWaterContent)
   call PrintInfo('end '//subname)
   end subroutine ComputeWaterTableEquilContent
 !------------------------------------------------------------------------------------------
