@@ -1,0 +1,51 @@
+netcdf Blodget_sp_phenol_20261103 {
+dimensions:
+	ntopou = 1 ;
+	maxpfts = 5 ;
+	nchar1 = 10 ;
+	month = 12 ;
+	year = UNLIMITED ; // (1 currently)
+variables:
+	int NH1(ntopou) ;
+		NH1:long_name = "Starting column from the west for a topo unit" ;
+	int NV1(ntopou) ;
+		NV1:long_name = "Starting row from the north for a topo unit" ;
+	int NH2(ntopou) ;
+		NH2:long_name = "Ending column at the east for a topo unit" ;
+	int NV2(ntopou) ;
+		NV2:long_name = "Ending row at the south for a topo unit" ;
+	int year(year) ;
+		year:long_name = "Calendar year of the record; a single record is applied to every year" ;
+	int NZ(ntopou) ;
+		NZ:long_name = "Number of tracked PFT slots, including trailing blank slots" ;
+	char pft_type(year, ntopou, maxpfts, nchar1) ;
+		pft_type:long_name = "PFT names; grid Koppen code replaces the suffix when positive; trailing blanks are fallow" ;
+	double PlantPopuLive_pft(year, ntopou, maxpfts) ;
+		PlantPopuLive_pft:long_name = "Prescribed live plant population density for each named PFT slot" ;
+		PlantPopuLive_pft:units = "plants m-2" ;
+		PlantPopuLive_pft:valid_min = 0. ;
+	float LAI(year, ntopou, maxpfts, month) ;
+		LAI:long_name = "Monthly leaf area index of each PFT slot" ;
+		LAI:units = "m2 m-2" ;
+	float SAI(year, ntopou, maxpfts, month) ;
+		SAI:long_name = "Monthly stem area index of each PFT slot" ;
+		SAI:units = "m2 m-2" ;
+	float HTOP(year, ntopou, maxpfts, month) ;
+		HTOP:long_name = "Monthly canopy top height of each PFT slot" ;
+		HTOP:units = "m" ;
+
+// global attributes:
+		:description = "Prescribed phenology (ldo_sp_mode) input for Blodgett, PFT slot 1 = ndlf34. Values are the placeholders formerly hardwired in PrescribePhenolMod.F90, not satellite retrievals." ;
+data:
+ NH1 = 1 ;
+ NV1 = 1 ;
+ NH2 = 1 ;
+ NV2 = 1 ;
+ NZ = 1 ;
+ year = 2012 ;
+ pft_type = "ndlf34", "", "", "", "" ;
+ PlantPopuLive_pft = 0.6, 0, 0, 0, 0 ;
+ LAI = 1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343, 1.3941, 1.2721, 1.2218, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+ SAI = 0.3190, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084, 0.3292, 0.3656, 0.3249, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+ HTOP = 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+}

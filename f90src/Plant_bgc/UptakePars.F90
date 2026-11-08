@@ -12,7 +12,7 @@ module UptakePars
 !     MaxIterNum=max number of cycles in convergence soln for water uptake
 !     DIFFX,DIFFY=acceptance criteria in convergence soln
 !     FMN=min PFT:total population ratio
-!     MinRawCanopy2Atm_pft,RACX=min,max canopy boundary layer resistance [h m-1]
+!     RawMinH2OCanopy2Atm_pft,RACX=min,max canopy boundary layer resistance [h m-1]
 !     ResistLeafSurf=surface resistance to evaporation [h m-1]
 !     EMODW=wood modulus of elasticity (MPa)
 !     ZCKI,PCKI,ZPKI,PZKI=N,P inhibition on root,myco N,P uptake(g g-1)
@@ -23,7 +23,7 @@ module UptakePars
   real(r8) :: DIFFX
   real(r8) :: DIFFY
   real(r8) :: FMN
-  real(r8) :: MinRawCanopy2Atm_pft !this value varies with vegetation type, forest (0.0014) < long grass (0.0083) < short grass (0.0278) < moss (0.0417)
+  real(r8) :: RawMinH2OCanopy2Atm_pft !this value varies with vegetation type, forest (0.0014) < long grass (0.0083) < short grass (0.0278) < moss (0.0417), [h/m]
   real(r8) :: RACX
   real(r8) :: ResistLeafSurf
   real(r8) :: EMMC         !canopy emissivity of longwave radiation
@@ -42,7 +42,7 @@ module UptakePars
   DIFFX                   = 1.0E-09_r8
   DIFFY                   = 0.5E-02_r8
   FMN                     = 1.e-6_r8 !ppmc
-  MinRawCanopy2Atm_pft    = 0.00139_r8  !
+  RawMinH2OCanopy2Atm_pft    = 0.00139_r8  ! [h/m]
   RACX                    = 0.0278_r8
   ResistLeafSurf          = 0.0139_r8
 

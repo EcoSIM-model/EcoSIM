@@ -20,6 +20,7 @@ module PlantBiomassAPIData
   real(r8), pointer :: CanopyLeafCLyr_pft(:,:)              => null()    !canopy layer leaf C,                                [g d-2]
   real(r8), pointer :: RootMycoNonstElms_pft(:,:,:)         => null()    !nonstructural root-myco chemical element,           [g d-2]
   real(r8), pointer :: RootMyco2ndStrutElms_rpvr(:,:,:,:,:) => null()    !root layer element secondary axes,                  [g d-2]
+  real(r8), pointer :: RootMyco2ndStrutElms_pvr(:,:,:,:)   => null()    !secondary structural elements: NR sum or prescribed SP root C, [g element cell-1]
   real(r8), pointer :: RootMyco1stStrutElms_rpvr(:,:,:,:)   => null()    !root layer element primary axes,                    [g d-2]
   real(r8), pointer :: Root1stActStructElms_rpvr(:,:,:,:)   => null()    !root layer active zone element in primary axes, [g d-2]
   real(r8), pointer :: Root1stLigStructElms_rpvr(:,:,:,:)   => null()    !root layer lignified zone element in primary axes, [g d-2]
@@ -28,6 +29,7 @@ module PlantBiomassAPIData
   real(r8), pointer :: RootMyco1stElm_raxs(:,:,:)           => null()    !root C primary axes,                                [g d-2]
   real(r8), pointer :: StandDeadCompKElms_pft(:,:,:)        => null()    !standing dead element fraction,                     [g d-2]
   real(r8), pointer :: CanopyNonstElmConc_pft(:,:)          => null()    !canopy nonstructural element concentration,         [g d-2]
+  real(r8), pointer :: CanopyNonstOMConc_pft(:)             => null()    !canopy C+N+P concentration: derived or prescribed CCPOLT, [g gC-1]
   real(r8), pointer :: CanopyNonstElms_pft(:,:)             => null()    !canopy nonstructural element concentration,         [g d-2]
   real(r8), pointer :: CanopyNodulNonstElms_pft(:,:)        => null()    !canopy nodule nonstructural element,                [g d-2]
   real(r8), pointer :: CanopyNoduleNonstCConc_pft(:)        => null()    !nodule nonstructural C,                             [gC d-2]
@@ -38,7 +40,8 @@ module PlantBiomassAPIData
   real(r8), pointer :: RootProteinC_pvr(:,:,:)              => null()    !root layer protein C,                               [gC d-2]
   real(r8), pointer :: RootProteinConc_rpvr(:,:,:)          => null()    !root layer protein C concentration,                 [g g-1]
   real(r8), pointer :: RootMycoNonstElms_rpvr(:,:,:,:)      => null()    !root  layer nonstructural element,                  [g d-2]
-  real(r8), pointer :: RootNonstructElmConc_rpvr(:,:,:,:)   => null()    !root  layer nonstructural C concentration,          [g g-1]
+  real(r8), pointer :: RootNonstructElmConc_pvr(:,:,:,:)   => null()    !root  layer nonstructural C concentration,          [g g-1]
+  real(r8), pointer :: RootNonstOMConc_pvr(:,:,:)         => null()    !sum of nonstructural C/N/P concentrations by root group/layer/PFT, [g gC-1]
   real(r8), pointer :: LeafPetoNonstElmConc_brch(:,:,:)     => null()    !branch nonstructural C concentration,               [g d-2]
   real(r8), pointer :: StructInternodeElms_brch(:,:,:,:)    => null()    !internode C,                                        [g d-2]
   real(r8), pointer :: LeafElmntNode_brch(:,:,:,:)          => null()    !leaf element,                                       [g d-2]
@@ -118,6 +121,7 @@ module PlantBiomassAPIData
 contains
 
   subroutine plt_biom_init(this)
+  ! Allocate biomass pools and initialize derived root aggregates.
   implicit none
   class(plant_biom_type) :: this
 
@@ -131,6 +135,8 @@ contains
   allocate(this%StandDeadCompKElms_pft(NumPlantChemElms,jsken,JP1));this%StandDeadCompKElms_pft=0._r8
   allocate(this%RootMyco2ndStrutElms_rpvr(NumPlantChemElms,jroots,JZ1,MaxNumRootAxes,JP1))
   this%RootMyco2ndStrutElms_rpvr=spval
+  allocate(this%RootMyco2ndStrutElms_pvr(NumPlantChemElms,jroots,JZ1,JP1))
+  this%RootMyco2ndStrutElms_pvr=0._r8
   allocate(this%RootMycoNonstElms_pft(NumPlantChemElms,jroots,JP1));this%RootMycoNonstElms_pft=spval
   allocate(this%RootMyco1stStrutElms_rpvr(NumPlantChemElms,JZ1,MaxNumRootAxes,JP1));this%RootMyco1stStrutElms_rpvr=0._r8
   allocate(this%Root1stActStructElms_rpvr(NumPlantChemElms,JZ1,MaxNumRootAxes,JP1)); this%Root1stActStructElms_rpvr=0._r8
@@ -138,6 +144,7 @@ contains
   allocate(this%KLigMax_pft(JP1));this%KLigMax_pft=0.0_r8
   allocate(this%KLigMM_pft(JP1));this%KLigMM_pft=0._r8
   allocate(this%CanopyNonstElmConc_pft(NumPlantChemElms,JP1));this%CanopyNonstElmConc_pft=spval
+  allocate(this%CanopyNonstOMConc_pft(JP1));this%CanopyNonstOMConc_pft=0._r8
   allocate(this%CanopyNonstElms_pft(NumPlantChemElms,JP1));this%CanopyNonstElms_pft=spval
   allocate(this%CanopyNodulNonstElms_pft(NumPlantChemElms,JP1));this%CanopyNodulNonstElms_pft=spval
   allocate(this%CanopyNoduleNonstCConc_pft(JP1));this%CanopyNoduleNonstCConc_pft=spval
@@ -148,7 +155,8 @@ contains
   allocate(this%RootMycoMassElm_pvr(NumPlantChemElms,jroots,JZ1,JP1)); this%RootMycoMassElm_pvr = 0._r8
   allocate(this%PopuRootMycoC_pvr(jroots,JZ1,JP1));this%PopuRootMycoC_pvr=spval
   allocate(this%RootMycoNonstElms_rpvr(NumPlantChemElms,jroots,JZ1,JP1));this%RootMycoNonstElms_rpvr=spval
-  allocate(this%RootNonstructElmConc_rpvr(NumPlantChemElms,jroots,JZ1,JP1));this%RootNonstructElmConc_rpvr=spval
+  allocate(this%RootNonstructElmConc_pvr(NumPlantChemElms,jroots,JZ1,JP1));this%RootNonstructElmConc_pvr=spval
+  allocate(this%RootNonstOMConc_pvr(jroots,JZ1,JP1));this%RootNonstOMConc_pvr=0._r8
   allocate(this%ROOTNLim_rpvr(jroots,JZ1,JP1)); this%ROOTNLim_rpvr=0._r8
   allocate(this%ROOTPLim_rpvr(jroots,JZ1,JP1)); this%ROOTPLim_rpvr=0._r8
   allocate(this%CanopyNonstElms_brch(NumPlantChemElms,MaxNumBranches,JP1));this%CanopyNonstElms_brch=spval
@@ -234,9 +242,14 @@ contains
   end subroutine plt_biom_init
 
   subroutine plt_biom_destroy(this)
+  ! Release biomass API storage handled by this lifecycle procedure.
 
   implicit none
   class(plant_biom_type) :: this
+
+  if(associated(this%RootMyco2ndStrutElms_pvr))deallocate(this%RootMyco2ndStrutElms_pvr)
+  if(associated(this%CanopyNonstOMConc_pft))deallocate(this%CanopyNonstOMConc_pft)
+  if(associated(this%RootNonstOMConc_pvr))deallocate(this%RootNonstOMConc_pvr)
 
 !  if(allocated(ZERO4LeafVar_pft))deallocate(ZERO4LeafVar_pft)
 !  if(allocated(ZERO4Groth_pft))deallocate(ZERO4Groth_pft)

@@ -98,7 +98,7 @@ module NutUptakeMod
     CanopyNonstElms_brch      => plt_biom%CanopyNonstElms_brch       ,& !input  :branch nonstructural element, [g d-2]
     LeafPetoNonstElmConc_brch => plt_biom%LeafPetoNonstElmConc_brch  ,& !input  :branch nonstructural C concentration, [g d-2]
     CanPStomaResistH2O_pft    => plt_photo%CanPStomaResistH2O_pft    ,& !input  :canopy stomatal resistance, [h m-1]
-    RawCanopy2Atm_pft         => plt_photo%RawCanopy2Atm_pft         ,& !input  :canopy boundary layer resistance, [h m-1]
+    RawH2OCanopy2Atm_pft         => plt_photo%RawH2OCanopy2Atm_pft         ,& !input  :canopy boundary layer resistance, [h m-1]
     LeafAreaLive_brch         => plt_morph%LeafAreaLive_brch         ,& !input  :branch leaf area, [m2 d-2]
     NumOfBranches_pft         => plt_morph%NumOfBranches_pft         ,& !input  :number of branches,[-]
     FracPARads2LiveCanopy_pft => plt_rad%FracPARads2LiveCanopy_pft   ,& !input  :fraction of incoming PAR absorbed by live canopy, [-]
@@ -131,7 +131,7 @@ module NutUptakeMod
         CNH3P                  = AZMAX1(FNH3P*LeafPetoNonstElmConc_brch(ielmn,NB,NZ)/SNH3P)
         ZPOOLB                 = AZMAX1(CanopyNonstElms_brch(ielmn,NB,NZ))
         NH3Dep2Can_brch(NB,NZ) = AMIN1(0.1_r8*ZPOOLB &
-          ,AMAX1((AtmGasc(idg_NH3)-CNH3P)/(RawCanopy2Atm_pft(NZ)+CanPStomaResistH2O_pft(NZ)) &
+          ,AMAX1((AtmGasc(idg_NH3)-CNH3P)/(RawH2OCanopy2Atm_pft(NZ)+CanPStomaResistH2O_pft(NZ)) &
           *FracPARads2LiveCanopy_pft(NZ)*AREA3(NU)*LeafAreaLive_brch(NB,NZ)/CanopyLeafArea_pft(NZ),-0.1_r8*ZPOOLB))
         CanopyNonstElms_brch(ielmn,NB,NZ) = CanopyNonstElms_brch(ielmn,NB,NZ)+NH3Dep2Can_brch(NB,NZ)  
       ELSE
@@ -1333,7 +1333,7 @@ module NutUptakeMod
     ZERO4Groth_pft                => plt_biom%ZERO4Groth_pft                  ,& !input  :threshold zero for plang growth calculation, [-]
     RootProteinC_pvr              => plt_biom%RootProteinC_pvr                ,& !input  :root layer protein C, [gC d-2]
     RootMycoNonstElms_rpvr        => plt_biom%RootMycoNonstElms_rpvr          ,& !input  :root layer nonstructural element, [g d-2]
-    RootNonstructElmConc_rpvr     => plt_biom%RootNonstructElmConc_rpvr       ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr     => plt_biom%RootNonstructElmConc_pvr       ,& !input  :root layer nonstructural C concentration, [g g-1]
     RootMycoActiveBiomC_pvr       => plt_biom%RootMycoActiveBiomC_pvr         ,& !input  :root layer structural C, [gC d-2]
     Nutruptk_fClim_rpvr           => plt_bgcr%Nutruptk_fClim_rpvr             ,& !output :carbon limitation for nutrient uptake,(0->1),stronger limitation, [-]
     Nutruptk_fNlim_rpvr           => plt_bgcr%Nutruptk_fNlim_rpvr             ,& !output :nitrogen limitation for nutrient uptake,(0->1),stronger limitation, [-]
@@ -1380,11 +1380,11 @@ module NutUptakeMod
   !     ZCKI,PCKI,ZPKI,PZKI=N,P inhibition effect on N,P uptake
   !     dtPerPlantRootH2OUptake=water uptake at time step for gas flux calculations
   !
-  IF(RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    FZUP=AMIN1(RootNonstructElmConc_rpvr(ielmc,N,L,NZ)/(RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/ZCKI) &
-      ,safe_adb(RootNonstructElmConc_rpvr(ielmp,N,L,NZ),(RootNonstructElmConc_rpvr(ielmp,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/ZPKI)))
-    FPUP=AMIN1(RootNonstructElmConc_rpvr(ielmc,N,L,NZ)/(RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/PCKI) &
-      ,safe_adb(RootNonstructElmConc_rpvr(ielmn,N,L,NZ),(RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/PZKI)))
+  IF(RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    FZUP=AMIN1(RootNonstructElmConc_pvr(ielmc,N,L,NZ)/(RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/ZCKI) &
+      ,safe_adb(RootNonstructElmConc_pvr(ielmp,N,L,NZ),(RootNonstructElmConc_pvr(ielmp,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/ZPKI)))
+    FPUP=AMIN1(RootNonstructElmConc_pvr(ielmc,N,L,NZ)/(RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmp,N,L,NZ)/PCKI) &
+      ,safe_adb(RootNonstructElmConc_pvr(ielmn,N,L,NZ),(RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmp,N,L,NZ)/PZKI)))
   ELSE
     FZUP=0.0_r8
     FPUP=0.0_r8

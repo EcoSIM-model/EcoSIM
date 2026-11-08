@@ -11,7 +11,6 @@ module EcoSIMHistMod
   CHARACTER(len=16) :: DATAC(30,250,250)
   CHARACTER(len=16),target,allocatable :: DATAP(:,:,:)
   INTEGER, target, allocatable :: datapi(:,:,:)
-  CHARACTER(len=16),target,allocatable :: DATAM(:,:,:)
   CHARACTER(len=16),target,allocatable :: DATAZ(:,:,:)
   CHARACTER(len=16),target,allocatable :: OUTFILS(:,:,:)
   CHARACTER(len=16),target,allocatable :: OUTFILP(:,:,:,:)
@@ -33,7 +32,6 @@ module EcoSIMHistMod
 
   allocate(DATAP(JP,JY,JX))
   allocate(datapi(jp,jy,jx)); datapi=0
-  allocate(DATAM(JP,JY,JX))
   allocate(DATAZ(JP,JY,JX))
   allocate(OUTFILS(10,JY,JX))
   allocate(OUTFILP(10,JP,JY,JX))
@@ -50,7 +48,6 @@ module EcoSIMHistMod
 
   call destroy(datapi)
   call destroy(DATAP)
-  call destroy(DATAM)
   call destroy(DATAZ)
   call destroy(OUTFILP)
   call destroy(OUTFILS)

@@ -1,4 +1,6 @@
 set(ECOSIM_MOD_SOURCES
+    # Allocate transport workspaces before either standalone or coupled stepping.
+    ../Transport/Salt/TranspSaltDataMod.F90
     InitAllocMod.F90
 	StarteMod.F90
 	StartsMod.F90

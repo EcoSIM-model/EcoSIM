@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoSIM · Heat, vapor and gas resistances · Surface area partition</title>
+<style>
+:root{--ink:#172e36;--muted:#536872;--paper:#f5f5ef;--card:#fff;--line:#d6e0dd;--teal:#096b65;--blue:#25618c;--warm:#a34c27;--wash:#e9f3f0}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:20px}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1120px;margin:auto;padding:42px 28px 80px}h1,h2,h3{line-height:1.2;letter-spacing:-.025em}h1{font-size:clamp(2rem,5vw,3.6rem);max-width:900px;margin:.35em 0}h2{font-size:1.85rem;margin-top:0}h3{font-size:1.2rem;margin-top:1.6em}p{max-width:91ch}a{color:var(--teal);text-underline-offset:3px}code{font: .86em/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre{background:#132d36;color:#e2f2ec;padding:20px;border-radius:10px;overflow:auto;font-size:14px;line-height:1.65;white-space:pre-wrap}pre code{color:inherit;font:inherit}section{margin:26px 0;padding:32px;background:var(--card);border:1px solid var(--line);border-radius:16px}header{padding:12px 0 25px}.eyebrow{color:var(--teal);text-transform:uppercase;letter-spacing:.15em;font-size:.75rem;font-weight:750}.lead{font-size:1.23rem;max-width:80ch}.meta,.source,.small{font-size:.85rem;color:var(--muted)}nav{display:flex;flex-wrap:wrap;gap:9px}nav a{padding:7px 13px;background:white;border:1px solid var(--line);border-radius:30px;text-decoration:none;font-size:.9rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.box{padding:20px;border-radius:12px;background:var(--wash)}.box h3{margin-top:0}.note{border-left:4px solid var(--warm);padding:13px 19px;background:#fff5e9;border-radius:3px}.eq{font:1.02rem/1.9 ui-monospace,SFMono-Regular,Consolas,monospace;padding:15px 18px;border-left:3px solid var(--teal);background:#f0f6f4;overflow-x:auto;white-space:normal;margin:14px 0}.eq div{white-space:nowrap}table{border-collapse:collapse;width:100%;font-size:.91rem}th,td{padding:12px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{background:#edf3f1;font-weight:700}.scroll{overflow-x:auto}details{border-top:1px solid var(--line);padding:15px 0}summary{cursor:pointer;font-weight:650}ul,ol{padding-left:24px}li{margin:7px 0}.network{display:grid;gap:15px}.lane{display:grid;grid-template-columns:1.1fr auto 1.1fr auto 1.35fr;align-items:center;gap:10px}.node{border:1px solid var(--line);background:#f4f8f6;border-radius:9px;padding:15px;text-align:center}.node.r{border-color:#6daaa0;background:#e8f5f0}.node.lat{border-color:#9bbbd3;background:#edf5fc}.arrow{color:var(--teal);font-size:1.6rem}.label{font-size:.83rem;color:var(--muted);margin-bottom:4px}.controls label{display:block;font-weight:650;margin-bottom:15px}.controls input[type=range]{width:100%;accent-color:var(--teal);display:block}.control-value{float:right;color:var(--teal);font-variant-numeric:tabular-nums}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:10px 0}.metric{background:#edf4f1;padding:17px;border-radius:12px}.metric strong{display:block;font-size:1.65rem;font-variant-numeric:tabular-nums}.barrow{margin:15px 0}.track{height:16px;background:#e8ecea;border-radius:5px;overflow:hidden}.bar{height:100%;background:var(--warm);transition:width .15s}.bar.blue{background:var(--blue)}button{padding:8px 16px;background:white;border:1px solid var(--line);border-radius:8px;color:var(--ink);cursor:pointer}.foot{border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:.86rem}@media(max-width:740px){main{padding:20px 14px 50px}section{padding:22px 17px}.grid{grid-template-columns:1fr}.lane{grid-template-columns:1fr;gap:3px}.arrow{text-align:center;transform:rotate(90deg)}td,th{padding:10px}.eq{font-size:.89rem}}@media print{body{background:white;font-size:11pt}main{max-width:none;padding:0}section{border-radius:0;break-inside:auto;padding:18px}nav,.controls button{display:none}a{color:inherit}.grid{grid-template-columns:1fr 1fr}h2,h3{break-after:avoid}.eq,.box,table{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">EcoSIM · Source walkthrough</div>
+<h1>Heat, vapor and gas<br>exchange resistances</h1>
+<p class="lead">Each resistance needs an air endpoint and an exchange area. Canopies exchange with reference air; soil, litter and snow heat and vapor exchange with canopy air. Gas paths combine surface patches in parallel, then add the shared atmospheric segment once.</p>
+<p class="meta">Working-tree source inspected November 6, 2026 · Standalone model, prescribed phenology, and relevant ATS differences · All equations below describe the implementation, including its numerical limits.</p>
+<nav aria-label="Contents"><a href="#map">Exchange paths</a><a href="#aerodynamic">Aerodynamic resistance</a><a href="#stomata">Stomata</a><a href="#canopy">Canopy fluxes</a><a href="#area">Area partition</a><a href="#ground">Ground heat &amp; vapor</a><a href="#gas">Gas network</a><a href="#air">Canopy air</a><a href="#explore">Calculator</a><a href="#diagnostics">Diagnostics</a><a href="#sources">Sources</a></nav>
+</header>
+
+<section id="map">
+<h2>1. Which resistance is used?</h2>
+<div class="network" aria-label="Resistance paths from canopy to atmosphere">
+<div class="lane"><div class="node">Canopy temperature<br><i>T</i><sub>c</sub></div><div class="arrow">↔</div><div class="node r">Aerodynamic resistance<br><i>r</i><sub>heat</sub> = <i>r</i><sub>H₂O</sub>/0.92</div><div class="arrow">↔</div><div class="node">Reference atmosphere<br><i>T</i><sub>a</sub> · sensible heat</div></div>
+<div class="lane"><div class="node">Canopy liquid / snow<br>surface vapor concentration</div><div class="arrow">↔</div><div class="node lat"><i>r</i><sub>H₂O</sub> + <i>r</i><sub>surface</sub></div><div class="arrow">↔</div><div class="node">Reference atmosphere<br><i>q</i><sub>a</sub> · evaporation / sublimation</div></div>
+<div class="lane"><div class="node">Internal leaf water<br>leaf vapor concentration</div><div class="arrow">↔</div><div class="node lat"><i>r</i><sub>H₂O</sub> + <i>r</i><sub>s</sub>(turgor)</div><div class="arrow">↔</div><div class="node">Reference atmosphere<br><i>q</i><sub>a</sub> · transpiration</div></div>
+</div>
+<p>The arrows show transport pathways, not the sign convention. In the canopy solver the atmospheric endpoints are <code>TairK</code> and <code>VPA</code>. Soil, litter, and snow exchange against the effective canopy-air state <code>TKQ_col</code> and <code>VPQ_col</code>.</p>
+<div class="note"><strong>Flux signs:</strong> <code>HeatXAir2PCan_pft</code> and <code>CanopyEvapTransLHeat_pft</code> are positive <em>into</em> the canopy. A warm, transpiring canopy generally has negative sensible and latent heat. History fields <code>ECO_HeatS_col</code> and <code>ECO_LE_col</code> preserve this sign; they do not negate it to upward-positive.</div>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/UptakesMod.F90#L858">canopy conductances and fluxes</a>; <a href="../f90src/IOutils/HistData/HistUpdateColumn.F90#L238">history conversion</a>.</p>
+<h3>Water, heat and CO₂ resistance definitions</h3>
+<div class="scroll"><table><thead><tr><th>Quantity</th><th>Current implementation</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Neutral canopy resistance</td><td><code>RawIsoTCanopy2Atm_pft</code></td><td>Above-sink resistance plus PFT sheltering. The above-sink neutral floor is 0.00278 h/m = 10.008 s/m.</td></tr>
+<tr><td>Water-vapor resistance</td><td><code>RawH2OCanopy2Atm_pft</code></td><td>Iterated stability correction, with a 0.00139 h/m = 5.004 s/m floor and 0.9–1.1 previous-value envelope.</td></tr>
+<tr><td>Sensible-heat resistance</td><td><code>RawHeatCanopy2Atm_pft = RawH2OCanopy2Atm_pft / 0.92</code></td><td><code>BndlResistH2OToHeatRatio</code> implements the specified Chilton–Colburn analogy. At fixed area and gradient, heat conductance is 0.92 times the value calculated with the water resistance.</td></tr>
+<tr><td>Canopy-air CO₂ coefficient</td><td><code>BndlResistCO2ToH2ORatio × r_H2O</code> when the current water resistance is supplied</td><td>Conditional convergence-stage calls supply that resistance. The initial call calculates its coefficient from neutral resistance and the current temperature estimate.</td></tr>
+</tbody></table></div>
+<div class="eq"><div>r<sub>heat</sub> = r<sub>H₂O</sub> / 0.92</div><div>r<sub>CO₂</sub> = 1.34 r<sub>H₂O</sub> &nbsp; (supplied-resistance branch)</div></div>
+<p>The constants <code>BndlResistH2OToHeatRatio = 0.92</code> and <code>BndlResistCO2ToH2ORatio = 1.34</code> are distinct from the <strong>1.56 stomatal</strong> CO₂/H₂O conversion. Heat and vapor also use their matching resistances in the canopy-air feedback stores and their neutral/fallback resets.</p>
+<details><summary>Initial and convergence-stage CO₂ calculations</summary>
+<p><code>RootUptakes</code> calls <code>StomatalDynamics(yearIJ,NZ)</code> before the energy solve. With no optional resistance supplied, the routine uses <code>1.34 × max(0.00556, r₀/(1−10 Ri))</code> in h/m. This branch has a 20.016 s/m water-reference floor, equivalent to 26.82144 s/m after the CO₂ ratio. Later conditional calls at the convergence stages pass the current <code>RawH2OCanopy2Atm_pft(NZ)</code> and bypass that floor. These refreshes are not performed on every iteration.</p>
+<p><code>BLYR_RSC_CO2_pft</code> reports 1.34 times the stored water resistance, converted to s/m. This diagnostic describes the stored resistance; the initial CO₂ coefficient is evaluated separately before the energy solve.</p>
+</details>
+<p class="source"><a href="../f90src/Utils/EcoSimConst.F90#L34">ratio definitions</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L154">initial call</a> · <a href="../f90src/Plant_bgc/StomatesMod.F90#L249">optional CO₂ branch</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L868">water/heat update</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L1139">conditional refresh</a> · <a href="../f90src/IOutils/HistData/HistUpdatePlant.F90#L176">history</a>.</p>
+</section>
+
+<section id="aerodynamic">
+<h2>2. Build the aerodynamic resistance</h2>
+<h3>2.1 Geometry and wind give the neutral resistance</h3>
+<p><code>CalcBoundaryLayerProperties</code> computes displacement height <i>d</i>, roughness length <i>z</i><sub>0</sub>, and effective wind measurement height <i>z</i><sub>w</sub>. For a canopy with total structural surface area index <i>S</i> = <code>LeafStalkAreaAll_col / AREA3(NU)</code>, the geometry uses:</p>
+<div class="eq"><div><i>x</i> = exp(−0.5 <i>S</i>), &nbsp; <i>y</i> = 1 − <i>x</i></div><div><i>d</i> = <i>h</i> max[0, 1 − 2<i>y</i>/<i>S</i>]</div><div><i>z</i><sub>e</sub> = <i>h</i> max(0.05, <i>x y</i>)</div><div><i>z</i><sub>0</sub> = max(0.001 m, <i>z</i><sub>e</sub>, ground or snow roughness)</div></div>
+<p>The canopy formulas apply only when structural area is significant and canopy height reaches the snow surface; otherwise <i>d</i> and <i>z</i><sub>e</sub> are zero. With <code>iFlagRaiseZ0GbyVeg</code> on, <i>z</i><sub>w</sub> is measurement height plus canopy height; otherwise it is max(measurement height, <i>d</i> + 2 m).</p>
+<div class="eq"><div><i>r</i><sub>above,0</sub> = max[RAM, ln²((<i>z</i><sub>w</sub> − <i>d</i>)/<i>z</i><sub>0</sub>) / (0.168 <i>u</i><sub>w</sub>)]</div><div>RAM in SurfaceRadiationMod = 0.00278 h m⁻¹ ≈ 10.01 s m⁻¹</div></div>
+<p>Here wind <i>u</i><sub>w</sub> is in <strong>m h⁻¹</strong>, so resistance is <strong>h m⁻¹</strong>. The number 0.168 is the implementation's squared von Kármán coefficient. The later heat solver has a different floor (0.00139 h m⁻¹ ≈ 5.00 s m⁻¹). The standalone weather reader initially floors wind at 3600 m h⁻¹ (1 m s⁻¹), before subsequent forcing modifiers; the ATS interface converts its supplied m s⁻¹ to m h⁻¹. A negative Koppen code instead takes the special <code>RAM</code>, zero-stability path.</p>
+<p class="source"><a href="../f90src/Plant_bgc/SurfaceRadiationMod.F90#L125">Geometry, wind, and neutral resistance</a> · <a href="../f90src/Modelforc/WthrMod.F90#L257">standalone wind</a> · <a href="../f90src/ATSUtils/ATSEcoSIMAdvanceMod.F90#L206">ATS wind</a>.</p>
+
+<h3>2.2 Add the sheltering of taller canopies</h3>
+<p>For PFT <i>p</i>, <code>UpdateCanopyProperty</code> sums the PAR-absorption fractions of PFTs taller than <i>h</i><sub>p</sub> + <i>z</i><sub>0</sub>. Their sum sets the attenuation coefficient α = 2 Σ<i>f</i><sub>PAR,taller</sub>. The extra resistance from the PFT top to the sink height (<i>d</i> + <i>z</i><sub>0</sub>) is:</p>
+<div class="eq"><div><i>K</i> = RawIsoTSurf2CanopyHScal_col</div><div><i>r</i><sub>p→sink,0</sub> = min[RACX, max(0, <i>h</i> exp(α) <i>K</i>/α</div><div>&emsp;× {exp(−α <i>h</i><sub>p</sub>/<i>h</i>) − exp[−α(<i>d</i>+<i>z</i><sub>0</sub>)/<i>h</i>]})]</div><div><i>r</i><sub>a,0,p</sub> = <i>r</i><sub>above,0</sub> + <i>r</i><sub>p→sink,0</sub></div></div>
+<p>When the required geometry or attenuation is absent, this extra term is zero; for a PFT without active leaf/stalk area it is <code>RACX</code>. In this canopy module <code>RACX = 0.0278 h m⁻¹</code> (100.08 s m⁻¹): the equation <em>caps the added shelter resistance</em>. It is not a maximum for the total resistance.</p>
+<details><summary>How the within-canopy factor K is calculated</summary><div class="eq"><div><i>H</i><sub>norm</sub> = (<i>h</i>−<i>d</i>)/<i>z</i><sub>0</sub></div><div><i>u</i><sub>h</sub> = <i>u</i><sub>w</sub> ln(<i>H</i><sub>norm</sub>)/ln[(<i>z</i><sub>w</sub>−<i>d</i>)/<i>z</i><sub>0</sub>]</div><div><i>K</i> = ln(<i>H</i><sub>norm</sub>)/[0.168(<i>h</i>−<i>d</i>)<i>u</i><sub>h</sub>]</div></div><p>These expressions are used for <i>H</i><sub>norm</sub> &gt; 1; otherwise <i>K</i> is zero. Its dimensional role in the equations is h m⁻², despite some aliases labelling it h m⁻¹.</p></details>
+<p class="source"><a href="../f90src/Plant_bgc/UptakesMod.F90#L404">PFT shelter resistance</a> · <a href="../f90src/Plant_bgc/SurfaceRadiationMod.F90#L161">within-canopy factor</a> · <a href="../f90src/Plant_bgc/UptakePars.F90#L45">canopy constants</a>.</p>
+
+<h3>2.3 Correct for thermal stability during the energy solve</h3>
+<div class="eq"><div>RIB = 1.27 × 10⁸ (<i>z</i><sub>w</sub> − <i>z</i><sub>0</sub>)/(<i>u</i><sub>w</sub>² <i>T</i><sub>a</sub>)</div><div>Ri = max[−0.3, min(0.075, RIB (<i>T</i><sub>a</sub> − <i>T</i><sub>c</sub>))]</div><div><i>r</i><sub>target</sub> = <i>r</i><sub>a,0,p</sub> / (1 − 10 Ri)</div><div><i>r</i><sub>a,new</sub> = max[0.00139, 0.9 <i>r</i><sub>previous</sub>, min(1.1 <i>r</i><sub>previous</sub>, <i>r</i><sub>target</sub>)]</div></div>
+<p>A colder canopy gives Ri &gt; 0 and increases the target resistance; a warmer canopy gives Ri &lt; 0 and lowers it. The Ri limits keep the denominator between 0.25 and 4. Thus the unconstrained target spans 4 times to one-quarter of the neutral value. The actual canopy update moves within a 0.9–1.1 envelope per iteration, subject to its floor. The first iteration uses the neutral resistance as its previous value. Here r<sub>a</sub> denotes the water-vapor resistance; each update also sets r<sub>heat</sub> = r<sub>a</sub>/0.92. The neutral 10.008 s/m minimum can therefore fall to the corrected 5.004 s/m floor under unstable conditions; these are different stages of the calculation.</p>
+<p class="source"><a href="../f90src/Plant_bgc/SurfaceRadiationMod.F90#L176">RIB definition</a> · <a href="../f90src/Minimath/MiniMathMod.F90#L418">Ri clipping</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L858">iterative canopy correction</a>.</p>
+</section>
+
+<section id="stomata">
+<h2>3. Calculate stomatal resistance</h2>
+<p>Stomatal resistance is computed in two stages. The first ties its minimum to potential photosynthetic CO₂ demand. The second increases resistance as canopy turgor declines.</p>
+<h3>Photosynthetic minimum</h3>
+<div class="eq"><div><i>r</i><sub>CO₂,min</sub> = <i>f</i><sub>PAR,live</sub> ΔCO₂ <i>A</i> / (CH₂O × 3600), &nbsp; if CH₂O is significant</div><div><i>r</i><sub>s,min</sub> = min[<i>r</i><sub>cuticle</sub>, max(0.00278, <i>r</i><sub>CO₂,min</sub>/1.56)]</div></div>
+<p><code>PhotoActivePFT</code> obtains <code>CH2O</code> from the canopy photosynthesis routines. If fixation is negligible it sets the CO₂ minimum to 1.56 times cuticular resistance. At night or without sufficient leaf area, <code>StomatalDynamics</code> directly sets the H₂O minimum to cuticular resistance. The divisor 1.56 converts the CO₂ resistance to H₂O resistance. <code>RSMY_stomaCO2</code> sets the implemented H₂O floor at 0.00278 h m⁻¹ (about 10.01 s m⁻¹).</p>
+<h3>Turgor response inside each energy/water iteration</h3>
+<div class="eq"><div><i>s</i> = exp(−Ψ<sub>turgor</sub>/RCS)</div><div><i>r</i><sub>s</sub> = <i>r</i><sub>s,min</sub> + (<i>r</i><sub>cuticle</sub> − <i>r</i><sub>s,min</sub>) <i>s</i></div></div>
+<p>At zero turgor, <i>r</i><sub>s</sub> reaches the cuticular maximum. With greater positive turgor it approaches the photosynthetic minimum. <code>RCS_pft</code> is an input trait in MPa. <code>H2OCuticleResist_pft</code> is converted from input seconds per meter to hours per meter during initialization.</p>
+<div class="box"><strong>The connection to CCPOLT.</strong> <code>update_osmo_turg_pressure</code> computes osmotic potential using <code>CanopyNonstOMConc_pft</code>, then sets Ψ<sub>turgor</sub> = max(0, Ψ<sub>canopy</sub> − Ψ<sub>osmotic</sub>). Consequently, the prescribed <code>CCPOLT</code> parameter affects latent heat indirectly through turgor and <i>r</i><sub>s</sub>. It does not enter the aerodynamic resistance formula directly.</div>
+<p class="source"><a href="../f90src/Plant_bgc/StomatesMod.F90#L202">StomatalDynamics</a> · <a href="../f90src/Plant_bgc/StomatesMod.F90#L1059">photosynthetic minimum</a> · <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90#L555">CalcStomataResist4H2O</a> · <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90#L52">osmotic/turgor calculation</a> · <a href="../f90src/Ecosim_mods/StartqMod.F90#L179">cuticle conversion</a>.</p>
+</section>
+
+<section id="canopy">
+<h2>4. Turn resistance into canopy heat flux</h2>
+<h3>Effective area</h3>
+<p>LAI and SAI inputs are area indices in m²/m². Native canopy leaf and stalk areas are cell totals in m²: area index × horizontal cell area. Standalone prescribed phenology and the ATS input path convert their indices to these totals before the shared area/profile calculations.</p>
+<p>The solver does not multiply conductance by every PFT's full ground area. It computes <code>FracGridPFTCovered</code> (<i>f</i><sub>p</sub>) and uses <i>A</i><sub>eff</sub> = <i>f</i><sub>p</sub> × grid area:</p>
+<div class="eq"><div><i>f</i><sub>p</sub> = (<i>active leaf/stalk area</i><sub>p</sub> / <i>all leaf/stalk area</i>)</div><div>&emsp;× min(1, 0.5 × column LAI)</div></div>
+<p>If total structural area is negligible, the fallback is the PFT population fraction; if population is also negligible, it is 1/<code>NP</code>. This is the implemented exchange-area weighting, not simply the fraction of PAR absorbed.</p>
+<div class="grid">
+<div class="box"><h3>Sensible heat</h3><div class="eq"><div><i>G</i><sub>H</sub> = <i>C</i><sub>air</sub> <i>A</i><sub>eff</sub> / <i>r</i><sub>heat</sub></div><div><i>H</i><sub>in</sub> = <i>G</i><sub>H</sub> (<i>T</i><sub>a</sub> − <i>T</i><sub>c</sub>)</div></div><p><i>C</i><sub>air</sub> = 0.00125 MJ m⁻³ K⁻¹. The result is MJ cell⁻¹ h⁻¹ in the hourly canopy equations. No stomatal term is added to this sensible-heat resistance.</p></div>
+<div class="box"><h3>Vapor transport</h3><div class="eq"><div><i>G</i><sub>v</sub> = <i>A</i><sub>eff</sub>/<i>r</i><sub>a</sub></div><div><i>X</i> = <i>G</i><sub>v</sub>(<i>q</i><sub>a</sub> − <i>q</i><sub>leaf</sub>)</div><div><i>q</i><sub>leaf</sub> = q<sub>sat</sub>(<i>T</i><sub>c</sub>) exp[18 max(Ψ<sub>c</sub>,−5000)/(R <i>T</i><sub>c</sub>)]</div></div><p><code>vapsat</code> returns vapor mass concentration in metric tonnes m⁻³. <i>G</i><sub>v</sub> is m³ h⁻¹ after area scaling, not m h⁻¹.</p></div>
+</div>
+<p>In the vapor equations below, r<sub>a</sub> means <code>RawH2OCanopy2Atm_pft</code>; sensible heat uses the separate <code>RawHeatCanopy2Atm_pft</code>.</p>
+<h3>Intercepted water is used before transpiration</h3>
+<ol>
+<li>Potential canopy-surface exchange is <i>E</i><sub>surf,pot</sub> = <i>X r</i><sub>a</sub>/(<i>r</i><sub>a</sub> + 0.0139). For positive <i>X</i>, this is dew/condensation and transpiration demand is set to zero.</li>
+<li>For negative <i>X</i>, the model first evaporates held liquid water, limited by <code>WatHeldOnCanopy_pft</code>, then sublimates held snow, limited by <code>SnowOnCanopy_pft</code>.</li>
+<li>The remaining aerodynamic demand is <i>X</i><sub>rem</sub> = <i>X</i> − <i>E</i><sub>surface,accepted</sub>. Transpiration is <i>E</i><sub>trans</sub> = <i>X</i><sub>rem</sub> <i>r</i><sub>a</sub>/(<i>r</i><sub>a</sub> + <i>r</i><sub>s</sub>). It is set to zero if no connected root–canopy hydraulic path is available.</li>
+</ol>
+<p>For a dry canopy with no intercepted-water exchange, the third step reduces to <i>E</i><sub>trans</sub> = <i>A</i><sub>eff</sub>(<i>q</i><sub>a</sub> − <i>q</i><sub>leaf</sub>)/(<i>r</i><sub>a</sub> + <i>r</i><sub>s</sub>). For a wet canopy the actual code uses the remaining demand, so the two vapor paths must not be independently added at their full potential rates.</p>
+<div class="eq"><div><i>LE</i><sub>in</sub> = 2465 (<i>E</i><sub>trans</sub> + <i>E</i><sub>liquid</sub>) + 2798.55 <i>E</i><sub>snow</sub></div></div>
+<p>The latent heats are MJ per metric tonne of water. Water mass in tonnes is numerically equivalent to liquid-water volume in m³ under the model's density convention. Separate <code>HeatEvapSens</code> terms carry the sensible enthalpy of the transferred water; they are distinct from the turbulent sensible flux <i>H</i><sub>in</sub>.</p>
+<details><summary>Temperature, hydraulic coupling, and fallback</summary><p><code>CanopyEnergyH2OIter_func</code> updates temperature, stability-dependent aerodynamic resistance, osmotic/turgor state, stomatal resistance, transpiration, and root water exchange in a coupled iteration. Radiation and heat storage also enter the temperature equation. The trial canopy temperature is restricted to ±5 K of air temperature. The iteration limit is 200. A rejected/divergent solution can enter <code>HandlingDivergence</code>; inactive canopy geometry enters <code>HandleBareSoil</code>. Those paths can zero exchange and reset resistance to its neutral value, so a stored resistance alone does not prove an active heat flux.</p></details>
+<p class="source"><a href="../f90src/Plant_bgc/UptakesMod.F90#L228">exchange-area fraction</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L817">conductances and coupled iteration</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L894">surface exchange, water limits, and transpiration</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L1589">accepted sensible heat</a> · <a href="../f90src/Utils/EcoSimConst.F90#L28">latent heat constants</a>.</p>
+</section>
+
+<section id="area">
+<h2>5. Partition the ground area before combining paths</h2>
+<p>Let <strong>A</strong> be horizontal cell area, <strong>s</strong> = <code>FracSurfSnowCovered_col</code>, and <strong>l</strong> = <code>FracSurfByLitR_col</code>. Snow is an overlay on the soil/litter footprint. Litter cover is conditional on the ground footprint <em>before</em> the snow partition; l and s do not sum to one. The implementation uses products of fractions for their overlap, without resolving a spatial map of which patches snow covers.</p>
+<div class="eq"><div>s = min[1, √(SnowDepth / 0.075 m)], &nbsp; snow-free fraction = 1−s</div><div>l = 1−FracSurfBareSoil_col</div></div>
+<p><code>PartLitSoilFractionM</code> calculates l from the litter thermal-presence test, litter carbon per area and mobile surface water. It can update each surface substep; s is set by the existing hourly surface partition.</p>
+<div class="scroll"><table><thead><tr><th>Physical patch</th><th>Fraction of full cell</th><th>Heat/vapor atmospheric exchange</th></tr></thead><tbody>
+<tr><td>Snow-free bare soil</td><td>(1−s)(1−l)</td><td>Soil surface ↔ canopy air, soil-temperature stability correction</td></tr>
+<tr><td>Snow-free litter</td><td>(1−s)l</td><td>Litter surface ↔ canopy air, litter-temperature stability correction</td></tr>
+<tr><td>Snow over bare soil</td><td>s(1−l)</td><td rowspan="2">Snow surface ↔ canopy air. Together these two patches have area fraction s. Soil/litter beneath exchange internally with the snowpack.</td></tr>
+<tr><td>Snow over litter</td><td>sl</td></tr>
+</tbody></table></div>
+<div class="eq"><div>(1−s)(1−l) + (1−s)l + s(1−l) + sl = 1</div></div>
+<p>Thus the direct atmospheric <strong>heat/water</strong> branches use areas A(1−s)(1−l), A(1−s)l and As. Snow-covered soil and litter are not additionally exposed to canopy air through their snow-free heat/vapor branches. Internal soil–litter–snow heat and water transfers remain in their own balance equations.</p>
+<h3>Gas exchange has a second ground-cover definition</h3>
+<p>Soil gas transport uses <strong>b</strong> = <code>FracAsExposedSoil_col</code> and <strong>e</strong> = <code>FracEffAsLitR_col</code> = 1−b. With thermally significant litter/surface material, the current code subtracts a normalized mobile-water footprint from the geometric bare fraction:</p>
+<div class="eq"><div>u = min[1, max(0, mobile_surface_water / surface_water_capacity)]</div><div>b = max(0, (1−l)−u), &nbsp; e = 1−b</div><div>Without thermally significant surface material: b = 1, e = 0</div></div>
+<p>Consequently e can exceed l. It is the effective litter/free-water cover for the <strong>soil gas</strong> network, not a replacement for geometric litter area in every process. Its four gas-path fractions are (1−s)b, (1−s)e, sb and se, also summing to one. Atmospheric dissolution into litter water still uses the geometric footprint <strong>Al</strong>; it has a different concentration endpoint from the soil gas pool.</p>
+<div class="note"><strong>Two rules:</strong> add resistances along one path; add area-weighted conductances across parallel paths. An area fraction already included in a coefficient must not be applied a second time by its consumer.</div>
+<h3>Explore the four-patch overlap</h3>
+<p class="small">Illustration for thermally significant surface material. Adjust l, s and u independently to see the bookkeeping; these controls do not reproduce the model's coupled cover/depth calculation.</p>
+<div class="grid"><div class="controls">
+<label for="snowArea">Snow fraction s <span id="snowAreaVal" class="control-value"></span><input id="snowArea" type="range" min="0" max="1" value=".4" step=".01"></label>
+<label for="litterArea">Geometric litter fraction l <span id="litterAreaVal" class="control-value"></span><input id="litterArea" type="range" min="0" max="1" value=".6" step=".01"></label>
+<label for="waterArea">Normalized mobile-water footprint u <span id="waterAreaVal" class="control-value"></span><input id="waterArea" type="range" min="0" max="1" value=".1" step=".01"></label>
+<button id="resetArea" type="button">Reset area inputs</button>
+<p id="effectiveCover" class="small" aria-live="polite"></p>
+</div><div><div class="scroll"><table><thead><tr><th>Patch</th><th>Geometric</th><th>Soil gas</th></tr></thead><tbody>
+<tr><td>Snow-free bare</td><td id="geom0"></td><td id="gas0"></td></tr>
+<tr><td>Snow-free covered</td><td id="geom1"></td><td id="gas1"></td></tr>
+<tr><td>Snow over bare</td><td id="geom2"></td><td id="gas2"></td></tr>
+<tr><td>Snow over covered</td><td id="geom3"></td><td id="gas3"></td></tr>
+<tr><th>Total</th><td id="geomSum"></td><td id="gasSum"></td></tr>
+</tbody></table></div><p class="small">Fractions are percentages of the full horizontal cell. In the heat/vapor calculation the two snow patches form one atmospheric snow-surface branch.</p></div></div>
+<p class="source"><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L261">snow partition</a> · <a href="../f90src/HydroTherm/PhysData/PhysPars.F90#L31">full-cover depth</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90#L43">geometric litter cover</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L1246">effective gas cover</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L491">heat/water area factors</a>.</p>
+</section>
+
+<section id="ground">
+<h2>6. Ground heat and vapor: local air endpoints</h2>
+<p><code>SurfaceResistances</code> constructs the neutral within-canopy resistance <code>RawIsoTSurf2SinkZ_col</code>, using α<sub>g</sub> = 2(1−<code>FracSWRad2Grnd_col</code>) and a 0.0139 h/m cap on that within-canopy term. The local floor is RAM = 0.00139 h/m. The above-sink atmospheric resistance is excluded from the following neutral bases:</p>
+<div class="eq"><div>r<sub>soil,0</sub> = max(RAM, RawIsoTSurf2SinkZ_col)</div><div>r<sub>snow,0</sub> = r<sub>soil,0</sub></div><div>r<sub>litter,0</sub> = r<sub>soil,0</sub> + ResistanceLitrSurf</div><div>ResistanceLitrSurf = 0.0139 h/m = 50.04 s/m</div></div>
+<p>Soil, litter and snow each calculate Ri using canopy-air temperature and their own surface temperature, then update their own local resistance with a 0.8–1.2 previous-value envelope and RAM floor. Litter pore diffusion is a separate material resistance used in the gas network; it is not added to the bare-soil heat branch.</p>
+<div class="scroll"><table><thead><tr><th>Surface</th><th>Local sensible-heat resistance</th><th>Additional vapor resistance</th></tr></thead><tbody>
+<tr><td>Bare soil</td><td><code>RawH2OSoil2CanAir_col</code></td><td>Standalone <code>RSoilEvap = RZ = 0.0139 h/m</code>. ATS uses max[RZ, exp(8.206−4.255 × saturation)/3600].</td></tr>
+<tr><td>Litter surface</td><td><code>RawH2OLitr2CanAir_col</code></td><td><code>RZ = 0.0139 h/m</code></td></tr>
+<tr><td>Snow surface</td><td><code>RawH2OSnow2CanAir_col</code></td><td><code>RZ = 0.0139 h/m</code></td></tr>
+</tbody></table></div>
+<p>For ground surfaces the current implementation uses the same local boundary resistance for sensible heat and vapor before adding the vapor surface term. The 0.92 heat conversion applies to the canopy branch. Litter's neutral boundary-film term and its extra evaporation resistance are separate implemented terms, both with value 0.0139 h/m.</p>
+<h3>Area and substep time are already in the coefficients</h3>
+<div class="eq"><div>K<sub>v,j</sub> = A Δt f<sub>j</sub> / (r<sub>j</sub> + r<sub>evap,j</sub>)</div><div>K<sub>H,j</sub> = C<sub>air</sub> A Δt f<sub>j</sub> / r<sub>j</sub></div><div>Δm<sub>in,j</sub> = K<sub>v,j</sub> (q<sub>q</sub>−q<sub>surface,j</sub>)</div><div>ΔH<sub>in,j</sub> = K<sub>H,j</sub> (T<sub>q</sub>−T<sub>surface,j</sub>)</div></div>
+<p>Use the geometric fractions from the preceding table. <code>AScaledCdWOverSoil_col</code> and <code>AScaledCdHOverSoil_col</code> already contain A Δt(1−s)(1−l). Their litter counterparts contain A Δt(1−s)l × <code>XNPR</code>; snow counterparts contain A Δt s × <code>XNPS</code>. Heat prefactors also contain C<sub>air</sub>. Δt is <code>dts_HeatWatTP</code> in hours; XNPR/XNPS scale inner litter/snow steps (0.99999 divided by their counts). K<sub>v</sub> has units m³ and K<sub>H</sub> MJ/K; resulting transfers are water mass or MJ per cell per substep, accumulated over the hour.</p>
+<p>Each surface has its own vapor concentration, temperature and water-availability limits. At different gradients, the model sums their actual fluxes; a single harmonic resistance cannot reproduce all heat/vapor branches without retaining those different driving states. Evaporation is donor-limited; snow liquid evaporates before dry snow sublimates with its distinct latent heat.</p>
+<p class="source"><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L409">neutral local bases and area factors</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L610">soil correction and conductances</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90#L323">litter</a> · <a href="../f90src/HydroTherm/SnowPhys/SnowPhysMod.F90#L877">snow</a>.</p>
+</section>
+
+<section id="gas">
+<h2>7. Gas exchange: parallel patches, one atmospheric segment</h2>
+<p>The gas coefficients connect soil gas or the litter-water interface to reference atmosphere. Let r<sub>a</sub> = <code>RawTAtm2CanopySinkZ_col</code> be the shared canopy-air-to-atmosphere resistance. For gas i, use local bare-soil resistance r<sub>b</sub>, litter aerodynamic/film resistance r<sub>l,i</sub>, snow-surface aerodynamic resistance r<sub>s</sub>, litter pore resistance p<sub>l,i</sub>, and snow pore resistance p<sub>s,i</sub>.</p>
+<p><code>CalcSnowBNDResistance</code> uses <strong>column-mean</strong> snow depth. For s &gt; 0, p<sub>s,i</sub>/s recovers the covered-patch pore resistance. Define r<sub>snow,i</sub> = r<sub>s</sub> + p<sub>s,i</sub>/s. Do not evaluate that division for s = 0.</p>
+<div class="scroll"><table><thead><tr><th>Soil gas path</th><th>Cell fraction</th><th>Local series resistance</th></tr></thead><tbody>
+<tr><td>Snow-free bare</td><td>(1−s)b</td><td>r<sub>b</sub></td></tr>
+<tr><td>Snow-free covered</td><td>(1−s)e</td><td>r<sub>l,i</sub> + p<sub>l,i</sub></td></tr>
+<tr><td>Snow-covered bare</td><td>sb</td><td>r<sub>snow,i</sub></td></tr>
+<tr><td>Snow-covered litter</td><td>se</td><td>r<sub>snow,i</sub> + p<sub>l,i</sub></td></tr>
+</tbody></table></div>
+<div class="eq"><div>g<sub>ground,i</sub> = (1−s)[b/r<sub>b</sub> + e/(r<sub>l,i</sub>+p<sub>l,i</sub>)]</div><div>&emsp;+ s[b/r<sub>snow,i</sub> + e/(r<sub>snow,i</sub>+p<sub>l,i</sub>)]</div><div>G<sub>soil,i</sub> = 1 / (r<sub>a</sub> + 1/g<sub>ground,i</sub>)</div><div>CondGasXSnowM_col(i,M,NY,NX) = A Δt G<sub>soil,i</sub></div></div>
+<p>The local g is in m/h per full ground footprint; its weights sum to one. Adding r<sub>a</sub> once after mixing avoids repeating the same atmospheric segment for every patch. Bare soil bypasses litter pores. At full snow the snow-surface film replaces the snow-free soil/litter films, while any underlying litter pores remain. At partial cover, a nearly impermeable snow patch does not close the snow-free bypass. Separate topsoil pore diffusion remains in the fast transport consumer.</p>
+<h3>The litter-water interface uses its own footprint</h3>
+<div class="eq"><div>g<sub>litter,i</sub> = (1−s)/r<sub>l,i</sub> + s/r<sub>snow,i</sub></div><div>GasXferCoeffLitr2Atm_col(i,M,NY,NX)</div><div>&emsp;= A Δt l<sub>M</sub> / (r<sub>a</sub> + 1/g<sub>litter,i</sub>)</div></div>
+<p>Here g<sub>litter,i</sub> is normalized per litter footprint, and the coefficient includes <strong>Al<sub>M</sub></strong>, not full area A. The aqueous-side <code>DFGcc</code> uses the same saved <code>FracSurfByLitRM_col(M,NY,NX)</code> before the two interface coefficients are coupled. Both coefficients include their timestep factors and have units m³. Liquid diffusivity, solubility and the donor-water cap remain in the slow consumer. Zero litter area gives zero litter atmospheric transfer without 0/0. Litter pores are not added to this surface-water endpoint; they remain in the underlying soil-gas path.</p>
+<p>The soil and litter coefficients connect different pools to atmosphere separately; they do not create a new prognostic shared gas concentration at canopy air. Their full-area and litter-area normalizations must therefore stay explicit.</p>
+<h3>Species dependence belongs to molecular components</h3>
+<div class="eq"><div>q<sub>i</sub> = D<sub>H₂O</sub>/D<sub>i</sub></div><div>p<sub>l,i</sub> = q<sub>i</sub> p<sub>l,H₂O</sub>, &nbsp; p<sub>s,i</sub> = q<sub>i</sub> p<sub>s,H₂O</sub></div><div>r<sub>l,i</sub> = r<sub>l,aero</sub> + k<sub>i</sub> r<sub>l,film,H₂O</sub></div><div>k<sub>CO₂</sub> = 1.34, &nbsp; k<sub>other gases</sub> = q<sub>i</sub><sup>2/3</sup></div></div>
+<p>The explicit litter film is separated from the current H₂O litter resistance in its neutral proportions: r<sub>film,H₂O</sub> = r<sub>l,current</sub> × <code>ResistanceLitrSurf</code>/(r<sub>soil,0</sub>+<code>ResistanceLitrSurf</code>), and r<sub>l,aero</sub> is the remainder. This assumes the existing bounded H₂O stability multiplier acts on both terms together and preserves the H₂O total exactly. Bare-soil and snow local resistances, including their RAM floor, retain their aerodynamic treatment; no separate molecular film was introduced for them.</p>
+<p>Shared aerodynamic terms, including r<sub>a</sub>, are not multiplied by gas diffusivity ratios. Litter/snow pore resistances keep their material-temperature scaling; the common <code>TEFGASDIF(T)</code> cancels from the species ratio at the same material temperature. The eight physical gases use the current diffusivity parameters; banded NH₃ uses the NH₃ surface coefficient.</p>
+<h3>Why assemble after every surface substep M?</h3>
+<p>Local stability resistances, surface cover and snow state can change during the surface solve. <code>UpdateSurfaceGasConductancesM</code> runs after each surface substep updates them and stores both gas coefficients with dimensions <code>(gas,M,NY,NX)</code>. Transport later reads the corresponding M rather than reusing the final substep's coefficient. The fast handoff passes the stored species coefficients and applies its gas-cycle time factor. These hourly work arrays are reconstructed before transport and need no persistent restart field.</p>
+<p><code>ResistGrndGas2CanAir_col = 1/g_ground,H₂O</code> and <code>CondGasXSurf_col = 1/(r_a + 1/g_ground,H₂O)</code> remain scalar H₂O-reference diagnostics. Actual gas exchange consumes the species-indexed arrays.</p>
+<p class="source"><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L2029">species assembly</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L2086">four-patch helper</a> · <a href="../f90src/HydroTherm/SnowPhys/SnowPhysMod.F90#L1435">snow pores</a> · <a href="../f90src/Transport/Nonsalt/TranspNoSaltMod.F90#L426">fast handoff</a> · <a href="../f90src/Transport/Nonsalt/TranspNoSaltSlowMod.F90#L1347">litter interface</a>.</p>
+</section>
+
+<section id="air">
+<h2>8. Effective canopy air feeds back on ground exchange</h2>
+<p>Ground exchange does not simply reuse the reference-air state. <code>SetCanopyProperty</code> predicts <code>TKQ_col</code> and <code>VPQ_col</code> from the completed hour's resistance-weighted sensible and latent exchange stores. It uses frozen-state derivatives to stabilize that prediction:</p>
+<div class="eq"><div><i>x</i><sub>q</sub> = [<i>x</i><sub>a</sub> − (<i>F</i>−<i>D x</i><sub>ref</sub>)/<i>C</i>] / (1+<i>D</i>/<i>C</i>)</div></div>
+<p>For temperature, <i>C</i> = <i>C</i><sub>air</sub> × cell area, <i>F</i> = <code>TSHX_col</code>, and <i>D</i> = <code>dSensHeatdTKQ_col</code>. For vapor concentration, <i>C</i> = latent heat × cell area, <i>F</i> = <code>TLEX_col</code>, and <i>D</i> = <code>dLatHeatdVPQ_col</code>. Without a usable slope/reference pair, the code falls back to <i>x</i><sub>q</sub> = <i>x</i><sub>a</sub> − <i>F</i>/<i>C</i>. Water-limited surface branches contribute zero local latent derivative when their donor limit is binding.</p>
+<p>Canopy exchange also adds flux × effective above-sink resistance to <code>Air_Heat_Sens_store_col</code> and <code>Air_Heat_Latent_store_col</code>. The sensible store uses the heat resistance, while the latent store uses the water resistance. Ground fluxes use local resistances against TKQ/VPQ, and their feedback weights contain the separate atmospheric segment. This is why changes to canopy and surface resistances can influence the next ground-surface air state as well as their immediate flux.</p>
+<p class="source"><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L269">effective-air predictor</a> · <a href="../f90src/Plant_bgc/UptakesMod.F90#L272">canopy resistance-weighted stores</a> · <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90#L647">water-limited derivative</a>.</p>
+</section>
+
+<section id="explore">
+<h2>9. Explore resistance at fixed gradients</h2>
+<p>This small calculator evaluates the canopy resistance-to-flux equations for a <strong>dry canopy with an available hydraulic pathway</strong>. It holds the temperature and vapor gradients fixed. It does not run the coupled EcoSIM solver or predict final temperatures, root uptake, interception, or ecosystem energy partition.</p>
+<div class="grid">
+<div class="controls">
+<label for="ra">Water-vapor boundary resistance <span id="raVal" class="control-value"></span><input id="ra" type="range" min="5.004" max="200" value="40" step=".001"></label>
+<label for="turgor">Canopy turgor <span id="turgorVal" class="control-value"></span><input id="turgor" type="range" min="0" max="1" value=".3" step=".01"></label>
+<label for="cover">Exchange-area fraction <span id="coverVal" class="control-value"></span><input id="cover" type="range" min="0" max="1" value=".7" step=".01"></label>
+<p class="small">Illustrative fixed inputs: r<sub>s,min</sub> = 30 s m⁻¹, r<sub>cuticle</sub> = 5000 s m⁻¹, RCS = 0.1 MPa, T<sub>c</sub> − T<sub>a</sub> = 2 K, q<sub>leaf</sub> − q<sub>a</sub> = 0.005 kg m⁻³. These are calculator assumptions, not claims about the PFT parameter file.</p>
+<button id="reset" type="button">Reset inputs</button>
+</div>
+<div aria-live="polite">
+<div class="metrics"><div class="metric">Stomatal resistance<strong id="rsVal"></strong><span class="small">s m⁻¹</span></div><div class="metric">Dry-path total resistance<strong id="totalVal"></strong><span class="small">r<sub>a</sub> + r<sub>s</sub>, s m⁻¹</span></div></div>
+<div class="barrow"><span>Sensible H<sub>up</sub>: <strong id="hVal"></strong> W m⁻²</span><div class="track"><div id="hBar" class="bar"></div></div></div>
+<div class="barrow"><span>Latent LE<sub>up</sub>: <strong id="leVal"></strong> W m⁻²</span><div class="track"><div id="leBar" class="bar blue"></div></div></div>
+<p class="small">Both bars use a 0–400 W m⁻² scale. Displayed values are <strong>upward-positive</strong> for readability; model-signed fluxes are their negatives.</p>
+<div class="eq"><div>r<sub>heat</sub> = r<sub>a</sub>/0.92; &nbsp; H<sub>up</sub> = 1250 f × 2 / r<sub>heat</sub></div><div>LE<sub>up</sub> = 2.465 × 10⁶ f × 0.005 / (r<sub>a</sub>+r<sub>s</sub>)</div></div>
+</div>
+</div>
+<noscript><p>Enable JavaScript for the calculator. The rest of this document, including every equation and source link, is readable without it.</p></noscript>
+</section>
+
+<section id="diagnostics">
+<h2>10. What to check in a simulation</h2>
+<div class="scroll"><table><thead><tr><th>History field</th><th>Meaning / conversion</th></tr></thead><tbody>
+<tr><td><code>BLYR_RSC_H2O_pft</code></td><td>Actual <code>RawH2OCanopy2Atm_pft × 3600</code>, s m⁻¹. Optional history field.</td></tr>
+<tr><td><code>BLYR_RSC_HEAT_pft</code></td><td><code>RawHeatCanopy2Atm_pft × 3600</code>, s/m. Equals the stored water-vapor resistance divided by 0.92.</td></tr>
+<tr><td><code>BLYR_RSC_CO2_pft</code></td><td>1.34 × stored water-vapor resistance × 3600, s/m; distinguish from the initial stomatal-call fallback.</td></tr>
+<tr><td><code>STOM_RSC_H2O_pft</code></td><td>Actual <code>CanPStomaResistH2O_pft × 3600</code>, s m⁻¹. Optional history field.</td></tr>
+<tr><td><code>STOML_RSC_CO2_pft</code><br><code>STOML_MinRSC_CO2_pft</code></td><td>Actual/minimum H₂O stomatal resistance × 1.56 × 3600. The output is CO₂ resistance; divide by 1.56 to compare with H₂O resistance.</td></tr>
+<tr><td><code>TURG_CAN_pft</code><br><code>PSI_CAN_pft</code><br><code>CanopyNonstOMConc_pft</code></td><td>Canopy turgor (MPa), water potential (MPa), and nonstructural concentration (g/gC), useful for tracing stomatal closure.</td></tr>
+<tr><td><code>ECO_HeatS_col</code><br><code>ECO_LE_col</code></td><td>Hourly ecosystem heat ledgers × 10⁶/(3600 × cell area), W m⁻². Signs remain positive into the ecosystem; multiply by −1 for an upward-positive comparison.</td></tr>
+</tbody></table></div>
+<p>To add water, heat and stomatal resistance diagnostics:</p>
+<pre><code>hist_fincl1 = 'BLYR_RSC_H2O_pft','BLYR_RSC_HEAT_pft','STOM_RSC_H2O_pft'</code></pre>
+<p>Check the corrected resistance and temperature difference together. A higher resistance reduces flux at a fixed gradient, but the coupled solver can change the gradient. Also check effective canopy area, interception stores, active-PFT status, root hydraulic connectivity, and whether a fallback was used.</p>
+<div class="note"><strong>Prescribed phenology still solves these resistances.</strong> Both full and prescribed modes call <code>RootUptakes</code>, including <code>StomatalDynamics</code> and the coupled canopy energy/water solve. Prescribed LAI, SAI, height, population, and root geometry set its inputs; prescribing phenology does not prescribe a constant aerodynamic or stomatal resistance. Radiative-only/inactive paths need to be distinguished from an active plant energy solve.</div>
+<p class="source"><a href="../f90src/IOutils/HistData/HistRegisterPlant.F90#L157">history registration</a> · <a href="../f90src/IOutils/HistData/HistUpdatePlant.F90#L171">resistance output conversions</a> · <a href="../f90src/IOutils/HistData/HistUpdateColumn.F90#L238">heat output conversions</a> · <a href="../f90src/APIs/PlantMod.F90#L61">full/SP call paths</a>.</p>
+</section>
+
+<section id="sources">
+<h2>11. Source map and scope</h2>
+<p>These are the active files in the current CMake source lists. Links are relative to this document's <code>ecosim_knowledge/</code> directory. The #L fragments identify the inspected line; a plain browser may open the file without scrolling to that line.</p>
+<div class="scroll"><table><thead><tr><th>Source</th><th>Role</th></tr></thead><tbody>
+<tr><td><a href="../f90src/Plant_bgc/SurfaceRadiationMod.F90">SurfaceRadiationMod.F90</a></td><td>Canopy geometry, neutral aerodynamic resistance, within-canopy factor, RIB.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a></td><td>PFT shelter resistance, stability iterations, surface evaporation, transpiration, accepted sensible heat.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a> · <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a></td><td>Photosynthetic minimum resistance, turgor response, osmotic state.</td></tr>
+<tr><td><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90">SurfPhysMod.F90</a></td><td>Effective canopy air, local ground resistance, area partition and species-specific gas-path assembly.</td></tr>
+<tr><td><a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90">SurfLitterPhysMod.F90</a> · <a href="../f90src/HydroTherm/SnowPhys/SnowPhysMod.F90">SnowPhysMod.F90</a></td><td>Litter and snow atmospheric exchange, water limits, energy balances.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/UptakePars.F90">UptakePars.F90</a> · <a href="../f90src/HydroTherm/PhysData/PhysPars.F90">PhysPars.F90</a> · <a href="../f90src/Utils/EcoSimConst.F90">EcoSimConst.F90</a></td><td>Resistance floors/caps, surface resistance, latent heat constants.</td></tr>
+<tr><td><a href="../f90src/Transport/Nonsalt/TranspNoSaltMod.F90">TranspNoSaltMod.F90</a> · <a href="../f90src/Transport/Nonsalt/TranspNoSaltSlowMod.F90">TranspNoSaltSlowMod.F90</a></td><td>Species/M-indexed gas coefficients, topsoil pores, aqueous soil/litter interfaces and matching litter area.</td></tr>
+<tr><td><a href="../f90src/Minimath/MiniMathMod.F90">MiniMathMod.F90</a></td><td>Richardson-number clipping and saturation vapor mass concentration.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/ExtractsMod.F90#L391">ExtractsMod.F90</a> · <a href="../f90src/Balances/RedistMod.F90#L228">RedistMod.F90</a></td><td>Canopy and ground contributions to ecosystem heat ledgers.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/CMakeLists.txt">Plant source list</a> · <a href="../f90src/HydroTherm/SurfPhys/CMakeLists.txt">Surface source list</a> · <a href="../f90src/HydroTherm/SnowPhys/CMakeLists.txt">Snow source list</a></td><td>Confirms the implementation being described is compiled.</td></tr>
+</tbody></table></div>
+<p>This document explains atmospheric exchange resistances. Soil thermal conduction, root water resistance, snow/soil freeze–thaw energy, and radiation are included only where they couple to these exchange equations. Formula comments in the code reference Choudhury &amp; Monteith (1988) and Sellers et al. (1992); the explanations here were checked against the local executable assignments, not independently against those papers.</p>
+</section>
+<footer class="foot">Updated November 6, 2026 against the current working tree. Includes canopy heat/water separation, local ground endpoints, geometric/effective area partitions and component-wise gas transport. The calculators illustrate equations and area bookkeeping; they are not simulation results.</footer>
+</main>
+<script>
+const fields = ['ra','turgor','cover'];
+function update(){
+  const ra=+document.getElementById('ra').value, p=+document.getElementById('turgor').value, f=+document.getElementById('cover').value;
+  const rs=30+(5000-30)*Math.exp(-p/.1), h=1250*f*2/(ra/.92), le=2.465e6*f*.005/(ra+rs);
+  document.getElementById('raVal').textContent=ra.toFixed(1)+' s m⁻¹';
+  document.getElementById('turgorVal').textContent=p.toFixed(2)+' MPa';
+  document.getElementById('coverVal').textContent=f.toFixed(2);
+  document.getElementById('rsVal').textContent=rs.toFixed(1);
+  document.getElementById('totalVal').textContent=(ra+rs).toFixed(1);
+  document.getElementById('hVal').textContent=h.toFixed(1);
+  document.getElementById('leVal').textContent=le.toFixed(1);
+  document.getElementById('hBar').style.width=Math.min(100,h/400*100)+'%';
+  document.getElementById('leBar').style.width=Math.min(100,le/400*100)+'%';
+}
+fields.forEach(id=>document.getElementById(id).addEventListener('input',update));
+document.getElementById('reset').addEventListener('click',()=>{
+  [40,.3,.7].forEach((v,i)=>document.getElementById(fields[i]).value=v);update();
+});
+update();
+const areaFields = ['snowArea','litterArea','waterArea'];
+function updateArea(){
+  const [s,l,u]=areaFields.map(id=>+document.getElementById(id).value);
+  const b=Math.max(0,1-l-u), e=1-b;
+  areaFields.forEach((id,i)=>document.getElementById(id+'Val').textContent=[s,l,u][i].toFixed(2));
+  const geom=[(1-s)*(1-l),(1-s)*l,s*(1-l),s*l];
+  const gas=[(1-s)*b,(1-s)*e,s*b,s*e];
+  [geom,gas].forEach((values,j)=>{
+    const prefix=j?'gas':'geom';
+    values.forEach((value,i)=>document.getElementById(prefix+i).textContent=(100*value).toFixed(1)+'%');
+    document.getElementById(prefix+'Sum').textContent=(100*values.reduce((a,b)=>a+b,0)).toFixed(1)+'%';
+  });
+  document.getElementById('effectiveCover').textContent='Effective soil-gas cover: b = '+b.toFixed(2)+', e = '+e.toFixed(2)+'. Litter-water interface area remains A × '+l.toFixed(2)+'.';
+}
+areaFields.forEach(id=>document.getElementById(id).addEventListener('input',updateArea));
+document.getElementById('resetArea').addEventListener('click',()=>{
+  [.4,.6,.1].forEach((v,i)=>document.getElementById(areaFields[i]).value=v);updateArea();
+});
+updateArea();
+</script>
+</body>
+</html>

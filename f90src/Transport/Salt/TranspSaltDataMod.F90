@@ -1,5 +1,7 @@
 module TranspSaltDataMod
+  ! Own temporary salt-transport state and flux arrays for a configured mesh.
   use data_kind_mod, only : r8 => DAT_KIND_R8
+  use DebugToolMod, only: PrintInfo
   use GridConsts
   use SoilPropertyDataType
   use TracerIDMod
@@ -35,12 +37,19 @@ implicit none
   real(r8),allocatable ::  trcSalt_SnowDrift_flxM_col(:,:,:)                  !salt flux due to snow drifting at iteration M [mol d-2]
   real(r8),allocatable ::  trcSalt_Irrig_flxM_vr(:,:,:,:)                     !salt flux due to irrigation at iteration M [mol d-2]
 
-!----------------------------------------------------------------------
+!------------------------------------------------------------------------------------------
 
 contains
   subroutine InitTranspSaltData
-
+  ! Allocate zeroed transport workspaces after mesh and salt IDs are initialized.
   implicit none
+  character(len=*), parameter :: subname='InitTranspSaltData'
+
+  call PrintInfo('beg '//subname)
+
+  ! Micropore state includes surface litter at L=0; reaction fluxes are soil-only.
+  allocate(trcSalt_solml2_vr(idsalt_beg:idsaltb_end,0:JZ,JY,JX)); trcSalt_solml2_vr=0._r8
+  allocate(trcSalt_RGeoChem_flxM_vr(idsalt_beg:idsaltb_end,JZ,JY,JX)); trcSalt_RGeoChem_flxM_vr=0._r8
 
   allocate(trcSalt_Irrig_flxM_vr(idsalt_beg:idsaltb_end,JZ,JY,JX));trcSalt_Irrig_flxM_vr=0._r8
   allocate(AquaIonDifusivty2_vr(idsalt_beg:idsalt_mend,JZ,JY,JX));   AquaIonDifusivty2_vr=0._r8
@@ -66,13 +75,20 @@ contains
   allocate(trcSalt_Transp2Macp_flxM_vr(idsalt_beg:idsaltb_end,JZ,JY,JX));   trcSalt_Transp2Macp_flxM_vr=0._r8
   allocate(trcSalt_Precip2LitrM(idsalt_beg:idsalt_end,JY,JX));      trcSalt_Precip2LitrM=0._r8
   allocate(trcSalt_Precip2MicpM(idsalt_beg:idsaltb_end,JY,JX));     trcSalt_Precip2MicpM=0._r8
+  call PrintInfo('end '//subname)
   end subroutine InitTranspSaltData
 
-!----------------------------------------------------------------------
+!------------------------------------------------------------------------------------------
   subroutine DestructTranspSaltData
+  ! Release every workspace owned by InitTranspSaltData, permitting a new mesh.
   use abortutils, only : destroy
   implicit none
+  character(len=*), parameter :: subname='DestructTranspSaltData'
 
+  call PrintInfo('beg '//subname)
+
+  call destroy(AquaIonDifusivty2_vr)
+  call destroy(trcSalt_AquaAdv_flxM_snvr)
   call destroy(trcSalt_AquaADV_Snow2Litr_flxM)
   call destroy(trcSalt_AquaADV_Snow2Soil_flxM)
 
@@ -89,10 +105,14 @@ contains
   call destroy(trcSalt_FloXSurRof_flxM_2DH)
   call destroy(trcSalt_Mac2MicPore_flxM_vr)
   call destroy(trcSalt_Transp2Micp_flxM_vr)
+  call destroy(trcSalt_Transp2Macp_flxM_vr)
+  call destroy(trcSalt_Precip2LitrM)
+  call destroy(trcSalt_Precip2MicpM)
 
   call destroy(trcSalt_FloXSurRof_flxM_col)
   call destroy(trcSalt_SnowDrift_flxM_col)
   call destroy(trcSalt_Irrig_flxM_vr)
+  call PrintInfo('end '//subname)
   end subroutine DestructTranspSaltData
 
 end module TranspSaltDataMod

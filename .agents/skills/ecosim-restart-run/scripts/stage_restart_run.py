@@ -12,6 +12,8 @@ The parent case directory is never written to.  Input paths are rewritten to
 absolute paths; files named with --copy-input are copied so they can be edited.
 """
 import argparse
+import calendar
+from datetime import datetime, timedelta
 import json
 import re
 import shutil
@@ -20,7 +22,8 @@ import sys
 from pathlib import Path
 
 INPUT_KEYS = ("pft_file_in", "grid_file_in", "pft_mgmt_in", "clm_hour_file_in",
-              "clm_day_file_in", "soil_mgmt_in", "atm_ghg_in", "clm_factor_in")
+              "clm_day_file_in", "soil_mgmt_in", "atm_ghg_in", "clm_factor_in",
+              "sp_phenol_in")
 TIME_KEYS = ("stop_n", "stop_option", "rest_opt", "rest_frq", "delta_time")
 RESTART_NAME = re.compile(r"^(?P<case>.+)\.ecosim\.r\.(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})-(?P<s>\d+)\.nc$")
 
@@ -29,10 +32,31 @@ def active(line):
     return not line.lstrip().startswith("!")
 
 
+def strip_inline_comment(line):
+    """Remove namelist comments while retaining ! and escaped quotes in strings."""
+    quote = None
+    i = 0
+    while i < len(line):
+        char = line[i]
+        if quote:
+            if char == quote:
+                if i + 1 < len(line) and line[i + 1] == quote:
+                    i += 1
+                else:
+                    quote = None
+        elif char in "'\"":
+            quote = char
+        elif char == "!":
+            return line[:i]
+        i += 1
+    return line
+
+
 def get_value(text, key):
     """Last active assignment wins, as in Fortran namelist reads."""
     val = None
     for line in text.splitlines():
+        line = strip_inline_comment(line)
         m = re.match(rf"^\s*{key}\s*=\s*(.*?)\s*$", line, re.IGNORECASE)
         if m and active(line):
             val = m.group(1)
@@ -90,19 +114,34 @@ def compress_periods(seq):
     return fp, px, py
 
 
-def history_files_for_continue(rh_files):
+def history_files_for_continue(restart):
+    """Read history filenames from the master checkpoint, not its .rh* tapes."""
     try:
         import netCDF4
     except ImportError:
         sys.exit("continue mode needs netCDF4 to read history file names from .rh* files")
     names = []
-    for rh in rh_files:
-        with netCDF4.Dataset(rh) as nc:
-            for row in nc.variables["locfnh"][:]:
-                name = b"".join(c for c in row.filled(b"") if c).decode().strip()
-                if name:
-                    names.append(Path(name).name)
+    with netCDF4.Dataset(restart) as nc:
+        if "locfnh" not in nc.variables:
+            sys.exit(f"master checkpoint lacks history filenames (locfnh): {restart}")
+        for row in nc.variables["locfnh"][:]:
+            name = b"".join(c for c in row.filled(b"") if c).decode().strip(" \x00")
+            if name:
+                names.append(Path(name).name)
     return names
+
+
+def run_end_time(checkpoint, count, unit, step_seconds):
+    """Advance from the checkpoint, retaining time of day for calendar units."""
+    if unit == "nsteps":
+        return checkpoint + timedelta(seconds=count * step_seconds)
+    if unit == "ndays":
+        return checkpoint + timedelta(days=count)
+    months = count * (12 if unit == "nyears" else 1)
+    year, month0 = divmod(checkpoint.year * 12 + checkpoint.month - 1 + months, 12)
+    month = month0 + 1
+    return checkpoint.replace(year=year, month=month,
+                              day=min(checkpoint.day, calendar.monthrange(year, month)[1]))
 
 
 def main():
@@ -121,6 +160,8 @@ def main():
                     help="extra &ecosim assignment, value written verbatim (e.g. disp_planttrait=.true.)")
     ap.add_argument("--exe", type=Path, help="run this executable after staging")
     args = ap.parse_args()
+    if args.stop_n <= 0:
+        ap.error("--stop-n must be positive")
 
     nml_path, rst = args.namelist.resolve(), args.restart.resolve()
     case_dir, out = nml_path.parent, args.out.resolve()
@@ -138,9 +179,10 @@ def main():
     text = nml_path.read_text()
     parent_case = get_value(text, "case_name").strip("'\"")
     rst_year = int(m["y"])
-    rst_date = f"{m['y']}{m['m']}{m['d']}000000"
-    if int(m["s"]) != 0:
-        print(f"warning: checkpoint at {m['s']} s into the day; start_date keeps 00 h", file=sys.stderr)
+    if not 0 <= int(m["s"]) < 86400:
+        ap.error("checkpoint seconds must lie within its day")
+    checkpoint_time = datetime(int(m["y"]), int(m["m"]), int(m["d"])) + timedelta(seconds=int(m["s"]))
+    rst_date = checkpoint_time.strftime("%Y%m%d%H%M%S")
 
     # inputs: absolute paths, or copies the user can edit
     record = {"mode": args.mode, "parent_namelist": str(nml_path), "checkpoint": str(rst), "inputs": {}}
@@ -194,14 +236,28 @@ def main():
             sys.exit(f"no history restart files ({stem.split('.rh')[0]}.rh*.{tag}) next to the checkpoint")
         for f in [rst, *rh_files]:
             shutil.copy2(f, out / f.name)
-        for name in history_files_for_continue(rh_files):
+        for name in history_files_for_continue(rst):
             shutil.copy2(rst.parent / name, out / name)
         (out / "rpointer.esim").write_text(f"./{rst.name}\n")
         text = set_value(text, "continue_run", ".true.", "ecosim")
         record["copied"] = [f.name for f in rh_files]
 
-    text = set_value(text, "stop_option", f"'{args.stop_option}'", "ecosim_time")
-    text = set_value(text, "stop_n", str(args.stop_n), "ecosim_time")
+    # The standalone driver replays its clock from January 1 before loading
+    # the checkpoint. Its stop counter includes those skipped hours. Express
+    # the requested additional duration as an absolute model-step endpoint.
+    raw_step = get_value(text, "delta_time") or "1800."
+    step_seconds = float(raw_step.split("!", 1)[0].strip().replace("D", "E").replace("d", "e"))
+    if step_seconds <= 0:
+        ap.error("delta_time must be positive")
+    target_time = run_end_time(checkpoint_time, args.stop_n, args.stop_option, step_seconds)
+    origin = datetime(int(get_value(text, "start_date").strip("'\"")[:4]), 1, 1)
+    target_steps = (target_time - origin).total_seconds() / step_seconds
+    if not target_steps.is_integer() or target_steps <= 0:
+        ap.error("requested endpoint must align with the model timestep after its clock origin")
+    text = set_value(text, "stop_option", "'nsteps'", "ecosim_time")
+    text = set_value(text, "stop_n", str(int(target_steps)), "ecosim_time")
+    record.update(requested_stop_n=args.stop_n, requested_stop_option=args.stop_option,
+                  expected_end=target_time.isoformat(), expected_nstep=int(target_steps))
     for item in args.set:
         key, _, value = item.partition("=")
         text = set_value(text, key.strip(), value.strip(), "ecosim")
@@ -216,8 +272,12 @@ def main():
             rc = subprocess.call([str(args.exe.resolve()), "runfile.namelist"], cwd=out, stdout=fh, stderr=subprocess.STDOUT)
         body = log.read_text(errors="replace")
         loaded = "restFile_open Successfully" in body
-        print(f"exit={rc} checkpoint_loaded={loaded} log={log}")
-        if rc != 0 or not loaded or "ENDRUN" in body or "Fortran runtime error" in body:
+        steps = re.findall(r"wrote out restart data at nstep\s*=\s*(\d+)", body)
+        completed = bool(steps) and int(steps[-1]) == int(target_steps)
+        stamp = target_time.strftime("%Y-%m-%d-") + f"{target_time.hour * 3600 + target_time.minute * 60 + target_time.second:06d}"
+        completed = completed and (out / f"{parent_case if args.mode == 'continue' else case}.ecosim.r.{stamp}.nc").is_file()
+        print(f"exit={rc} checkpoint_loaded={loaded} completed={completed} expected_nstep={int(target_steps)} log={log}")
+        if rc != 0 or not loaded or not completed or "ENDRUN" in body or "Fortran runtime error" in body:
             sys.exit(1)
 
 

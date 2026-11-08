@@ -98,7 +98,7 @@ module WatsubMod
   integer :: K0,K1
   integer :: KL,L,L2,LL,M,MM,M1,M2,M3,M4,M5,M6,NX,NY
   integer :: N,N1,N2,N3,N4,N5,N6,NN,N4B,N5B,NUX
-  real(r8):: ResistanceLitRLay(JY,JX),HeatFluxAir2Soi(JY,JX)
+  real(r8):: ResistVapThroughLitr(JY,JX),HeatFluxAir2Soi(JY,JX)
   REAL(R8):: RainEkReducedKsat(JY,JX)
 
   REAL(R8) :: TopLayWatVol_col(JY,JX)
@@ -126,7 +126,7 @@ module WatsubMod
   call BeginMassCheck(NHW,NHE,NVN,NVS,twatmass0)
   twatmasstM=twatmass0
   ! 
-  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistanceLitRLay)
+  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
   !
   call InitSoilHydrauics(NHW,NHE,NVN,NVS)
 
@@ -139,7 +139,7 @@ module WatsubMod
     ! dtime=dtime+dts_HeatWatTP
     call PrepHydroThermIterM(M,NHW,NHE,NVN,NVS,TopLayWatVol_col,NUX0)
 
-    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
+    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr,RainEkReducedKsat,&
       TopLayWatVol_col,HeatFluxAir2Soi,dHGrnddTKsoi1,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
     
     call CopySoilWatVolIterateM(I,J,M,NHW,NHE,NVN,NVS,TopLayWatVol_col)
@@ -405,7 +405,7 @@ module WatsubMod
 !------------------------------------------------------------------------------------------  
   subroutine LocalCopySoilVars(I,J,NHW,NHE,NVN,NVS)
   !
-  !coupling interface between EcoSIM and the soil physics module 
+  ! Stage soil state and locate the occupied surface below any empty lake layers.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -569,6 +569,14 @@ module WatsubMod
           FracLayVolBelowTileWTBL_vr(L,NY,NX)=0.0_r8
         ENDIF
       ENDDO D30
+      ! Lake recession can leave empty geometric slots when grid relayering
+      ! is disabled. They have no mass or energy to exchange with snow/air.
+      ! Keep NU as the geometry index, but start physics at an occupied store.
+      do while(NUM_col(NY,NX)<NL_col(NY,NX))
+        L=NUM_col(NY,NX)
+        if(SoilBulkDensity_vr(L,NY,NX)>ZERO.or.VHeatCapacity1_vr(L,NY,NX)>0._r8)exit
+        NUM_col(NY,NX)=L+1
+      enddo
     ENDDO DX990
   ENDDO DX995
   call PrintInfo('end '//subname)
@@ -1549,10 +1557,11 @@ module WatsubMod
         NUX=NUM_col(NY,NX)                 
         D9970: DO  LL=NUX+1,NL_col(NY,NX)
           !the first meaningful layer
-          IF(VLSoilPoreMicP_vr(LL,NY,NX).GT.ZEROS2(NY,NX))THEN
+          IF(VHeatCapacity1_vr(LL,NY,NX).GT.0._r8)THEN
             NUM_col(NY,NX) = LL
             !heat capacity of a too thin layer
-            dCPX           = cpw*(VLWatMicP1_vr(NUX,NY,NX)+VLWatMacP1_vr(NUX,NY,NX))+cpi*(VLiceMicP1_vr(NUX,NY,NX))
+            dCPX           = cpw*(VLWatMicP1_vr(NUX,NY,NX)+VLWatMacP1_vr(NUX,NY,NX)) &
+              +cpi*(VLiceMicP1_vr(NUX,NY,NX)+VLiceMacP1_vr(NUX,NY,NX))
             !enthalpy
             HFLX           = dCPX*TKSoil1_vr(NUX,NY,NX)
 
@@ -1568,10 +1577,12 @@ module WatsubMod
             HeatFlow2TopSoi_col(NY,NX)                   = HeatFlow2Soil_3D(3,NUM_col(NY,NX),NY,NX)
 
             VHCPX                                   = VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)
-            QIceInflx_vr(NUM_col(NY,NX),NY,NX)      = QIceInflx_vr(NUM_col(NY,NX),NY,NX)+VLiceMicP1_vr(NUX,NY,NX)
+            QIceInflx_vr(NUM_col(NY,NX),NY,NX)      = QIceInflx_vr(NUM_col(NY,NX),NY,NX) &
+              +VLiceMicP1_vr(NUX,NY,NX)+VLiceMacP1_vr(NUX,NY,NX)
             VLWatMicP1_vr(NUM_col(NY,NX),NY,NX)     = VLWatMicP1_vr(NUM_col(NY,NX),NY,NX)+ VLWatMicP1_vr(NUX,NY,NX)
             VLWatMacP1_vr(NUM_col(NY,NX),NY,NX)     = VLWatMacP1_vr(NUM_col(NY,NX),NY,NX)+ VLWatMacP1_vr(NUX,NY,NX)
-            VLiceMicP1_vr(NUM_col(NY,NX),NY,NX)     = VLiceMicP1_vr(NUM_col(NY,NX),NY,NX)+ VLiceMicP1_vr(NUX,NY,NX)            
+            VLiceMicP1_vr(NUM_col(NY,NX),NY,NX)     = VLiceMicP1_vr(NUM_col(NY,NX),NY,NX) &
+              +VLiceMicP1_vr(NUX,NY,NX)+VLiceMacP1_vr(NUX,NY,NX)
             VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX) = VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)+dCPX
             !update the temperature by merging the two layers
             TKSoil1_vr(NUM_col(NY,NX),NY,NX)        = (VHCPX*TKSoil1_vr(NUM_col(NY,NX),NY,NX)+HFLX)/VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)

@@ -408,6 +408,7 @@ implicit none
     Root1stActStruct_pvr   => plt_biom%Root1stActStruct_pvr   ,& !output :derived primary active root element mass
     Root1stLigStruct_pvr   => plt_biom%Root1stLigStruct_pvr   ,& !output :derived primary lignified root element mass
     RootMedStruct_pvr      => plt_biom%RootMedStruct_pvr      ,& !output :derived medium root element mass
+    RootMyco2ndStrutElms_pvr => plt_biom%RootMyco2ndStrutElms_pvr ,& !output :derived secondary root/mycorrhizal element mass
     RootSinkWeight_pvr     => plt_morph%RootSinkWeight_pvr    ,& !output :root-layer sink weighting
     RootAtmGasConductance_rpvr => plt_rbgc%RootAtmGasConductance_rpvr ,& !output :root-atmosphere gas conductance
     RootCO2Autor_pvr       => plt_rbgc%RootCO2Autor_pvr       ,& !input  :root respiration constrained by O2, [g d-2 h-1]
@@ -464,6 +465,7 @@ implicit none
     Root1stActStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
     Root1stLigStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
     RootMedStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
+    RootMyco2ndStrutElms_pvr(:,:,MaxNumRootLays+1:,NZ) = 0._r8
     RootSinkWeight_pvr(MaxNumRootLays+1:,NZ) = 0._r8
     RootAtmGasConductance_rpvr(:,:,MaxNumRootLays+1:,NZ) = 0._r8
     CO2Intra_pft(NZ) = 0._R8
@@ -538,6 +540,7 @@ implicit none
 
 !----------------------------------------------------------------------------------------------------
   subroutine SumRootBiome(yearIJ,NZ,massroot)
+  ! Aggregate per-axis structural and reserve pools into root/mycorrhizal totals.
 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
@@ -566,6 +569,7 @@ implicit none
     RootNodulNonstElms_rpvr   => plt_biom%RootNodulNonstElms_rpvr    ,& !input  :root layer nonstructural element, [g d-2]
     RootMyco1stStrutElms_rpvr => plt_biom%RootMyco1stStrutElms_rpvr  ,& !input  :root layer element primary axes, [g d-2]
     RootMyco2ndStrutElms_rpvr => plt_biom%RootMyco2ndStrutElms_rpvr  ,& !input  :root layer element secondary axes, [g d-2]
+    RootMyco2ndStrutElms_pvr  => plt_biom%RootMyco2ndStrutElms_pvr   ,& !output :secondary structural elements summed over active NR, [g element cell-1]
     RootMycoNonstElms_rpvr    => plt_biom%RootMycoNonstElms_rpvr     ,& !input  :root layer nonstructural element, [g d-2]
     RootElms_pft              => plt_biom%RootElms_pft               ,& !output :plant root element mass, [g d-2]    
     RootNoduleElms_pft        => plt_biom%RootNoduleElms_pft         ,& !output :plant root nodule element mass, [g d-2]    
@@ -577,14 +581,17 @@ implicit none
   )
   call PrintInfo('beg '//subname)
   massr1st1=0._r8;massr2nd1=0._r8
+  RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
   RootElms_pft(:,NZ)=0._r8
   RootMycoNonstElms_pft(:,:,NZ)=0._r8
   DO NE=1,NumPlantChemElms
     DO L=1,MaxNumRootLays
       DO N=1,Myco_pft(NZ)
-        RootMycoMassElm_pvr(NE,N,L,NZ) = sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ))+RootMycoNonstElms_rpvr(NE,N,L,NZ)
+        RootMyco2ndStrutElms_pvr(NE,N,L,NZ) = &
+          sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+        RootMycoMassElm_pvr(NE,N,L,NZ) = RootMyco2ndStrutElms_pvr(NE,N,L,NZ)+RootMycoNonstElms_rpvr(NE,N,L,NZ)
         RootMycoNonstElms_pft(NE,N,NZ) = RootMycoNonstElms_pft(NE,N,NZ)+RootMycoNonstElms_rpvr(NE,N,L,NZ)
-        massr2nd1(NE)                  = massr2nd1(NE)+sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+        massr2nd1(NE)                  = massr2nd1(NE)+RootMyco2ndStrutElms_pvr(NE,N,L,NZ)
       ENDDO  
       RootMedStruct_pvr(NE,L,NZ)    = SUM(RootMediumStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
       Root1stActStruct_pvr(NE,L,NZ) = SUM(Root1stActStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
