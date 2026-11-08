@@ -82,6 +82,10 @@ module RootDataType
   real(sp),target,allocatable ::  Cytokinin1stConc_rpvr(:,:,:,:,:)               !cytokinin concentration in primary roots, [gC m-3 H2O]
   real(sp),target,allocatable ::  RootMediumLength_pvr(:,:,:,:)                  !Medium size root length, [m]
   real(sp),target,allocatable ::  RootFineFrac2Med_rpvr(:,:,:,:,:)                  !fine-axis-count-weighted fraction attached to medium roots, by root category, [-]
+  ! Young cohort subsets; established tissue is total minus young.
+  real(sp),target,allocatable :: RootMediumYoungXNum_rpvr(:,:,:,:,:)
+  real(sp),target,allocatable :: RootMediumYoungLength_rpvr(:,:,:,:,:)
+  real(sp),target,allocatable :: RootMediumYoungElms_rpvr(:,:,:,:,:,:)
   real(sp),target,allocatable ::  RootMediumXNum_rpvr(:,:,:,:,:)                 !living population medium-root axes by layer and structural-root group, [# d-2]
   real(sp),target,allocatable ::  Root2ndXNum_rpvr(:,:,:,:,:,:)                  !root layer number secondary axes, [d-2]
   real(sp),target,allocatable ::  RootMyco1stSinkC_rpvr(:,:,:,:,:)               !primary root C sink, [gC d-2 h-1]
@@ -118,6 +122,9 @@ module RootDataType
   real(sp),target,allocatable ::  TRootGasLossDisturb_col(:,:,:)                 !total root gas content, [g d-2]
   real(sp),target,allocatable ::  RootBiomCPerPlant_pft(:,:,:)                   !root C per plant, [g p-1]
   real(sp),target,allocatable ::  RootElms_pft(:,:,:,:)                          !plant root element, [g d-2]
+  real(sp),target,allocatable :: CytokininShootExport_pft(:,:,:) !Root-to-shoot cytokinin export, [1.e-3 gC equivalent h-1]
+  real(sp),target,allocatable :: CytokininRootLoss_pft(:,:,:) !Root cytokinin decay and vanished-compartment loss, [1.e-3 gC equivalent h-1]
+  real(sp),target,allocatable ::  RootActiveC_pft(:,:,:)                        !derived root C excluding inactive primary C and nodules, [gC population-1]
   real(sp),target,allocatable ::  RootNoduleElms_pft(:,:,:,:)                    !plant root nodule element mass,                     [g d-2]
   real(sp),target,allocatable ::  RootStrutElms_pft(:,:,:,:)                     !plant root structural element, [g d-2]
   real(sp),target,allocatable ::  RootProteinC_pvr(:,:,:,:,:)                    !root layer protein C, [g d-2]
@@ -249,6 +256,9 @@ contains
   allocate(Root2ndXNumL_rpvr(jroots,JZ,JP,JY,JX));Root2ndXNumL_rpvr=0._sp
   allocate(RootMediumLength_pvr(JZ,JP,JY,JX)); RootMediumLength_pvr=0._sp
   allocate(RootFineFrac2Med_rpvr(jroots,JZ,JP,JY,JX)); RootFineFrac2Med_rpvr=0._sp
+  allocate(RootMediumYoungXNum_rpvr(JZ,MaxNumRootAxes,JP,JY,JX)); RootMediumYoungXNum_rpvr=0._sp
+  allocate(RootMediumYoungLength_rpvr(JZ,MaxNumRootAxes,JP,JY,JX)); RootMediumYoungLength_rpvr=0._sp
+  allocate(RootMediumYoungElms_rpvr(NumPlantChemElms,JZ,MaxNumRootAxes,JP,JY,JX)); RootMediumYoungElms_rpvr=0._sp
   allocate(RootMediumXNum_rpvr(JZ,MaxNumRootAxes,JP,JY,JX)); RootMediumXNum_rpvr=0._sp
   allocate(Root2ndXNum_rpvr(jroots,JZ,MaxNumRootAxes,JP,JY,JX));Root2ndXNum_rpvr=0._sp
   allocate(CytokininMRConc_rpvr(JZ,MaxNumRootAxes,JP,JY,JX)); CytokininMRConc_rpvr=0._sp
@@ -287,6 +297,9 @@ contains
   allocate(TRootGasLossDisturb_col(idg_beg:idg_NH3,JY,JX));TRootGasLossDisturb_col=0._sp
   allocate(RootBiomCPerPlant_pft(JP,JY,JX));    RootBiomCPerPlant_pft=0._sp
   allocate(RootElms_pft(NumPlantChemElms,JP,JY,JX)); RootElms_pft=0._sp
+  allocate(CytokininShootExport_pft(JP,JY,JX)); CytokininShootExport_pft=0._sp
+  allocate(CytokininRootLoss_pft(JP,JY,JX)); CytokininRootLoss_pft=0._sp
+  allocate(RootActiveC_pft(JP,JY,JX)); RootActiveC_pft=0._sp
   allocate(RootNoduleElms_pft(NumPlantChemElms,JP,JY,JX)); RootNoduleElms_pft=0._sp
   allocate(RootStrutElms_pft(NumPlantChemElms,JP,JY,JX));   RootStrutElms_pft=0._sp
   allocate(RootProteinC_pvr(jroots,JZ,JP,JY,JX));RootProteinC_pvr=0._sp
@@ -440,6 +453,9 @@ contains
   call destroy(TRootGasLossDisturb_col)
   call destroy(RootBiomCPerPlant_pft)
   call destroy(RootElms_pft)
+  call destroy(CytokininShootExport_pft)
+  call destroy(CytokininRootLoss_pft)
+  call destroy(RootActiveC_pft)
   call destroy(RootNoduleElms_pft)
   call destroy(RootStrutElms_pft)
   call destroy(RootProteinC_pvr)
@@ -451,6 +467,9 @@ contains
   call destroy(RootMyco2ndStrutElms_pvr)
   call destroy(PopuRootMycoC_pvr)
   call destroy(RootNodulStrutElms_rpvr)
+  call destroy(RootMediumYoungXNum_rpvr)
+  call destroy(RootMediumYoungLength_rpvr)
+  call destroy(RootMediumYoungElms_rpvr)
   call destroy(RootMediumXNum_rpvr)
   call destroy(RootFineFrac2Med_rpvr)
   call destroy(RootMediumLength_pvr)

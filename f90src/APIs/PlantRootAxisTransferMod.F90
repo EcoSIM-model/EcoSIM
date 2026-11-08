@@ -48,6 +48,13 @@ contains
   integer, intent(in) :: NY,NX,NZ
   integer :: NR,K,L,M,N,NE
 
+  associate(YoungNumber=>plt_morph%RootMediumYoungXNum_rpvr, &
+    YoungLength=>plt_morph%RootMediumYoungLength_rpvr,YoungElements=>plt_morph%RootMediumYoungElms_rpvr)
+    RootMediumYoungXNum_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX) = YoungNumber(1:NK_col(NY,NX),:,NZ)
+    RootMediumYoungLength_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX) = YoungLength(1:NK_col(NY,NX),:,NZ)
+    RootMediumYoungElms_rpvr(:,1:NK_col(NY,NX),:,NZ,NY,NX) = YoungElements(:,1:NK_col(NY,NX),:,NZ)
+  end associate
+
     DO NR=1,pltpar%MaxNumRootAxes
       NRoot1stTipLay_raxes(NR,NZ,NY,NX) = plt_morph%NRoot1stTipLay_raxes(NR,NZ)
       Root1stDepz_raxes(NR,NZ,NY,NX)    = plt_morph%Root1stDepz_raxes(NR,NZ)
@@ -147,6 +154,12 @@ contains
     plt_biom%RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
     plt_biom%RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ)= &
       RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ,NY,NX)
+  associate(YoungNumber=>plt_morph%RootMediumYoungXNum_rpvr, &
+    YoungLength=>plt_morph%RootMediumYoungLength_rpvr,YoungElements=>plt_morph%RootMediumYoungElms_rpvr)
+    YoungNumber(1:NK_col(NY,NX),:,NZ) = RootMediumYoungXNum_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+    YoungLength(1:NK_col(NY,NX),:,NZ) = RootMediumYoungLength_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+    YoungElements(:,1:NK_col(NY,NX),:,NZ) = RootMediumYoungElms_rpvr(:,1:NK_col(NY,NX),:,NZ,NY,NX)
+  end associate
 
     DO NR=1,pltpar%MaxNumRootAxes
       plt_morph%NRoot1stTipLay_raxes(NR,NZ)=NRoot1stTipLay_raxes(NR,NZ,NY,NX)

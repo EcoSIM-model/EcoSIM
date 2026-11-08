@@ -573,6 +573,10 @@ implicit none
     plt_rbgc%Cytokinin2ndConc_rpvr(:,:,:,NZ) = 0._r8
     plt_rbgc%CytokininMRConc_rpvr(:,:,NZ)    = 0._r8
     plt_rbgc%Cytokinin1stConc_rpvr(:,:,NZ)   = 0._r8
+    associate(YoungN=>plt_morph%RootMediumYoungXNum_rpvr,YoungL=>plt_morph%RootMediumYoungLength_rpvr, &
+      YoungE=>plt_morph%RootMediumYoungElms_rpvr)
+      YoungN(:,:,NZ)=0._r8;YoungL(:,:,NZ)=0._r8;YoungE(:,:,:,NZ)=0._r8
+    end associate
     plt_morph%RootMediumMeanLength_rpvr(:,:,NZ) = 0._r8
     plt_morph%RootMediumXNum_rpvr(:,:,NZ) = 0._r8
     plt_morph%RootMediumXNum_pvr(:,NZ) = 0._r8

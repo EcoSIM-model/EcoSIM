@@ -1,5 +1,6 @@
 module RootGasMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
+  use RootMod, only: MediumTransportGeometry
   use minimathmod,   only: safe_adb, vapsat, AZMAX1, AZMIN1
   use minimathmod,   only: fixEXConsumpFlux,isclose, symmetric_flux_limiter, SubstrateDribbling
   use EcoSIMCtrlMod, only : lcoarseroot
@@ -52,6 +53,8 @@ module RootGasMod
 
   !local variables
   logical :: chkActiveUptk
+  real(r8) :: cn(2),cl(2),cr(2),ca(2),cg(2),cgas(2)
+  integer :: cohort
   integer :: M,MX,NR
   real(r8) :: B,C
   real(r8) :: trcg_rootml_loc(idg_beg:idg_NH3)     !vol gaseous mass volatile in roots
@@ -254,7 +257,15 @@ module RootGasMod
       if(lcoarseroot .and. RootMediumLength_pvr(L,NZ).GT.0._r8 .and. RootMediumXNum_pvr(L,NZ).GT.0._r8)then
         fMedium = RootFineFrac2Med_rpvr(N,L,NZ)
         if(RootMedTransptArea_pvr(N,L,NZ).GT.0._r8)then
-          RTCRM=RootMediumXNum_pvr(L,NZ)*RootMedTransptArea_pvr(N,L,NZ)/RootMediumLength_pvr(L,NZ)
+          ! Medium axes act in parallel. Use each cohort's own length rather
+          ! than a pooled mean that recruitment would shorten for old axes.
+          do NR=1,NumStructuralRootAxes_pft(NZ)
+            call MediumTransportGeometry(NZ,L,NR,cn,cl,cr,ca,cg,cgas)
+            do cohort=1,2
+              if(cn(cohort)>0._r8.and.cl(cohort)>0._r8)RTCRM=RTCRM &
+                +cn(cohort)*cgas(cohort)/(cl(cohort)/cn(cohort))
+            enddo
+          enddo
         endif
       endif
 

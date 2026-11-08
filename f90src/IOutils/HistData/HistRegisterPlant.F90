@@ -267,6 +267,19 @@ contains
   call hist_addfld1d(fname='Root_C_pft',units='gC/m2',avgflag='A',&
     long_name='Plant root C, exluding nodule',ptr_patch=data1d_ptr)
 
+  data1d_ptr => this%h1D_CytokininShootExport_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='CytokininShootExport_pft',units='1.e-3 gC equiv m-2 h-1',avgflag='A',&
+    long_name='Root-to-shoot cytokinin export',ptr_patch=data1d_ptr)
+
+  data1d_ptr => this%h1D_CytokininRootLoss_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='CytokininRootLoss_pft',units='1.e-3 gC equiv m-2 h-1',avgflag='A',&
+    long_name='Root cytokinin decay and vanished-compartment loss',ptr_patch=data1d_ptr)
+
+  data1d_ptr => this%h1D_RootActiveC_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='RootActiveC_pft',units='gC/m2',avgflag='A',&
+    long_name='Root and mycorrhizal C including reserves, excluding inactive primary roots and nodules',&
+    ptr_patch=data1d_ptr)
+
   data1d_ptr => this%h1D_ROOTST_C_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='RootST_C_pft',units='gC/m2',avgflag='A',&
     long_name='Plant root structural C',ptr_patch=data1d_ptr)

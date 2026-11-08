@@ -94,6 +94,8 @@ module PlantRootBGCAPIData
   real(r8), pointer :: RootCO2Ar2RootX_rpvr(:,:,:)       => null()  !root/myco respiration released to root/myco,                    [gC d-2 h-1]
   real(r8), pointer :: trcs_deadroot2soil_pvr(:,:,:)     => null()  !gases released to soil upong dying roots,                       [g d-2 h-1]
   real(r8), pointer :: GroSrcRootStress_pvr(:,:)        => null()  !root growth stress due to nutrient and water, [-]
+  real(r8), pointer :: CytokininShootExport_pft(:) => null() !Root-to-shoot cytokinin export, [1.e-3 gC equivalent h-1]
+  real(r8), pointer :: CytokininRootLoss_pft(:) => null() !Root cytokinin decay and vanished-compartment loss, [1.e-3 gC equivalent h-1]
   contains
     procedure, public :: Init => plt_rootbgc_init
     procedure, public :: Destroy  => plt_rootbgc_destroy
@@ -122,6 +124,8 @@ contains
   allocate(this%RootUptk_N_CumYr_pft(JP1)); this%RootUptk_N_CumYr_pft=spval
   allocate(this%RootUptk_P_CumYr_pft(JP1)); this%RootUptk_P_CumYr_pft=spval
   allocate(this%Soil2RootMycoExudE_pft(NumPlantChemElms,JP1));this%Soil2RootMycoExudE_pft=spval
+  allocate(this%CytokininShootExport_pft(JP1)); this%CytokininShootExport_pft=0._r8
+  allocate(this%CytokininRootLoss_pft(JP1)); this%CytokininRootLoss_pft=0._r8
   allocate(this%RootN2Fix_pft(JP1)); this%RootN2Fix_pft=spval
   allocate(this%CanopyN2Fix_pft(JP1));this%CanopyN2Fix_pft=spval
   allocate(this%canopy_growth_pft(JP1)); this%canopy_growth_pft=spval
@@ -300,5 +304,7 @@ contains
     deallocate(this%RootSoilCO2Debt_vr)
     nullify(this%RootSoilCO2Debt_vr)
   endif
+  if(associated(this%CytokininShootExport_pft))deallocate(this%CytokininShootExport_pft)
+  if(associated(this%CytokininRootLoss_pft))deallocate(this%CytokininRootLoss_pft)
   end subroutine plt_rootbgc_destroy
 end module PlantRootBGCAPIData

@@ -47,7 +47,9 @@ submodule (HistDataType) HistUpdatePlant
     Root1stTipSinkWeight_pft, Root1stTransptArea_pvr, Root1stXNumL_pvr, Root2ndSinkWeight_pvr, &
     Root2ndXNumL_rpvr, Root2ndLen_rpvr, MeanSecondaryAxisLength_pft, &
     RootAtmGasConductance_rpvr, RootAxialKond2H2O_pvr, RootElms_pft, RootH2OUptkStress_pvr, &
+    CytokininShootExport_pft, CytokininRootLoss_pft, RootActiveC_pft, &
     RootLenDensPerPlant_pvr, RootLenPerPlant_pvr, RootMaintDef_CO2_pvr, RootMediumLength_pvr, &
+    RootMediumYoungXNum_rpvr,RootMediumYoungLength_rpvr,RootMediumYoungElms_rpvr, &
     RootMediumRadius_rpvr, RootMediumXNum_pvr, RootMedStruct_pvr, RootMSinkWeight_pvr, &
     RootMyco1stStrutElms_rpvr, RootMyco2ndStrutElms_pvr, RootMycoMassElm_pvr, RootMycoNonstElms_pft, &
     RootMycoNonstElms_rpvr, ROOTNLim_rpvr, RootNoduleElms_pft, RootNonstructElmConc_pvr, RootNonstOMConc_pvr, ROOTPLim_rpvr, &
@@ -210,6 +212,9 @@ contains
           +EarStrutElms_pft(ielmc,NZ,NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_GRAIN_C_ptc(nptc)       = GrainStrutElms_pft(ielmc,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_ROOT_C_ptc(nptc)        = RootElms_pft(ielmc,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h1D_CytokininShootExport_ptc(nptc)=CytokininShootExport_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h1D_CytokininRootLoss_ptc(nptc)=CytokininRootLoss_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h1D_RootActiveC_ptc(nptc)   = RootActiveC_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_ROOTST_C_ptc(nptc)      = RootStrutElms_pft(ielmc,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_ROOTST_N_ptc(nptc)      = RootStrutElms_pft(ielmn,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_ROOTST_P_ptc(nptc)      = RootStrutElms_pft(ielmp,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
@@ -437,6 +442,12 @@ contains
               endif
             endif
             this%h2D_RootKond2H2O_pvr(nptc,L)= safe_adb(1._r8,RootResist4H2O_pvr(ipltroot,L,NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX))*1.e7/3600._r8
+            this%h2D_RootMedYoungC_pvr(nptc,L)=SUM(RootMediumYoungElms_rpvr(ielmc,L,:,NZ,NY,NX))/DVOLL
+            this%h2D_RootMedYoungLength_pvr(nptc,L)=SUM(RootMediumYoungLength_rpvr(L,:,NZ,NY,NX)) &
+              /AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h2D_RootMedYoungAxes_pvr(nptc,L)=0._r8
+            if(PlantPopuLive_pft(NZ,NY,NX)>0._r8)this%h2D_RootMedYoungAxes_pvr(nptc,L)= &
+              SUM(RootMediumYoungXNum_rpvr(L,:,NZ,NY,NX))/PlantPopuLive_pft(NZ,NY,NX)
             this%h2D_RootMedC_pvr(nptc,L) = RootMedStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL
             this%h2D_RootAct1stC_pvr(nptc,L) = Root1stActStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL
             this%h2D_RootLig1stC_pvr(nptc,L) = Root1stLigStruct_pvr(ielmc,L,NZ,NY,NX)/DVOLL

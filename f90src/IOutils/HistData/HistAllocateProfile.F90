@@ -230,6 +230,9 @@ contains
   allocate(this%h2D_RootH2OUptk_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootH2OUptk_pvr(:,:)=spval
   allocate(this%h2D_RootAct1stC_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootAct1stC_pvr(:,:)=spval
   allocate(this%h2D_RootMedC_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootMedC_pvr(:,:)=spval
+  allocate(this%h2D_RootMedYoungC_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootMedYoungC_pvr(:,:)=spval
+  allocate(this%h2D_RootMedYoungAxes_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootMedYoungAxes_pvr(:,:)=spval
+  allocate(this%h2D_RootMedYoungLength_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootMedYoungLength_pvr(:,:)=spval
   allocate(this%h2D_NonstC_conc_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_NonstC_conc_pvr(:,:)=spval
   allocate(this%h2D_RootLig1stC_pvr(beg_ptc:end_ptc,1:JZ)); this%h2D_RootLig1stC_pvr(:,:)=spval
   allocate(this%h2D_RootShootExchC_pvr(beg_ptc:end_ptc,1:JZ));this%h2D_RootShootExchC_pvr(:,:)=spval

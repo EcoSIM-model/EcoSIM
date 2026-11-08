@@ -12,6 +12,7 @@ set(PLANT_BGC_SOURCES
   NoduleBGCMod.F90
   PlantNonstElmDynMod.F90
   PlantBranchMod.F90
+  MediumRootCohortMod.F90
   RootMod.F90
   PhotoSynsMod.F90
   LitterFallMod.F90

@@ -50,6 +50,12 @@ contains
   integer, intent(in) :: NY,NX,NZ
   integer :: K,L,N,NE,idg
 
+    associate(signal => plt_rbgc%CytokininShootExport_pft)
+      CytokininShootExport_pft(NZ,NY,NX)=signal(NZ)
+    end associate
+    associate(signal => plt_rbgc%CytokininRootLoss_pft)
+      CytokininRootLoss_pft(NZ,NY,NX)=signal(NZ)
+    end associate
     DO  L=NUI_col(NY,NX),NK_col(NY,NX)
       GroSrcRootStress_pvr(L,NZ,NY,NX) = plt_rbgc%GroSrcRootStress_pvr(L,NZ)
       DO K=1,jcplx

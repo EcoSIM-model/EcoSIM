@@ -26,6 +26,7 @@ implicit none
   public :: SumPlantBiome
   public :: SumPlantBiomStates
   public :: SumRootBiome
+  public :: UpdateRootActiveC
   public :: SumPlantBranchBiome
   public :: EnterPlantBalance
   public :: ExitPlantBalance
@@ -614,10 +615,47 @@ implicit none
     endif      
   ENDDO
   
+  call UpdateRootActiveC(NZ)
   if(present(massroot))massroot=RootElms_pft(:,NZ)+RootNoduleElms_pft(:,NZ)
   call PrintInfo('end '//subname)
   end associate
   end subroutine SumRootBiome
+
+!------------------------------------------------------------------------------------------
+  subroutine UpdateRootActiveC(NZ)
+  ! Same root C basis as RootElms_pft, excluding only inactive primary C.
+  ! Rebuild from current pools so old restarts need no additional state field.
+  implicit none
+  integer, intent(in) :: NZ
+  character(len=*), parameter :: subname='UpdateRootActiveC'
+  integer :: L,N,NR
+  associate(                                                        &
+    MaxNumRootLays            => plt_site%MaxNumRootLays           ,&
+    Myco_pft                  => plt_morph%Myco_pft                ,&
+    NumStructuralRootAxes_pft => plt_morph%NumStructuralRootAxes_pft,&
+    RootActiveC_pft           => plt_biom%RootActiveC_pft           ,&
+    Root1stActStructElms_rpvr  => plt_biom%Root1stActStructElms_rpvr  ,&
+    RootMediumStructElms_rpvr  => plt_biom%RootMediumStructElms_rpvr  ,&
+    RootMyco2ndStrutElms_rpvr  => plt_biom%RootMyco2ndStrutElms_rpvr  ,&
+    RootMycoNonstElms_rpvr     => plt_biom%RootMycoNonstElms_rpvr      &
+  )
+  call PrintInfo('beg '//subname)
+  RootActiveC_pft(NZ)=0._r8
+  DO L=1,MaxNumRootLays
+    DO N=1,Myco_pft(NZ)
+      RootActiveC_pft(NZ)=RootActiveC_pft(NZ)+RootMycoNonstElms_rpvr(ielmc,N,L,NZ)
+      DO NR=1,NumStructuralRootAxes_pft(NZ)
+        RootActiveC_pft(NZ)=RootActiveC_pft(NZ)+RootMyco2ndStrutElms_rpvr(ielmc,N,L,NR,NZ)
+      ENDDO
+    ENDDO
+    DO NR=1,NumStructuralRootAxes_pft(NZ)
+      RootActiveC_pft(NZ)=RootActiveC_pft(NZ)+Root1stActStructElms_rpvr(ielmc,L,NR,NZ) &
+        +RootMediumStructElms_rpvr(ielmc,L,NR,NZ)
+    ENDDO
+  ENDDO
+  call PrintInfo('end '//subname)
+  end associate
+  end subroutine UpdateRootActiveC
 
 !----------------------------------------------------------------------------------------------------
   subroutine EnterPlantBalance(yearIJ,NP)

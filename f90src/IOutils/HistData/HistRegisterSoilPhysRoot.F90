@@ -470,6 +470,20 @@ contains
       type2d='pmorphunits',avgflag='A',&
       long_name='C allocation to different morph unit in branch '//trim(fieldname),ptr_patch=data2d_ptr,default='inactive')
   enddo
+  ! Append optional fields to preserve pointer indices stored in old history
+  ! restart files. This is the last group in register_hist_data.
+  data2d_ptr => this%h2D_RootMedYoungC_pvr(beg_ptc:end_ptc,1:JZ)
+  call hist_addfld2d(fname='RootMedYoungC_pvr',units='gC m-3',type2d='levsoi',avgflag='A',&
+    long_name='Young medium-root carbon (subset of total medium-root C)',ptr_patch=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_RootMedYoungAxes_pvr(beg_ptc:end_ptc,1:JZ)
+  call hist_addfld2d(fname='RootMedYoungAxes_pvr',units='# plant-1',type2d='levsoi',avgflag='A',&
+    long_name='Young medium-root axes per living plant',ptr_patch=data2d_ptr,default='inactive')
+
+  data2d_ptr => this%h2D_RootMedYoungLength_pvr(beg_ptc:end_ptc,1:JZ)
+  call hist_addfld2d(fname='RootMedYoungLength_pvr',units='m m-2',type2d='levsoi',avgflag='A',&
+    long_name='Population young medium-root length per ground area',ptr_patch=data2d_ptr,default='inactive')
+
   end procedure register_hist_soil_phys_root
 
 end submodule HistRegisterSoilPhysRoot

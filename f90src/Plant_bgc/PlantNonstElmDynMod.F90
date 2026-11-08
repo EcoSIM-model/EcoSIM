@@ -3,6 +3,7 @@ module PlantNonstElmDynMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use DebugToolMod,  only: PrintInfo,DebugPrint
   use PlantMathFuncMod, only : ExchFluxLimiter,is_plant_woody_vascular
+  use PlantBalMod, only : UpdateRootActiveC
   use EcoSIMCtrlMod
   use ElmIDMod
   use PlantBGCPars
@@ -378,6 +379,7 @@ module PlantNonstElmDynMod
     fctyok_scalar_rpvr            => plt_morph%fctyok_scalar_rpvr             ,& !input :cytokinin scalar for corase root sink, [-]    
     CumSoilThickness_vr           => plt_site%CumSoilThickness_vr             ,& !input  :depth to bottom of soil layer from surface of grid cell, [m]    
     RootElms_pft                  => plt_biom%RootElms_pft                    ,& !input  :plant root element mass, [g d-2]
+    RootActiveC_pft               => plt_biom%RootActiveC_pft                 ,& !input  :root C excluding inactive primary C and nodules, [gC population-1]
     PlantPopuLive_pft             => plt_site%PlantPopuLive_pft               ,& !input  :plant population, [d-2]    
     ZERO4Groth_pft                => plt_biom%ZERO4Groth_pft                  ,& !input  :threshold zero for plang growth calculation, [-]
     isPlantBranchAlive_brch       => plt_pheno%isPlantBranchAlive_brch        ,& !input  :flag to detect branch death, [-]
@@ -499,17 +501,21 @@ module PlantNonstElmDynMod
   !
   !     IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_perennial)THEN
   !
+  ! Refresh after growth, remobilization, and reserve transfers. Both weights
+  ! use the same non-lignified root C basis; total root C remains an accounting pool.
+  call UpdateRootActiveC(NZ)
+
   !canopy sink weighting factor
   !  why 2/3 here?
   IF(CanopyLeafSheathC_pft(NZ).GT.ZERO4Groth_pft(NZ))THEN
-    FWTC=AMIN1(1.0_r8,0.667_r8*RootElms_pft(ielmc,NZ)/CanopyLeafSheathC_pft(NZ))
+    FWTC=AMIN1(1.0_r8,0.667_r8*RootActiveC_pft(NZ)/CanopyLeafSheathC_pft(NZ))
   ELSE
     FWTC=1.0_r8
   ENDIF
 
   !root sink weighting factor
-  IF(RootElms_pft(ielmc,NZ).GT.ZERO4Groth_pft(NZ))THEN
-    FWTS=AMIN1(1.0_r8,CanopyLeafSheathC_pft(NZ)/(0.667_r8*RootElms_pft(ielmc,NZ)))
+  IF(RootActiveC_pft(NZ).GT.ZERO4Groth_pft(NZ))THEN
+    FWTS=AMIN1(1.0_r8,CanopyLeafSheathC_pft(NZ)/(0.667_r8*RootActiveC_pft(NZ)))
   ELSE
     FWTS=1.0_r8
   ENDIF

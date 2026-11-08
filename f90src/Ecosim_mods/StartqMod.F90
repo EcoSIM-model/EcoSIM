@@ -964,6 +964,7 @@ module StartqMod
   ENDDO
   
   RootElms_pft(1:NumPlantChemElms,NZ,NY,NX)=0._r8
+  RootActiveC_pft(NZ,NY,NX)=0._r8
 
   call PrintInfo('end '//subname)
   end subroutine InitSeedMorphoBio

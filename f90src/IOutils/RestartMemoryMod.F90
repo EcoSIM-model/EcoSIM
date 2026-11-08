@@ -5,7 +5,7 @@ module RestartMemoryMod
   use DebugToolMod, only : PrintInfo
   use abortutils, only : endrun, iulog
   use GridConsts, only : bounds
-  use PlantMgmtDataType, only : NP_col
+  use PlantMgmtDataType, only : NP0_col
   use restUtilMod, only : restartvar, cpcol, cppft
   use ncdio_pio
   use SOMDataType, only : EPOC_vr
@@ -246,13 +246,13 @@ contains
 
   ! BulkFactor4Snow_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,BulkFactor4Snow_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,BulkFactor4Snow_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_BulkFactor4Snow_pft', &
     dim1name='pft', &
     long_name='Restart process memory: BulkFactor4Snow_pft',units='m2 (kg SWE)-1',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,BulkFactor4Snow_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,BulkFactor4Snow_pft,c1)
   deallocate(c1)
 
   ! THeatLossRoot2Soil_vr: retain the value used by the next process call.
@@ -290,24 +290,24 @@ contains
 
   ! fSnowCanopy_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,fSnowCanopy_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,fSnowCanopy_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_fSnowCanopy_pft', &
     dim1name='pft', &
     long_name='Restart process memory: fSnowCanopy_pft',units='-',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,fSnowCanopy_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,fSnowCanopy_pft,c1)
   deallocate(c1)
 
   ! TKCanopy_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,TKCanopy_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,TKCanopy_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_TKCanopy_pft', &
     dim1name='pft', &
     long_name='Restart process memory: TKCanopy_pft',units='K',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,TKCanopy_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,TKCanopy_pft,c1)
   deallocate(c1)
 
   ! trcg_TotalMass_col: retain the value used by the next process call.
@@ -356,24 +356,24 @@ contains
 
   ! CanopyHeightDead_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,CanopyHeightDead_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,CanopyHeightDead_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_CanopyHeightDead_pft', &
     dim1name='pft', &
     long_name='Restart process memory: CanopyHeightDead_pft',units='m',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,CanopyHeightDead_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,CanopyHeightDead_pft,c1)
   deallocate(c1)
 
   ! StalkAveRadius_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,StalkAveRadius_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,StalkAveRadius_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_StalkAveRadius_pft', &
     dim1name='pft', &
     long_name='Restart process memory: StalkAveRadius_pft',units='m',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,StalkAveRadius_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,StalkAveRadius_pft,c1)
   deallocate(c1)
 
   ! BulkFactor4Snow_col: retain the value used by the next process call.
@@ -400,13 +400,13 @@ contains
 
   ! GrossRespC_CumYr_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,GrossRespC_CumYr_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,GrossRespC_CumYr_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_GrossRespC_CumYr_pft', &
     dim1name='pft', &
     long_name='Restart process memory: GrossRespC_CumYr_pft',units='g d-2 ',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,GrossRespC_CumYr_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,GrossRespC_CumYr_pft,c1)
   deallocate(c1)
 
   ! WatMass_col: retain the value used by the next process call.
@@ -532,24 +532,24 @@ contains
 
   ! RootUptk_Nmin_cumYr_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RootUptk_Nmin_cumYr_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootUptk_Nmin_cumYr_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_RootUptk_Nmin_cumYr_pft', &
     dim1name='pft', &
     long_name='Restart process memory: RootUptk_Nmin_cumYr_pft',units='gN d-2',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RootUptk_Nmin_cumYr_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootUptk_Nmin_cumYr_pft,c1)
   deallocate(c1)
 
   ! RootUptk_Pmin_cumYr_pft: retain the value used by the next process call.
   allocate(c1(begp:endp)); c1=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RootUptk_Pmin_cumYr_pft,c1)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootUptk_Pmin_cumYr_pft,c1)
   p1=>c1
   call restartvar(ncid,flag,varname='memory_RootUptk_Pmin_cumYr_pft', &
     dim1name='pft', &
     long_name='Restart process memory: RootUptk_Pmin_cumYr_pft',units='gP d-2',interpinic_flag='skip', &
     data=p1,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RootUptk_Pmin_cumYr_pft,c1)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootUptk_Pmin_cumYr_pft,c1)
   deallocate(c1)
 
   ! trcg_mass_cumerr_col: retain the value used by the next process call.
@@ -609,13 +609,13 @@ contains
 
   ! RubiscoActivity_brch: retain the value used by the next process call.
   allocate(c2(begp:endp,SIZE(RubiscoActivity_brch,1))); c2=spval
-  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RubiscoActivity_brch,c2)
+  if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RubiscoActivity_brch,c2)
   p2=>c2
   call restartvar(ncid,flag,varname='memory_RubiscoActivity_brch', &
     dim1name='pft',dim2name='nbranches', &
     long_name='Restart process memory: RubiscoActivity_brch',units='-',interpinic_flag='skip', &
     data=p2,missing_value=spval,fill_value=spval)
-  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP_col,RubiscoActivity_brch,c2)
+  if(flag=='read')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RubiscoActivity_brch,c2)
   deallocate(c2)
   end associate
   call PrintInfo("end "//subname)

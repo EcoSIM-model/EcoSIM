@@ -52,6 +52,7 @@ module PlantBiomassAPIData
   real(r8), pointer :: tCanLeafC_clyr(:)                    => null()    !total leaf carbon mass in canopy layers,            [gC d-2]
   real(r8), pointer :: StandingDeadInitC_pft(:)             => null()    !initial standing dead C,                            [g C m-2]
   real(r8), pointer :: RootElms_pft(:,:)                    => null()    !plant root element mass,                            [g d-2]
+  real(r8), pointer :: RootActiveC_pft(:)                   => null()    !derived root C excluding inactive primary C and nodules, [gC population-1]
   real(r8), pointer :: RootNoduleElms_pft(:,:)              => null()    !plant root nodule element mass,                     [g d-2]
   real(r8), pointer :: RootNoduleElmsBeg_pft(:,:)           => null()    !previous time step plant root nodule element mass,  [g d-2]
   real(r8), pointer :: RootElmsBeg_pft(:,:)                 => null()    !plant root element at previous time step,           [g d-2]
@@ -186,6 +187,7 @@ contains
   allocate(this%StandDeadStrutElmsBeg_pft(NumPlantChemElms,JP1));this%StandDeadStrutElmsBeg_pft=spval
   allocate(this%tCanLeafC_clyr(NumCanopyLayers1));this%tCanLeafC_clyr=spval
   allocate(this%RootElms_pft(NumPlantChemElms,JP1));this%RootElms_pft=spval
+  allocate(this%RootActiveC_pft(JP1));this%RootActiveC_pft=0._r8
   allocate(this%RootNoduleElms_pft(NumPlantChemElms,JP1));this%RootNoduleElms_pft=spval
   allocate(this%RootNoduleElmsBeg_pft(NumPlantChemElms,JP1));this%RootNoduleElmsBeg_pft=spval
   allocate(this%RootElmsBeg_pft(NumPlantChemElms,JP1));this%RootElmsBeg_pft=spval
@@ -250,6 +252,7 @@ contains
   if(associated(this%RootMyco2ndStrutElms_pvr))deallocate(this%RootMyco2ndStrutElms_pvr)
   if(associated(this%CanopyNonstOMConc_pft))deallocate(this%CanopyNonstOMConc_pft)
   if(associated(this%RootNonstOMConc_pvr))deallocate(this%RootNonstOMConc_pvr)
+  if(associated(this%RootActiveC_pft))deallocate(this%RootActiveC_pft)
 
 !  if(allocated(ZERO4LeafVar_pft))deallocate(ZERO4LeafVar_pft)
 !  if(allocated(ZERO4Groth_pft))deallocate(ZERO4Groth_pft)

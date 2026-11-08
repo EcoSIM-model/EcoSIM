@@ -41,6 +41,9 @@ module PlantMorphologyAPIData
   real(r8), pointer :: Root1stSpecLen_pft(:,:)         => null() !specific root length primary axes,                                          [m g-1]
   real(r8), pointer :: Root2ndSpecLen_pft(:,:)         => null() !specific root length secondary axes,                                        [m g-1]
   real(r8), pointer :: Root2ndXNum_rpvr(:,:,:,:)       => null() !root layer number secondary axes,                                           [d-2]
+  real(r8), pointer :: RootMediumYoungXNum_rpvr(:,:,:) => null() !young subset count, [# d-2]
+  real(r8), pointer :: RootMediumYoungLength_rpvr(:,:,:) => null() !young subset length, [m d-2]
+  real(r8), pointer :: RootMediumYoungElms_rpvr(:,:,:,:) => null() !young subset C/N/P, [g element d-2]
   real(r8), pointer :: RootMediumXNum_rpvr(:,:,:)      => null() !living population medium-root axes by layer and structural-root group, [# d-2]
   real(r8), pointer :: RootFineFrac2Med_rpvr(:,:,:)       => null() !fine-axis-count-weighted fraction attached to medium roots, by root category, [-]
   real(r8), pointer :: CRootLumenArea_rpvr(:,:,:)      => null() !coarse roots lumen area for root axes, [m2]
@@ -258,6 +261,9 @@ contains
   allocate(this%MRootLumenArea_rpvr(JZ1,MaxNumRootAxes,JP1)); this%MRootLumenArea_rpvr=0._r8
   allocate(this%CRootLumenArea_rpvr(JZ1,MaxNumRootAxes,JP1)); this%CRootLumenArea_rpvr=0._r8
   allocate(this%Root2ndXNum_rpvr(jroots,JZ1,MaxNumRootAxes,JP1));this%Root2ndXNum_rpvr=0._r8
+  allocate(this%RootMediumYoungXNum_rpvr(JZ1,MaxNumRootAxes,JP1));this%RootMediumYoungXNum_rpvr=0._r8
+  allocate(this%RootMediumYoungLength_rpvr(JZ1,MaxNumRootAxes,JP1));this%RootMediumYoungLength_rpvr=0._r8
+  allocate(this%RootMediumYoungElms_rpvr(NumPlantChemElms,JZ1,MaxNumRootAxes,JP1));this%RootMediumYoungElms_rpvr=0._r8
   allocate(this%RootMediumXNum_rpvr(JZ1,MaxNumRootAxes,JP1)); this%RootMediumXNum_rpvr=0._r8
   allocate(this%RootFineFrac2Med_rpvr(jroots,JZ1,JP1)); this%RootFineFrac2Med_rpvr=0._r8
   allocate(this%iPlantNfixType_pft(JP1));this%iPlantNfixType_pft=0
@@ -391,6 +397,11 @@ contains
   implicit none
   class(plant_morph_type) :: this
 
+  ! Deallocation requires the pointer component itself: ASSOCIATE does not
+  ! preserve the POINTER attribute of its selector.
+  if(associated(this%RootMediumYoungXNum_rpvr))deallocate(this%RootMediumYoungXNum_rpvr)
+  if(associated(this%RootMediumYoungLength_rpvr))deallocate(this%RootMediumYoungLength_rpvr)
+  if(associated(this%RootMediumYoungElms_rpvr))deallocate(this%RootMediumYoungElms_rpvr)
   if(associated(this%RootMediumMeanLength_rpvr))deallocate(this%RootMediumMeanLength_rpvr)
   if(associated(this%RootFineFrac2Med_rpvr))deallocate(this%RootFineFrac2Med_rpvr)
   end subroutine plt_morph_destroy

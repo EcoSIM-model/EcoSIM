@@ -138,6 +138,9 @@ implicit none
   real(r8),pointer :: datpr4(:,:,:,:),datpr5(:,:,:,:,:)
   integer :: ncols, npfts
   integer :: ic,ip,sz3,sz4,sz5,sz2
+  integer :: cohort_varid
+  type(var_desc_t) :: cohort_vardesc
+  logical :: has_cohort(3)
   integer :: routing_varid
   type(var_desc_t) :: routing_vardesc
   logical :: has_category_routing
@@ -4981,9 +4984,72 @@ implicit none
       interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
     endif  
 
+
+  ! Cohort variables are a subset of the existing total stocks. Older files have
+  ! no subset: all existing medium roots then enter as established roots.
+  has_cohort=.true.
+  if(flag=='read')then
+    call ncd_inqvid(ncid,'RootMediumYoungXNum_rpvr',cohort_varid,cohort_vardesc,readvar=has_cohort(1))
+    call ncd_inqvid(ncid,'RootMediumYoungLength_rpvr',cohort_varid,cohort_vardesc,readvar=has_cohort(2))
+    call ncd_inqvid(ncid,'RootMediumYoungElms_rpvr',cohort_varid,cohort_vardesc,readvar=has_cohort(3))
+    if(any(has_cohort).and..not.all(has_cohort))call endrun('Incomplete medium-root cohort restart state')
+    if(.not.any(has_cohort))then
+      RootMediumYoungXNum_rpvr=0._r8
+      RootMediumYoungLength_rpvr=0._r8
+      RootMediumYoungElms_rpvr=0._r8
+    endif
+  endif
+  if(all(has_cohort))then
+if(flag=='read')then
+    datpr3 => datrp_3d(1:npfts,1:JZ,1:MaxNumRootAxes)
+    call restartvar(ncid, flag, varname='RootMediumYoungXNum_rpvr', dim1name='pft',dim2name='levsoi',dim3name='rootaxs',&
+     long_name='Young subset of medium-root population axes', units='# d-2', &
+     interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval)
+    call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungXNum_rpvr,datrp_3d,NumActivePlants=restart_num_plants,&
+      IsPlantActive_pft=restart_active_pft)
+  else
+    if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungXNum_rpvr,datrp_3d,NumActivePlants=restart_num_plants,&
+      IsPlantActive_pft=restart_active_pft)
+    datpr3 => datrp_3d(1:npfts,1:JZ,1:MaxNumRootAxes)
+    call restartvar(ncid, flag, varname='RootMediumYoungXNum_rpvr', dim1name='pft',dim2name='levsoi',dim3name='rootaxs',&
+     long_name='Young subset of medium-root population axes', units='# d-2', &
+     interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval)
+  endif
+if(flag=='read')then
+      datpr3 => datrp_3d(1:npfts, 1:JZ,1:MaxNumRootAxes)
+      call restartvar(ncid, flag, varname='RootMediumYoungLength_rpvr', dim1name='pft',&
+      dim2name='levsoi',dim3name='rootaxs',long_name='Young subset of population medium-root length', units='m d-2', &
+      interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval)
+      call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungLength_rpvr,datrp_3d,NumActivePlants=restart_num_plants,&
+        IsPlantActive_pft=restart_active_pft)
+    else
+      if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungLength_rpvr,datrp_3d,NumActivePlants=restart_num_plants,&
+        IsPlantActive_pft=restart_active_pft)
+      datpr3 => datrp_3d(1:npfts,1:JZ,1:MaxNumRootAxes)
+      call restartvar(ncid, flag, varname='RootMediumYoungLength_rpvr', dim1name='pft',&
+      dim2name='levsoi',dim3name='rootaxs',long_name='Young subset of population medium-root length', units='m d-2', &
+      interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval)
+    endif
+if(flag=='read')then
+      datpr4 => datrp_4d(1:npfts, 1:NumPlantChemElms, 1:JZ,1:MaxNumRootAxes)
+      call restartvar(ncid, flag, varname='RootMediumYoungElms_rpvr', dim1name='pft',dim2name='elmnts',&
+      dim3name='levsoi',dim4name='rootaxs',long_name='Young subset of medium-root structural elements', units='g d-2', &
+      interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
+      call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungElms_rpvr,datrp_4d,NumActivePlants=restart_num_plants,&
+        IsPlantActive_pft=restart_active_pft)
+    else
+      if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumYoungElms_rpvr,datrp_4d,NumActivePlants=restart_num_plants,&
+        IsPlantActive_pft=restart_active_pft)
+      datpr4 => datrp_4d(1:npfts, 1:NumPlantChemElms,1:JZ,1:MaxNumRootAxes)
+      call restartvar(ncid, flag, varname='RootMediumYoungElms_rpvr', dim1name='pft',dim2name='elmnts',&
+      dim3name='levsoi',dim4name='rootaxs',long_name='Young subset of medium-root structural elements', units='g d-2', &
+      interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
+    endif
+  endif
+
     if(flag=='read')then
       datpr4 => datrp_4d(1:npfts, 1:NumPlantChemElms, 1:JZ,1:MaxNumRootAxes)
-      call restartvar(ncid, flag, varname='RootMediumStructElms_rpvr', dim1name='pft',dim2name='elmnts',&
+      call restartvar(ncid, flag,varname='RootMediumStructElms_rpvr', dim1name='pft',dim2name='elmnts',&
       dim3name='levsoi',dim4name='rootaxs',long_name='root layer medium axes element', units='g d-2', &
       interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
       call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,RootMediumStructElms_rpvr,datrp_4d,NumActivePlants=restart_num_plants,&
@@ -5028,6 +5094,13 @@ implicit none
       dim3name='levsoi',dim4name='rootaxs',long_name='root layer primary axes lignified zone element', units='g d-2', &
       interpinic_flag='skip', data=datpr4, missing_value=spval, fill_value=spval)
     endif  
+
+    ! Derived diagnostic: reconstruct it from existing fields so older restart
+    ! files remain readable. Shoot-root exchange refreshes it from current pools.
+    if(flag=='read')then
+      RootActiveC_pft(:,:,:) = RootElms_pft(ielmc,:,:,:) &
+        -SUM(SUM(Root1stLigStructElms_rpvr(ielmc,:,:,:,:,:),DIM=2),DIM=1)
+    endif
 
     if(flag=='read')then
       datpr5 => datrp_5d(1:npfts, 1:NumPlantChemElms, 1:pltpar%jroots,1:JZ,1:MaxNumRootAxes)

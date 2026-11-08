@@ -2253,12 +2253,19 @@ module PlantDisturbsMod
   if(N.EQ.ipltroot)then
     DO NR=1,NumStructuralRootAxes_pft(NZ)
       DO NE=1,NumPlantChemElms        
+        associate(YoungE=>plt_morph%RootMediumYoungElms_rpvr)
+          YoungE(NE,L,NR,NZ)=YoungE(NE,L,NR,NZ)*FracLeftThin
+        end associate
         RootMediumStructElms_rpvr(NE,L,NR,NZ) = RootMediumStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
         Root1stActStructElms_rpvr(NE,L,NR,NZ) = Root1stActStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
         Root1stLigStructElms_rpvr(NE,L,NR,NZ) = Root1stLigStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
         RootMyco1stStrutElms_rpvr(NE,L,NR,NZ) = Root1stActStructElms_rpvr(NE,L,NR,NZ)+Root1stLigStructElms_rpvr(NE,L,NR,NZ)
       ENDDO
       !Thin total length and axis count together; surviving root radius is unchanged.
+      associate(YoungN=>plt_morph%RootMediumYoungXNum_rpvr,YoungL=>plt_morph%RootMediumYoungLength_rpvr)
+        YoungN(L,NR,NZ)=YoungN(L,NR,NZ)*FracLeftThin
+        YoungL(L,NR,NZ)=YoungL(L,NR,NZ)*FracLeftThin
+      end associate
       RootMediumLength_rpvr(L,NR,NZ) = RootMediumLength_rpvr(L,NR,NZ)*FracLeftThin
       RootMediumXNum_rpvr(L,NR,NZ)   = RootMediumXNum_rpvr(L,NR,NZ)*FracLeftThin
       Root1stLenPP_rpvr(L,NR,NZ)  = Root1stLenPP_rpvr(L,NR,NZ)*FracGeometryLeft

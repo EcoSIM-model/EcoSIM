@@ -4,8 +4,9 @@ module UptakesMod
   use abortutils, only : endrun
   use data_kind_mod , only : r8 => DAT_KIND_R8,yearIJ_type
   use data_const_mod, only: GravAcceleration=>DAT_CONST_G
+  use RootMod, only: MediumTransportGeometry
   use StomatesMod,    only: StomatalDynamics, PhotosynsDiag
-  use EcoSIMCtrlMod,  only: etimer, ldo_sp_mode, ats_cpl_mode
+  use EcoSIMCtrlMod,  only: etimer, ldo_sp_mode, ats_cpl_mode, lcoarseroot
   use UnitMod,        only: units
   use PlantBalMod,    only: SumPlantRootGas
   use MiniFuncMod,    only: gOC_to_m3_OM
@@ -1247,13 +1248,23 @@ module UptakesMod
   real(r8) :: FRAD1   !total transport vessels in primary roots
   real(r8) :: FRAD2
   real(r8) :: FRADM   !medium roots xylem/tracheid vessels
-  real(r8) :: DTransptTube, AreaTranspt
+  real(r8) :: StalkRadius, StalkSapDepth, StalkSapArea, StalkLumenFraction
+  real(r8) :: StalkVesselCount, StalkRootArea, StalkPathFraction
+  real(r8) :: RootAbsorbArea_rvr(pltpar%jroots,JZ1)
+  logical :: UseStalkRadius
   real(r8) :: RSSL,Root2ndSurfArea,condC,condM
   real(r8) :: StalkAxialResist     ![kg H2O m-5 h-1] =[m-2 h-1 H2O]
-  integer :: N, L
+  real(r8) :: cn(2),cl(2),cr(2),ca(2),cg(2),cgas(2),medium_water_g
+  integer :: N, L, NR, cohort
   associate(                                                                  &
+    NumGroups=>plt_morph%NumStructuralRootAxes_pft, &
     DLYR3                       => plt_site%DLYR3                            ,& !input  :vertical thickness of soil layer, [m]  
     CanopyHeightLive_pft        => plt_morph%CanopyHeightLive_pft            ,& !input  :canopy height, [m]
+    StalkAveRadius_pft          => plt_morph%StalkAveRadius_pft              ,& !input  :main stalk radius per plant, [m]
+    iPlant2ndGrothPattern_pft   => plt_pheno%iPlant2ndGrothPattern_pft       ,& !input  :secondary growth expression, [-]
+    xylemPhi_min_pft            => plt_morph%xylemPhi_min_pft                ,& !input  :young xylem lumen fraction, [-]
+    xylemPhi_max_pft            => plt_morph%xylemPhi_max_pft                ,& !input  :mature xylem lumen fraction, [-]
+    Radius95pctMature_pft       => plt_morph%Radius95pctMature_pft           ,& !input  :95% mature woody radius, [m]
     iPlantRootProfile_pft       => plt_pheno%iPlantRootProfile_pft           ,& !input  :plant growth type (vascular, non-vascular),[-]    
     CumSoilThickMidL_vr         => plt_site%CumSoilThickMidL_vr              ,& !input  :depth to middle of soil layer from surface of grid cell, [m]
     HYCDMicP4RootUptake_vr      => plt_soilchem%HYCDMicP4RootUptake_vr       ,& !input  :soil micropore hydraulic conductivity for root water uptake, [m MPa-1 h-1]
@@ -1310,7 +1321,28 @@ module UptakesMod
   PSIGravCanopyHeight            = mGravAccelerat*CanopyHeight4WatUptake_pft(NZ)
   !
   !Hagen-Poiseuille law of stalk xylem/tracheid vessels
-  FRADW                          = 1.0E+04_r8*(AMAX1(0.5_r8,1.0_r8+PSICanopy_pft(NZ)/EMODW))**4
+  FRADW  = 1.0E+04_r8*(AMAX1(0.5_r8,1.0_r8+PSICanopy_pft(NZ)/EMODW))**4
+
+  UseStalkRadius = lcoarseroot .and. &
+    is_plant_woody_vascular(iPlantRootProfile_pft(NZ),iPlant2ndGrothPattern_pft(NZ))
+  StalkVesselCount = 0._r8
+  if(UseStalkRadius)then
+    !Young stems are almost entirely sapwood; depth approaches the existing
+    !woody-xylem limit dmax as radius increases. Do not use the 1-mm phloem cap.
+    StalkRadius   = MAX(0._r8,StalkAveRadius_pft(NZ))
+    StalkSapDepth = dmax*TANH(StalkRadius/dmax)
+    StalkSapArea  = PiCON*StalkSapDepth*(2._r8*StalkRadius-StalkSapDepth)
+    !Use the existing root conduit anatomy as a stem proxy until separate
+    !stem traits are supplied. The single-conduit resistance includes ARSRA.
+    StalkLumenFraction = xylemPhi_min_pft(NZ)
+    if(Radius95pctMature_pft(NZ).GT.0._r8) &
+      StalkLumenFraction = StalkLumenFraction+(xylemPhi_max_pft(NZ)-xylemPhi_min_pft(NZ)) &
+        *(1._r8-EXP(-3._r8*StalkRadius/Radius95pctMature_pft(NZ)))
+    StalkLumenFraction = MIN(1._r8,MAX(0._r8,StalkLumenFraction))
+    if(RootSingleVesselArea_pft(NZ).GT.0._r8) &
+      StalkVesselCount = StalkSapArea*StalkLumenFraction*MAX(0._r8,PlantPopuLive_pft(NZ)) &
+        /RootSingleVesselArea_pft(NZ)
+  endif
   !
   !     SOIL AND ROOT HYDRAULIC RESISTANCES TO ROOT WATER UPTAKE
   !
@@ -1320,7 +1352,12 @@ module UptakesMod
   !     SoiLayerHasRoot_rvr:1=rooted,0=not rooted
   !     N:1=root,2=mycorrhizae
   !
-  D3880: DO N=1,Myco_pft(NZ)
+  !Split the population's shared stalk conductance among eligible parallel
+  !root/mycorrhizal paths by absorbing area. Fractions sum to one, so adding
+  !layers or root categories does not duplicate the whole stalk's capacity.
+  SoiLayerHasRoot_rvr = .false.
+  RootAbsorbArea_rvr = 0._r8
+  DO N=1,Myco_pft(NZ)
     DO  L=NU,MaxSoilLays4Root_pft(NZ)
 
       SoiLayerHasRoot_rvr(N,L)=VLSoilPoreMicP_vr(L).GT.ZEROS2         &
@@ -1331,6 +1368,19 @@ module UptakesMod
         .AND. Root2ndXNumL_rpvr(N,L,NZ).GT.ZERO4Groth_pft(NZ)         &
         .AND. THETW_vr(L).GT.ZERO
 
+      if(UseStalkRadius)then
+        RootAbsorbArea_rvr(N,L) = TwoPiCON*MAX(0._r8,Root2ndRadius_rpvr(N,L,NZ)) &
+          *MAX(0._r8,RootAbsorbLenPerPlant_pvr(N,L,NZ))*MAX(0._r8,PlantPopuLive_pft(NZ))
+        SoiLayerHasRoot_rvr(N,L) = SoiLayerHasRoot_rvr(N,L) .and. &
+          StalkVesselCount.GT.0._r8 .and. RootAbsorbArea_rvr(N,L).GT.0._r8
+        if(.not.SoiLayerHasRoot_rvr(N,L))RootAbsorbArea_rvr(N,L)=0._r8
+      endif
+    enddo
+  enddo
+  StalkRootArea = SUM(RootAbsorbArea_rvr)
+
+  D3880: DO N=1,Myco_pft(NZ)
+    DO L=NU,MaxSoilLays4Root_pft(NZ)
       if(SoiLayerHasRoot_rvr(N,L))THEN
 
         !
@@ -1372,13 +1422,35 @@ module UptakesMod
         else
           FRAD2                       = (Root2ndRadius_rpvr(N,L,NZ)/Root2ndMaxRadius_pft(N,NZ))**4
         endif
-        StalkAxialResist            = AZMAX1(StalkAxialResist_pft(NZ)*CanopyHeight4WatUptake_pft(NZ)/(FRADW*Root1stXNumL_pvr(L,NZ)))
+        if(UseStalkRadius)then
+          StalkPathFraction = RootAbsorbArea_rvr(N,L)/StalkRootArea
+          !Population conduit count and path fraction replace the empirical
+          !10000*primary-axis count; retain only its dimensionless stress factor.
+          StalkAxialResist = RootSingleVesselRstaxial_pft(NZ)*CanopyHeight4WatUptake_pft(NZ) &
+            /(StalkVesselCount*StalkPathFraction*(FRADW/1.e4_r8))
+        else
+          StalkAxialResist = AZMAX1(StalkAxialResist_pft(NZ)*CanopyHeight4WatUptake_pft(NZ) &
+            /(FRADW*Root1stXNumL_pvr(L,NZ)))
+        endif
         Root1stAxialResist_rvr(N,L) = StalkAxialResist+RootSingleVesselRstaxial_pft(NZ)*CumSoilThickMidL_vr(L)/FRAD1
 
         if(FRADM.GT.0._r8)then
           RootMediumAxialResist_rvr(N,L)=0.5_r8*RootSingleVesselRstaxial_pft(NZ)*RootMediumLength_pvr(L,NZ)/FRADM
         ELSE
           RootMediumAxialResist_rvr(N,L)=0._r8
+        endif
+        if(UseStalkRadius)then
+          medium_water_g=0._r8
+          do NR=1,NumGroups(NZ)
+            call MediumTransportGeometry(NZ,L,NR,cn,cl,cr,ca,cg,cgas)
+            do cohort=1,2
+              if(cn(cohort)>0._r8.and.cl(cohort)>0._r8)medium_water_g=medium_water_g &
+                +ca(cohort)*cn(cohort)/(0.5_r8*cl(cohort)/cn(cohort))
+            enddo
+          enddo
+          RootMediumAxialResist_rvr(N,L)=0._r8
+          if(medium_water_g>0._r8)RootMediumAxialResist_rvr(N,L)= &
+            RootSingleVesselRstaxial_pft(NZ)*RootSingleVesselArea_pft(NZ)/medium_water_g
         endif
         Root2ndAxialResist_rvr(N,L) = Root2ndAxialResist_pft(N,NZ)*Root2ndEffLen4uptk_rpvr(N,L,NZ)/(FRAD2*Root2ndXNumL_rpvr(N,L,NZ))
 

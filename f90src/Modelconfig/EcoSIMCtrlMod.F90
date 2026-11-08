@@ -69,6 +69,10 @@ implicit none
   logical :: snowRedist_model     = .true.
   logical :: llignification       = .false.
   logical :: lcoarseroot          =.false.
+  ! Exploratory medium-axis developmental scales; configured through /ecosim/.
+  real(r8) :: medium_axis_init_length=0.01_r8       !m per recruited axis
+  real(r8) :: medium_axis_mature_length=0.10_r8     !m per established axis
+  real(r8) :: medium_axis_extension_rate=0.001_r8   !m per existing axis per hour
   logical :: ATS_cpl_mode         = .false.
   logical :: plantOM4Heat         = .false.
   logical :: fixWaterLevel        = .false.

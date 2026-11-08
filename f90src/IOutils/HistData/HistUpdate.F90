@@ -86,6 +86,9 @@ contains
   this%h2D_RootKond2H2O_pvr(nptc,1:JZ)    = 0._r8
 
   this%h2D_RootMedC_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_RootMedYoungC_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_RootMedYoungAxes_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_RootMedYoungLength_pvr(nptc,1:JZ) = 0._r8
   this%h2D_RootAct1stC_pvr(nptc,1:JZ)    = 0._r8
   this%h2D_RootLig1stC_pvr(nptc,1:JZ)    = 0._r8
   this%h2D_NonstC_conc_pvr(nptc,1:JZ)    = 0._r8
@@ -97,6 +100,9 @@ contains
   this%h1D_SHOOT_NONSTP_ptc(nptc) = 0._r8
 
   this%h1D_dCAN_GPP_CLIM_ptc(nptc) = 0._r8
+  this%h1D_CytokininShootExport_ptc(nptc)=0._r8
+  this%h1D_CytokininRootLoss_ptc(nptc)=0._r8
+  this%h1D_RootActiveC_ptc(nptc) = 0._r8
   this%h1D_dCAN_GPP_eLIM_ptc(nptc) = 0._r8
 
   this%h1D_LeafChlCperm2LA_ptc(nptc)   = 0._r8

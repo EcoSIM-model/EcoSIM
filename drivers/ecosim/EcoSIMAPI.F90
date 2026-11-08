@@ -183,7 +183,8 @@ contains
 !     guard_floor_dying_stand = .true.
   namelist /ecosim/hist_nhtfrq,hist_mfilt,hist_fincl1,hist_fincl2,hist_fincl3,hist_yrclose, lmicrobeMLdiag,&
     do_budgets,ref_date,start_date,do_timing,do_timing_detail,warming_exp,fixClime,FireEvents,oscal_test,&
-    lcoarseroot,guard_floor_dying_stand
+    lcoarseroot,guard_floor_dying_stand, &
+    medium_axis_init_length,medium_axis_mature_length,medium_axis_extension_rate
 
   logical :: laddband
   namelist /bbgcforc/do_bgcforc_write,do_year,do_doy,laddband,do_layer,&
@@ -217,6 +218,9 @@ contains
   microbial_model       = .true.
   llignification        = .false.
   lcoarseroot           = .false.
+  medium_axis_init_length=0.01_r8
+  medium_axis_mature_length=0.10_r8
+  medium_axis_extension_rate=0.001_r8
   disp_planttrait       = .false.
   ref_date              = '18000101000000'   !place holder for future
   start_date            = '18000101000000'   !start date of the simulation, differ from the forcing date
@@ -276,6 +280,11 @@ contains
      call endrun('stopped in '//trim(mod_filename), __LINE__)
   end if
 
+  if(lcoarseroot)then
+    if(medium_axis_init_length<=0._r8.or.medium_axis_mature_length<=medium_axis_init_length &
+      .or.medium_axis_extension_rate<=0._r8) &
+      call endrun('Invalid medium-axis establishment/maturation lengths or extension rate',__LINE__)
+  endif
   read(nml_buffer, nml=bbgcforc, iostat=nml_error, iomsg=ioerror_msg)
   if (nml_error /= 0) then
      write(iulog,'(a)')"ERROR reading bbgcforc namelist "

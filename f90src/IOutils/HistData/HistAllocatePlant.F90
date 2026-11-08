@@ -72,6 +72,9 @@ contains
   allocate(this%h1D_HUSK_C_ptc(beg_ptc:end_ptc))          ;this%h1D_HUSK_C_ptc(:)=spval
   allocate(this%h1D_GRAIN_C_ptc(beg_ptc:end_ptc))         ;this%h1D_GRAIN_C_ptc(:)=spval
   allocate(this%h1D_ROOT_C_ptc(beg_ptc:end_ptc))          ;this%h1D_ROOT_C_ptc(:)=spval
+  allocate(this%h1D_CytokininShootExport_ptc(beg_ptc:end_ptc));this%h1D_CytokininShootExport_ptc(:)=spval
+  allocate(this%h1D_CytokininRootLoss_ptc(beg_ptc:end_ptc));this%h1D_CytokininRootLoss_ptc(:)=spval
+  allocate(this%h1D_RootActiveC_ptc(beg_ptc:end_ptc));this%h1D_RootActiveC_ptc(:)=spval
   allocate(this%h1D_ROOTST_C_ptc(beg_ptc:end_ptc))        ;this%h1D_ROOTST_C_ptc(:)=spval
   allocate(this%h1D_ROOTST_N_ptc(beg_ptc:end_ptc))        ;this%h1D_ROOTST_N_ptc(:)=spval
   allocate(this%h1D_ROOTST_P_ptc(beg_ptc:end_ptc))        ;this%h1D_ROOTST_P_ptc(:)=spval

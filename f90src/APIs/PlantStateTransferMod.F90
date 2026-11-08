@@ -65,6 +65,9 @@ contains
     RootUptk_Pmin_cumYr_pft(NZ,NY,NX) = RootUptk_Pmin_cumYr_pft(NZ,NY,NX)+plt_rbgc%RootNutUptakeP_pft(NZ)
     RootNoduleElms_pft(1:NumPlantChemElms,NZ,NY,NX)             = plt_biom%RootNoduleElms_pft(1:NumPlantChemElms,NZ)
     RootElms_pft(1:NumPlantChemElms,NZ,NY,NX)                   = plt_biom%RootElms_pft(1:NumPlantChemElms,NZ)
+    associate(RootActiveC_api => plt_biom%RootActiveC_pft)
+      RootActiveC_pft(NZ,NY,NX) = RootActiveC_api(NZ)
+    end associate
     PlantElmBalCum_pft(1:NumPlantChemElms,NZ,NY,NX)             = plt_site%PlantElmBalCum_pft(1:NumPlantChemElms,NZ)
     CanopyNonstElms_pft(1:NumPlantChemElms,NZ,NY,NX)            = plt_biom%CanopyNonstElms_pft(1:NumPlantChemElms,NZ)
     CanopyNodulNonstElms_pft(1:NumPlantChemElms,NZ,NY,NX)       = plt_biom%CanopyNodulNonstElms_pft(1:NumPlantChemElms,NZ)
@@ -287,6 +290,9 @@ contains
     plt_biom%RootNoduleElms_pft(1:NumPlantChemElms,NZ)             = RootNoduleElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%ShootNoduleElms_pft(1:NumPlantChemElms,NZ)            = ShootNoduleElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%RootElms_pft(1:NumPlantChemElms,NZ)                   = RootElms_pft(1:NumPlantChemElms,NZ,NY,NX)
+    associate(RootActiveC_api => plt_biom%RootActiveC_pft)
+      RootActiveC_api(NZ) = RootActiveC_pft(NZ,NY,NX)
+    end associate
     plt_biom%ShootElms_pft(1:NumPlantChemElms,NZ)                  = ShootElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%LeafStrutElms_pft(1:NumPlantChemElms,NZ)              = LeafStrutElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%EarStrutElms_pft(1:NumPlantChemElms,NZ)               = EarStrutElms_pft(1:NumPlantChemElms,NZ,NY,NX)

@@ -1,5 +1,6 @@
 module PlantMod
   use data_kind_mod,     only: r8 => DAT_KIND_R8,yearIJ_type
+  use RootMod,          only: PrepareRootDomain
   use grosubsMod,        only: GrowPlants
   use PlantPhenolMod,    only: PhenologyUpdate
   use UptakesMod,        only: RootUptakes
@@ -71,6 +72,9 @@ implicit none
       
         call  PlantAPISend(yearIJ,NY,NX)
 
+        DO NZ=1,NP_col(NY,NX)
+          call PrepareRootDomain(yearIJ,NZ)
+        ENDDO
         call EnterPlantBalance(yearIJ,NP0_col(NY,NX))
 
         if(yearIJ%J.eq.1) then          

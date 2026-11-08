@@ -143,6 +143,31 @@ implicit none
       endif
     endif
     plt_morph%StalkAxialResist_pft(NZ)         = StalkAxialResist_pft(NZ,NY,NX)
+    associate(StalkRadius_api => plt_morph%StalkAveRadius_pft, &
+      PhiMin_api => plt_morph%xylemPhi_min_pft, PhiMax_api => plt_morph%xylemPhi_max_pft, &
+      MatureRadius_api => plt_morph%Radius95pctMature_pft, &
+      SecondaryGrowth_api => plt_pheno%iPlant2ndGrothPattern_pft)
+      StalkRadius_api(NZ) = StalkAveRadius_pft(NZ,NY,NX)
+      PhiMin_api(NZ) = xylemPhi_min_pft(NZ,NY,NX)
+      PhiMax_api(NZ) = xylemPhi_max_pft(NZ,NY,NX)
+      MatureRadius_api(NZ) = Radius95pctMature_pft(NZ,NY,NX)
+      SecondaryGrowth_api(NZ) = iPlant2ndGrothPattern_pft(NZ,NY,NX)
+    end associate
+    ! Water uptake precedes the full plant API transfer. Supply the cohort
+    ! geometry explicitly, including on the first hour after a restart.
+    associate(TotalN=>plt_morph%RootMediumXNum_rpvr,TotalL=>plt_morph%RootMediumLength_rpvr, &
+      TotalE=>plt_biom%RootMediumStructElms_rpvr,YoungN=>plt_morph%RootMediumYoungXNum_rpvr, &
+      YoungL=>plt_morph%RootMediumYoungLength_rpvr,YoungE=>plt_morph%RootMediumYoungElms_rpvr, &
+      NumGroups=>plt_morph%NumStructuralRootAxes_pft,Volume=>plt_morph%CRootActVolPerMassC_pft)
+      TotalN(1:NK_col(NY,NX),:,NZ)=RootMediumXNum_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+      TotalL(1:NK_col(NY,NX),:,NZ)=RootMediumLength_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+      TotalE(:,1:NK_col(NY,NX),:,NZ)=RootMediumStructElms_rpvr(:,1:NK_col(NY,NX),:,NZ,NY,NX)
+      YoungN(1:NK_col(NY,NX),:,NZ)=RootMediumYoungXNum_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+      YoungL(1:NK_col(NY,NX),:,NZ)=RootMediumYoungLength_rpvr(1:NK_col(NY,NX),:,NZ,NY,NX)
+      YoungE(:,1:NK_col(NY,NX),:,NZ)=RootMediumYoungElms_rpvr(:,1:NK_col(NY,NX),:,NZ,NY,NX)
+      NumGroups(NZ)=NumStructuralRootAxes_pft(NZ,NY,NX)
+      Volume(NZ)=CRootActVolPerMassC_pft(NZ,NY,NX)
+    end associate
     plt_morph%RootSingleVesselRstaxial_pft(NZ) = RootSingleVesselRstaxial_pft(NZ,NY,NX)
     plt_morph%RootSingleVesselArea_pft(NZ)     = RootSingleVesselArea_pft(NZ,NY,NX)
     plt_ew%ETCanopy_CumYr_pft(NZ)              = ETCanopy_CumYr_pft(NZ,NY,NX)
