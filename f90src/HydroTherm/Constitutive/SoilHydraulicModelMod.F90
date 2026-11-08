@@ -39,10 +39,10 @@ module SoilHydraulicModelMod
     procedure(matric_interface), deferred :: matric_potential
     procedure(inverse_interface), deferred :: water_content
     procedure(table_interface), deferred :: conductivity_table
-    procedure :: relative_conductivity => LookupRelativeConductivity
-    procedure :: dry_content => DefaultDryContent
+    procedure :: relative_conductivity  => LookupRelativeConductivity
+    procedure :: dry_content            => DefaultDryContent
     procedure :: ksat_reference_content => DefaultKsatReferenceContent
-    procedure :: equilibrium_content => DefaultEquilibriumContent
+    procedure :: equilibrium_content    => DefaultEquilibriumContent
   end type SoilHydraulicModel
 
   abstract interface
@@ -72,12 +72,12 @@ module SoilHydraulicModelMod
       ! Class k must use theta=porosity*(1-(k-1)/100), for k=1..100. Existing consumers
       ! index total liquid saturation theta/porosity, not residual-adjusted saturation.
       import :: SoilHydraulicModel,SoilHydraulicParameters,r8,NumSoilMoistureClasses
-      class(SoilHydraulicModel), intent(in) :: this ! constitutive implementation [-]
-      type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-      real(r8), intent(in) :: ksat_vertical,ksat_horizontal ! saturated scales [m2 MPa-1 h-1]
-      real(r8), intent(out) :: water_classes(NumSoilMoistureClasses) ! wet-to-dry contents [m3 m-3]
+      class(SoilHydraulicModel), intent(in) :: this                     ! constitutive implementation [-]
+      type(SoilHydraulicParameters), intent(in) :: parameters           ! one-layer parameter view
+      real(r8), intent(in) :: ksat_vertical,ksat_horizontal             ! saturated scales [m2 MPa-1 h-1]
+      real(r8), intent(out) :: water_classes(NumSoilMoistureClasses)    ! wet-to-dry contents [m3 m-3]
       real(r8), intent(out) :: pressure_classes(NumSoilMoistureClasses) ! matric potentials [MPa]
-      real(r8), intent(out) :: conductivity(3,NumSoilMoistureClasses) ! directions 1:2 horizontal, 3 vertical [m2 MPa-1 h-1]
+      real(r8), intent(out) :: conductivity(3,NumSoilMoistureClasses)   ! directions 1:2 horizontal, 3 vertical [m2 MPa-1 h-1]
     end subroutine table_interface
   end interface
 contains
@@ -86,10 +86,10 @@ contains
     ! Description:
     ! Select relative conductivity from a unit-scale table using EcoSIM's existing
     ! discrete lookup. Runtime flow continues to use its precomputed layer tables.
-    class(SoilHydraulicModel), intent(in) :: this ! constitutive implementation [-]
+    class(SoilHydraulicModel), intent(in) :: this           ! constitutive implementation [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(in) :: theta ! liquid content [m3 m-3]
-    real(r8) :: relative_k ! vertical K/Ksat at the selected class [-]
+    real(r8), intent(in) :: theta                           ! liquid content [m3 m-3]
+    real(r8) :: relative_k                                  ! vertical K/Ksat at the selected class [-]
     real(r8) :: water(NumSoilMoistureClasses),pressure(NumSoilMoistureClasses)
     real(r8) :: conductivity(3,NumSoilMoistureClasses)
     integer :: k
@@ -107,9 +107,9 @@ contains
   function DefaultDryContent(this,parameters) result(theta)
     ! Description:
     ! Use a scheme's inverse at the dry-potential bound unless it overrides this rule.
-    class(SoilHydraulicModel), intent(in) :: this ! constitutive implementation [-]
+    class(SoilHydraulicModel), intent(in) :: this           ! constitutive implementation [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8) :: theta ! dry-limit liquid content [m3 m-3]
+    real(r8) :: theta                                       ! dry-limit liquid content [m3 m-3]
     character(len=*), parameter :: subname='DefaultDryContent'
 
     call PrintInfo('beg '//subname)
@@ -122,9 +122,9 @@ contains
   function DefaultKsatReferenceContent(this,parameters) result(theta)
     ! Description:
     ! Obtain the -0.033 MPa reference content from a scheme's inverse by default.
-    class(SoilHydraulicModel), intent(in) :: this ! constitutive implementation [-]
+    class(SoilHydraulicModel), intent(in) :: this           ! constitutive implementation [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8) :: theta ! reference liquid content [m3 m-3]
+    real(r8) :: theta                                       ! reference liquid content [m3 m-3]
     character(len=*), parameter :: subname='DefaultKsatReferenceContent'
 
     call PrintInfo('beg '//subname)
@@ -135,11 +135,11 @@ contains
   function DefaultEquilibriumContent(this,parameters,potential,max_content) result(theta)
     ! Description:
     ! Bound inverse retention by the liquid capacity supplied by water-table diagnosis.
-    class(SoilHydraulicModel), intent(in) :: this ! constitutive implementation [-]
-    type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(in) :: potential ! equilibrium matric potential [MPa]
-    real(r8), intent(in) :: max_content ! liquid capacity after ice/air allowance [m3 m-3]
-    real(r8) :: theta ! bounded equilibrium content [m3 m-3]
+    class(SoilHydraulicModel), intent(in) :: this             ! constitutive implementation [-]
+    type(SoilHydraulicParameters), intent(in) :: parameters   ! one-layer parameter view
+    real(r8), intent(in) :: potential                         ! equilibrium matric potential [MPa]
+    real(r8), intent(in) :: max_content                       ! liquid capacity after ice/air allowance [m3 m-3]
+    real(r8) :: theta                                         ! bounded equilibrium content [m3 m-3]
     character(len=*), parameter :: subname='DefaultEquilibriumContent'
 
     call PrintInfo('beg '//subname)

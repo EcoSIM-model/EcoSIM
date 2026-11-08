@@ -11,22 +11,22 @@ module EcoSIMSoilHydraulicMod
     ! Description:
     ! Stateless current scheme; all spatial parameters are passed in by the caller.
   contains
-    procedure :: matric_potential => EcoSIMMatricPotential
-    procedure :: water_content => EcoSIMWaterContent
-    procedure :: conductivity_table => EcoSIMConductivityTable
-    procedure :: dry_content => EcoSIMDryContent
+    procedure :: matric_potential       => EcoSIMMatricPotential
+    procedure :: water_content          => EcoSIMWaterContent
+    procedure :: conductivity_table     => EcoSIMConductivityTable
+    procedure :: dry_content            => EcoSIMDryContent
     procedure :: ksat_reference_content => EcoSIMKsatReferenceContent
-    procedure :: equilibrium_content => EcoSIMEquilibriumContent
+    procedure :: equilibrium_content    => EcoSIMEquilibriumContent
   end type EcoSIMSoilHydraulicModel
 contains
 !------------------------------------------------------------------------------------------
   function EcoSIMMatricPotential(this,parameters,theta) result(potential)
     ! Description:
     ! Evaluate the existing piecewise log retention curve without regrouping its arithmetic.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this     ! current constitutive scheme [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(inout) :: theta ! liquid content; set to porosity near saturation [m3 m-3]
-    real(r8) :: potential ! matric potential [MPa]
+    real(r8), intent(inout) :: theta                        ! liquid content; set to porosity near saturation [m3 m-3]
+    real(r8) :: potential                                   ! matric potential [MPa]
     character(len=*), parameter :: subname='EcoSIMMatricPotential'
 
     call PrintInfo('beg '//subname)
@@ -39,8 +39,8 @@ contains
       psd           => parameters%log_wet_content_ratio    , &
       log_psifc     => parameters%log_field_potential      , &
       log_psisat    => parameters%log_saturation_potential , &
-      log_dry_ratio => parameters%log_dry_potential_ratio. , &
-      log_wet_ratio => parameters%log_wet_potential_ratio. , &
+      log_dry_ratio => parameters%log_dry_potential_ratio  , &
+      log_wet_ratio => parameters%log_wet_potential_ratio  , &
       srp           => parameters%curvature                , &
       dry_limit     => parameters%dry_potential            , &
       sat_potential => parameters%saturation_potential     , &
@@ -62,20 +62,28 @@ contains
     ! Description:
     ! Invert both branches of the current retention curve, bounded at saturation
     ! and the dry-pressure limit. This is distinct from its legacy diagnostic approximation.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this     ! current constitutive scheme [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(in) :: potential ! matric potential [MPa]
-    real(r8) :: theta ! bounded liquid content [m3 m-3]
+    real(r8), intent(in) :: potential                       ! matric potential [MPa]
+    real(r8) :: theta                                       ! bounded liquid content [m3 m-3]
     real(r8) :: bounded_potential
     character(len=*), parameter :: subname='EcoSIMWaterContent'
 
     call PrintInfo('beg '//subname)
-    associate(porosity => parameters%porosity,log_fc => parameters%log_field_capacity, &
-      log_phi => parameters%log_porosity,fcd => parameters%log_dry_content_ratio, &
-      psd => parameters%log_wet_content_ratio,log_psifc => parameters%log_field_potential, &
-      log_psisat => parameters%log_saturation_potential,log_dry_ratio => parameters%log_dry_potential_ratio, &
-      log_wet_ratio => parameters%log_wet_potential_ratio,srp => parameters%curvature, &
-      dry_limit => parameters%dry_potential,sat_potential => parameters%saturation_potential)
+    associate(                                              &
+      porosity      => parameters%porosity,                 &
+      log_fc        => parameters%log_field_capacity,       &
+      log_phi       => parameters%log_porosity,             &
+      fcd           => parameters%log_dry_content_ratio,    &
+      psd           => parameters%log_wet_content_ratio,    &
+      log_psifc     => parameters%log_field_potential,      &
+      log_psisat    => parameters%log_saturation_potential, &
+      log_dry_ratio => parameters%log_dry_potential_ratio,  &
+      log_wet_ratio => parameters%log_wet_potential_ratio,  &
+      srp           => parameters%curvature,                &
+      dry_limit     => parameters%dry_potential,            &
+      sat_potential => parameters%saturation_potential      &
+      )
       bounded_potential=AMAX1(potential,dry_limit)
       if(bounded_potential.GE.sat_potential)then
         theta=porosity
@@ -92,12 +100,12 @@ contains
     ! Description:
     ! Preserve the original 100-class conductivity sums and multiplication order.
     ! Drainage thresholds are applied by the caller, separately from this scheme.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
-    type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(in) :: ksat_vertical,ksat_horizontal ! saturated scales [m2 MPa-1 h-1]
-    real(r8), intent(out) :: water_classes(NumSoilMoistureClasses) ! liquid samples [m3 m-3]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this               ! current constitutive scheme [-]
+    type(SoilHydraulicParameters), intent(in) :: parameters           ! one-layer parameter view
+    real(r8), intent(in) :: ksat_vertical,ksat_horizontal             ! saturated scales [m2 MPa-1 h-1]
+    real(r8), intent(out) :: water_classes(NumSoilMoistureClasses)    ! liquid samples [m3 m-3]
     real(r8), intent(out) :: pressure_classes(NumSoilMoistureClasses) ! corresponding potentials [MPa]
-    real(r8), intent(out) :: conductivity(3,NumSoilMoistureClasses) ! horizontal 1:2, vertical 3 [m2 MPa-1 h-1]
+    real(r8), intent(out) :: conductivity(3,NumSoilMoistureClasses)   ! horizontal 1:2, vertical 3 [m2 MPa-1 h-1]
     real(r8) :: xk,yk,sum1,sum2
     integer :: k,m,n,n100
     character(len=*), parameter :: subname='EcoSIMConductivityTable'
@@ -133,15 +141,19 @@ contains
   function EcoSIMDryContent(this,parameters) result(theta)
     ! Description:
     ! Preserve the original dry-bound expression and evaluation order.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this     ! current constitutive scheme [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8) :: theta ! dry-bound liquid content [m3 m-3]
+    real(r8) :: theta                                       ! dry-bound liquid content [m3 m-3]
     character(len=*), parameter :: subname='EcoSIMDryContent'
 
     call PrintInfo('beg '//subname)
-    associate(log_psifc => parameters%log_field_potential,dry_limit => parameters%dry_potential, &
-      fcd => parameters%log_dry_content_ratio,log_dry_ratio => parameters%log_dry_potential_ratio, &
-      log_fc => parameters%log_field_capacity)
+    associate(                                             &
+      log_psifc     => parameters%log_field_potential,     &
+      dry_limit     => parameters%dry_potential,           &
+      fcd           => parameters%log_dry_content_ratio,   &
+      log_dry_ratio => parameters%log_dry_potential_ratio, &
+      log_fc        => parameters%log_field_capacity       &
+      )
       theta=EXP((log_psifc-LOG(-dry_limit))*fcd/log_dry_ratio+log_fc)
     end associate
     call PrintInfo('end '//subname)
@@ -150,15 +162,19 @@ contains
   function EcoSIMKsatReferenceContent(this,parameters) result(theta)
     ! Description:
     ! Preserve the historical -0.033 MPa Ksat reference, which omits inverse SRP.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this     ! current constitutive scheme [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8) :: theta ! reference liquid content [m3 m-3]
+    real(r8) :: theta                                       ! reference liquid content [m3 m-3]
     character(len=*), parameter :: subname='EcoSIMKsatReferenceContent'
 
     call PrintInfo('beg '//subname)
-    associate(porosity => parameters%porosity,log_phi => parameters%log_porosity, &
-      log_fc => parameters%log_field_capacity,log_psisat => parameters%log_saturation_potential, &
-      log_wet_ratio => parameters%log_wet_potential_ratio)
+    associate(                                              &
+      porosity      => parameters%porosity,                 &
+      log_phi       => parameters%log_porosity,             &
+      log_fc        => parameters%log_field_capacity,       &
+      log_psisat    => parameters%log_saturation_potential, &
+      log_wet_ratio => parameters%log_wet_potential_ratio   &
+      )
       theta=AMIN1(porosity,EXP((log_psisat-LOG(0.033_r8))*(log_phi-log_fc)/log_wet_ratio+log_phi))
     end associate
     call PrintInfo('end '//subname)
@@ -167,16 +183,20 @@ contains
   function EcoSIMEquilibriumContent(this,parameters,potential,max_content) result(theta)
     ! Description:
     ! Preserve the current water-table diagnostic's SRP-free wet-branch extrapolation.
-    class(EcoSIMSoilHydraulicModel), intent(in) :: this ! current constitutive scheme [-]
+    class(EcoSIMSoilHydraulicModel), intent(in) :: this     ! current constitutive scheme [-]
     type(SoilHydraulicParameters), intent(in) :: parameters ! one-layer parameter view
-    real(r8), intent(in) :: potential ! equilibrium matric potential [MPa]
-    real(r8), intent(in) :: max_content ! liquid capacity after ice/air allowance [m3 m-3]
-    real(r8) :: theta ! bounded diagnostic equilibrium content [m3 m-3]
+    real(r8), intent(in) :: potential                       ! equilibrium matric potential [MPa]
+    real(r8), intent(in) :: max_content                     ! liquid capacity after ice/air allowance [m3 m-3]
+    real(r8) :: theta                                       ! bounded diagnostic equilibrium content [m3 m-3]
     character(len=*), parameter :: subname='EcoSIMEquilibriumContent'
 
     call PrintInfo('beg '//subname)
-    associate(log_psisat => parameters%log_saturation_potential,psd => parameters%log_wet_content_ratio, &
-      log_wet_ratio => parameters%log_wet_potential_ratio,log_phi => parameters%log_porosity)
+    associate(                                              &
+      log_psisat    => parameters%log_saturation_potential, &
+      psd           => parameters%log_wet_content_ratio,    &
+      log_wet_ratio => parameters%log_wet_potential_ratio,  &
+      log_phi       => parameters%log_porosity              &
+      )
       IF(potential.GE.-EXP(log_psisat))THEN
         theta=max_content
       ELSE
