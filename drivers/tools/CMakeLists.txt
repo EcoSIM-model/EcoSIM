@@ -11,6 +11,7 @@ set(TOOLS_SOURCES
   GroundResistanceTest.F90
   ThinSnowEnergyTest.F90
   SaltTransportDataTest.F90
+  SoilHydraulicTest.F90
 	EcoATSTest.F90
 )
 include(add_ecosim_library)
@@ -152,3 +153,17 @@ target_include_directories(SaltTransportDataTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Mesh/
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/)
+
+add_ecosim_executable(SoilHydraulicTest.x SoilHydraulicTest.F90)
+target_include_directories(SoilHydraulicTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Minimath/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Modelpars/
+  ${CMAKE_BINARY_DIR}/f90src/ModelDiags/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SoilPhys/)
+add_test(NAME soil_hydraulic_properties COMMAND SoilHydraulicTest.x)

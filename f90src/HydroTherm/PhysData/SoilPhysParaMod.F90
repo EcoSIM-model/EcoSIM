@@ -1,4 +1,7 @@
 module SoilPhysParaMod
+  ! Description:
+  ! Evaluate soil/pond pressure and thermal properties. Hydraulic callers share
+  ! the current retention curve and named auxiliary water-content calculations.
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use DebugToolMod,     only: PrintInfo,DebugPrint
@@ -26,6 +29,8 @@ implicit none
   public :: CalcSoilThermConductivity
   public :: get_Tfrez
   public :: ComputePsiMCM  
+  public :: ComputeSoilAirDryContent
+  public :: ComputeKsatReferenceContent
   public :: ComputePSIPond
   public :: getMoistK
   public :: IsPondLayer
@@ -262,12 +267,11 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine ComputePsiMCM(N6,N5,N4,THETWL,PSISM1)
-  !
-  !Description
+  ! Description:
   !Compute soil matric pressure
   implicit none
   integer, intent(in) :: N6,N5,N4
-  real(r8), intent(inout) :: THETWL  !liquid water content, [m3 H2O d-2]
+  real(r8), intent(inout) :: THETWL  !liquid content [m3 m-3 soil]; set to porosity near saturation
   real(r8), intent(out) :: PSISM1    !Soil matric pressure [MPa]
   character(len=*), parameter :: subname='ComputePsiMCM'
 
@@ -287,6 +291,37 @@ implicit none
   call PrintInfo('end '//subname)
   END subroutine ComputePsiMCM
 
+!------------------------------------------------------------------------------------------
+  subroutine ComputeSoilAirDryContent(L,NY,NX,WaterContent)
+  ! Description:
+  ! Evaluate the current dry-branch water content at PSIHY. Callers retain
+  ! responsibility for distinguishing ordinary soil, litter and pond layers.
+  implicit none
+  integer, intent(in) :: L       ! vertical layer index, including litter at zero [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8), intent(out) :: WaterContent ! dry-branch liquid content [m3 m-3 soil]
+  character(len=*), parameter :: subname='ComputeSoilAirDryContent'
+
+  call PrintInfo('beg '//subname)
+  WaterContent=EXP((LOGPSIFLD_col(NY,NX)-LOG(-PSIHY))*FCD_vr(L,NY,NX)/LOGPSIMND_col(NY,NX)+LOGFldCapacity_vr(L,NY,NX))
+  call PrintInfo('end '//subname)
+  end subroutine ComputeSoilAirDryContent
+!------------------------------------------------------------------------------------------
+  subroutine ComputeKsatReferenceContent(L,NY,NX,WaterContent)
+  ! Description:
+  ! Preserve the logarithmic -0.033 MPa reference used to estimate Ksat.
+  ! This historical expression omits SRP and is not a general retention inverse.
+  implicit none
+  integer, intent(in) :: L       ! ordinary-soil layer index [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8), intent(out) :: WaterContent ! reference liquid content [m3 m-3 soil]
+  character(len=*), parameter :: subname='ComputeKsatReferenceContent'
+
+  call PrintInfo('beg '//subname)
+  WaterContent=AMIN1(POROS_vr(L,NY,NX),EXP((LOGPSIAtSat(NY,NX)-LOG(0.033_r8)) &
+    *(LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX))/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
+  call PrintInfo('end '//subname)
+  end subroutine ComputeKsatReferenceContent
 !------------------------------------------------------------------------------------------
   pure function getMoistK(thetawl,pores)result(K)
   implicit none

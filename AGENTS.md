@@ -67,6 +67,13 @@ take precedence over repository guidance.
   responsibilities.
 - Every subroutine and function must include a description comment explaining
   its purpose.
+- Each module or procedure description must start with a standalone comment line
+  `! Description:`, followed by the actual description on subsequent comment
+  lines. For example:
+  ```fortran
+  ! Description:
+  ! Compute soil matric potential from liquid water content.
+  ```
 - For new subroutines, declare `intent(in)`, `intent(out)`, or `intent(inout)`
   for each data argument and annotate its declaration with a comment explaining
   its meaning, units, and array dimensions where applicable.
