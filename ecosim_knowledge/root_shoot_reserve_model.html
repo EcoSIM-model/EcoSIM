@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Six-pool carbon model: reserves and coordinated shoot–root growth</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f8f5;color:#213936;font:17px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1100px;margin:auto;padding:40px 28px 70px}h1{font-size:2.3rem;line-height:1.2}h2{font-size:1.45rem}h3{font-size:1.1rem}section{background:white;border:1px solid #cedbd4;border-radius:12px;padding:25px;margin:24px 0}a{color:#176354}.meta,.small{font-size:.9rem;color:#556863}.lede{font-size:1.18rem}.tag{color:#176354;text-transform:uppercase;letter-spacing:.1em;font-size:.8rem;font-weight:700}.note{border-left:4px solid #176354;background:#edf5f0;padding:16px 20px;margin:18px 0}.warn{background:#fff4dc;border-color:#b37c26}.eq{font: .94rem/1.9 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5f2;padding:18px;border-radius:8px}table{border-collapse:collapse;width:100%;font-size:.93rem}th,td{padding:11px;border-bottom:1px solid #cedbd4;vertical-align:top;text-align:left}th{background:#edf5f0}.scroll{overflow-x:auto}nav{display:flex;flex-wrap:wrap;gap:8px 20px}img,svg{max-width:100%;height:auto}li{margin:8px 0}code{font-size:.9em}.chain{font-weight:600;color:#176354}figure{margin:20px 0}figcaption{font-size:.88rem;color:#556863}@media(max-width:650px){main{padding:22px 14px}section{padding:18px}h1{font-size:1.85rem}}@media print{body{background:white;font-size:10pt}main{padding:0}section{break-inside:avoid}nav{display:none}.eq{font-size:9pt}}
+</style></head><body><main>
+<header><div class="tag">EcoSIM-inspired model • Reserve extension</div>
+<h1>Can shoot and root reserves coordinate growth?</h1>
+<p class="lede">Yes, under identifiable conditions. Two reserve pools allow supply, transport, maintenance, and growth to adjust separately. They do not, by themselves, guarantee a stable shoot–root ratio or an adequate coarse-root framework.</p>
+<p class="meta">October 23, 2026 · Six dynamic carbon states · Analytical conditions and eight numerical experiments · Illustrative parameters, not an EcoSIM calibration.</p>
+<nav><a href="#states">Six states</a><a href="#equations">Fluxes and balances</a><a href="#ratio">Shoot–root ratio</a><a href="#analytic">Coordinated-growth condition</a><a href="#experiments">Experiments</a><a href="#formulation">Implications for formulation</a><a href="#validation">Reproduce</a></nav></header>
+
+<section id="states"><h2>1. Extend the four structural pools with two reserves</h2>
+<div class="scroll"><table><thead><tr><th>State</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>S</td><td>Shoot structural C, including unresolved leaf and stem components.</td></tr>
+<tr><td>F</td><td>Fine-root structural C.</td></tr>
+<tr><td>M</td><td>Medium-root structural C.</td></tr>
+<tr><td>C</td><td>Coarse/primary framework structural C, including the unresolved primary extension zone.</td></tr>
+<tr><td>Nₛ</td><td>Shoot reserve C: a lumped, mobilizable nonstructural carbon pool.</td></tr>
+<tr><td>Nᵣ</td><td>Root reserve C shared by the three root groups.</td></tr>
+</tbody></table></div>
+<p>All states are g C m⁻² ground. Time is days. Prescribed GPP, G(t), is g C m⁻² day⁻¹ and enters Nₛ. Reserves are carbon mass, not dry biomass. Their synthesis and mobilization costs are included only through the growth yields; separate storage-conversion costs are omitted.</p>
+<div class="eq">R = F + M + C
+r = S/R                         structural shoot:root ratio
+rₜ = (S + Nₛ)/(R + Nᵣ)          total shoot:root carbon ratio
+
+Vₛ = aₛ S
+Vᵣ = aꜰ F + aₘ M + a꜀ C
+qₛ = Nₛ/Vₛ,  qᵣ = Nᵣ/Vᵣ        reserve C per effective active C</div>
+<p>Choose fixed positive active fractions aᵢ ≤ 1. These effective capacities replace explicit leaf/sheath and living root tissues; they are not water volumes. Established positive shoots and root framework are required. Germination and recovery from complete organ loss need additional rules.</p>
+<p class="chain">GPP → shoot reserve ⇄ root reserve → root structural growth</p>
+<p>Shoot reserve also supplies shoot growth. Maintenance draws from the local reserve first. A shortage causes explicitly budgeted structural catabolism. The model contains no automatic F → M → C maturation conveyor.</p>
+<p>Compared with the <a href="simplified_root_shoot_carbon_model.html">four-pool proposal</a>, the two algebraic mobile-carbon balances are replaced by differential reserve balances. Maintenance is now local, and the transfer flux includes carbon for root maintenance as well as root growth.</p>
+</section>
+
+<section id="equations"><h2>2. Flux rules and all six equations</h2>
+<h3>2.1 Reserve-gradient transport</h3>
+<div class="eq">K = k VₛVᵣ/(Vₛ + Vᵣ)
+J = K(qₛ − qᵣ)
+  = k(NₛVᵣ − NᵣVₛ)/(Vₛ + Vᵣ)</div>
+<p>k is day⁻¹; J is g C m⁻² day⁻¹, positive from shoot to root. A root reserve excess can reverse J even when G = 0. Transport conserves carbon: the same J leaves one reserve and enters the other. The empty-reserve boundary is inward-pointing: an empty compartment cannot export through this rule. Discrete numerical steps must still respect donor availability.</p>
+<p>This is the gradient form used in EcoSIM’s <a href="../f90src/Plant_bgc/PlantNonstElmDynMod.F90"><code>ShootRootElmTransfer</code></a>, lines 598–615. EcoSIM also uses branch/layer weights, source–sink mass caps <code>FWTC/FWTS</code>, active-tissue fractions, and minimum linked masses. Those details are not reproduced here. Results for this reduction are not a proof of behavior or defects in the full model.</p>
+<h3>2.2 Preserve the original root-allocation hypothesis</h3>
+<p>The baseline keeps the conductance/sink closure of the four-pool proposal so that adding reserves does not silently change root architecture. With B₀ &gt; 0 and dimensionless bᵢ &gt; 0:</p>
+<div class="eq">g꜀ = b꜀C/B₀;  gₘ = bₘM/B₀;  gꜰ = bꜰF/B₀
+gₘ* = bₘ(M + εC)/B₀
+H(x,y) = xy/(x+y)
+H₃(x,y,z) = xyz/(xy+xz+yz)
+a = C/(Kₐ+C);  χ = χmax a F/(Kχ+F);  φ = gₘ/(g꜀+gₘ)
+
+wꜰ = (1−χ) H(g꜀, (1−φ)gꜰ + H(gₘ,φgꜰ))
+wₘ = a H₃(g꜀,gₘ*,gꜰ)
+w꜀ = g꜀(e+χ)
+Aᵢ = vᵣ B₀ wᵢ    for i ∈ {F,M,C}
+Aᵣ = Aꜰ + Aₘ + A꜀</div>
+<p>H and H₃ are zero when a required input is zero; φ = 0 if its denominator is zero. vᵣ is day⁻¹, so Aᵢ are substrate-use coefficients in g C m⁻² day⁻¹. ε allows medium establishment without inventing living medium transport; medium growth still requires fine roots. The maturity and cytokinin proxies are proposed closures, not exact EcoSIM equations. The source’s fine/medium/primary coupling is in <a href="../f90src/Plant_bgc/RootMod.F90"><code>SummarizeRootSink</code></a>.</p>
+<h3>2.3 Reserve-dependent growth and maintenance priority</h3>
+<div class="eq">h(q) = max(q − q₀, 0)
+Uₛ = vₛ S h(qₛ)
+Uᵢ = Aᵢ h(qᵣ)                   for i ∈ {F,M,C}
+
+l(q) = min(1, q/qₘ)              for q ≥ 0;  0 &lt; qₘ &lt; q₀
+Pᵢ = mᵢ Bᵢ                     potential maintenance C demand
+Mᵢ = Pᵢ l(qlocal)               maintenance paid from reserve
+Dᵢ = Pᵢ − Mᵢ                   structural C oxidized for the deficit</div>
+<p>Bᵢ denotes S, F, M, or C. Use qₛ for shoot maintenance and qᵣ for all root maintenance. mᵢ and vₛ are day⁻¹. U is substrate consumption, not structural growth. If a local reserve falls below q₀, structural growth stops; maintenance can continue down to zero reserve. Because q₀ &gt; qₘ, a growing compartment pays its full potential maintenance from reserves.</p>
+<p>Dᵢ is a deliberately simple starvation closure: catabolized structural carbon is all respired, with no litter or recycled fraction. It is not new carbon. This avoids imposing negative reserve pools when maintenance cannot be paid. The linear h(q) is suitable for modest q; it has no upper kinetic saturation.</p>
+<h3>2.4 The six state equations</h3>
+<div class="eq">dS/dt  = YₛUₛ − τₛS − Dₛ
+dF/dt  = YꜰUꜰ − τꜰF − Dꜰ
+dM/dt  = YₘUₘ − τₘM − Dₘ
+dC/dt  = Y꜀U꜀ − τ꜀C − D꜀
+
+dNₛ/dt = G − J − Mₛ − Uₛ
+dNᵣ/dt = J − (Mꜰ+Mₘ+M꜀) − (Uꜰ+Uₘ+U꜀)</div>
+<p>Yᵢ ∈ (0,1] are structural-carbon yields; τᵢ ≥ 0 are turnover rates, day⁻¹. Turnover leaves the plant as litter. Recycling is set to zero for clarity. Root maintenance persists when a root growth sink is zero.</p>
+<div class="note"><strong>Whole-plant carbon balance:</strong>
+<div class="eq">d(S+F+M+C+Nₛ+Nᵣ)/dt
+ = G − ΣᵢmᵢBᵢ − Σᵢ(1−Yᵢ)Uᵢ − ΣᵢτᵢBᵢ</div>
+Transport and storage-to-structure transfers cancel internally. External losses are maintenance respiration, growth respiration, and litter. Adding reserves does not create a source of carbon.</div>
+</section>
+
+<section id="ratio"><h2>3. What constitutes coordinated growth?</h2>
+<p>Coordinated growth means shoots and roots grow at the same net relative rate while both can gain biomass. It is not merely a transient flat ratio, reserve accumulation, or both compartments becoming stationary under constant GPP.</p>
+<div class="eq">gₛ = (YₛUₛ − τₛS − Dₛ)/S
+gᵣ = [Σroot(YᵢUᵢ − τᵢBᵢ − Dᵢ)]/R
+d ln(r)/dt = gₛ − gᵣ</div>
+<p>A constant structural ratio requires gₛ = gᵣ. A restoring response requires an excess of shoots to increase relative root growth, and an excess of roots to increase relative shoot growth. Reserve dynamics can supply that response through carbon demand and the concentration gradient; equality of reserve concentrations alone cannot.</p>
+<div class="eq">rₜ = r (1+Nₛ/S)/(1+Nᵣ/R)</div>
+<p>The total-carbon ratio differs from the structural ratio whenever reserve loading differs. A stable total ratio during drought, recovery, or carbon overflow may conceal a changing structural ratio. Both ratios, both q values, and all three structural root fractions should be tracked.</p>
+<div class="note warn"><strong>Reserve benefits:</strong> they allow growth to lag GPP, maintenance during low GPP, and reverse carbon transfer. <strong>Reserve limits:</strong> they cannot guarantee appropriate organ demand, sufficient transport, or balanced fine/medium/coarse development. They also cannot establish a universal biological shoot:root target.</div>
+</section>
+
+<section id="analytic"><h2>4. A tractable coordinated-growth condition</h2>
+<p>First freeze the structural root fractions, give all root groups a common yield Yᵣ and turnover τᵣ, and write their total use coefficient as Aᵣ = vᵣR. Set Vₛ = aₛS and Vᵣ = aᵣR. This is an analytical control case of the six-state equations, not an assumption that root fractions are fixed in the full model.</p>
+<p>Ask whether G(t) = G₀ exp(λt) can sustain balanced growth with S, R, Nₛ, and Nᵣ all proportional to exp(λt), λ &gt; 0. Assume both q values exceed q₀, so maintenance is paid and structural starvation is absent. The required reserve concentrations are:</p>
+<div class="eq">qₛ* = q₀ + (λ+τₛ)/(Yₛvₛ)
+qᵣ* = q₀ + (λ+τᵣ)/(Yᵣvᵣ)
+
+jᵣ = mᵣ + vᵣ(qᵣ*−q₀) + λ aᵣqᵣ*</div>
+<p>jᵣ is root carbon import required per unit root structural C, day⁻¹. It pays maintenance, supplies structural production including growth respiration, and grows the root reserve along with the plant. Keeping reserve concentration constant during growth requires growing the reserve mass; omitting λaᵣqᵣ* would understate root carbon demand.</p>
+<div class="eq">J/R = [k aₛaᵣr/(aₛr+aᵣ)] (qₛ*−qᵣ*)
+
+r* = aᵣjᵣ / {aₛ[k aᵣ(qₛ*−qᵣ*) − jᵣ]}</div>
+<p>A finite positive balanced ratio exists only if:</p>
+<div class="eq">qₛ* &gt; qᵣ*
+k aᵣ(qₛ*−qᵣ*) &gt; jᵣ</div>
+<ul><li><strong>Growth demand must sustain a gradient:</strong> with the same q₀, yields, and turnover, roots need vᵣ &gt; vₛ. Faster mobilization lets roots grow at the same relative rate while maintaining a lower reserve concentration.</li><li><strong>Transport must carry the required import:</strong> even infinitely many shoots cannot supply roots at the requested growth rate if k aᵣΔq ≤ jᵣ. This is a transport limit, not a shortage of total shoot carbon.</li><li><strong>Equal organ kinetics need not mean coordination:</strong> if yields, turnover, and v are equal, the required q values are equal. Then J = 0, but roots still require import. Positive balanced growth is impossible in this special case with all GPP entering shoots.</li><li><strong>The ratio is endogenous:</strong> it depends on growth demand, turnover, maintenance, reserve loading, and transport. Close to the transport threshold, r* becomes very large and sensitive to parameter changes.</li></ul>
+<p>For fixed Δq &gt; 0, J/R increases with r but saturates at k aᵣΔq. This provides a potential restoring mechanism: relatively more shoot structure increases carbon delivery per unit root. It cannot overcome the saturation bound.</p>
+<h3>A numerical example and a local stability check</h3>
+<div class="eq">aₛ=aᵣ=1;  Yₛ=Yᵣ=0.75
+vₛ=0.1 day⁻¹;  vᵣ=0.2 day⁻¹;  k=0.4 day⁻¹
+mₛ=mᵣ=τₛ=τᵣ=0.001 day⁻¹
+q₀=0.02;  qₘ=0.01;  λ=0.003 day⁻¹
+
+qₛ*=0.07333;  qᵣ*=0.04667
+jᵣ=0.006473 day⁻¹
+kcritical=0.24275 day⁻¹
+r*=1.54372
+rₜ*=r*×(1+qₛ*)/(1+qᵣ*) ≈ 1.58305</div>
+<p>The equilibrium of the exponentially normalized six stocks, exp(−λt)B, has Jacobian eigenvalues approximately −0.57532, −0.13763, −0.00473, −0.00400, −0.00400, and −0.000821 day⁻¹. All are negative: this particular controlled solution is locally attracting. The slowest mode has an e-folding time near 1,218 days; convergence can take many years even when coordination is stable. Existence alone is not a proof of stability for other parameters, root closures, or forcing.</p>
+</section>
+
+<section id="experiments"><h2>5. Six-state numerical experiments</h2>
+<figure><a href="root_shoot_reserve_experiments.png"><img src="root_shoot_reserve_experiments.png" alt="Four panels showing approach toward a balanced shoot-root ratio, failure under slow transport and equal mobilization, and sensitivity to coarse-root allocation."></a><figcaption>All six stocks are integrated explicitly for 3,000 days. These are accelerated mathematical growth tests with prescribed exponentially increasing GPP, not realistic Blodgett forcing or biomass forecasts. The very large failed-case ratios diagnose model behavior, not plausible plants.</figcaption></figure>
+<h3>5.1 Isolate the reserve/transport mechanism</h3>
+<p>Three controlled runs keep F:M:C = 0.4:0.3:0.3, with common root yield and turnover; their demand coefficients allocate in those same fractions, making this an invariant subcase of six-state dynamics. The initial structural biomass total is 100 g C m⁻², with qₛ = 0.07 and qᵣ = 0.045. G₀ = 1 g C m⁻² day⁻¹ and all other coefficients are those above.</p>
+<div class="scroll"><table><thead><tr><th>Controlled experiment</th><th>Day-3000 structural S:R</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Initial S:R = 0.3</td><td>1.430</td><td>Approaching 1.544 from below.</td></tr>
+<tr><td>Initial S:R = 1.5</td><td>1.536</td><td>Near the analytical balanced ratio.</td></tr>
+<tr><td>Initial S:R = 8</td><td>1.936</td><td>Approaching from above; not yet converged after 3000 days.</td></tr>
+<tr><td>k reduced to 0.15 day⁻¹</td><td>84.98</td><td>Below kcritical; ratio continues increasing.</td></tr>
+<tr><td>vᵣ reduced to vₛ = 0.1 day⁻¹</td><td>49.06</td><td>Insufficient organ demand separation; ratio continues increasing.</td></tr>
+</tbody></table></div>
+<p>These tests show that reserves can support a stable growing ratio without imposing a ratio target. They also demonstrate why merely adding reserve pools is insufficient.</p>
+<h3>5.2 Restore the original root-class sink closure</h3>
+<p>Three further runs use the conductance weights in section 2.2, B₀ = 100, bᵢ = 1, ε = 0.01, Kₐ = Kχ = 0.5 g C m⁻², and vᵣ = 0.5 day⁻¹. The normal illustrative coarse coefficients are e = 0.1 and χmax = 0.4. The weak-coarse variant reduces them to e = 0.0001 and χmax = 0.001. All start at S:R = 1.5.</p>
+<div class="scroll"><table><thead><tr><th>Root-class experiment</th><th>Day-3000 structural S:R</th><th>Coarse fraction of root structural C</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Original proposed sink structure; illustrative coefficients</td><td>1.064</td><td>71.9%</td><td>Nearly coordinated by the end; the high coarse fraction itself needs biological calibration.</td></tr>
+<tr><td>Weak coarse sink</td><td>≈21,801</td><td>1.11%</td><td>Coarse support and root growth fail to keep pace.</td></tr>
+<tr><td>Weak coarse sink + ratio feedback</td><td>171.7</td><td>0.069%</td><td>Aggregate imbalance is smaller but persists; coarse allocation is not repaired.</td></tr>
+</tbody></table></div>
+<p>The optional feedback multiplies shoot substrate use by θₛ = 2/[1+(r/r₀)<sup>κ</sup>] and root substrate use by θᵣ = 2(r/r₀)<sup>κ</sup>/[1+(r/r₀)<sup>κ</sup>], with r₀ = 1.5 and exponent κ = 1. It slows shoot growth and favors root use when shoots are excessive, but leaves the relative root weights unchanged. Its preferred ratio is not guaranteed to be attained.</p>
+<div class="note warn">In that feedback failure, qₛ and qᵣ rise to about 2.67 and 2.65: far beyond a modest reserve-fraction regime. Prescribed GPP keeps supplying carbon despite poor structural use, so the model stores the excess. This is a clear validity warning. A physiological version needs reserve-capacity/source feedback or an explicit carbon-loss flux. Never cap reserves numerically and silently delete carbon.</div>
+<p>The full root-class runs do not have fixed composition, and their instantaneous Aᵣ/R changes. The closed-form r* above therefore cannot be substituted directly into them. Their finite-duration trajectories are numerical evidence, not a global stability proof.</p>
+</section>
+
+<section id="formulation"><h2>6. Implications for the root formulation hypothesis</h2>
+<p><strong>The six-state extension makes the hypothesis testable; it does not establish that EcoSIM’s complete root model is wrong.</strong> A framework for interpreting a failed simulation is:</p>
+<div class="scroll"><table><thead><tr><th>Observed behavior</th><th>What to investigate</th></tr></thead><tbody>
+<tr><td>Root reserves low, shoot reserves high, J too small</td><td>Transport capacity and the active-mass normalization used in the reserve gradient.</td></tr>
+<tr><td>Root reserves adequate/high, roots barely grow</td><td>Root sink demand, mobilization, yields, and environmental growth limits.</td></tr>
+<tr><td>Fine roots grow, coarse roots stagnate</td><td>Class-specific sink weights and whether a depleted support pool can rebuild.</td></tr>
+<tr><td>S:R stabilizes but coarse or medium fractions vanish</td><td>Functional support balance. Aggregate biomass coordination does not establish hydraulic coordination.</td></tr>
+<tr><td>Both reserves grow without bound</td><td>Unrealistic prescribed GPP, insufficient use capacity, or missing source/storage feedback.</td></tr>
+</tbody></table></div>
+<h3>6.1 Root groups need their own coordination test</h3>
+<div class="eq">For stable positive root fractions:
+(YᵢUᵢ − τᵢBᵢ − Dᵢ)/Bᵢ = gᵣ    for each i ∈ {F,M,C}</div>
+<p>Shared root reserves do not enforce this equality. A sink proportional to the already-small coarse pool can perpetuate its scarcity. Making all growth sinks depend on transport through that same pool can further prevent recovery. Carbon storage cannot remove such a structural dependency.</p>
+<p>A candidate formulation to test is an explicit support-deficit demand, for example adding η꜀[Creq−C]₊/B₀ to w꜀, with a corresponding medium support demand gated by living fine roots. Creq could be tied to supported leaf area, stem/root path length, or absorptive-root load. Unlike a pure own-biomass sink, this term remains capable of requesting support growth when C is small. The functional requirement must be justified and calibrated; it is not an EcoSIM equation and was not used in the experiments above.</p>
+<h3>6.2 A ratio feedback is an optional hypothesis, not a substitute for support</h3>
+<p>The tested θ feedback can restore relative growth when the underlying organ capacities are adequate. It cannot overcome a near-zero coarse-growth pathway or arbitrarily weak transport. A target ratio should depend on the definition of shoots, plant size, and environment; a fixed whole-shoot S:R is only a special case. Leaf:absorptive-root and conductive-framework:leaf-area relationships can be more informative than a single total biomass ratio.</p>
+<h3>6.3 Relation to the Blodgett diagnosis</h3>
+<p>The <a href="blodgett_gpp_saturation.md">h0 analysis</a> found very little primary-root structural carbon and thickening allocation, alongside water-stressed shoots and relatively wet soil. This motivates testing whether root demand and framework recovery are formulated adequately. The present model isolates carbon coordination. It has no mechanistic hydraulics, N/P states, or leaf/stem separation, and prescribed GPP does not fall when root function fails. It therefore cannot reproduce or quantify the GPP plateau by itself.</p>
+<p>The most discriminating EcoSIM test would jointly record shoot and root reserves, local reserve concentrations, J, realized class growth, maintenance, cytokinin signals, and hydraulic capacity, then perturb one mechanism at a time. A good total S:R alone should not count as validation of the three-root-group formulation.</p>
+</section>
+
+<section id="validation"><h2>7. Reproduce and assess the evidence</h2>
+<p><a href="root_shoot_reserve_model.py">Executable six-state Python model</a> · <a href="root_shoot_reserve_results.json">Numerical results and stability eigenvalues</a> · <a href="root_shoot_reserve_experiments.png">Exportable figure</a></p>
+<div class="eq">python3 ecosim_knowledge/root_shoot_reserve_model.py</div>
+<p>The script uses NumPy and Matplotlib, explicit RK4 with negative-stage rejection, and an independent integral of external carbon inputs minus losses. No state is clipped to zero. It tests empty-reserve boundaries and the flux carbon identity in 1,000 randomized cases, compares integration steps of 0.1 and 0.05 day, and checks the normalized reference equilibrium and Jacobian.</p>
+<p>All eight trajectories conserve carbon to a maximum relative residual below 10⁻¹³; halving the reference time step changes the final stocks by less than 10⁻¹⁰ relative. These numerical checks establish bookkeeping and integration consistency, not scientific correctness. The analytical example proves local attraction only for its stated control case.</p>
+<p>The original Fortran source and example inputs were not modified. The two reserve states, starvation closure, biomass–conductance proxies, and optional ratio feedback are reduced-model choices. Further EcoSIM comparisons and biological constraints are required before choosing a replacement root formulation.</p>
+</section>
+</main></body></html>

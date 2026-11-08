@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EcoSIM • Updated root model</title>
+<style>
+:root{--ink:#17312d;--muted:#526760;--paper:#f6f7f2;--line:#d8e0d7;--green:#17674c;--young:#65509a;--brown:#966132;--soft:#edf4ed;--amber:#fff4d6}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}header,main,footer{max-width:1100px;margin:auto;padding:32px}header{padding-top:56px;padding-bottom:22px}.eyebrow{font-size:12px;font-weight:750;letter-spacing:.14em;text-transform:uppercase;color:var(--green)}h1{font-size:clamp(32px,5vw,52px);letter-spacing:-.035em;line-height:1.12;margin:14px 0 20px;max-width:900px}h2{font-size:27px;line-height:1.25;margin:0 0 18px;letter-spacing:-.02em}h3{font-size:19px;margin:24px 0 8px}p{margin:12px 0}.lead{font-size:19px;max-width:870px;color:var(--muted)}nav{display:flex;gap:8px 20px;flex-wrap:wrap;margin-top:28px;padding-top:18px;border-top:1px solid var(--line)}a{color:var(--green);text-underline-offset:3px}nav a{font-size:14px;font-weight:650}section{margin:0 0 24px;background:white;border:1px solid var(--line);border-radius:14px;padding:30px;scroll-margin-top:20px}.number{display:block;color:var(--green);font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:750;margin-bottom:10px}.note{background:var(--soft);border-left:4px solid var(--green);padding:13px 17px;margin:18px 0}.caution{background:var(--amber);border-left-color:#aa7a19}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{background:var(--paper);border:1px solid var(--line);padding:20px;border-radius:10px}.card h3{margin-top:0}pre{background:#f0f4ef;padding:18px;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;color:#17312d;margin:15px 0}code{font: .88em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre code{font:inherit}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;margin:18px 0}th,td{text-align:left;padding:12px 13px;border-bottom:1px solid var(--line);vertical-align:top}thead th{background:var(--soft);font-weight:750}tbody th{font-weight:650}td:nth-last-child(-n+2){font-variant-numeric:tabular-nums}.small,figcaption{font-size:13px;color:var(--muted)}figure{margin:22px 0}svg{display:block;width:100%;height:auto}.status{color:var(--green);font-weight:750}ul,ol{padding-left:23px}li{margin:7px 0}footer{color:var(--muted);font-size:13px;padding-top:4px;padding-bottom:45px}.src{font-size:13px;border-top:1px solid var(--line);padding-top:14px;margin-top:24px}details{border-top:1px solid var(--line);padding:15px 0}summary{cursor:pointer;font-weight:650}.legend{display:flex;flex-wrap:wrap;gap:15px;font-size:13px;color:var(--muted)}.dot{display:inline-block;width:9px;height:9px;border-radius:100%;margin-right:5px}@media(max-width:700px){header,main,footer{padding:22px 16px}header{padding-top:35px}section{padding:22px 18px}.grid{grid-template-columns:1fr}th,td{padding:10px 8px}h2{font-size:24px}}@media print{body{background:white;font-size:10pt}header,main,footer{max-width:none;padding:12px 0}nav{display:none}section{break-inside:auto;border-radius:0;padding:20px 0;border:0;border-top:1px solid #ccc}h2,h3,thead{break-after:avoid}tr,pre,.card,figure{break-inside:avoid}a{color:inherit}details{display:block}details>*{display:block}}
+</style></head><body>
+<header><div class="eyebrow">EcoSIM · model implementation note · updated 28 October 2026</div>
+<h1>Root recruitment paid by growth.<br>Transport shaped by cohorts.</h1>
+<p class="lead">The updated woody-root model separates potential branching capacity from living axes. New medium roots require structural investment, compete with existing tips for elongation, and enter a young cohort with its own geometry.</p>
+<nav aria-label="Report sections"><a href="#overview">Root network</a><a href="#why-three">Why three classes?</a><a href="#states">State variables</a><a href="#growth">Growth equations</a><a href="#maturation">Maturation</a><a href="#transport">Transport</a><a href="#configuration">Configuration</a><a href="#evidence">Validation</a><a href="#sources">Source map</a></nav></header>
+<main>
+<section id="overview"><span class="number">01 · Architecture</span><h2>Connected primary, medium and fine root classes</h2>
+<p>GPP supplies the wider plant carbon economy. Shoot–root transfers and root nonstructural C/N/P pools provide resources for maintenance and growth; the cohort routine receives <strong>actual net structural growth</strong> after the caller has paid resource and respiration costs. It does not allocate GPP directly or create an additional carbon source.</p>
+<figure><svg viewBox="0 0 920 330" role="img" aria-labelledby="network-title network-desc"><title id="network-title">Carbon supply and root cohort architecture</title><desc id="network-desc">GPP supplies shoot carbon, linked by transfers to root reserves. Root reserves fund primary roots and medium and fine root growth. Medium roots contain established and young cohorts. A direct primary to fine pathway also exists.</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8Z" fill="#526760"/></marker></defs>
+<g font-family="system-ui,sans-serif" font-size="15" text-anchor="middle"><rect x="20" y="25" width="90" height="52" rx="10" fill="#edf4ed" stroke="#17674c"/><text x="65" y="57">GPP</text><rect x="170" y="25" width="210" height="52" rx="10" fill="#edf4ed" stroke="#17674c"/><text x="275" y="57">Shoot carbon economy</text><rect x="530" y="25" width="280" height="52" rx="10" fill="#fff4d6" stroke="#aa7a19"/><text x="670" y="57">Root nonstructural C / N / P</text><path d="M110,51 H170 M380,51 H530" stroke="#526760" stroke-width="2" fill="none" marker-end="url(#arrow)"/><text x="455" y="21" font-size="12">shoot–root transfer</text>
+<path d="M670,77 V112 H166 V150 M670,112 H486 V150 M670,112 H802 V150" stroke="#526760" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<rect x="50" y="150" width="230" height="93" rx="10" fill="#f5eee5" stroke="#966132"/><text x="165" y="184" font-weight="700">Primary roots</text><text x="165" y="211" font-size="13">Framework, elongation, thickening</text>
+<rect x="350" y="150" width="280" height="130" rx="10" fill="#f2edf8" stroke="#65509a"/><text x="490" y="180" font-weight="700">Medium roots</text><rect x="366" y="196" width="115" height="60" rx="7" fill="white" stroke="#65509a"/><text x="424" y="232" font-size="13">Established</text><rect x="497" y="196" width="115" height="60" rx="7" fill="white" stroke="#65509a"/><text x="554" y="232" font-size="13">Young</text>
+<rect x="700" y="150" width="200" height="93" rx="10" fill="#edf4ed" stroke="#17674c"/><text x="800" y="184" font-weight="700">Fine roots</text><text x="800" y="211" font-size="13">Resource uptake and signaling</text>
+<path d="M280,188 H350 M630,188 H700" stroke="#526760" stroke-width="2" fill="none" marker-end="url(#arrow)"/><path d="M165,243 V307 H800 V243" stroke="#526760" stroke-dasharray="5 5" stroke-width="1.6" fill="none" marker-end="url(#arrow)"/><text x="480" y="326" font-size="12">Direct primary–fine pathway retained where medium routing is absent</text></g></svg>
+<figcaption>Schematic of resource supply and root organization. Horizontal root links indicate supporting topology, not compulsory sequential carbon transfers through structural biomass.</figcaption></figure>
+<h3 id="functional-classes">Functional classes, with partially independent growth</h3>
+<p><strong>Primary, medium and fine roots are functional model classes.</strong> Botanical branching orders describe positions within a root branching hierarchy; EcoSIM’s three classes do not correspond directly to those orders or to a universal sequence of diameter classes. Here, young medium roots represent developing transport laterals, while the fine-root class represents absorptive roots.</p>
+<p>Each class has its own growth and maintenance calculations. The model does not explicitly mature living fine-root axes into medium axes, or medium axes into primary axes. Young → established medium-root promotion occurs <strong>within the medium class</strong>; it changes cohort membership while preserving the class’s aggregate count, length and C/N/P. Resource remobilization through nonstructural pools is distinct from reclassifying a living root axis.</p>
+<div class="table-wrap"><table><thead><tr><th>Relationship</th><th>How the classes remain coordinated</th></tr></thead><tbody>
+<tr><th>Shared resources</th><td>Growth and maintenance compete for root nonstructural C/N/P supplied by plant transfers and resource acquisition.</td></tr>
+<tr><th>Branching support</th><td>Primary-root length and radius constrain potential medium-axis capacity; supporting medium-root length contributes to fine-root branching capacity.</td></tr>
+<tr><th>Transport connections</th><td>Primary, medium and fine conductances jointly constrain connected pathways; the direct primary–fine pathway remains available.</td></tr>
+<tr><th>Activity and signaling</th><td>Living fine-root support constrains medium growth activation, and cytokinin influences supporting-root growth.</td></tr>
+</tbody></table></div>
+<div class="note"><strong>Interpretation:</strong> the formulation represents coordinated growth among persistent functional classes, with partial independence of their growth calculations. It omits explicit developmental transfers between classes. A future formulation based strictly on diameter or individual-root developmental fate would need explicit, mass-conserving reclassification rules.</div>
+<p>Soil layers retain independent effective uptake pathways. Cytokinin produced locally can pass from fine roots through medium/primary compartments toward the shoot; deeper uptake does not flush upper-layer compartments through a serial soil-to-shoot chain.</p>
+<div class="note"><strong>Activation:</strong> the new medium-root recruitment/cohort formulation operates for woody vascular plants with <code>lcoarseroot=.true.</code> Primary-root maturity, fine-root support, maintenance, resource limitation and existing growth gates remain part of the surrounding model.</div>
+</section>
+<section id="why-three"><span class="number">02 · Why three functional classes?</span><h2>Separate the woody framework, developing transport branches and absorptive roots</h2>
+<p>The three-class representation is useful when the model must predict <strong>growth allocation, root profiles, recruitment and transport together</strong>. A coarse–fine split can describe bulk root carbon, but two undifferentiated biomass stocks provide too little information to determine all of those processes. The issue is the functions and geometry represented within the pools, rather than the number of pools alone.</p>
+<div class="note caution"><strong>Main insufficiency of a simple coarse–fine model:</strong> total woody carbon is not a sufficient measure of metabolic activity, available branching sites or transport capacity; total fine-root biomass is not a sufficient measure of absorptive capacity. Using those two stocks as universal proxies can couple processes that should respond differently.</div>
+<div class="table-wrap"><table><thead><tr><th>Process</th><th>What a simple coarse–fine split can obscure</th><th>What the three-class formulation makes explicit</th></tr></thead><tbody>
+<tr><th>Structural versus active tissue</th><td>A coarse-root pool combines accumulated woody structure with the living tissues responsible for maintenance, storage and growth. Applying one activity coefficient to the entire stock can exaggerate its metabolic or allocation influence.</td><td>The primary class carries the framework role; the medium class separately represents investment in supporting transport laterals. <strong>Active-tissue accounting is still needed within woody classes.</strong> Woody respiration depends on tissue nitrogen and physical properties, not just total C. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9113292/">Woody-tissue respiration study</a>.</td></tr>
+<tr><th>Absorption versus transport</th><td>A diameter-defined fine-root pool can contain both absorptive roots and roots already undergoing secondary development. Assigning the same uptake capacity to all its length can overestimate the absorptive fraction.</td><td>Fine roots represent the absorptive role; medium roots represent supporting transport laterals. The distinction is functional, not an assertion that one diameter threshold works for every species. Anatomy across 23 tree species supports separating these roles. <a href="https://nph.onlinelibrary.wiley.com/doi/10.1111/j.1469-8137.2008.02573.x">Guo et al., 2008</a>.</td></tr>
+<tr><th>Recruitment versus thickening</th><td>More coarse-root C can result from thickening existing axes without adding supporting length or new branches. A rule that converts that mass increase directly into fine-root capacity can create an unsupported feedback.</td><td>Primary length and radius set potential medium-axis capacity; actual medium recruitment requires new growth investment. Medium length then contributes to supporting fine-root branching. This is a modeling rationale for the intermediate class.</td></tr>
+<tr><th>Maintenance, lifespan and turnover</th><td>A single fine-root turnover rate combines persistent supporting roots with more rapidly replaced absorptive roots. This can distort replacement C demand, litter inputs and N/P recycling.</td><td>Separate classes provide places to assign and test distinct maintenance and turnover behavior. Longleaf-pine observations found branching order to be a stronger lifespan predictor than diameter. Merely adding a class does not establish the correct rates. <a href="https://besjournals.onlinelibrary.wiley.com/doi/10.1111/j.1365-2745.2008.01385.x">Guo et al., 2008</a>.</td></tr>
+<tr><th>Hydraulic and carbon-transfer pathways</th><td>Equal biomass can represent a few thick axes or many thinner branches with different path lengths and connectivity. A pooled mean may hide the resistance of the supporting network.</td><td>Medium count, length and radius describe the connecting branches. Cohort conductances are evaluated separately before combination with fine and primary pathways. Effective network conductance depends on architecture as well as segment properties. <a href="https://hess.copernicus.org/articles/25/4835/2021/">Vanderborght et al., 2021</a>.</td></tr>
+<tr><th>Development and coordination</th><td>A single fine-root category can blur early differences between exploratory pioneer roots and fibrous absorptive roots, including their investment in transport tissues.</td><td>Young medium roots represent developing transport laterals; fine roots retain their absorptive role. Different growth calculations remain coupled by resources, supporting geometry and signaling. Early pioneer/fibrous developmental differences have been observed in trees. <a href="https://bsapubs.onlinelibrary.wiley.com/doi/10.3732/ajb.1100552">Bagniewska-Zadworna et al., 2012</a>.</td></tr>
+</tbody></table></div>
+<h3>Why accumulated lignified carbon matters</h3>
+<p>A tree can accumulate a large coarse-root structural C stock without a proportional increase in metabolically active tissue or new branching capacity. For an idealized cylindrical root of fixed tissue volume per unit C:</p>
+<pre>Cstructural = π × radius² × length / volume_per_C
+At fixed length: doubling structural C increases radius by √2.
+It does not, by itself, add root length, axes or absorptive tips.</pre>
+<p>The larger radius can change surface area and conducting geometry, so thickening can increase <em>potential</em> support. Our formulation represents that radius effect in potential medium-axis capacity, then requires separate investment to realize new axes. It does not infer a living branch count directly from accumulated coarse-root mass.</p>
+<p>If total coarse-root C also weights growth sinks or acts as the denominator of a reserve concentration, old structural wood can dominate allocation or make reserves appear diluted. These are possible formulation errors to inspect in a two-class model; they are not unavoidable consequences of using two classes.</p>
+<div class="note"><strong>Lignified does not mean functionless.</strong> Woody tissue supplies mechanical support and conducting structures, and includes living cells involved in metabolism and storage. Chemical lignification, living-cell abundance and transport function are distinct properties. Excluding an entire lignified stock from every physiological calculation would also be an oversimplification. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC9113292/">Evidence on living woody tissues and respiration</a>.</div>
+<h3>What three classes do—and do not—resolve</h3>
+<p>For this EcoSIM application, the clearest benefit is a separate accounting unit for <strong>transport-lateral recruitment and extension</strong>, between framework thickening and absorptive-root production. That helps prevent framework C from serving as an automatic proxy for fine-root support and allows explicit competition for investment.</p>
+<p>The medium class can itself accumulate structural carbon. Therefore, three classes do not remove the need for active-tissue fractions, consistent C/N/P budgets, realistic radii and lengths, and validated turnover and transport parameters. The classes are persistent functional groups; the current model omits explicit developmental transfers between them.</p>
+<p>A carefully formulated two-class model can remain adequate for bulk carbon accounting, or can recover some missing behavior through active-tissue subdivisions, turnover heterogeneity and effective network geometry. Three classes are justified here by the processes we want to resolve, <strong>not by a universal requirement that every tree model have exactly three pools</strong>.</p>
+<p class="small">The one-year comparison below verifies investment and restart accounting. Its higher medium-root C and lower fine-root C do not establish improved biological realism or a corrected long-term shoot–root ratio.</p>
+</section>
+<section id="states"><span class="number">03 · State and units</span><h2>Young tissue is a subset of the total stock</h2>
+<p>For each soil layer, parent structural-root group and PFT, existing medium-root totals remain authoritative. The three new state arrays identify the young subset. Established stocks are calculated by subtraction.</p>
+<div class="table-wrap"><table><thead><tr><th>Quantity</th><th>Total array</th><th>Young subset array</th><th>Internal units</th></tr></thead><tbody>
+<tr><th>Axis count N</th><td><code>RootMediumXNum_rpvr</code></td><td><code>RootMediumYoungXNum_rpvr</code></td><td>Axes per grid cell</td></tr>
+<tr><th>Total length L</th><td><code>RootMediumLength_rpvr</code></td><td><code>RootMediumYoungLength_rpvr</code></td><td>m per grid cell</td></tr>
+<tr><th>Structural elements E</th><td><code>RootMediumStructElms_rpvr</code></td><td><code>RootMediumYoungElms_rpvr</code></td><td>g C, N or P per grid cell</td></tr></tbody></table></div>
+<pre>Eestablished = Etotal − Eyoung     (element order: C, N, P)
+Nestablished = Ntotal − Nyoung
+Lestablished = Ltotal − Lyoung
+
+mean_length[k] = L[k] / N[k]
+radius[k] = sqrt( C[k] × volume_per_C / (π × L[k]) )
+cohort index k: 1 = young; 2 = established</pre>
+<p>Axis counts can be fractional because they represent population means. Internal population length and mass include the plants in the grid cell; per-area history outputs divide by ground area or soil volume. <code>volume_per_C</code> has units m³/gC, so radius is in meters. The young pools must never be added again when computing plant carbon totals.</p>
+<p class="small">The geometry helper bounds the young subset to nonnegative totals when deriving cohorts and returns zero radius for compartments without positive C and length. This is a numerical safeguard, not a new material transfer.</p>
+</section>
+<section id="growth"><span class="number">04 · Potential and investment</span><h2>Capacity creates a target; growth pays for axes</h2>
+<h3>1. Scale branching capacity with primary lateral surface</h3>
+<pre>Npotential = branching_frequency × primary_length_per_axis × primary_population
+             × max(1, primary_radius / nominal_primary_radius)
+Ntarget = min(1, max(0, fine_support_activation)) × Npotential</pre>
+<p>For a cylinder of fixed length, lateral area grows in proportion to radius. The radius ratio therefore scales the length-based branching capacity relative to an unthickened reference root. Its lower bound of one preserves reference capacity for thin primary axes. A larger potential target alone creates neither living axes nor transport area.</p>
+<h3>2. Share new elongation investment between recruitment and old tips</h3>
+<pre>Dnew = max(Ntarget − Ntotal, 0) × Linitial
+Dextension = Ntotal × extension_rate × 1 hour
+B = growth_C × max(1 − thick_fraction, 0) × specific_length
+s = min(1, B / (Dnew + Dextension))    if total demand &gt; 0; otherwise 0
+
+recruited_length = s × Dnew
+new_axes = recruited_length / Linitial
+existing_extension = s × Dextension</pre>
+<p>The growth update is evaluated for positive <code>growth_C</code> and <code>specific_length</code>. <code>growth_C</code> is gC per grid cell for the current hourly call. The demands and budget are population lengths in meters. <code>specific_length</code> is the medium elongation conversion retained from the existing model: <code>FracRootElmAllocm(C,fine_comp) × Root1stSpecLen_pft</code>, in m/gC.</p>
+<div class="grid"><div class="card"><h3>Recruitment</h3><p>Every new axis receives the configured initial length and its corresponding C investment. Existing standing length cannot finance new counts. Recruitment is limited by the target deficit and the available growth budget.</p></div><div class="card"><h3>Existing axes</h3><p>All existing tips request extension. That extension is divided between young and established cohorts by their counts. Recruiting short axes does not directly reduce the established cohort’s length/count ratio.</p></div></div>
+<h3>3. Partition the complete structural C/N/P growth vector</h3>
+<pre>radial_C = max(growth_C − (recruited_length + existing_extension)/specific_length, 0)
+young_extension = existing_extension × Nyoung/Ntotal
+old_young_C_share = Cyoung/Ctotal
+
+young_growth_C = (recruited_length + young_extension)/specific_length
+                 + radial_C × old_young_C_share
+young_growth_fraction = clamp(young_growth_C/growth_C, 0, 1)
+
+Etotal += growth_CNP
+Eyoung += growth_CNP × young_growth_fraction</pre>
+<p>The count and carbon shares use zero-safe denominators; for a newly starting population with no axes, radial investment belongs to the young cohort. Unused elongation capacity becomes radial investment. Thus realized growth enters total C/N/P exactly once, and the young subset receives the corresponding fraction. The caller’s reserve debit and respiration accounting are not repeated inside the cohort helper.</p>
+</section>
+<section id="maturation"><span class="number">05 · Developmental closure</span><h2>Promotion transfers cohort membership, not total biomass</h2>
+<pre>promoted_axes = min(Nyoung,
+  max(Lyoung − Nyoung × Linitial, 0) / (Lmature − Linitial))
+promoted_length = min(Lyoung, promoted_axes × Lmature)
+moved_fraction = promoted_length / Lyoung
+
+Nyoung -= promoted_axes
+Lyoung -= promoted_length
+Eyoung *= (1 − moved_fraction)</pre>
+<p>If all young axes are promoted, all young length moves. Total count, length and C/N/P remain unchanged; the established residual gains exactly what the young subset loses.</p>
+<div class="note caution"><strong>Approximation:</strong> this two-stage moment closure uses extension beyond the initial length to fund promotion at a maturation length. It does not track individual root age or a complete length distribution. Promoted axes mix into the established cohort and can change its mean length and radius. The model avoids immediate dilution by newly recruited axes, but does not preserve every older axis as a separate cohort.</div>
+</section>
+<section id="transport"><span class="number">06 · Geometry and transport</span><h2>Compute each cohort first, then combine pathways</h2>
+<p><code>MediumTransportGeometry</code> returns population count and length, tissue radius, lumen area per axis, a phloem geometry factor, and transport-annulus area per axis for each cohort. Transport tube depth is limited by the actual radius.</p>
+<pre>depth[k] = min(radius[k], ZSTX, max(FSTK × radius[k], nominal_primary_radius))
+Agas[k] = π × (2 × radius[k] × depth[k] − depth[k]²)
+Gphloem[k] = N[k] × (Agas[k]/π)
+             / max(0.5 × mean_length[k], fine_root_tip_length)
+
+phi[k] = phi_min + (phi_max − phi_min) × (1 − exp(−3 × radius[k]/R95))
+Alumen[k] = coarse_root_xylem_area(dmax, radius[k]) × phi[k]</pre>
+<p><code>Gphloem</code> is a geometric conductance factor, not a carbon flux. The xylem function retains the existing radius/sapwood-area formulation. The lumen fraction and cross-sectional area are evaluated at each cohort’s own radius.</p>
+<div class="table-wrap"><table><thead><tr><th>Process</th><th>Cohort combination</th><th>Interpretation</th></tr></thead><tbody>
+<tr><th>Medium sink support</th><td><code>Gfine[k] = Gfine,total × L[k]/ΣL</code><br><code>Gused = series(Gprimary, Σ series(Gphloem[k], Gfine[k]))</code></td><td>Fine support is partitioned by cohort length; medium branches act in parallel before coupling to the primary path. <code>series(a,b)=ab/(a+b)</code> for positive conductances.</td></tr>
+<tr><th>Medium sink and activation</th><td><code>Gconnected = series(Gprimary, Σ Gphloem[k])</code><br><code>SM = f_mroot × Gused</code><br><code>activation = clamp(Gused/Gconnected,0,1)</code></td><td>The existing medium sink modifier is retained; activation constrains the recruitment target. Absent living fine-root support cannot activate medium growth.</td></tr>
+<tr><th>Water uptake</th><td><code>Gwater,geometry = Σ Alumen[k] × N[k] / (0.5 × mean_length[k])</code></td><td>Sum includes structural groups and cohorts. Vessel area and axial resistivity convert the geometry factor into hydraulic resistance.</td></tr>
+<tr><th>Gas transport</th><td><code>Ggas,geometry = Σ Agas[k] × N[k] / mean_length[k]</code></td><td>Each cohort contributes using its own mean path length.</td></tr>
+<tr><th>Lumen geometry</th><td><code>Apopulation = Σ Alumen[k] × N[k]</code><br><code>Vmedium = Σ Alumen[k] × L[k]</code></td><td>Population conducting area and local water-storage volume apply count or length once.</td></tr>
+<tr><th>Cytokinin</th><td><code>Mmedium = cmedium × Vmedium</code></td><td>One mixed concentration remains per layer/group. Inventory before growth is rebased to the new summed volume, with production, decay, export and compartment-loss accounting.</td></tr>
+</tbody></table></div>
+<p>Nascent-medium establishment still evaluates a potential sink when living medium axes are absent. That calculation creates demand only. Living transport geometry appears after paid growth establishes tissue.</p>
+</section>
+<section id="configuration"><span class="number">07 · Settings and persistence</span><h2>Three provisional development parameters</h2>
+<pre>&amp;ecosim
+  lcoarseroot = .true.
+  medium_axis_init_length = 0.01
+  medium_axis_mature_length = 0.10
+  medium_axis_extension_rate = 0.001
+/</pre>
+<div class="table-wrap"><table><thead><tr><th>Setting</th><th>Default</th><th>Role</th></tr></thead><tbody><tr><th><code>medium_axis_init_length</code></th><td>0.01 m/axis</td><td>Paid establishment length for recruitment</td></tr><tr><th><code>medium_axis_mature_length</code></th><td>0.10 m/axis</td><td>Promotion length; must exceed initial length</td></tr><tr><th><code>medium_axis_extension_rate</code></th><td>0.001 m/axis/hour</td><td>Developmental extension demand per existing tip</td></tr></tbody></table></div>
+<p>Initial length and extension rate must be positive. These defaults are implementation assumptions for sensitivity testing, <strong>not calibrated measurements for Blodgett trees</strong>. The growth helper assumes a one-hour call.</p>
+<h3>Lifecycle and restart handling</h3><p>Young C/N/P, length and count follow their aggregate stocks through thinning, whole-root death and upward layer relocation. Partial withdrawal retains the surrounding model’s shortening of surviving axes. Recruitment constraints do not prevent later tissue loss.</p>
+<p>New restart files store all three young-subset arrays. Old files containing none initialize existing medium roots as established. Files containing only part of the cohort state are rejected. Both the full plant API and the earlier water-uptake API transfer the geometry inputs. New optional history fields are appended after existing registrations to preserve pointer indices in older history restart files.</p>
+<h3>Optional history profiles</h3><ul><li><code>RootMedYoungC_pvr</code> — gC/m³ soil.</li><li><code>RootMedYoungAxes_pvr</code> — axes per living plant.</li><li><code>RootMedYoungLength_pvr</code> — m root/m² ground.</li></ul><p>Add these names to the case’s existing <code>hist_fincl1</code> list. They are inactive by default; existing total profiles keep their original meanings.</p>
+</section>
+<section id="evidence"><span class="number">08 · Observed behavior</span><h2>Matched one-year test at tree ages 25–26</h2>
+<p>Both runs start from the same 1966-01-01 checkpoint and end on 1967-01-01, using the existing Blodgett inputs with CYTOS = 0.5 and Km = 0.0012. The comparison uses the preceding executable and the completed cohort update. No new 30-year trajectory was run for this update.</p>
+<div class="table-wrap"><table><thead><tr><th>Quantity</th><th>Units</th><th>Previous model</th><th>Cohort update</th></tr></thead><tbody><tr><th scope="row">Primary root C</th><td>gC/m² ground</td><td>481.938</td><td>476.753</td></tr>
+<tr><th scope="row">Medium root C</th><td>gC/m² ground</td><td>31.961</td><td>52.456</td></tr>
+<tr><th scope="row">Fine root C</th><td>gC/m² ground</td><td>397.330</td><td>370.721</td></tr>
+<tr><th scope="row">Shoot C</th><td>gC/m² ground</td><td>3,374.098</td><td>3,364.649</td></tr>
+<tr><th scope="row">Shoot/root C ratio</th><td>gC/gC; root includes reserve</td><td>3.646</td><td>3.682</td></tr>
+<tr><th scope="row">Medium axes</th><td>axes/tree</td><td>566.700</td><td>7,305.367</td></tr>
+<tr><th scope="row">Young medium axes</th><td>axes/tree</td><td>0.000</td><td>428.591</td></tr>
+<tr><th scope="row">Established mean axis length</th><td>m</td><td>12.661</td><td>1.656</td></tr>
+<tr><th scope="row">Annual GPP</th><td>gC/m²/year</td><td>1,270.626</td><td>1,261.724</td></tr><tr><th scope="row">Annual NPP</th><td>gC/m²/year</td><td>531.621</td><td>525.674</td></tr></tbody></table></div>
+<div class="note"><strong>The immediate count jump is removed.</strong> Both runs begin with about 567 medium axes/tree in their first daily mean. The later increase to roughly 7,305 axes/tree follows paid recruitment and promotion over the year. Medium C increases; fine-root C declines; shoot/root C changes only slightly.</div>
+<p>The established mean length falls as newly matured axes enter that cohort. This mixing is part of the two-stage closure, and should not be interpreted as the physical shortening of every older root. The response does not demonstrate that more medium recruitment improves the long-term fine-root profile.</p>
+<h3>Validation completed</h3><div class="table-wrap"><table><thead><tr><th>Check</th><th>Result</th></tr></thead><tbody>
+<tr><th>Compiled cohort tests</th><td><span class="status">PASS</span> — recruitment cost, competing extension, C/N/P closure, maturation and geometry consistency.</td></tr>
+<tr><th>Compiled cytokinin tests</th><td><span class="status">PASS</span> — inventory closure through production, decay, export, geometry changes, compartment disappearance and mixed young/established roots.</td></tr>
+<tr><th>Fresh 20-day restart tests</th><td><span class="status">EXACT</span> — 645 numeric restart fields and 255 history fields after splits at 240 and 252 hours.</td></tr>
+<tr><th>Mature July restart</th><td><span class="status">EXACT</span> — 645 restart fields and 252 fields in each existing history tape; young-root stocks are positive at restart.</td></tr>
+<tr><th><code>lcoarseroot=false</code>, 20 days</th><td><span class="status">UNCHANGED</span> — all 642 pre-existing restart fields and 252 pre-existing history fields match the preceding executable.</td></tr>
+<tr><th>Monthly states and finite history</th><td><span class="status">PASS</span> — young stocks remain nonnegative and bounded by totals; numeric history values are finite.</td></tr></tbody></table></div>
+<p class="small">Toolchain: VSCode terminal environment, GFortran 13.4.0 via <code>agf13</code>; configuration <code>build/Darwin-arm64-double-Release</code>. The recorded executable SHA-256 is <code>1a5e0e03f7bdbc4e63a884a641728a86faefab3f7fb3debe7d40bdff2a5a4fe2</code>. Later argument/alias annotations are documentation changes; the validation above describes the recorded build.</p>
+<div class="note caution"><strong>Scientific assessment remains open.</strong> The test demonstrates working investment accounting and restart recovery. Recruitment length, maturation length and extension demand still need sensitivity tests and age-aware observational comparison. A successful build and exact restart do not establish realistic tree architecture.</div>
+</section>
+<section id="sources"><span class="number">09 · Implementation map</span><h2>Read the equations beside the code</h2>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>Relevant responsibilities</th></tr></thead><tbody>
+<tr><th><a href="../f90src/Plant_bgc/MediumRootCohortMod.F90">MediumRootCohortMod.F90</a></th><td><code>GrowMediumCohorts</code>: investment, elongation, recruitment and promotion. <code>MediumCohortGeometry</code>: young/established stocks, length and radius.</td></tr>
+<tr><th><a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a></th><td><code>GrowMediumRootAxes</code>, <code>SummarizeRootSink</code>, <code>MediumTransportGeometry</code>, cytokinin inventory and transport, withdrawal and relocation.</td></tr>
+<tr><th><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a> · <a href="../f90src/Plant_bgc/RootGasMod.F90">RootGasMod.F90</a></th><td>Water and gas conductances from cohort geometry.</td></tr>
+<tr><th><a href="../f90src/Ecosim_datatype/RootDataType.F90">RootDataType.F90</a> · <a href="../f90src/APIData/PlantMorphologyAPIData.F90">PlantMorphologyAPIData.F90</a></th><td>Persistent global young-subset arrays and plant API state.</td></tr>
+<tr><th><a href="../f90src/APIs/PlantRootAxisTransferMod.F90">PlantRootAxisTransferMod.F90</a> · <a href="../f90src/APIs/PlantAPI4Uptake.F90">PlantAPI4Uptake.F90</a></th><td>Full plant-state transfer and geometry availability before water uptake.</td></tr>
+<tr><th><a href="../f90src/IOutils/RestartMod.F90">RestartMod.F90</a></th><td>Read/write cohort state and compatibility with older checkpoints.</td></tr>
+<tr><th><a href="../f90src/Modelconfig/EcoSIMCtrlMod.F90">EcoSIMCtrlMod.F90</a> · <a href="../drivers/ecosim/EcoSIMAPI.F90">EcoSIMAPI.F90</a></th><td>Default values, namelist exposure and configuration validation.</td></tr>
+<tr><th><a href="../tests/test_medium_root_cohorts.py">Cohort tests</a> · <a href="../tests/test_cytokinin_layer_pathways.py">Cytokinin tests</a></th><td>Compiled production-routine checks.</td></tr>
+</tbody></table></div>
+<p class="src">Saved evidence: <a href="../build/runs/medium_cohort_update/final/evaluation.json">evaluation metrics</a> · <a href="../build/runs/medium_cohort_update/final/checks.json">mature restart comparison</a> · <a href="../build/runs/medium_cohort_update/final/fresh_restart/results.json">fresh restart comparison</a> · <a href="../build/runs/medium_cohort_update/final/false_results.json">disabled-path comparison</a>.</p>
+</section></main><footer>EcoSIM knowledge note · Local source and evidence links resolve from ecosim_knowledge/. This report is self-contained for offline reading; linked source files and run evidence remain in the repository.</footer></body></html>

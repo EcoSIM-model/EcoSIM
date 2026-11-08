@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A four-pool root–shoot carbon model inspired by EcoSIM</title>
+<style>
+:root{color-scheme:light;--ink:#203536;--muted:#576867;--line:#cbd9d4;--green:#165d50;--pale:#edf5f1;--gold:#fcf3de}
+*{box-sizing:border-box}body{margin:0;background:#f7f9f6;color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1080px;margin:auto;padding:42px 28px 70px}h1{font-size:2.3rem;line-height:1.18;max-width:880px}h2{font-size:1.45rem;margin:0 0 16px}h3{font-size:1.12rem}p{margin:12px 0}a{color:var(--green)}section{background:white;border:1px solid var(--line);border-radius:12px;margin:24px 0;padding:26px}.eyebrow{color:var(--green);font-weight:700;letter-spacing:.1em;font-size:.8rem;text-transform:uppercase}.lede{font-size:1.17rem}.meta,.small{color:var(--muted);font-size:.9rem}.note{background:var(--pale);padding:16px 20px;border-left:4px solid var(--green);margin:18px 0}.assumption{background:var(--gold);border-color:#bb852a}.eq{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5f2;padding:18px;border-radius:7px;line-height:1.85;font-size:.95rem}table{border-collapse:collapse;width:100%;font-size:.94rem}th,td{border-bottom:1px solid var(--line);text-align:left;padding:11px;vertical-align:top}th{background:var(--pale)}.scroll{overflow-x:auto}code{font-size:.9em}nav{display:flex;flex-wrap:wrap;gap:8px 20px}svg{width:100%;height:auto;display:block}li{margin:8px 0}@media(max-width:650px){main{padding:24px 14px}section{padding:20px 16px}h1{font-size:1.85rem}}@media print{body{background:white;font-size:10pt}main{padding:0}section{break-inside:avoid;border-radius:0}nav{display:none}.eq{font-size:9pt}a{color:inherit}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">EcoSIM • Reduced model proposal</div>
+<h1>Four biomass pools, with carbon allocation governed by transport and root function</h1>
+<p class="lede">Use fine-root, medium-root, coarse-root, and shoot carbon as the four dynamic states. GPP supplies carbon; transport connects shoots to roots; competing root sinks determine the relative allocation belowground.</p>
+<div class="note"><strong>Reserve extension, October 23:</strong> the <a href="root_shoot_reserve_model.html">six-state model with shoot and root reserves</a> replaces the fast mobile-carbon closure below and analyzes conditions for coordinated shoot–root growth. This page retains the original four-state proposal for comparison.</div>
+<p class="meta">Documented October 22, 2026 · Source snapshot: <code>63562b1b</code> · Proposed equations, informed by the active Fortran implementation.</p>
+<nav aria-label="Contents"><a href="#findings">Source findings</a><a href="#states">States</a><a href="#sinks">Root allocation</a><a href="#exchange">Root–shoot transfer</a><a href="#balance">State equations</a><a href="#example">Worked example</a><a href="#limits">Limits and calibration</a></nav>
+</header>
+
+<section id="findings"><h2>1. What the EcoSIM source establishes</h2>
+<div class="scroll"><table><thead><tr><th>Mechanism</th><th>Source evidence</th><th>Retained in the reduced model</th></tr></thead><tbody>
+<tr><td>Carbon exchange responds to mobile-carbon gradients.</td><td><code>ShootRootElmTransfer</code> uses <code>PTSHTR × (CPOOLBranch × RootActVL − CPOOLRootS × CanopyActVNB)/(CanopyActVNB + RootActVL)</code>. Positive exchange is shoot → root; negative exchange reverses it. The donor flux is limited.</td><td>An algebraic concentration-gradient flux, with no extra dynamic reserve pool.</td></tr>
+<tr><td>Root sinks compete through transport conductance.</td><td><code>SummarizeRootSink</code> combines primary, medium, fine, and primary-tip sinks. Fine-root supply includes primary transport in series with downstream paths.</td><td>Conductance-based sink weights, normalized across the three root groups.</td></tr>
+<tr><td>Medium-root growth requires fine roots.</td><td><code>RootMSink_pvr = f_mroot × UsedConnCd</code>; <code>UsedConnCd</code> includes primary, medium, and fine conductances in series. Both sink construction and <code>GrowMediumRootAxes</code> check living fine roots.</td><td>Medium allocation vanishes when fine-root biomass is zero, while maintenance remains.</td></tr>
+<tr><td>Medium roots can establish before a living medium-root transport network exists.</td><td>A small fraction of potential medium axes supplies a growth capacity when living axes are absent. Fine-root presence is still required.</td><td>A small establishment term in the medium <em>growth</em> conductance, excluded from existing fine-root transport.</td></tr>
+<tr><td>Coarse-root thickening competes with fine-root allocation.</td><td>Eligible mature primary roots receive a cytokinin-modified sink; fine-root sinks contain <code>1 − fctyok</code>. Primary-tip extension has a separate sink.</td><td>A coarse thickening signal and a separate primary extension term.</td></tr>
+<tr><td>Maintenance is distinct from growth.</td><td><code>ReserveMediumRootMaintenance</code> reserves demand-weighted maintenance independently of growth sinks. Growth is additionally limited by carbon, N/P, oxygen, and water.</td><td>Maintenance persists when a growth weight is zero; yields explicitly account for growth respiration.</td></tr>
+</tbody></table></div>
+<p class="small">Sources: <a href="../f90src/Plant_bgc/PlantNonstElmDynMod.F90"><code>PlantNonstElmDynMod.F90</code></a>, <code>ShootRootElmTransfer</code> (lines 490–638); <a href="../f90src/Plant_bgc/RootMod.F90"><code>RootMod.F90</code></a>, <code>ReserveMediumRootMaintenance</code> (1021–1111), <code>GrowMediumRootAxes</code> (1113–1317), <code>SummarizeRootSink</code> (5467–5842), and <code>f_mroot</code> (6204–6242). These are active sources in <a href="../f90src/Plant_bgc/CMakeLists.txt">Plant_bgc/CMakeLists.txt</a>; <code>RootBGCModel</code> calls the sink and growth routines, and <a href="../f90src/Plant_bgc/GrosubsMod.F90">GrosubsMod.F90</a> calls <code>PlantNonstElmTransfer</code>, which calls shoot–root exchange.</p>
+<div class="note assumption"><strong>Scope:</strong> the three-root-group formulation represents a woody vascular plant with coarse-root dynamics enabled. It is not a universal mapping for mosses, lichens, or fibrous-root plants. The equations below are a new reduction, not an exact transcription of EcoSIM.</div>
+</section>
+
+<section id="states"><h2>2. States, units, and the four-state closure</h2>
+<div class="scroll"><table><thead><tr><th>Symbol</th><th>Definition</th><th>Units</th></tr></thead><tbody>
+<tr><td>F</td><td>Fine-root structural carbon, aggregated over soil layers and root groups.</td><td>g C m⁻² ground</td></tr>
+<tr><td>M</td><td>Medium-root structural carbon.</td><td>g C m⁻² ground</td></tr>
+<tr><td>C</td><td>Coarse/primary framework carbon, including its unresolved extension zone.</td><td>g C m⁻² ground</td></tr>
+<tr><td>S</td><td>Shoot structural carbon, with a fixed active shoot fraction.</td><td>g C m⁻² ground</td></tr>
+<tr><td>G(t)</td><td>Prescribed GPP, the only external carbon input.</td><td>g C m⁻² ground day⁻¹</td></tr>
+</tbody></table></div>
+<p>All biomass is carbon mass, not dry mass. Convert EcoSIM population/grid-cell totals to the same ground-area basis before fitting parameters. Here <strong>C is a pool name</strong>; “carbon” is the chemical element throughout.</p>
+<div class="note"><strong>Closure:</strong> mobile carbon equilibrates rapidly relative to biomass change. Its concentrations are algebraic variables, not integrated states. This preserves exactly four dynamic states, but removes delayed reserve accumulation and depletion. Biomass refers to structural carbon; transient nonstructural carbon storage is neglected.</div>
+<p>The coarse pool includes the unresolved primary extension zone because EcoSIM has a separate primary-tip sink that a four-pool description otherwise cannot represent. This is a functional framework pool, not a strict diameter-only class. Do not introduce automatic <code>F → M → C</code> transfers: the source represents branching and thickening of distinct axes, and does not justify that universal maturation chain.</p>
+<svg viewBox="0 0 900 230" role="img" aria-label="GPP enters shoot mobile supply, exchanges reversibly with root mobile supply, then feeds the three root biomass pools. Mobile supplies are algebraic.">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#165d50"/></marker></defs>
+<g fill="#edf5f1" stroke="#165d50" stroke-width="1.5"><rect x="30" y="65" width="220" height="90" rx="10"/><rect x="360" y="65" width="200" height="90" rx="10"/><rect x="690" y="10" width="180" height="55" rx="8"/><rect x="690" y="87" width="180" height="55" rx="8"/><rect x="690" y="164" width="180" height="55" rx="8"/></g>
+<g fill="#203536" text-anchor="middle" font-family="system-ui,sans-serif" font-size="17"><text x="140" y="94">Shoot S</text><text x="140" y="124" font-size="14">algebraic mobile supply</text><text x="460" y="94">Root mobile supply</text><text x="460" y="124" font-size="14">algebraic, shared</text><text x="780" y="44">Fine roots F</text><text x="780" y="121">Medium roots M</text><text x="780" y="198">Coarse roots C</text><text x="140" y="28">GPP</text><text x="305" y="91">J</text><text x="620" y="220" font-size="13">sink-weighted allocation</text></g>
+<g fill="none" stroke="#165d50" stroke-width="2" marker-end="url(#arrow)"><path d="M140 34 V64"/><path d="M252 110 H358" marker-start="url(#arrow)"/><path d="M560 110 L688 38"/><path d="M560 114 H688"/><path d="M560 118 L688 191"/></g></svg>
+</section>
+
+<section id="sinks"><h2>3. Relative allocation among root groups</h2>
+<h3>3.1 Diagnose transport capacity from biomass</h3>
+<p>Choose a positive reference biomass B₀ and positive dimensionless conductance coefficients bᵢ. Linear biomass–conductance relations are the simplest closure; geometry and sapwood saturation are omitted.</p>
+<div class="eq">g꜀ = b꜀ C/B₀
+gₘ = bₘ M/B₀                 (existing medium transport)
+gꜰ = bꜰ F/B₀
+gₘ* = bₘ (M + ε C)/B₀        (medium growth/establishment only)
+
+H(a,b) = ab/(a+b)
+H₃(a,b,c) = abc/(ab+ac+bc)</div>
+<p>Define H and H₃ as zero if any required input is zero. They represent series conductances. The establishment coefficient ε ≥ 0 supplies no carbon and creates no biomass directly; it only permits medium allocation when M = 0, C &gt; 0, and F &gt; 0.</p>
+<h3>3.2 Replace unresolved maturity and cytokinin with explicit proxies</h3>
+<div class="eq">a = C/(Kₐ + C)
+χ = χmax a F/(Kχ + F)        with 0 ≤ χmax &lt; 1
+φ = gₘ/(g꜀ + gₘ)             (zero when both are zero)</div>
+<p>Kₐ and Kχ are positive carbon biomass scales; a and χ are dimensionless. The maturity proxy a replaces EcoSIM’s age, depth, and distance-behind-tip tests. χ represents a fine-root-associated thickening signal. EcoSIM actually diagnoses cytokinin from production, transport, and decay, and <code>func_cyto</code> includes high-concentration inhibition. This monotonic biomass proxy deliberately omits those dynamics and inhibition; it needs calibration.</p>
+<h3>3.3 Construct and normalize the sinks</h3>
+<div class="eq">wꜰ = (1 − χ) H(g꜀, (1 − φ)gꜰ + H(gₘ, φ gꜰ))
+wₘ = a H₃(g꜀, gₘ*, gꜰ)
+w꜀ = g꜀ (e + χ)
+W = wꜰ + wₘ + w꜀
+
+pꜰ = wꜰ/W,  pₘ = wₘ/W,  p꜀ = w꜀/W       when W &gt; 0</div>
+<p>e &gt; 0 is a dimensionless primary-extension weight. For W = 0, set all pᵢ = 0 and root growth capacity to zero. The direct and medium-mediated fine-root pathways partition gꜰ using φ, avoiding duplication of the same fine capacity. This is a reduced analogue of the source’s length-weighted pathways, not its exact geometry.</p>
+<ul><li><strong>F = 0:</strong> both wꜰ and wₘ vanish. Existing medium roots retain their maintenance cost.</li><li><strong>M = 0:</strong> fine roots still have a direct primary pathway; medium roots may establish through ε when living fine roots and primary framework exist.</li><li><strong>C = 0:</strong> the root network has no primary support, so all root sinks vanish. Initialize with C &gt; 0 and F &gt; 0 for an established plant. Germination/re-establishment is outside this reduction.</li><li><strong>Increasing χ:</strong> shifts sink strength toward coarse thickening and away from fine growth. Medium growth retains its separate series-conductance gate.</li></ul>
+<p>Define substrate-use capacities, all in g C m⁻² day⁻¹:</p>
+<div class="eq">Aₛ = vₛ S
+Aᵣ = vᵣ B₀ W
+Aᵢ = pᵢ Aᵣ     for i ∈ {F,M,C}</div>
+<p>vₛ and vᵣ have units day⁻¹. The A values multiply the dimensionless mobile-carbon concentrations introduced below. They are uptake coefficients, not hard maximum fluxes.</p>
+</section>
+
+<section id="exchange"><h2>4. Root–shoot carbon transfer without another state</h2>
+<h3>4.1 Pay maintenance and define substrate inputs</h3>
+<div class="eq">Rₘ = mₛ S + mꜰ F + mₘ M + m꜀ C
+P = max(G − Rₘ, 0)
+D = max(Rₘ − G, 0)
+Dᵢ = D mᵢ Bᵢ/Rₘ              if Rₘ &gt; 0; otherwise 0
+Lᵢ = τᵢ Bᵢ                   for Bᵢ ∈ {S,F,M,C}</div>
+<p>mᵢ and τᵢ are maintenance and turnover rates, day⁻¹. Dᵢ represents structural carbon catabolized to pay a maintenance deficit. This whole-plant maintenance priority is a simplification of EcoSIM’s local reserve and remobilization rules. P is carbon available for growth before growth respiration; it is not NPP.</p>
+<p>Optionally recycle a fraction ρᵢ of turnover into mobile substrate:</p>
+<div class="eq">Hₛ = ρₛ Lₛ
+Hᵣ = ρꜰ Lꜰ + ρₘ Lₘ + ρ꜀ L꜀
+Qₛ = P + Hₛ,     Qᵣ = Hᵣ</div>
+<p><strong>Default: ρᵢ = 0.</strong> A positive ρ is an optional lumped carbon-remobilization assumption, not a measured EcoSIM resorption fraction. It returns carbon already removed through Lᵢ and therefore does not create carbon. It must not also be subtracted as litter.</p>
+<h3>4.2 Use EcoSIM’s concentration-gradient form</h3>
+<p>Let Vₛ = fₛS and Vᵣ = fꜰF + fₘM + f꜀C be effective active-carbon capacities in g C m⁻², with fixed fractions 0 &lt; fᵢ ≤ 1. qₛ and qᵣ are dimensionless mobile C per active C. No V or q is an additional dynamic state.</p>
+<div class="eq">K = k VₛVᵣ/(Vₛ + Vᵣ)         (zero if either V is zero)
+J = K(qₛ − qᵣ)</div>
+<p>k is day⁻¹ and K is g C m⁻² day⁻¹. This follows directly from the source’s exchange expression by substituting mobile masses Nₛ = qₛVₛ and Nᵣ = qᵣVᵣ. It is not a gradient of total structural biomass. J &gt; 0 means shoot → root.</p>
+<h3>4.3 Eliminate the fast mobile pools algebraically</h3>
+<div class="eq">0 = Qₛ − Aₛqₛ − J
+0 = Qᵣ + J − Aᵣqᵣ
+Δ = AₛAᵣ + K(Aₛ + Aᵣ)
+
+qₛ = [(Aᵣ + K)Qₛ + KQᵣ]/Δ
+qᵣ = [KQₛ + (Aₛ + K)Qᵣ]/Δ
+J  = K(AᵣQₛ − AₛQᵣ)/Δ
+
+Uₛ = Aₛqₛ
+Uꜰ = pꜰ Aᵣqᵣ,  Uₘ = pₘ Aᵣqᵣ,  U꜀ = p꜀ Aᵣqᵣ</div>
+<p>Uᵢ are gross substrate consumption fluxes before growth respiration. For nonnegative inputs and Δ &gt; 0, all Uᵢ are nonnegative, Uₛ + Uꜰ + Uₘ + U꜀ = P + Hₛ + Hᵣ, and −Qᵣ ≤ J ≤ Qₛ. Thus the steady-state transfer cannot exceed available source carbon.</p>
+<div class="note"><strong>Direction and allocation:</strong> with no recycling, J is forward and the whole-plant fraction allocated to root substrate is J/P = KAᵣ/Δ. At large K it approaches Aᵣ/(Aₛ + Aᵣ); at small K it approaches zero. Reverse transfer requires a root-side mobile source: J &lt; 0 when AₛQᵣ &gt; AᵣQₛ. With ρ = 0 and no reserve state, nighttime reverse reserve export is unavailable.</div>
+<p>J describes <em>growth-substrate</em> exchange after the whole-plant maintenance bookkeeping. Root maintenance transport is not resolved. For carbon-sufficient conditions without recycling, an approximate total shoot → root delivery is J plus root maintenance Rₘ,root. The simplified J should therefore not be compared directly with EcoSIM’s total nonstructural exchange diagnostic.</p>
+<p><strong>Degenerate cases:</strong> if Δ = 0, solve disconnected compartments separately: Uₛ = Qₛ when Aₛ &gt; 0 and Uᵣ = Qᵣ when Aᵣ &gt; 0. An isolated compartment with a positive input and zero use capacity has no quasi-steady solution; flag that condition rather than discarding the input. A living S &gt; 0 with positive vₛ avoids this issue in the default, no-recycling model.</p>
+</section>
+
+<section id="balance"><h2>5. The four state equations and carbon balance</h2>
+<p>Let 0 &lt; Yᵢ ≤ 1 be structural growth yields in g structural C per g substrate C consumed. The retained fraction becomes biomass and the rest is growth respiration.</p>
+<div class="eq">dF/dt = Yꜰ Uꜰ − τꜰ F − Dꜰ
+dM/dt = Yₘ Uₘ − τₘ M − Dₘ
+dC/dt = Y꜀ U꜀ − τ꜀ C − D꜀
+dS/dt = Yₛ Uₛ − τₛ S − Dₛ
+
+R𝗀 = Σᵢ (1 − Yᵢ)Uᵢ
+Lout = Σᵢ (1 − ρᵢ)τᵢBᵢ
+
+d(S + F + M + C)/dt = G − Rₘ − R𝗀 − Lout</div>
+<p>This is the required closed plant-carbon budget. Internal J cancels between shoots and roots; recycled turnover cancels between loss and resupply. The only external source is GPP. External losses are maintenance respiration, growth respiration, and unrecycled turnover leaving the plant boundary. Soil/litter carbon is outside the four states.</p>
+<p>With a common root yield, relative root biomass production equals pꜰ:pₘ:p꜀. With different yields, relative biomass production is Yꜰpꜰ:Yₘpₘ:Y꜀p꜀. Distinguish allocation of substrate carbon from allocation of structural growth.</p>
+<h3>A minimal implementation sequence</h3>
+<ol><li>Read nonnegative GPP and the four nonnegative biomass states. Evaluate conductances, maturity, thickening signal, and root sink weights.</li><li>Compute maintenance, P, Dᵢ, turnover, and any explicitly enabled recycling.</li><li>Compute active capacities, K, the algebraic concentrations, J, and Uᵢ.</li><li>Evaluate the four derivatives and integrate with adaptive substeps. Check the integrated external carbon budget at every accepted step.</li><li>Reject/substep a step that would make a pool negative. Do not clip negative biomass after the update: that adds unaccounted carbon. If using donor-limited fluxes, adjust all matching respiration, turnover, and recycling terms consistently.</li></ol>
+<p>There are no direct transfers of structural fine-root carbon into medium or coarse pools. The coupling occurs through transport, sink competition, and optional explicitly budgeted remobilization.</p>
+</section>
+
+<section id="example"><h2>6. Worked allocation and conservation check</h2>
+<p>Illustrative numbers only; these are not EcoSIM defaults or fitted plant traits. Suppose the biomass-dependent rules at one instant give Aₛ = 4, Aᵣ = 6, K = 3, and (pꜰ,pₘ,p꜀) = (0.5,0.2,0.3). The A and K units are g C m⁻² day⁻¹. Let G = 12, Rₘ = 2, all Y = 0.75, total turnover = 1, and all ρ = 0.</p>
+<div class="eq">P = 10; Δ = 4×6 + 3×(4+6) = 54
+qₛ = 90/54 = 1.666667; qᵣ = 30/54 = 0.555556
+J = 3×(1.666667 − 0.555556) = 3.333333
+Uₛ = 6.666667
+(Uꜰ,Uₘ,U꜀) = (1.666667, 0.666667, 1.000000)
+Root structural production = 0.75×3.333333 = 2.500000
+R𝗀 = 0.25×10 = 2.500000
+Total biomass change = 12 − 2 − 2.5 − 1 = 6.500000</div>
+<p>The q values are effective algebraic concentrations in this linear model, not bounded reserve fractions. If comparison with EcoSIM implies excessive nonstructural carbon, the fast-pool closure is invalid; adjusting rates or adding reserve dynamics is necessary.</p>
+<p>For a reversal example with the same capacities, set P = Hₛ = 0 and Hᵣ = 2 through explicitly budgeted root remobilization. Then J = −24/54 = −0.444444: roots supply shoots, Uₛ = 0.444444, and total root substrate use is 1.555556. Their sum is the remobilized 2, not new carbon.</p>
+</section>
+
+<section id="limits"><h2>7. Parameters, calibration, and limits</h2>
+<div class="scroll"><table><thead><tr><th>Parameter group</th><th>Role and constraints</th></tr></thead><tbody>
+<tr><td>B₀; bꜰ,bₘ,b꜀</td><td>Reference carbon biomass and relative transport effectiveness; B₀ &gt; 0, all b &gt; 0. Fix B₀ by convention; biomass data alone may not identify each b separately.</td></tr>
+<tr><td>ε, e, Kₐ, Kχ, χmax</td><td>Medium establishment; primary extension; maturity and fine-root signal scales; maximal thickening signal. ε ≥ 0, e &gt; 0, both K scales &gt; 0, 0 ≤ χmax &lt; 1.</td></tr>
+<tr><td>vₛ,vᵣ,k; active fractions fᵢ</td><td>Substrate-use coefficients and exchange; all rates positive in day⁻¹, 0 &lt; fᵢ ≤ 1. Shoot active fraction substitutes for the source’s explicit leaf/sheath pool.</td></tr>
+<tr><td>mᵢ,τᵢ,Yᵢ,ρᵢ</td><td>Maintenance, turnover, growth yield, and optional recycling. mᵢ,τᵢ ≥ 0; 0 &lt; Yᵢ ≤ 1; 0 ≤ ρᵢ ≤ 1, with ρᵢ = 0 initially.</td></tr>
+</tbody></table></div>
+<p>Start with a common root yield, constant active fractions, no recycling, and fixed B₀. Fit turnover and respiration from independent evidence before tuning allocation. Prefer fitting to EcoSIM trajectories of the four aggregated carbon pools, root-group growth, maintenance, and growth respiration together. Compare fractions and fluxes on the same time and area basis.</p>
+<p>Typical fine-root turnover may exceed medium- and coarse-root turnover, but impose this ordering only when supported for the plant and conditions. No universal fine:medium:coarse biomass ratio follows from the source: ratios emerge from allocation, yields, turnover, and environmental constraints.</p>
+<div class="note assumption"><strong>What four states cannot retain:</strong> explicit reserve memory, branch structure, root age/depth distributions, changing conductive sapwood fraction, hydraulic/hormonal feedbacks, or N/P stoichiometry. Water, oxygen, and nutrients are assumed nonlimiting in the minimal model. If needed, prescribe environmental multipliers on growth capacities and separate modifiers on maintenance; setting a growth weight to zero must not erase maintenance. Mechanistic N/P conservation requires additional states.</div>
+<p>Because GPP is prescribed, shoot and root biomass do not feed back onto photosynthesis here. GPP must already reflect those constraints externally. Constant forcing applied to a dead or severely depleted plant is outside the valid domain. Use positive established-plant initial conditions; this document does not define seed carbon or establishment reserves.</p>
+<p><strong>Validation status:</strong> source relationships and active call sites were inspected; the algebraic allocation and carbon-budget identities were checked numerically. The proposed reduction has not been calibrated or validated against EcoSIM simulations. No Fortran code was changed and no model build was required.</p>
+<p class="small">Related local explanations: <a href="root_categories.html">Root categories and transport geometry</a> · <a href="cytokinin.html">Cytokinin dynamics</a>. The Fortran files linked above are the primary evidence; the proposed biomass proxies remain explicit modeling choices.</p>
+</section>
+</main></body></html>
