@@ -1,6 +1,5 @@
 module SnowPhysMod
-!
-! Description
+! Description:
 ! Evolve snow water, ice, temperature and surface exchange, and accumulate
 ! accepted mass and energy transfers for the surface and hourly balances.
   use data_kind_mod, only : r8 => DAT_KIND_R8
@@ -25,6 +24,7 @@ module SnowPhysMod
   use SoilHeatDataType
   use SoilPropertyDataType
   use SoilPhysDataType
+  use SoilPhysParaMod, only: ComputePsiMCM
   use ChemTranspDataType
   use LandSurfDataType
   use PhysPars
@@ -1763,6 +1763,9 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine UpdateSoilWaterPotential(NY,NX)
+  ! Description:
+  ! Refresh the working surface pressure for snow exchange. Ordinary soil shares
+  ! the common retention evaluator; the existing pond/ice branches remain here.
   implicit none
   integer, intent(in) :: NY,NX
   real(r8) :: THETW1,VPY,FCX,WPX
@@ -1773,18 +1776,7 @@ contains
   THETW1=AMAX1(SoilWatAirDry_vr(NUM_col(NY,NX),NY,NX),AMIN1(POROS_vr(NUM_col(NY,NX),NY,NX) &
     ,safe_adb(VLWatMicP1_vr(NUM_col(NY,NX),NY,NX),VLSoilMicP_vr(NUM_col(NY,NX),NY,NX))))
   IF(VLSoilMicPMass_vr(NUM_col(NY,NX),NY,NX).GT.ZEROS(NY,NX))THEN
-    IF(THETW1.LT.FieldCapacity_vr(NUM_col(NY,NX),NY,NX))THEN
-      PSISM1_vr(NUM_col(NY,NX),NY,NX)=AMAX1(PSIHY,-EXP(LOGPSIFLD_col(NY,NX) &
-        +((LOGFldCapacity_vr(NUM_col(NY,NX),NY,NX)-LOG(THETW1)) &
-        /FCD_vr(NUM_col(NY,NX),NY,NX)*LOGPSIMND_col(NY,NX))))
-    ELSEIF(THETW1.LT.POROS_vr(NUM_col(NY,NX),NY,NX)-DTHETW)THEN
-      PSISM1_vr(NUM_col(NY,NX),NY,NX)=-EXP(LOGPSIAtSat(NY,NX) &
-        +(((LOGPOROS_vr(NUM_col(NY,NX),NY,NX)-LOG(THETW1)) &
-        /PSD_vr(NUM_col(NY,NX),NY,NX))**SRP_vr(NUM_col(NY,NX),NY,NX)*LOGPSIMXD_col(NY,NX)))
-    ELSE
-      THETW1=POROS_vr(NUM_col(NY,NX),NY,NX)
-      PSISM1_vr(NUM_col(NY,NX),NY,NX)=PSI_at_Sautration_vr(NUM_col(NY,NX),NY,NX)
-    ENDIF
+    call ComputePsiMCM(NUM_col(NY,NX),NY,NX,THETW1,PSISM1_vr(NUM_col(NY,NX),NY,NX))
   ELSEIF(VLSoilPoreMicP_vr(NUM_col(NY,NX),NY,NX).GT.ZEROS2(NY,NX))THEN
     FCX    = FCI*FracSoiPAsIce_vr(NUM_col(NY,NX),NY,NX)
     WPX    = WPI*FracSoiPAsIce_vr(NUM_col(NY,NX),NY,NX)
