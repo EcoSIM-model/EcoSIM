@@ -32,11 +32,13 @@ start_date='18000101000000'
 forc_periods=1980,1989,2
 npxs=30 !water/heat substeps
 npys=10 !gas substeps
+sp_phenol_in = 'phenology.nc'
 /
 &ecosim_time
 delta_time=3600.
 /
 """)
+        (parent / 'phenology.nc').write_bytes(b'phenology')
         original = namelist.read_bytes()
         stamp = f'1800-07-30-{seconds:06d}.nc'
         restart = parent / ('Lake.ecosim.r.' + stamp)
@@ -78,6 +80,17 @@ delta_time=3600.
         record = json.loads((out / 'restart_run.json').read_text())
         self.assertEqual(record['expected_nstep'], 5285)
         self.assertEqual(record['expected_end'], '1800-08-09T05:00:00')
+
+    def test_phenology_input_is_resolved_and_copied_when_requested(self):
+        parent, out, result = self.stage('branch')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = (out / 'runfile.namelist').read_text()
+        self.assertIn(f"sp_phenol_in = '{parent / 'phenology.nc'}'", text)
+
+        _, copied_out, result = self.stage('branch', extra=('--copy-input', 'sp_phenol_in'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((copied_out / 'phenology.nc').read_bytes(), b'phenology')
+        self.assertIn("sp_phenol_in = './phenology.nc'", (copied_out / 'runfile.namelist').read_text())
 
     def test_calendar_endpoints(self):
         self.assertEqual(staging.run_end_time(datetime(2000, 2, 29, 5), 1, 'nyears', 3600),

@@ -22,7 +22,8 @@ import sys
 from pathlib import Path
 
 INPUT_KEYS = ("pft_file_in", "grid_file_in", "pft_mgmt_in", "clm_hour_file_in",
-              "clm_day_file_in", "soil_mgmt_in", "atm_ghg_in", "clm_factor_in")
+              "clm_day_file_in", "soil_mgmt_in", "atm_ghg_in", "clm_factor_in",
+              "sp_phenol_in")
 TIME_KEYS = ("stop_n", "stop_option", "rest_opt", "rest_frq", "delta_time")
 RESTART_NAME = re.compile(r"^(?P<case>.+)\.ecosim\.r\.(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})-(?P<s>\d+)\.nc$")
 
