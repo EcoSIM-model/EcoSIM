@@ -307,21 +307,21 @@ implicit none
   call PrintInfo('end '//subname)
   end subroutine ComputeSoilAirDryContent
 !------------------------------------------------------------------------------------------
-  subroutine ComputeKsatReferenceContent(L,NY,NX,WaterContent)
+  function ComputeKsatReferenceContent(L,NY,NX) result(WaterContent)
   ! Description:
-  ! Preserve the logarithmic -0.033 MPa reference used to estimate Ksat.
+  ! Return the logarithmic -0.033 MPa reference content used to estimate Ksat.
   ! This historical expression omits SRP and is not a general retention inverse.
   implicit none
   integer, intent(in) :: L       ! ordinary-soil layer index [-]
   integer, intent(in) :: NY,NX   ! row and column indices [-]
-  real(r8), intent(out) :: WaterContent ! reference liquid content [m3 m-3 soil]
+  real(r8) :: WaterContent ! returned reference liquid content [m3 m-3 soil]
   character(len=*), parameter :: subname='ComputeKsatReferenceContent'
 
   call PrintInfo('beg '//subname)
   WaterContent=AMIN1(POROS_vr(L,NY,NX),EXP((LOGPSIAtSat(NY,NX)-LOG(0.033_r8)) &
     *(LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX))/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
   call PrintInfo('end '//subname)
-  end subroutine ComputeKsatReferenceContent
+  end function ComputeKsatReferenceContent
 !------------------------------------------------------------------------------------------
   pure function getMoistK(thetawl,pores)result(K)
   implicit none

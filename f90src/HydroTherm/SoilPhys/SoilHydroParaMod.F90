@@ -193,7 +193,7 @@ contains
   IF(ISOIL_vr(isoi_scnv,L,NY,NX).EQ.isoi_unset)THEN
     !computing vertical saturated hydraulic conductivity
     IF(CSoilOrgM_vr(ielmc,L,NY,NX).LT.FORGW)THEN
-      call ComputeKsatReferenceContent(L,NY,NX,THETF)
+      THETF=ComputeKsatReferenceContent(L,NY,NX)
       SatHydroCondVert_vr(L,NY,NX)=1.54_r8*((POROS_vr(L,NY,NX)-THETF)/THETF)**2
     ELSE
       SatHydroCondVert_vr(L,NY,NX) = 0.10_r8+75.0_r8*1.0E-15_r8**SoilBulkDensity_vr(L,NY,NX)
@@ -204,7 +204,7 @@ contains
   IF(ISOIL_vr(isoi_scnh,L,NY,NX).EQ.isoi_unset)THEN
     !computing horizontal saturated hydraulic conductivity
     IF(CSoilOrgM_vr(ielmc,L,NY,NX).LT.FORGW)THEN
-      call ComputeKsatReferenceContent(L,NY,NX,THETF)
+      THETF=ComputeKsatReferenceContent(L,NY,NX)
       SatHydroCondHrzn_vr(L,NY,NX)=1.54_r8*((POROS_vr(L,NY,NX)-THETF)/THETF)**2
     ELSE
       SatHydroCondHrzn_vr(L,NY,NX) = 0.10_r8+75.0_r8*1.0E-15_r8**SoilBulkDensity_vr(L,NY,NX)

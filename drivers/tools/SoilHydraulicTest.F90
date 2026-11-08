@@ -101,7 +101,7 @@ program SoilHydraulicTest
 
   call ComputeSoilAirDryContent(1,1,1,content)
   call check_close('dry content characterization',content,.038992079977186643_r8)
-  call ComputeKsatReferenceContent(1,1,1,content)
+  content=ComputeKsatReferenceContent(1,1,1)
   call check_close('Ksat reference content',content,.30_r8)
   call ComputeWaterTableEquilContent(1,1,1,-.033_r8,.44_r8,content)
   call check_close('legacy equilibrium approximation',content,.30_r8)
