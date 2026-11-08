@@ -1,4 +1,10 @@
 module SoilPhysParaMod
+  ! Description:
+  ! Evaluate soil/pond pressure and thermal properties. Hydraulic callers share
+  ! the current retention curve and named auxiliary water-content calculations.
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
+  use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use DebugToolMod,     only: PrintInfo,DebugPrint
@@ -26,6 +32,8 @@ implicit none
   public :: CalcSoilThermConductivity
   public :: get_Tfrez
   public :: ComputePsiMCM  
+  public :: ComputeSoilAirDryContent
+  public :: ComputeKsatReferenceContent
   public :: ComputePSIPond
   public :: getMoistK
   public :: IsPondLayer
@@ -262,31 +270,75 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine ComputePsiMCM(N6,N5,N4,THETWL,PSISM1)
-  !
-  !Description
-  !Compute soil matric pressure
+  ! Description:
+  ! Dispatch ordinary-soil pressure to the selected scheme. Litter and pond-table
+  ! calls retain the current curve; ambient pond/ice pressure uses ComputePSIPond.
   implicit none
   integer, intent(in) :: N6,N5,N4
-  real(r8), intent(inout) :: THETWL  !liquid water content, [m3 H2O d-2]
+  real(r8), intent(inout) :: THETWL  !liquid content [m3 m-3 soil]; set to porosity near saturation
   real(r8), intent(out) :: PSISM1    !Soil matric pressure [MPa]
   character(len=*), parameter :: subname='ComputePsiMCM'
 
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: surface_model
+
   call PrintInfo('beg '//subname)
-  IF(THETWL.LT.FieldCapacity_vr(N6,N5,N4))THEN
-    !less than field capacity
-    PSISM1=AMAX1(PSIHY,-EXP(LOGPSIFLD_col(N5,N4)+((LOGFldCapacity_vr(N6,N5,N4)-LOG(THETWL)) &
-      /FCD_vr(N6,N5,N4)*LOGPSIMND_col(N5,N4))))
-  ELSEIF(THETWL.LT.POROS_vr(N6,N5,N4)-DTHETW)THEN
-    PSISM1=-EXP(LOGPSIAtSat(N5,N4)+(((LOGPOROS_vr(N6,N5,N4)-LOG(THETWL)) &
-      /PSD_vr(N6,N5,N4))**SRP_vr(N6,N5,N4)*LOGPSIMXD_col(N5,N4)))
+  parameters=GetSoilHydraulicParameters(N6,N5,N4,DTHETW)
+  IF(N6.EQ.0 .OR. SoilBulkDensity_vr(N6,N5,N4).LE.ZERO)THEN
+    PSISM1=surface_model%matric_potential(parameters,THETWL)
   ELSE
-    !saturated
-    THETWL = POROS_vr(N6,N5,N4)
-    PSISM1 = PSI_at_Sautration_vr(N6,N5,N4)
+    model=>GetSoilHydraulicModel()
+    PSISM1=model%matric_potential(parameters,THETWL)
   ENDIF
   call PrintInfo('end '//subname)
   END subroutine ComputePsiMCM
 
+!------------------------------------------------------------------------------------------
+  subroutine ComputeSoilAirDryContent(L,NY,NX,WaterContent)
+  ! Description:
+  ! Evaluate the current dry-branch water content at PSIHY. Callers retain
+  ! responsibility for distinguishing ordinary soil, litter and pond layers.
+  implicit none
+  integer, intent(in) :: L       ! vertical layer index, including litter at zero [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8), intent(out) :: WaterContent ! dry-branch liquid content [m3 m-3 soil]
+  character(len=*), parameter :: subname='ComputeSoilAirDryContent'
+
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: litter_model
+
+  call PrintInfo('beg '//subname)
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  IF(L.EQ.0)THEN
+    WaterContent=litter_model%dry_content(parameters)
+  ELSE
+    model=>GetSoilHydraulicModel()
+    WaterContent=model%dry_content(parameters)
+  ENDIF
+  call PrintInfo('end '//subname)
+  end subroutine ComputeSoilAirDryContent
+!------------------------------------------------------------------------------------------
+  function ComputeKsatReferenceContent(L,NY,NX) result(WaterContent)
+  ! Description:
+  ! Return the logarithmic -0.033 MPa reference content used to estimate Ksat.
+  ! This historical expression omits SRP and is not a general retention inverse.
+  implicit none
+  integer, intent(in) :: L       ! ordinary-soil layer index [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8) :: WaterContent ! returned reference liquid content [m3 m-3 soil]
+  character(len=*), parameter :: subname='ComputeKsatReferenceContent'
+
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+
+  call PrintInfo('beg '//subname)
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  model=>GetSoilHydraulicModel()
+  WaterContent=model%ksat_reference_content(parameters)
+  call PrintInfo('end '//subname)
+  end function ComputeKsatReferenceContent
 !------------------------------------------------------------------------------------------
   pure function getMoistK(thetawl,pores)result(K)
   implicit none

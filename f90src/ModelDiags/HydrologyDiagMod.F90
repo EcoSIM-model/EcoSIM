@@ -1,4 +1,9 @@
 module HydrologyDiagMod  
+  ! Description:
+  ! Diagnose water/ice contents, connected water-table depth and active-layer depth
+  ! from model state without changing water inventories.
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use minimathmod,   only: isclose, AZMAX1, AZMIN1, safe_adb
   use EcosimConst,   only: mGravAccelerat
@@ -16,10 +21,34 @@ module HydrologyDiagMod
   __FILE__
 
   public :: UpdateSoilWaterContents
+  public :: ComputeWaterTableEquilContent
   public :: DiagWaterTableDepZi
   public :: DiagActiveLayerDepth
 
   contains
+!------------------------------------------------------------------------------------------
+
+  subroutine ComputeWaterTableEquilContent(L,NY,NX,Potential,MaxWaterContent,WaterContent)
+  ! Description:
+  ! Delegate equilibrium content to the scheme. The default EcoSIM implementation
+  ! explicitly preserves the existing SRP-free diagnostic approximation.
+  implicit none
+  integer, intent(in) :: L       ! soil layer above the diagnosed saturated zone [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8), intent(in) :: Potential       ! equilibrium matric potential [MPa]
+  real(r8), intent(in) :: MaxWaterContent ! liquid capacity after ice/air allowance [m3 m-3 soil]
+  real(r8), intent(out) :: WaterContent   ! bounded equilibrium liquid content [m3 m-3 soil]
+  character(len=*), parameter :: subname='ComputeWaterTableEquilContent'
+
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+
+  call PrintInfo('beg '//subname)
+  parameters=GetSoilHydraulicParameters(L,NY,NX,0._r8)
+  model=>GetSoilHydraulicModel()
+  WaterContent=model%equilibrium_content(parameters,Potential,MaxWaterContent)
+  call PrintInfo('end '//subname)
+  end subroutine ComputeWaterTableEquilContent
 !------------------------------------------------------------------------------------------
 
   subroutine UpdateSoilWaterContents(NY,NX)
@@ -48,8 +77,7 @@ module HydrologyDiagMod
 !------------------------------------------------------------------------------------------
 
   subroutine DiagWaterTableDepZi(I,J,NY,NX)
-  !
-  !Description:
+  ! Description:
   !Diagnose water table depth in the soil column
   implicit none
   integer, intent(in) :: I,J,NY,NX
@@ -105,12 +133,7 @@ module HydrologyDiagMod
         PSIEquil=PSISoilMatricP_vr(L,NY,NX)-mGravAccelerat* &
           (SoilDepthMidLay_vr(L,NY,NX)-SoilDepthMidLay_vr(LL,NY,NX))
         THETWM=AZMAX1(POROS_vr(LL,NY,NX)-THETI_vr(LL,NY,NX)-THETPW)
-        IF(PSIEquil.GE.-EXP(LOGPSIAtSat(NY,NX)))THEN
-          THETW1=THETWM
-        ELSE
-          THETW1=AMIN1(THETWM,EXP((LOGPSIAtSat(NY,NX)-LOG(-PSIEquil)) &
-            *PSD_vr(LL,NY,NX)/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(LL,NY,NX)))
-        ENDIF
+        call ComputeWaterTableEquilContent(LL,NY,NX,PSIEquil,THETWM,THETW1)
         THETPX=0._r8
         IF(THETWM.GT.THETW1)THEN
           THETPX=AMIN1(1._r8,AZMAX1((THETWM-THETW_vr(LL,NY,NX))/(THETWM-THETW1)))

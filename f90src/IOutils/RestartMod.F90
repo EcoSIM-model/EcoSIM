@@ -1,6 +1,6 @@
 module RestartMod
 !
-! DESCRIPTION
+! Description:
 ! code to write restart/check point files
 ! code to read/write restart files
   use data_kind_mod     , only : r8 => DAT_KIND_R8
@@ -11,7 +11,8 @@ module RestartMod
   use EcoSIMConfig      , only : case_name,hostname,version,source,username
   use EcoSiMParDataMod  , only : micpar,pltpar
   use TracerIDMod       , only : trc_confs
-  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode
+  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,use_ecosys_drainage,DefaultSoilHydraulicScheme
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicSchemeName,GetSoilHydraulicSchemeRevision
   use ecosim_log_mod   , only : errMsg => shr_log_errMsg
   use abortutils        , only : endrun,destroy,iulog
   use UnitMod           , only : units
@@ -65,6 +66,7 @@ implicit none
   character(len=16), parameter :: namep  = 'pft'          ! name of patches
 
   public :: restFile
+  public :: restartnc_soil_hydraulic_scheme
   public :: get_restart_date
   contains
 
@@ -5304,6 +5306,86 @@ implicit none
   call restartnc_daily_irrigation(ncid,flag)
 
   end subroutine restartnc
+!------------------------------------------------------------------------------------------
+  subroutine restartnc_soil_hydraulic_scheme(ncid,flag)
+  ! Description:
+  ! Write scheme identity/revision and separate drainage policy as global attributes.
+  ! Validate them before restoring caches. Attribute-free legacy files are EcoSIM;
+  ! cross-scheme or cross-policy cache migration is not performed implicitly.
+  use netcdf, only: nf90_global,nf90_noerr,nf90_enotatt,nf90_char,nf90_int, &
+    nf90_inquire_attribute,nf90_get_att
+  implicit none
+  type(file_desc_t), intent(inout) :: ncid ! opened checkpoint descriptor [-]
+  character(len=*), intent(in) :: flag    ! metadata operation: define or read [-]
+  character(len=32) :: selected_name,saved_name
+  integer :: selected_revision,saved_revision,saved_policy,status,attribute_type,attribute_length
+  logical :: has_name,has_revision,has_policy
+  character(len=*), parameter :: subname='restartnc_soil_hydraulic_scheme'
+
+  call PrintInfo('beg '//subname)
+  selected_name=GetSoilHydraulicSchemeName()
+  selected_revision=GetSoilHydraulicSchemeRevision()
+  associate(handle => ncid%fh)
+    if(flag=='define')then
+      call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_scheme',trim(selected_name)),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_scheme_revision',selected_revision),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_ecosys_drainage',merge(1,0,use_ecosys_drainage)),subname)
+    elseif(flag=='read')then
+      status=nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_scheme')
+      has_name=status==nf90_noerr
+      if(status/=nf90_enotatt)call check_ret(status,subname)
+      status=nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_scheme_revision')
+      has_revision=status==nf90_noerr
+      if(status/=nf90_enotatt)call check_ret(status,subname)
+      status=nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_ecosys_drainage')
+      has_policy=status==nf90_noerr
+      if(status/=nf90_enotatt)call check_ret(status,subname)
+      if(.not.has_name.and..not.has_revision.and..not.has_policy)then
+        if(selected_name/=DefaultSoilHydraulicScheme)then
+          write(iulog,*) 'Legacy checkpoint has no scheme identity; requested ',trim(selected_name)
+          call endrun('Soil hydraulic restart scheme mismatch')
+        endif
+        write(iulog,*) 'Restart lacks soil hydraulic scheme metadata; assuming ecosim and retaining configured drainage policy.'
+      elseif(.not.(has_name.and.has_revision.and.has_policy))then
+        write(iulog,*) 'Checkpoint must contain all three soil hydraulic scheme metadata attributes.'
+        call endrun('Incomplete soil hydraulic restart metadata')
+      else
+        call check_ret(nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_scheme', &
+          xtype=attribute_type,len=attribute_length),subname)
+        if(attribute_type/=nf90_char.or.attribute_length<1.or.attribute_length>len(saved_name))then
+          call endrun('Invalid soil hydraulic restart scheme attribute')
+        endif
+        saved_name=''
+        call check_ret(nf90_get_att(handle,nf90_global,'soil_hydraulic_scheme',saved_name),subname)
+        call check_ret(nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_scheme_revision', &
+          xtype=attribute_type,len=attribute_length),subname)
+        if(attribute_type/=nf90_int.or.attribute_length/=1)then
+          call endrun('Invalid soil hydraulic restart revision attribute')
+        endif
+        call check_ret(nf90_get_att(handle,nf90_global,'soil_hydraulic_scheme_revision',saved_revision),subname)
+        call check_ret(nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_ecosys_drainage', &
+          xtype=attribute_type,len=attribute_length),subname)
+        if(attribute_type/=nf90_int.or.attribute_length/=1)then
+          call endrun('Invalid soil hydraulic restart drainage-policy attribute')
+        endif
+        call check_ret(nf90_get_att(handle,nf90_global,'soil_hydraulic_ecosys_drainage',saved_policy),subname)
+        if(saved_name/=selected_name)then
+          write(iulog,*) 'Checkpoint scheme=',trim(saved_name),' requested=',trim(selected_name)
+          call endrun('Soil hydraulic restart scheme mismatch')
+        endif
+        if(saved_revision/=selected_revision)then
+          write(iulog,*) 'Checkpoint scheme revision=',saved_revision,' requested=',selected_revision
+          call endrun('Soil hydraulic restart revision mismatch')
+        endif
+        if(saved_policy/=merge(1,0,use_ecosys_drainage))then
+          write(iulog,*) 'Checkpoint drainage policy=',saved_policy,' requested=',merge(1,0,use_ecosys_drainage)
+          call endrun('Soil hydraulic restart drainage-policy mismatch')
+        endif
+      endif
+    endif
+  end associate
+  call PrintInfo('end '//subname)
+  end subroutine restartnc_soil_hydraulic_scheme
 !------------------------------------------------------------------------------------------
   subroutine restartnc_accumulators(ncid,flag)
   implicit none
@@ -10937,6 +11019,7 @@ implicit none
   ! Open file
   print*,trim(file)
   call restFile_open( flag='read', file=file, ncid=ncid )
+  call restartnc_soil_hydraulic_scheme(ncid,'read')
   print*,'restFile_open Successfully'
   ! Read file
 
@@ -11335,6 +11418,7 @@ implicit none
 !  call ncd_putatt(ncid, NCD_GLOBAL, 'surface_dataset', trim(fsurdat))
 !  call ncd_putatt(ncid, NCD_GLOBAL, 'flanduse_timeseries', trim(get_flanduse_timeseries()))
   call check_ret(ncd_putatt(ncid, NCD_GLOBAL, 'title', 'ECOSIM Restart information'),subname)
+  call restartnc_soil_hydraulic_scheme(ncid,'define')
 
 !  call restFile_add_ipft_metadata(ncid)
 !  call restFile_add_icol_metadata(ncid)

@@ -1,4 +1,6 @@
 module EcoSIMCtrlMod
+  ! Description:
+  ! Store model controls, input selections and runtime configuration shared by drivers.
   use ncdio_pio,       only: file_desc_t
   use data_kind_mod,   only: r8 => DAT_KIND_R8
   use ecosim_Time_Mod, only: ecosim_time_type
@@ -63,6 +65,8 @@ implicit none
   logical :: first_pft            = .false.  !only simulate first pft
   integer :: iErosionMode         = -1         !erosion option
   logical :: use_ecosys_drainage = .false.
+  character(len=*), parameter :: DefaultSoilHydraulicScheme='ecosim'
+  character(len=32) :: soil_hydraulic_scheme=DefaultSoilHydraulicScheme
   logical :: plant_model          = .true.
   logical :: microbial_model      = .true.
   logical :: soichem_model        = .true.

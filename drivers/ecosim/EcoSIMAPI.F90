@@ -142,6 +142,7 @@ contains
   use EcoSIMHistMod  , only : DATAC
   use readsmod       , only : clim_var  
   use MicrobeConfigMod,only : ReadMicrobeNamelist
+  use SoilHydraulicSchemeMod, only: InitializeSoilHydraulicScheme
   use HistFileMod
   implicit none
   character(len=*), parameter :: mod_filename = &
@@ -164,7 +165,7 @@ contains
     num_of_simdays,lverbose,num_microbial_guilds,transport_on,column_mode,&
     do_instequil,salt_model, pft_file_in,grid_file_in,pft_mgmt_in, clm_factor_in,&
     clm_hour_file_in,clm_day_file_in,soil_mgmt_in,forc_periods,NCYC_LITR,NCYC_SNOW,&
-    NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,use_ecosys_drainage,&
+    NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,use_ecosys_drainage,soil_hydraulic_scheme,&
     clm_hour_file_in,clm_day_file_in,soil_mgmt_in,soil_mgmt_use_model_year,forc_periods,NCYC_LITR,NCYC_SNOW,&
     NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,&
     finidat,restartFileFullPath,brnch_retain_casename,plant_model,microbial_model,&
@@ -236,6 +237,7 @@ contains
   do_layer             = 1
   LMacPoreOff          = .false.
   use_ecosys_drainage  = .false.
+  soil_hydraulic_scheme = DefaultSoilHydraulicScheme
   salt_model           = .false.
   laddband             = .false.
   do_regression_test   = .false.
@@ -342,6 +344,7 @@ contains
     clim_var%Atm_kPa   = Atm_kPa
   endif
 
+  call InitializeSoilHydraulicScheme()
   call ReadMicrobeNamelist(nml_buffer)
 
 end subroutine readnamelist
@@ -695,6 +698,8 @@ end subroutine regressiontest
 
 !------------------------------------------------------------------------------------------
   subroutine write_modelconfig()
+  ! Description:
+  ! Write the selected process controls and soil hydraulic scheme to the run setup file.
   use fileUtil, only : getavu, relavu, opnfil
   use readiMod
   implicit none
@@ -712,6 +717,8 @@ end subroutine regressiontest
     write(nu_cfg,*)'erosion_model=',erosion_model_status(iErosionMode)
     write(nu_cfg,*)'grid_mode=',GridConectionMode(grid_mode)
     write(nu_cfg,*)'soil_mgmt_use_model_year=',soil_mgmt_use_model_year
+    write(nu_cfg,*)'soil_hydraulic_scheme=',trim(soil_hydraulic_scheme)
+    write(nu_cfg,*)'use_ecosys_drainage=',use_ecosys_drainage
     call relavu(nu_cfg)
   endif
   end subroutine write_modelconfig

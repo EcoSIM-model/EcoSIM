@@ -1,9 +1,16 @@
 module SoilHydroParaMod
+  ! Description:
+  ! Initialize and refresh hydraulic limits, conductivity tables and thresholds.
+  ! Ordinary-soil and litter property setup retain their separate domain rules.
 
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
+  use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use minimathmod,      only: isclose, AZMAX1, AZMIN1, Viscosity_H2O
-  Use SoilPhysParaMod,  only: ComputePsiMCM,ComputePSIPond,getMoistK
+  Use SoilPhysParaMod,  only: ComputePsiMCM,ComputePSIPond,getMoistK, &
+    ComputeSoilAirDryContent,ComputeKsatReferenceContent
   use DebugToolMod
   use EcoSimConst
   use SoilWaterDataType
@@ -128,17 +135,15 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine SoilHydroProperty(I,J,L,NY,NX)
-  !
-  !Set up soil hydraulic property
+  ! Description:
+  ! Refresh ordinary-soil limits and properties, then rebuild the conductivity
+  ! cache and drainage thresholds without resetting water/ice inventories.
   implicit none
   integer, intent(in) :: L,NY,NX
   integer, intent(in) :: I,J
   real(r8) :: THETF
-  real(r8) :: H2OSOIK(100),PSISK(0:100)
   character(len=*), parameter :: subname='SoilHydroProperty'
 
-  integer :: K,M,N,N100
-  real(r8) :: XK,YK,SUM1,SUM2
   real(r8) :: VISCWL
 
   call PrintInfo('beg '//subname)
@@ -178,7 +183,7 @@ contains
 
   IF(SoilBulkDensity_vr(L,NY,NX).GT.ZERO)THEN
     !PSIHY: soil matric potential at dessication
-    SoilWatAirDry_vr(L,NY,NX)=EXP((LOGPSIFLD_col(NY,NX)-LOG(-PSIHY))*FCD_vr(L,NY,NX)/LOGPSIMND_col(NY,NX)+LOGFldCapacity_vr(L,NY,NX))
+    call ComputeSoilAirDryContent(L,NY,NX,SoilWatAirDry_vr(L,NY,NX))
   ELSE
     SoilWatAirDry_vr(L,NY,NX)=ZERO2
   ENDIF
@@ -191,8 +196,7 @@ contains
   IF(ISOIL_vr(isoi_scnv,L,NY,NX).EQ.isoi_unset)THEN
     !computing vertical saturated hydraulic conductivity
     IF(CSoilOrgM_vr(ielmc,L,NY,NX).LT.FORGW)THEN
-      THETF=AMIN1(POROS_vr(L,NY,NX),EXP((LOGPSIAtSat(NY,NX)-LOG(0.033_r8)) &
-        *(LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX))/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
+      THETF=ComputeKsatReferenceContent(L,NY,NX)
       SatHydroCondVert_vr(L,NY,NX)=1.54_r8*((POROS_vr(L,NY,NX)-THETF)/THETF)**2
     ELSE
       SatHydroCondVert_vr(L,NY,NX) = 0.10_r8+75.0_r8*1.0E-15_r8**SoilBulkDensity_vr(L,NY,NX)
@@ -203,8 +207,7 @@ contains
   IF(ISOIL_vr(isoi_scnh,L,NY,NX).EQ.isoi_unset)THEN
     !computing horizontal saturated hydraulic conductivity
     IF(CSoilOrgM_vr(ielmc,L,NY,NX).LT.FORGW)THEN
-      THETF=AMIN1(POROS_vr(L,NY,NX),EXP((LOGPSIAtSat(NY,NX)-LOG(0.033_r8)) &
-        *(LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX))/LOGPSIMXD_col(NY,NX)+LOGPOROS_vr(L,NY,NX)))
+      THETF=ComputeKsatReferenceContent(L,NY,NX)
       SatHydroCondHrzn_vr(L,NY,NX)=1.54_r8*((POROS_vr(L,NY,NX)-THETF)/THETF)**2
     ELSE
       SatHydroCondHrzn_vr(L,NY,NX) = 0.10_r8+75.0_r8*1.0E-15_r8**SoilBulkDensity_vr(L,NY,NX)
@@ -212,79 +215,18 @@ contains
     ENDIF
   ENDIF
 
-  !
-  !     HYDRAULIC CONDUCTIVITY FUNCTION FROM KSAT AND SOIL WATER RELEASE CURVE
-  !
-  !     THETK,PSISK=micropore class water content,potential
-  !     HCND=lateral(1,2),vertical(3) micropore hydraulic conductivity
-  !
-  !     IF(VLSoilMicPMass_vr(L,NY,NX).GT.ZEROS(NY,NX))THEN
-  !using Eq.(1) and II in Table 1 from Green and Corey, 1971
-  SUM2=0.0_r8;N100=100
-  !integrate of 1/Psi(x) over [0,1] 
-  DO  K=1,n100
-    !air-filled relative pore volume
-    XK  = (K-1._r8)/n100
-    !moisture content
-    H2OSOIK(K) = POROS_vr(L,NY,NX)*(1._r8-XK)
-    call ComputePsiMCM(L,NY,NX,H2OSOIK(K),PSISK(K))
-    SUM2=SUM2+(2._r8*K-1)/(PSISK(K)**2)
-  ENDDO
-
-  !progress from dry to saturation
-  !completely dry at XK==1
-  DO  K=1,N100
-    
-    !air-filled relative pore volume
-    XK   = (K-1._r8)/N100
-    !saturation at K
-    YK   = (1._r8-XK)**1.33_r8
-    SUM1 = 0.0_r8
-    DO M    = K, N100
-      SUM1=SUM1+(2*(M-K)+1._r8)/(PSISK(M)**2)
-    ENDDO
-
-    DO  N=1,3
-      IF(N.EQ.3)THEN
-        !vertical
-        HydroCond_3D(N,K,L,NY,NX)=SatHydroCondVert_vr(L,NY,NX)*YK*SUM1/SUM2
-
-        !obtain water content at saturation
-        if (use_ecosys_drainage) then
-          ! ECOSIM_ZM: legacy FSCNV=0.1 crossing, using preceding wetter
-          ! entry for BOTH pressure and theta. Internal saturated/Green-Ampt
-          ! switches and natural-outlet wetness now share the same definition.
-          if (K.gt.1) then
-            if (HydroCond_3D(3,K,L,NY,NX).lt.0.1_r8*SatHydroCondVert_vr(L,NY,NX) .and. &
-                HydroCond_3D(3,K-1,L,NY,NX).ge.0.1_r8*SatHydroCondVert_vr(L,NY,NX)) then
-              PSISoilAirEntry_vr(L,NY,NX)=PSISK(K-1)
-              ThetaSat_vr(L,NY,NX)=H2OSOIK(K-1)
-            endif
-          endif
-        else
-          IF(K.GT.1 .AND. PSISK(K).LT.PSISoilAirEntry_vr(L,NY,NX))then
-            if(PSISK(K-1).GE.PSISoilAirEntry_vr(L,NY,NX))THEN
-              ThetaSat_vr(L,NY,NX)=H2OSOIK(K)
-            endif
-          ENDIF
-        endif
-      ELSE
-        !horizontal
-        HydroCond_3D(N,K,L,NY,NX)=SatHydroCondHrzn_vr(L,NY,NX)*YK*SUM1/SUM2
-      ENDIF
-    ENDDO
-  ENDDO
+  call BuildSoilConductivityTable(L,NY,NX)
 
   !     SOIL MACROPORE DIMENSIONS AND CONDUCTIVITY FROM MACROPORE FRACTION
   !     ENTERED IN 'READS'
   !
   !     PathLenMacP,MacPNumLayer,MacPRadius=path length between, number,radius of macropores
   !     CNDH=macropore hydraulic conductivity
-  !VGeomLayert0_vr: geometric volume of the layer 
+  !VGeomLayert0_vr: geometric volume of the layer
   !VLMacroPores_vr: volume of macropores in the layer
   !Assuming soil macropores are approximated as (cylydrical) pipes, and has layer thickness as pipe length
   !Eq.(3.3)-(3.4) from Dimitrov et al. (2010)
-  
+
   MacPoreRadius_vr(L,NY,NX)   = 0.5E-03_r8
   MacPoreNumbers_vr(L,NY,NX) = INT(VLMacroPores_vr(L,NY,NX)/(PICON*MacPoreRadius_vr(L,NY,NX)**2*VGeomLayert0_vr(L,NY,NX)))
 
@@ -300,6 +242,68 @@ contains
 
   call PrintInfo('end '//subname)
   end subroutine SoilHydroProperty
+
+!------------------------------------------------------------------------------------------
+  subroutine BuildSoilConductivityTable(L,NY,NX)
+  ! Description:
+  ! Build the 100-class conductivity cache with the selected ordinary-soil scheme.
+  ! Pond tables retain the current curve; litter has its own builder below.
+  ! Threshold policy is applied separately after the complete table is available.
+  implicit none
+  integer, intent(in) :: L       ! ordinary-soil or pond layer index [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8) :: H2OSOIK(100),PSISK(100) ! sampled liquid contents [m3 m-3] and potentials [MPa]
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
+  type(EcoSIMSoilHydraulicModel) :: pond_model
+  character(len=*), parameter :: subname='BuildSoilConductivityTable'
+
+  call PrintInfo('beg '//subname)
+  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+  IF(L.EQ.0 .OR. SoilBulkDensity_vr(L,NY,NX).LE.ZERO)THEN
+    call pond_model%conductivity_table(parameters,SatHydroCondVert_vr(L,NY,NX),SatHydroCondHrzn_vr(L,NY,NX), &
+      H2OSOIK,PSISK,HydroCond_3D(:,:,L,NY,NX))
+  ELSE
+    model=>GetSoilHydraulicModel()
+    call model%conductivity_table(parameters,SatHydroCondVert_vr(L,NY,NX),SatHydroCondHrzn_vr(L,NY,NX), &
+      H2OSOIK,PSISK,HydroCond_3D(:,:,L,NY,NX))
+  ENDIF
+
+  call UpdateHydraulicThresholds(L,NY,NX,H2OSOIK,PSISK)
+  call PrintInfo('end '//subname)
+  end subroutine BuildSoilConductivityTable
+!------------------------------------------------------------------------------------------
+  subroutine UpdateHydraulicThresholds(L,NY,NX,WaterClasses,PressureClasses)
+  ! Description:
+  ! Set air-entry/ThetaSat using the existing drainage policy. The default policy
+  ! retains its prescribed air-entry pressure; legacy policy takes the wetter
+  ! side of the 0.1 Ksat crossing. No crossing leaves the existing state intact.
+  implicit none
+  integer, intent(in) :: L       ! vertical layer index; litter is zero [-]
+  integer, intent(in) :: NY,NX   ! row and column indices [-]
+  real(r8), intent(in) :: WaterClasses(100)    ! wet-to-dry liquid contents [m3 m-3 soil]
+  real(r8), intent(in) :: PressureClasses(100) ! corresponding matric potentials [MPa]
+  integer :: K
+  character(len=*), parameter :: subname='UpdateHydraulicThresholds'
+
+  call PrintInfo('beg '//subname)
+  DO K=2,100
+    if (use_ecosys_drainage) then
+      if (HydroCond_3D(3,K,L,NY,NX).lt.0.1_r8*SatHydroCondVert_vr(L,NY,NX) .and. &
+          HydroCond_3D(3,K-1,L,NY,NX).ge.0.1_r8*SatHydroCondVert_vr(L,NY,NX)) then
+        PSISoilAirEntry_vr(L,NY,NX)=PressureClasses(K-1)
+        ThetaSat_vr(L,NY,NX)=WaterClasses(K-1)
+      endif
+    else
+      IF(PressureClasses(K).LT.PSISoilAirEntry_vr(L,NY,NX))then
+        if(PressureClasses(K-1).GE.PSISoilAirEntry_vr(L,NY,NX))THEN
+          ThetaSat_vr(L,NY,NX)=WaterClasses(K)
+        endif
+      ENDIF
+    endif
+  ENDDO
+  call PrintInfo('end '//subname)
+  end subroutine UpdateHydraulicThresholds
 
 !------------------------------------------------------------------------------------------
   subroutine EstimateSoilWaterLimits(L,NY,NX)
@@ -427,6 +431,9 @@ contains
   end subroutine SetColdRunSoilStates
 !------------------------------------------------------------------------------------------
   subroutine LitterHydroproperty(NY,NX)
+  ! Description:
+  ! Build litter vertical conductivity with its own porosity and zero horizontal
+  ! transport, then apply the shared threshold policy. Preserve its retention rule.
   implicit none
   integer, intent(in) :: NY,NX
 
@@ -434,14 +441,17 @@ contains
   real(r8) :: XK,YK
   real(r8) :: SUM1,SUM2
   integer, parameter :: n100=100
-  real(r8) :: H2OSOIK(n100),PSISK(0:n100)
+  real(r8) :: H2OSOIK(n100),PSISK(n100)
+  character(len=*), parameter :: subname='LitterHydroproperty'
+
+  call PrintInfo('beg '//subname)
 
   IF(VGeomLayer_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
     SoilBulkDensity_vr(0,NY,NX)=VLSoilMicPMass_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
   ELSE
     SoilBulkDensity_vr(0,NY,NX)=BulkDensLitR(micpar%k_fine_comp)
   ENDIF
-  SoilWatAirDry_vr(0,NY,NX)=EXP((LOGPSIFLD_col(NY,NX)-LOG(-PSIHY))*FCD_vr(0,NY,NX)/LOGPSIMND_col(NY,NX)+LOGFldCapacity_vr(0,NY,NX))
+  call ComputeSoilAirDryContent(0,NY,NX,SoilWatAirDry_vr(0,NY,NX))
   SUM2             =0.0_r8
   D1220: DO  K=1,n100
     XK         = (K-1._r8)/n100
@@ -461,24 +471,9 @@ contains
     HydroCond_3D(3,K,0,NY,NX) = SatHydroCondVert_vr(0,NY,NX)*YK*SUM1/SUM2
     HydroCond_3D(1,K,0,NY,NX) = 0.0_r8
     HydroCond_3D(2,K,0,NY,NX) = 0.0_r8
-    if (use_ecosys_drainage) then
-      ! ECOSIM_ZM: apply the same conductivity-defined threshold to litter,
-      ! matching legacy hour1.f. Preserve its existing retention curvature.
-      if (K.gt.1) then
-        if (HydroCond_3D(3,K,0,NY,NX).lt.0.1_r8*SatHydroCondVert_vr(0,NY,NX) .and. &
-            HydroCond_3D(3,K-1,0,NY,NX).ge.0.1_r8*SatHydroCondVert_vr(0,NY,NX)) then
-          PSISoilAirEntry_vr(0,NY,NX)=PSISK(K-1)
-          ThetaSat_vr(0,NY,NX)=H2OSOIK(K-1)
-        endif
-      endif
-    else
-      IF(K.GT.1.AND.(PSISK(K).LT.PSISoilAirEntry_vr(0,NY,NX)))THEN
-        IF(PSISK(K-1).GE.PSISoilAirEntry_vr(0,NY,NX))THEN
-          ThetaSat_vr(0,NY,NX)=H2OSOIK(K)
-        ENDIF
-      ENDIF
-    endif
   ENDDO D1235
+  call UpdateHydraulicThresholds(0,NY,NX,H2OSOIK,PSISK)
+  call PrintInfo('end '//subname)
   end subroutine LitterHydroproperty
 
 !------------------------------------------------------------------------------------------
