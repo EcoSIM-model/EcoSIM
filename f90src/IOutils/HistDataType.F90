@@ -307,6 +307,7 @@ module HistDataType
   real(r8),pointer   :: h1D_TURG_CAN_ptc(:)     
   real(r8),pointer   :: h1D_STOML_RSC_H2O_ptc(:) 
   real(r8),pointer   :: h1D_BLYR_RSC_H2O_ptc(:) 
+  real(r8),pointer   :: h1D_BLYR_RSC_HEAT_ptc(:)
   real(r8),pointer   :: h1D_CdH2ORootxSoil_ptc(:)
   real(r8),pointer   :: h1D_TRANSPN_ptc(:)      
   real(r8),pointer   :: h1D_NH4_UPTK_FLX_ptc(:)  
@@ -663,6 +664,7 @@ module HistDataType
   real(r8),pointer   :: h2D_RootMedAxesNumL_pvr(:,:)
   real(r8),pointer   :: h2D_Root1stAxesNumL_pvr(:,:)
   real(r8),pointer   :: h2D_Root2ndAxesNumL_pvr(:,:)
+  real(r8),pointer   :: h2D_Root2ndMeanLen_pvr(:,:) !mean secondary plant-root axis length by PFT/layer [m]
   REAL(R8),pointer   :: h2D_RootKond2H2O_pvr(:,:)
   contains
     procedure, public :: Init  => init_hist_data

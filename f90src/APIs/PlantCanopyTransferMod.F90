@@ -238,6 +238,7 @@ contains
   integer, intent(in) :: NY,NX,NZ
   integer :: NB,NR,K,L,M,N,NE
 
+    plt_morph%RootSinkWeight_pvr(:,NZ)=RootSinkWeight_pvr(:,NZ,NY,NX)
     DO L=1,NK_col(NY,NX)
       plt_rbgc%GroSrcRootStress_pvr(L,NZ)  = GroSrcRootStress_pvr(L,NZ,NY,NX)
       plt_morph%RootMediumLength_pvr(L,NZ) = RootMediumLength_pvr(L,NZ,NY,NX)

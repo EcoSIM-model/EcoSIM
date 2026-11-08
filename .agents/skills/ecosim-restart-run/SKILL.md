@@ -43,8 +43,12 @@ python3 .agents/skills/ecosim-restart-run/scripts/stage_restart_run.py \
   --exe build/<configuration>/bin/ecosim.f90.x
 ```
 
-- `--stop-n` / `--stop-option` count from the checkpoint, not from the parent's
-  `start_date` (`curr_stop_count` starts at zero for every run).
+- `--stop-n` / `--stop-option` request additional time from the checkpoint.
+  The stager converts that endpoint to an absolute `nsteps` limit: the driver
+  replays its clock from January 1 before loading the checkpoint, and those
+  skipped hours also increment its stop counter. Intraday checkpoint times are
+  preserved; calendar month/year increments retain the day where possible and
+  otherwise use the target month's last day.
 - `--copy-input KEY` copies that input into the run directory so it can be
   edited there; every other input is referenced by absolute path and is never
   modified.
@@ -52,7 +56,8 @@ python3 .agents/skills/ecosim-restart-run/scripts/stage_restart_run.py \
 - Without `--exe` the script only stages. With it, the script runs the model
   and fails unless the exit status is zero, the log contains
   `restFile_open Successfully`, and the log has no `ENDRUN` or Fortran runtime
-  error.
+  error. It also requires the expected final timestep and dated checkpoint;
+  merely loading a checkpoint or stopping early is not a pass.
 - The staged directory gets `runfile.namelist` and `restart_run.json`, which
   records the checkpoint, inputs and forcing-year mapping.
 

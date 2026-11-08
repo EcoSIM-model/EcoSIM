@@ -72,7 +72,7 @@ implicit none
   integer :: NY,NX,NZ,L,NHW,NHE,NVN,NVS, I, J, M, heat_vec_size, NPH_Test, LS, npfts, NP
   real(r8) :: Wat_next
   real(r8) :: YSIN(NumOfSkyAzimuthSects),YCOS(NumOfSkyAzimuthSects),SkyAzimuthAngle(NumOfSkyAzimuthSects)
-  real(r8) :: ResistanceLitRLay(JY,JX)
+  real(r8) :: ResistVapThroughLitr(JY,JX)
   real(r8) :: RainEkReducedKsat(JY,JX)
   real(r8) :: HeatFluxAir2Soi(JY,JX)
   real(r8) :: TopLayWatVol_col(JY,JX)
@@ -416,6 +416,8 @@ implicit none
             tlai_day_pft(NZ,NY,NX)         = 0._r8
             tsai_day_pft(NZ,NY,NX)         = 0._r8
             irootType_pft(NZ,NY,NX)        = 0
+            MeanSecondaryAxisLength_pft(NZ,NY,NX) = 0._r8
+            CanopyNonstOMConc_pft(NZ,NY,NX) = 0._r8
             CanopyHeightLive_pft(NZ,NY,NX) = 0._r8
         endif
       enddo
@@ -452,7 +454,7 @@ implicit none
   !This does the surface energy and water balance. In the case of plants
   ! it processes the precipitation and radiation already separated out in
   ! PlantCanopyRadsModel
-  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistanceLitRLay)
+  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
 
   VHeatCapacity1_vr(0,1,1) = 0.0
 
@@ -483,17 +485,17 @@ implicit none
   !
   DO M=1,NPH
 
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,&
+    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr,&
     !  KSatReductByRainKineticEnergy,TopLayWatVol,HeatFluxAir2Soi,Qinfl2MicPM,Hinfl2SoilM)
 
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay, &
+    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr, &
     !KSatReductByRainKineticEnergy,TopLayWatVol_col,HeatFluxAir2Soi, &
     !Qinfl2MicP_col,HeatInfl2Soil)
 
-    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
+    call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr,RainEkReducedKsat,&
       TopLayWatVol_col,HeatFluxAir2Soi,dLWRaddTKsoi1,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
     
-    !call subroutine RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
+    !call subroutine RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistVapThroughLitr,RainEkReducedKsat,&
     !  TopLayWatVol_col,HeatFluxAir2Soi,Qinfl2MicP,HeatInfl2Soil,Qinfl2MacP)
 
     !sum fluxes over iterations in each column

@@ -885,7 +885,7 @@ implicit none
     ZERO4Groth_pft            => plt_biom%ZERO4Groth_pft             ,& !input  :threshold zero for plang growth calculation, [-]  
     MainBranchNum_pft         => plt_morph%MainBranchNum_pft         ,& !input  :number of main branch,[-]  
     FracRootElmAllocm         => plt_allom%FracRootElmAllocm         ,& !input  :C woody/soft fraction in root,[-]    
-    RootNonstructElmConc_rpvr => plt_biom%RootNonstructElmConc_rpvr  ,& !input  :root layer nonstructural C concentration, [g g-1]    
+    RootNonstructElmConc_pvr  => plt_biom%RootNonstructElmConc_pvr  ,& !input  :root layer nonstructural C concentration, [g g-1]
     RootMyco2ndStrutElms_rpvr => plt_biom%RootMyco2ndStrutElms_rpvr  ,& !input  :root layer element secondary axes, [g d-2]    
     ZERO                      => plt_site%ZERO                       ,& !input  :threshold zero for numerical stability, [-]    
     icwood                    => pltpar%icwood                       ,& !input  :group id of coarse woody litter
@@ -907,17 +907,17 @@ implicit none
   !     RCCXR,RCCQR=max fractions for root N,P recycling
   !
   IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0 .AND. &
-    RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmn,N,L,NZ) &
-      ,RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CNKI) &
-      ,safe_adb(RootNonstructElmConc_rpvr(ielmp,N,L,NZ) &
-      ,RootNonstructElmConc_rpvr(ielmp,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CPKI)))
+    RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmn,N,L,NZ) &
+      ,RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CNKI) &
+      ,safe_adb(RootNonstructElmConc_pvr(ielmp,N,L,NZ) &
+      ,RootNonstructElmConc_pvr(ielmp,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CPKI)))
     CNC=AZMAX1(AMIN1(1.0_r8 &
-      ,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ) &
-      ,RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/CNKI)))
+      ,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ) &
+      ,RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/CNKI)))
     CPC=AZMAX1(AMIN1(1.0_r8 &
-      ,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ) &
-      ,RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+ RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/CPKI)))
+      ,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ) &
+      ,RootNonstructElmConc_pvr(ielmc,N,L,NZ)+ RootNonstructElmConc_pvr(ielmp,N,L,NZ)/CPKI)))
   ELSE
     CCC = 0._r8
     CNC = 0._r8
@@ -1345,7 +1345,7 @@ implicit none
 
   character(len=*), parameter :: subname='RemobilizeMediumRoots'
   associate(                                                                      &
-    RootNonstructElmConc_rpvr      => plt_biom%RootNonstructElmConc_rpvr         ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr       => plt_biom%RootNonstructElmConc_pvr          ,& !input  :root layer nonstructural C concentration, [g g-1]
     ZERO4Groth_pft                 => plt_biom%ZERO4Groth_pft                    ,& !input  :threshold zero for plang growth calculation, [-]
     ZERO                           => plt_site%ZERO                              ,& !input  :threshold zero for numerical stability, [-]
     icwood                         => pltpar%icwood                              ,& !input  :group id of coarse woody litter
@@ -1365,15 +1365,15 @@ implicit none
   RootMRcylc=0._r8
 
   IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0 &
-    .AND. RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmn,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CNKI), &
-      safe_adb(RootNonstructElmConc_rpvr(ielmp,N,L,NZ),RootNonstructElmConc_rpvr(ielmp,N,L,NZ) &
-        +RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CPKI)))
-    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/CNKI)))
-    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/CPKI)))
+    .AND. RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmn,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CNKI), &
+      safe_adb(RootNonstructElmConc_pvr(ielmp,N,L,NZ),RootNonstructElmConc_pvr(ielmp,N,L,NZ) &
+        +RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CPKI)))
+    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/CNKI)))
+    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmp,N,L,NZ)/CPKI)))
   ELSE
     CCC=0._r8;CNC=0._r8;CPC=0._r8
   ENDIF
@@ -1534,7 +1534,7 @@ implicit none
     PlantPopuLive_pft              => plt_site%PlantPopuLive_pft                 ,& !input  :plant population, [d-2]
     DLYR3                          => plt_site%DLYR3                             ,& !input  :vertical thickness of soil layer, [m]
     GrainFillDowreg_brch           => plt_photo%GrainFillDowreg_brch             ,& !input  :grain fill down-regulation of annual plants, [-]    
-    RootNonstructElmConc_rpvr      => plt_biom%RootNonstructElmConc_rpvr         ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr       => plt_biom%RootNonstructElmConc_pvr          ,& !input  :root layer nonstructural C concentration, [g g-1]
     Root2ndLen_rpvr                => plt_morph%Root2ndLen_rpvr                  ,& !input  :root layer length secondary axes, [m d-2]
     RootMyco2ndStrutElms_rpvr      => plt_biom%RootMyco2ndStrutElms_rpvr         ,& !input  :root layer element secondary axes, [g d-2]
     RootMyco1stStrutElms_rpvr      => plt_biom%RootMyco1stStrutElms_rpvr         ,& !input  :root layer element primary axes, [g d-2]
@@ -1571,9 +1571,9 @@ implicit none
   DMRespEff         = 1.0_r8-RootBiomGrosYld_pft(NZ)     !1-[gC root/gC nonst] = [gC resp/gC nonst]
 
   !nutrient limitation factor
-  IF(RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    CNG  = RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/(RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CNKI)
-    CPG  = RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/(RootNonstructElmConc_rpvr(ielmp,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CPKI)
+  IF(RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    CNG  = RootNonstructElmConc_pvr(ielmn,N,L,NZ)/(RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CNKI)
+    CPG  = RootNonstructElmConc_pvr(ielmp,N,L,NZ)/(RootNonstructElmConc_pvr(ielmp,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CPKI)
     Nutstress4GrossResp = AMIN1(CNG,CPG)
   ELSE
     CNG =0._r8
@@ -3791,7 +3791,7 @@ implicit none
   character(len=*), parameter :: subname = 'RemobilLignifCoarseRoots'
 
   associate(                                                                &
-    RootNonstructElmConc_rpvr    => plt_biom%RootNonstructElmConc_rpvr     ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr     => plt_biom%RootNonstructElmConc_pvr      ,& !input  :root layer nonstructural C concentration, [g g-1]
     RootMyco1stStrutElms_rpvr    => plt_biom%RootMyco1stStrutElms_rpvr     ,& !input  :root layer element primary axes, [g d-2]    
     RootMyco1stElm_raxs          => plt_biom%RootMyco1stElm_raxs           ,& !inoput :root C biomass of primary axes, [g d-2]    
     ZERO4Groth_pft               => plt_biom%ZERO4Groth_pft                ,& !input  :threshold zero for plang growth calculation, [-]
@@ -3812,15 +3812,15 @@ implicit none
   N=ipltroot
 
   IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0 &
-    .AND. RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmn,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CNKI), &
-      safe_adb(RootNonstructElmConc_rpvr(ielmp,N,L,NZ),RootNonstructElmConc_rpvr(ielmp,N,L,NZ) &
-        +RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CPKI)))
-    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/CNKI)))
-    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/CPKI)))
+    .AND. RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmn,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CNKI), &
+      safe_adb(RootNonstructElmConc_pvr(ielmp,N,L,NZ),RootNonstructElmConc_pvr(ielmp,N,L,NZ) &
+        +RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CPKI)))
+    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/CNKI)))
+    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmp,N,L,NZ)/CPKI)))
   ELSE
     CCC=0._r8
     CNC=0._r8
@@ -3946,7 +3946,7 @@ implicit none
   character(len=*), parameter :: subname = 'KillCoarseRoots'
 
   associate(                                                                &
-    RootNonstructElmConc_rpvr    => plt_biom%RootNonstructElmConc_rpvr     ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr    => plt_biom%RootNonstructElmConc_pvr     ,& !input  :root layer nonstructural C concentration, [g g-1]
     NU                           => plt_site%NU                            ,& !input  :current soil surface layer number, [-]     
     ZERO4Groth_pft               => plt_biom%ZERO4Groth_pft                ,& !input  :threshold zero for plang growth calculation, [-]
     ZERO                         => plt_site%ZERO                          ,& !input  :threshold zero for numerical stability, [-]  
@@ -4298,7 +4298,7 @@ implicit none
 
 ! begin_execution
   associate(                                                           &
-    RootNonstructElmConc_rpvr  => plt_biom%RootNonstructElmConc_rpvr   ,& !input  :root layer nonstructural C concentration, [g g-1]
+    RootNonstructElmConc_pvr  => plt_biom%RootNonstructElmConc_pvr   ,& !input  :root layer nonstructural C concentration, [g g-1]
     ZERO4Groth_pft             => plt_biom%ZERO4Groth_pft              ,& !input  :threshold zero for plang growth calculation, [-]
     ZERO                       => plt_site%ZERO                        ,& !input  :threshold zero for numerical stability, [-]
     icwood                     => pltpar%icwood                        ,& !input  :group id of coarse woody litter
@@ -4331,15 +4331,15 @@ implicit none
   call PrintInfo('beg '//subname)
   Root1stcylc=0._r8
   IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0 &
-    .AND. RootNonstructElmConc_rpvr(ielmc,N,L,NZ).GT.ZERO)THEN
-    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmn,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmn,N,L,NZ)+RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CNKI), &
-      safe_adb(RootNonstructElmConc_rpvr(ielmp,N,L,NZ),RootNonstructElmConc_rpvr(ielmp,N,L,NZ) &
-        +RootNonstructElmConc_rpvr(ielmc,N,L,NZ)*CPKI)))
-    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmn,N,L,NZ)/CNKI)))
-    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_rpvr(ielmc,N,L,NZ), &
-      RootNonstructElmConc_rpvr(ielmc,N,L,NZ)+RootNonstructElmConc_rpvr(ielmp,N,L,NZ)/CPKI)))
+    .AND. RootNonstructElmConc_pvr(ielmc,N,L,NZ).GT.ZERO)THEN
+    CCC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmn,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmn,N,L,NZ)+RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CNKI), &
+      safe_adb(RootNonstructElmConc_pvr(ielmp,N,L,NZ),RootNonstructElmConc_pvr(ielmp,N,L,NZ) &
+        +RootNonstructElmConc_pvr(ielmc,N,L,NZ)*CPKI)))
+    CNC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmn,N,L,NZ)/CNKI)))
+    CPC=AZMAX1(AMIN1(1.0_r8,safe_adb(RootNonstructElmConc_pvr(ielmc,N,L,NZ), &
+      RootNonstructElmConc_pvr(ielmc,N,L,NZ)+RootNonstructElmConc_pvr(ielmp,N,L,NZ)/CPKI)))
   ELSE
     CCC=0._r8;CNC=0._r8;CPC=0._r8
   ENDIF

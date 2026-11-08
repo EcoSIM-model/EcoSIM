@@ -1,4 +1,5 @@
 module HydroThermData
+  ! Own substep hydrological/thermal work arrays and local surface resistances.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
 implicit none
@@ -34,7 +35,8 @@ implicit none
   real(r8),allocatable ::  AScaledCdHOverSnow_col(:,:)           ! area scaled sensible heat flux conductance over snow  [MJ h /(m K)]
   real(r8),allocatable ::  Ice2Snowt_col(:,:)                    ! icefall to snow, [m3 d-2]
 
-  real(r8),allocatable ::  ResistAreodynOverSnow_col(:,:)        !  
+  real(r8),allocatable :: RawH2OSnow2CanAir_col(:,:) !snow to canopy-air resistance [h/m]
+  real(r8),allocatable :: RawH2OSoil2CanAir_col(:,:) !bare soil to canopy-air resistance [h/m]
   real(r8),allocatable :: SurfSensHeatConduct_col(:,:) !sum of active soil/litter/snow sensible conductances over this hour [MJ/K]
   real(r8),allocatable :: SurfLatHeatVapDeriv_col(:,:) !sum of active, water-limited latent-energy derivatives over this hour [MJ m3 ton-1]
   real(r8),allocatable ::  VLairMicP1_vr(:,:,:)                  ! corrected air-filled micropore volume [m3/d2]
@@ -43,7 +45,7 @@ implicit none
   real(r8),allocatable ::  SoilFracAsMicP_vr(:,:,:)              !
   real(r8),allocatable ::  VLHeatCapacityA_vr(:,:,:)             !
   real(r8),allocatable ::  VLHeatCapacityB_vr(:,:,:)             !
-  real(r8),allocatable ::  RawIsoTSoil2ATM_col(:,:)        ! aerodynamic resistance over soil, [m]
+  real(r8),allocatable ::  RawIsoTSoil2CanAir_col(:,:)        !neutral soil-to-canopy-air resistance [h/m]
   real(r8),allocatable ::  AScaledCdWOverSnow_col(:,:)           ! area scaled latent heat flux conductance over snow, [m^2 h]
   real(r8),allocatable ::  Altitude_col(:,:)                    ! grid altitude [m]
   real(r8),allocatable ::  VLiceMacP1_vr(:,:,:)                      !
@@ -67,6 +69,7 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine InitHydroThermData
+  ! Allocate and initialize substep state and surface-resistance work arrays.
   implicit none
 
 
@@ -93,7 +96,8 @@ implicit none
   allocate(Ice2Snowt_col(JY,JX));       Ice2Snowt_col=0._r8    
 
   allocate(LWEmscefSnow_col(JY,JX));       LWEmscefSnow_col=0._r8  
-  allocate(ResistAreodynOverSnow_col(JY,JX));        ResistAreodynOverSnow_col=0._r8  
+  allocate(RawH2OSoil2CanAir_col(JY,JX)); RawH2OSoil2CanAir_col=0._r8
+  allocate(RawH2OSnow2CanAir_col(JY,JX));        RawH2OSnow2CanAir_col=0._r8
   allocate(SurfSensHeatConduct_col(JY,JX)); SurfSensHeatConduct_col=0._r8
   allocate(SurfLatHeatVapDeriv_col(JY,JX)); SurfLatHeatVapDeriv_col=0._r8
   allocate(LWRad2Snow_col(JY,JX));       LWRad2Snow_col=0._r8  
@@ -103,7 +107,7 @@ implicit none
   allocate(SoilFracAsMicP_vr(JZ,JY,JX));     SoilFracAsMicP_vr=0._r8
   allocate(VLHeatCapacityA_vr(JZ,JY,JX));   VLHeatCapacityA_vr=0._r8
   allocate(VLHeatCapacityB_vr(JZ,JY,JX));   VLHeatCapacityB_vr=0._r8  
-  allocate(RawIsoTSoil2ATM_col(JY,JX));         RawIsoTSoil2ATM_col=0._r8
+  allocate(RawIsoTSoil2CanAir_col(JY,JX));         RawIsoTSoil2CanAir_col=0._r8
   allocate(AScaledCdWOverSnow_col(JY,JX));       AScaledCdWOverSnow_col=0._r8
   allocate(Altitude_col(JY,JX));        Altitude_col=0._r8  
   allocate(VLiceMacP1_vr(JZ,JY,JX));   VLiceMacP1_vr=0._r8  
@@ -132,6 +136,7 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine DestructHydroThermData
+  ! Release substep hydrological/thermal work arrays.
   use abortutils, only : destroy  
   implicit none
 
@@ -159,7 +164,8 @@ implicit none
   call destroy(Ice2Snowt_col)
 
   call destroy(LWEmscefSnow_col)
-  call destroy(ResistAreodynOverSnow_col) 
+  call destroy(RawH2OSoil2CanAir_col)
+  call destroy(RawH2OSnow2CanAir_col)
   call destroy(SurfSensHeatConduct_col)
   call destroy(SurfLatHeatVapDeriv_col)
   call destroy(LWRad2Snow_col)
@@ -169,7 +175,7 @@ implicit none
   call destroy(SoilFracAsMicP_vr)
   call destroy(VLHeatCapacityA_vr)
   call destroy(VLHeatCapacityB_vr)  
-  call destroy(RawIsoTSoil2ATM_col)
+  call destroy(RawIsoTSoil2CanAir_col)
   call destroy(AScaledCdWOverSnow_col)
   call destroy(Altitude_col)
   call destroy(VLiceMacP1_vr)

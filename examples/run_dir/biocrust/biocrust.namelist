@@ -6,7 +6,7 @@
 case_name='Biocrust'
 prefix='../../inputs/biocrust/'
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260915.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../../examples/inputs/biocrust/BareSoil_grid_20260831.nc'
 pft_mgmt_in='../../../examples/inputs/biocrust/biocrust_pft_mgmt.nc'
 clm_hour_file_in='../../../examples/inputs/biocrust/BareSoil_clim_20250203.nc'

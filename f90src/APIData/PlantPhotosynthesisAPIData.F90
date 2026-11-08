@@ -35,7 +35,8 @@ module PlantPhotosynthesisAPIData
   real(r8), pointer :: CanopyMinStomaResistH2O_pft(:)         => null()   !canopy minimum stomatal resistance,                          [s m-1]
   real(r8), pointer :: CuticleResist_pft(:)                 => null()   !maximum stomatal resistance to vapor,                        [s m-1]
   real(r8), pointer :: CanPStomaResistH2O_pft(:)            => null()   !canopy stomatal resistance,                                  [h m-1]
-  real(r8), pointer :: RawCanopy2Atm_pft(:)              => null()   !canopy boundary layer resistance,                            [h m-1]
+  real(r8), pointer :: RawH2OCanopy2Atm_pft(:)              => null()   !canopy boundary layer resistance,                            [h m-1]
+  real(r8), pointer :: RawHeatCanopy2Atm_pft(:)              => null()   !canopy sensible-heat boundary layer resistance,                            [h m-1]
   real(r8), pointer :: LeafO2Solubility_pft(:)              => null()   !leaf O2 solubility,                                          [uM /umol mol-1]
   real(r8), pointer :: CO2CuticleResist_pft(:)              => null()   !maximum stomatal resistance to CO2,                          [s h-1]
   real(r8), pointer :: DiffCO2Atmos2Intracel_pft(:)         => null()   !gaesous CO2 concentration difference across stomates,        [umol m-3]
@@ -92,7 +93,8 @@ contains
   allocate(this%CuticleResist_pft(JP1));this%CuticleResist_pft=spval
   allocate(this%CanopyMinStomaResistH2O_pft(JP1));this%CanopyMinStomaResistH2O_pft=spval
   allocate(this%LeafO2Solubility_pft(JP1));this%LeafO2Solubility_pft=spval
-  allocate(this%RawCanopy2Atm_pft(JP1));this%RawCanopy2Atm_pft=spval
+  allocate(this%RawH2OCanopy2Atm_pft(JP1));this%RawH2OCanopy2Atm_pft=spval
+  allocate(this%RawHeatCanopy2Atm_pft(JP1));this%RawHeatCanopy2Atm_pft=spval
   allocate(this%CanPStomaResistH2O_pft(JP1));this%CanPStomaResistH2O_pft=spval
   allocate(this%DiffCO2Atmos2Intracel_pft(JP1));this%DiffCO2Atmos2Intracel_pft=spval
   allocate(this%AirConc_pft(JP1));this%AirConc_pft=spval
@@ -165,6 +167,7 @@ contains
   class(plant_photosyns_type) :: this
 
 
+  call destroy(this%RawHeatCanopy2Atm_pft)
   call destroy(this%DynCi2CaRatio_pft)
   call destroy(this%CO2Intra_pft)
   call destroy(this%CO2IntraScal_pft)

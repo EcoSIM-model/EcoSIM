@@ -5,7 +5,7 @@
 &ecosim
 case_name='Blodget.dfir'
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260915.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../inputs/blodgett/Blodget_grid_20251115.nc'
 pft_mgmt_in='../../inputs/blodgett/Blodget_pft_20251109.nc'
 clm_hour_file_in='../../inputs/blodgett/Blodget.clim.2012-2022.nc'

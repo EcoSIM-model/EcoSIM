@@ -6,7 +6,7 @@
 case_name          = 'Pond'
 prefix             = '../../inputs/Pond/'
 do_regression_test = .false.
-pft_file_in        = '../../../input_data/ecosim_pftpar_20260915.nc'
+pft_file_in        = '../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in       = '../../../examples/inputs/Pond/lake_grid_20230510.nc'
 pft_mgmt_in        = '../../../examples/inputs/Pond/lake_pft_20230131.nc'
 soil_mgmt_in       = 'NO'

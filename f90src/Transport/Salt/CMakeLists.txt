@@ -1,5 +1,4 @@
 set(SALT_MOD_SOURCES
-  TranspSaltDataMod.F90
   IngridTranspMod.F90
 	TranspSaltMod.F90
 )
@@ -13,6 +12,7 @@ target_include_directories(Salt  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Mesh/
   ${CMAKE_BINARY_DIR}/f90src/DebugTools/  
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/
   ${CMAKE_BINARY_DIR}/f90src/IOutils/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/  

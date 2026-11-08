@@ -2,7 +2,7 @@ module RootDataType
 
 !
 !!
-! data types of plant characteristics
+! Own root morphology, biomass, hydraulic state and derived layer aggregates.
   use data_kind_mod, only : sp => DAT_KIND_r8
   use GridConsts
   use ElmIDMod
@@ -18,6 +18,7 @@ module RootDataType
   integer,target,allocatable ::  MaxSoilLays4Root_pft(:,:,:)                         !maximum soil layer number for all root axes, [-]
   integer,target,allocatable ::  irootType_col(:,:)                              !Root type integer from ATS [-]
   integer,target,allocatable ::  irootType_pft(:,:,:)                            !Jackson et al. root biome type per pft [-]
+  real(sp),target,allocatable :: MeanSecondaryAxisLength_pft(:,:,:)             !MFRUTL: prescribed mean secondary axis length [m]
   real(sp),target,allocatable :: RootElmsbeg_pft(:,:,:,:)                        !root biomass per pft
   real(sp),target,allocatable ::  RootBiomGrosYld_pft(:,:,:)                     !root growth yield, [g g-1]
   real(sp),target,allocatable ::  NonstCMinCon2InitRoot_pft(:,:,:)                  !threshold root nonstructural C content for initiating new root axis, [g g-1]
@@ -124,6 +125,9 @@ module RootDataType
   real(sp),target,allocatable ::  Root1stLigStructElms_rpvr(:,:,:,:,:,:)         !root layer lignified zone element in primary axes, [g d-2]
   real(sp),target,allocatable ::  RootMyco1stStrutElms_rpvr(:,:,:,:,:,:)       !root layer element primary axes, [g d-2]
   real(sp),target,allocatable ::  RootMyco2ndStrutElms_rpvr(:,:,:,:,:,:,:)       !root layer element secondary axes, [g d-2]
+  ! Secondary structural elements [g element cell-1]: active NR sum in the full
+  ! plant model; prescribed live fine-root C (plant group only) in SP mode.
+  real(sp),target,allocatable ::  RootMyco2ndStrutElms_pvr(:,:,:,:,:,:)
   real(sp),target,allocatable ::  PopuRootMycoC_pvr(:,:,:,:,:)                  !root layer C, [g d-2]
   real(sp),target,allocatable ::  RootMediumLength_rpvr(:,:,:,:,:)                  !root layer length for medium size axes, [m d-2]  
   real(sp),target,allocatable ::  RootMediumRadius_rpvr(:,:,:,:,:)               !root layer radius for medium size axes, [m d-2]  
@@ -133,7 +137,8 @@ module RootDataType
   real(sp),target,allocatable ::  Root1stTransptArea_pvr(:,:,:,:,:)              !root cross section area for gas/water transport, [m2 d-2]
   real(sp),target,allocatable ::  RootMedTransptArea_pvr(:,:,:,:,:)              !root cross section area for water/gas transport,    [g d-2]  
   real(sp),target,allocatable ::   RootMycoNonstElms_rpvr(:,:,:,:,:,:)           !root  layer nonstructural element, [g d-2]
-  real(sp),target,allocatable ::  RootNonstructElmConc_rpvr(:,:,:,:,:,:)         !root  layer nonstructural element concentration, [g g-1]
+  real(sp),target,allocatable ::  RootNonstructElmConc_pvr(:,:,:,:,:,:)         !root  layer nonstructural element concentration, [g g-1]
+  real(sp),target,allocatable :: RootNonstOMConc_pvr(:,:,:,:,:)                !sum of nonstructural C/N/P concentrations by root group/layer/PFT/cell, [g gC-1]
   real(sp),target,allocatable ::  RootMyco1stElm_raxs(:,:,:,:,:)               !root C primary axes, [g d-2]
   real(sp),target,allocatable ::  RootProteinConc_rpvr(:,:,:,:,:)                !root layer protein C concentration, [g g-1]
   real(sp),target,allocatable :: RootMycoMassElm_vr(:,:,:,:,:)                   !root chemical element mass in soil layer, [g d-2]
@@ -180,6 +185,7 @@ contains
   allocate(isPlantRootAlive_pft(JP,JY,JX));    isPlantRootAlive_pft=iFalse
   allocate(irootType_col(JY,JX));  irootType_col=1  !set to one to avoid numerical failure
   allocate(irootType_pft(JP,JY,JX)); irootType_pft=0
+  allocate(MeanSecondaryAxisLength_pft(JP,JY,JX));MeanSecondaryAxisLength_pft=0._sp
   allocate(NMaxRootBotLayer_pft(JP,JY,JX));      NMaxRootBotLayer_pft=0
   allocate(MaxSoilLays4Root_pft(JP,JY,JX));       MaxSoilLays4Root_pft=0
   allocate(RootElmsbeg_pft(NumPlantChemElms,JP,JY,JX)); RootElmsbeg_pft=0._sp
@@ -289,6 +295,7 @@ contains
   allocate(RootMyco1stStrutElms_rpvr(NumPlantChemElms,JZ,MaxNumRootAxes,JP,JY,JX));RootMyco1stStrutElms_rpvr=0._sp
   allocate(Root1stStructE_buf(NumPlantChemElms,MaxNumRootAxes,JP,JY,JX)); Root1stStructE_buf=0._sp
   allocate(RootMyco2ndStrutElms_rpvr(NumPlantChemElms,jroots,JZ,MaxNumRootAxes,JP,JY,JX));RootMyco2ndStrutElms_rpvr=0._sp
+  allocate(RootMyco2ndStrutElms_pvr(NumPlantChemElms,jroots,JZ,JP,JY,JX));RootMyco2ndStrutElms_pvr=0._sp
   allocate(PopuRootMycoC_pvr(jroots,JZ,JP,JY,JX)); PopuRootMycoC_pvr=0._sp
   allocate(RootMediumRadius_rpvr(JZ,MaxNumRootAxes,JP,JY,JX)); RootMediumRadius_rpvr=0._sp
   allocate(RootMediumLength_rpvr(JZ,MaxNumRootAxes,JP,JY,JX));RootMediumLength_rpvr=0._sp
@@ -298,7 +305,8 @@ contains
   allocate(Root1stTransptArea_pvr(jroots,JZ,JP,JY,JX)); Root1stTransptArea_pvr=0._sp
   allocate(RootMedTransptArea_pvr(jroots,JZ,JP,JY,JX)); RootMedTransptArea_pvr=0._sp
   allocate(RootMycoNonstElms_rpvr(NumPlantChemElms,jroots,JZ,JP,JY,JX)); RootMycoNonstElms_rpvr=0._sp
-  allocate(RootNonstructElmConc_rpvr(NumPlantChemElms,jroots,JZ,JP,JY,JX));RootNonstructElmConc_rpvr=0._sp
+  allocate(RootNonstructElmConc_pvr(NumPlantChemElms,jroots,JZ,JP,JY,JX));RootNonstructElmConc_pvr=0._sp
+  allocate(RootNonstOMConc_pvr(jroots,JZ,JP,JY,JX));RootNonstOMConc_pvr=0._sp
   allocate(RootMyco1stElm_raxs(NumPlantChemElms,MaxNumRootAxes,JP,JY,JX));RootMyco1stElm_raxs=0._sp
   allocate(RootProteinConc_rpvr(jroots,JZ,JP,JY,JX));RootProteinConc_rpvr=0._sp
   allocate(RootResist4H2O_pvr(jroots,JZ,JP,JY,JX)); RootResist4H2O_pvr=0._sp
@@ -336,6 +344,7 @@ contains
   call destroy(NRoot1stTipLay_raxes)
   call destroy(irootType_col)
   call destroy(irootType_pft)
+  call destroy(MeanSecondaryAxisLength_pft)
   call destroy(isPlantRootAlive_pft)
   call destroy(NMaxRootBotLayer_pft)
   call destroy(MaxSoilLays4Root_pft)
@@ -439,6 +448,7 @@ contains
   call destroy(Root1stActStructElms_rpvr)
   call destroy(Root1stLigStructElms_rpvr)
   call destroy(RootMyco2ndStrutElms_rpvr)
+  call destroy(RootMyco2ndStrutElms_pvr)
   call destroy(PopuRootMycoC_pvr)
   call destroy(RootNodulStrutElms_rpvr)
   call destroy(RootMediumXNum_rpvr)
@@ -451,7 +461,8 @@ contains
   call destroy(RootMedTransptArea_pvr)
   call destroy(Root1stTransptArea_pvr)
   call destroy(RootMycoNonstElms_rpvr)
-  call destroy(RootNonstructElmConc_rpvr)
+  call destroy(RootNonstructElmConc_pvr)
+  call destroy(RootNonstOMConc_pvr)
   call destroy(RootMyco1stElm_raxs)
   call destroy(RootProteinConc_rpvr)
   call destroy(RootSegAges_raxes)

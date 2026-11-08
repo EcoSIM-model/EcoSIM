@@ -170,7 +170,7 @@ contains
     finidat,restartFileFullPath,brnch_retain_casename,plant_model,microbial_model,&
     soichem_model,atm_ghg_in,aco2_ppm,ao2_ppm,an2_ppm,ach4_ppm,anh3_ppm,&
     snowRedist_model,disp_planttrait,iErosionMode,grid_mode,atm_ch4_fix,atm_n2o_fix,&
-    atm_co2_fix,first_topou,first_pft,fixWaterLevel,arg_ppm,idebug_day,idebug_year,ldo_sp_mode,iverblevel,&
+    atm_co2_fix,first_topou,first_pft,fixWaterLevel,arg_ppm,idebug_day,idebug_year,ldo_sp_mode,sp_phenol_in,iverblevel,&
     ldo_radiation_test,ldo_transpt_bubbling,plantOM4Heat,micpar_file_in,iselect_plantZ,llignification
 ! --- Jing Tao ---
 ! guard_floor_dying_stand is appended to this group so ONE binary serves both arms of the
@@ -254,6 +254,7 @@ contains
   soil_mgmt_in       = 'NO'
   soil_mgmt_use_model_year = .false. ! legacy default; opt in for dated schedules
   atm_ghg_in         = ''
+  sp_phenol_in       = ''
   aco2_ppm           = 280._r8
   ach4_ppm           = 1.144_r8
   an2o_ppm           = 0.270_r8
@@ -385,6 +386,8 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
 
   character(len=*), parameter :: subname='AdvanceModelOneYear'
   integer :: I,J
+  integer :: NX,NY
+  integer :: NP_previous(JY,JX)
   integer :: idaz
   character(len=14) :: ymdhs
   logical :: rstwr, lnyr
@@ -433,6 +436,7 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
   if(plant_model)then
     !plant information is read in every year, but the active flags
     !are set using the checkpoint file.
+    NP_previous=NP_col
     if(do_timing)call start_timer(t1)
     call ReadPlantInfo(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
     if(do_timing)call end_timer('ReadPlantInfo',t1)
@@ -444,7 +448,15 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
 
 ! INITIALIZE ALL PLANT VARIABLES IN 'STARTQ'
 !
-  IF(ymdhs(1:4)==frectyp%ymdhs0(1:4) .and. plant_model)THEN
+  if(ldo_sp_mode)then
+    ! Prescribed PFT slots can appear in any forcing year. Initialize only
+    ! newly named slots; existing canopies retain their water and root state.
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        call STARTQ(NX,NX,NY,NY,NP_previous(NY,NX)+1,NP_col(NY,NX))
+      ENDDO
+    ENDDO
+  ELSEIF(ymdhs(1:4)==frectyp%ymdhs0(1:4) .and. plant_model)THEN
     !initialize by year
     if(do_timing)call start_timer(t1)
     CALL STARTQ(NHW,NHE,NVN,NVS,1,JP)
@@ -508,6 +520,29 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
           if(do_timing)call start_timer(t1)
           call restFile(flag='read')
           if(do_timing)call end_timer('RestartRead',t1)
+          ! A January checkpoint precedes the new year's plant-management read.
+          ! Restore last year's state first, then apply this year's slot counts,
+          ! planting records and traits, as in an uninterrupted annual transition.
+          if(I==1 .and. J==1)then
+            call ReadAtmosComposition(iYearCurrent,NHW,NHE,NVN,NVS)
+            if(plant_model)then
+              NP_previous=NP_col
+              if(do_timing)call start_timer(t1)
+              call ReadPlantInfo(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
+              if(do_timing)call end_timer('ReadPlantInfo',t1)
+              if(ldo_sp_mode)then
+                DO NX=NHW,NHE
+                  DO NY=NVN,NVS
+                    call STARTQ(NX,NX,NY,NY,NP_previous(NY,NX)+1,NP_col(NY,NX))
+                  ENDDO
+                ENDDO
+              endif
+            endif
+            ! Checkpoints also contain the previous year's soil-management
+            ! state. Re-read the annual schedule against the restored geometry.
+            call ReadClimSoilForcing(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS,RefreshRainChem)
+            if(soichem_model)call STARTE(NHW,NHE,NVN,NVS,RefreshRainChem)
+          endif
           call CompleteDailySetup(I,J,NHW,NHE,NVN,NVS)
           if (j==1)then
             if(do_timing)call start_timer(t1)

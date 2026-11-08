@@ -409,6 +409,18 @@ variables:
 		IROOTJK:long_name = "Jackson et al. (1997) biome root type index" ;
 		IROOTJK:units = "none" ;
 		IROOTJK:flags = "1=boreal forest,2=desert bushes,3=sclerophyllous shrubs,4=temperate coniferous forest,5=temperate deciduous forest,6=temperate grassland,7=tropical deciduous forest,8=tropical evergreen forest,9=tropical grassland/savanna,10=tundra" ;
+	float MFRUTL(npfts) ;
+		MFRUTL:_FillValue = -9999.f ;
+		MFRUTL:long_name = "Mean secondary fine-root axis length for prescribed phenology" ;
+		MFRUTL:units = "m" ;
+		MFRUTL:valid_min = 0.002f ;
+		MFRUTL:comment = "Provisional 0.01 m default for all PFTs; calibrate by PFT. Must be at least Root2ndTipLen4uptk (0.002 m)." ;
+	double CCPOLT(npfts) ;
+		CCPOLT:_FillValue = -9999. ;
+		CCPOLT:long_name = "Prescribed canopy nonstructural C+N+P concentration per unit leaf/sheath carbon" ;
+		CCPOLT:units = "g/gC" ;
+		CCPOLT:valid_min = 0. ;
+		CCPOLT:comment = "Used in prescribed phenology mode. Default 0.1 preserves the former SP canopy osmotic concentration; full plant mode derives the total from C, N and P." ;
 	float CANHT(npfts) ;
 		CANHT:long_name = "live canopy height" ;
 		CANHT:units = "m" ;
@@ -557,7 +569,7 @@ data:
  PEPC = 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0, 0, 0, 
     0, 0, 0, 0.05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0.12, 0, 0, 0, 0, 0 ;
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0.035, 0, 0, 0, 0, 0 ;
 
  ETMX = 405, 405, 405, 400, 1000, 405, 405, 405, 450, 405, 405, 405, 405, 
     405, 405, 405, 405, 200, 300, 600, 400, 405, 405, 800, 405, 405, 500, 
@@ -941,8 +953,8 @@ data:
     4e-06, 4e-06, 4e-06, 4e-06, 4e-06, 1e+10, 4e-06, 4e-06, 1e-06, 1e-06, 
     4e-06, 1e-06, 4e-06, 4e-06, 4e-06, 4e+08, 4e-06, 4e-06, 4e-06, 1e-06, 
     4e-06, 1e-06, 4e-06, 4e-06, 4e-06, 4e-06, 4e-06, 1e-06, 4e-06, 4e-06, 
-    4e-06, 4e-06, 1e-06, 1e-06, 1e-06, 2e-06, 1e-06, 4e-06, 5e-06, 
-    1.388889e-06, 7.5e-06, 2e-06, 4e-06, 4e-06, 4e+09 ;
+    4e-06, 4e-06, 1e-06, 1e-06, 1e-06, 2e-06, 1e-06, 4e-06, 5e-06, 1.25e-05, 
+    7.5e-06, 2e-06, 4e-06, 4e-06, 4e+09 ;
 
  RSSA = 4e+09, 4e+09, 4e+09, 1e+08, 1.388889e+08, 4e+09, 1e+10, 4e+09, 4e+09, 
     1e+09, 4e+09, 1e+09, 4e+09, 4e+09, 4e+09, 4e+09, 4e+09, 2e+08, 4e+09, 
@@ -1737,4 +1749,22 @@ data:
     2, 30, 20, 15, 0.8, 0.8, 20, 20, 20, 1, 20, 0.8, 25, 25, 2, 0.05, 2, 20, 
     0.05, 2, 0.05, 0.05, 0.05, 1, 40, 1.5, 0.8, 0.3, 0.8, 2, 0.8, 0.3, 20, 
     0.05, 0.02 ;
+
+ MFRUTL =
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,
+    0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01 ;
+
+ CCPOLT =
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 ;
 }

@@ -3,6 +3,7 @@ set(IOUTILS_SOURCES
     ForcWriterMod.F90
   	ClimReadMod.F90
     PlantInfoMod.F90
+    Read4SatePhenolMod.F90
     HistDataType.F90
     HistData/HistAllocateColumn.F90
     HistData/HistAllocatePlant.F90

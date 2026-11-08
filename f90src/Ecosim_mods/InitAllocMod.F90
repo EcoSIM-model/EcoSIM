@@ -1,4 +1,5 @@
 module InitAllocMod
+  ! Allocate model state and workspaces shared by standalone and coupled drivers.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use EcoSIMCtrlMod
 
@@ -34,6 +35,7 @@ implicit none
   use FertilizerDataType  , only : InitFertilizerData
   use CanopyRadDataType   , only : InitCanopyRad
   use InitSoluteMod       , only : InitSoluteProperty
+  use TranspSaltDataMod   , only : InitTranspSaltData
   use AqueChemDatatype    , only : initaquachem
   use PlantDataRateType   , only : InitPlantRates
   use EcoSIMCtrlMod       , only : plant_model
@@ -146,7 +148,10 @@ implicit none
   call InitRadiationData
   
   call InitMLDataType
-  if(salt_model)call InitSoluteProperty
+  if(salt_model)then
+    call InitSoluteProperty
+    call InitTranspSaltData
+  endif
 
   call InitSoilWarming
   

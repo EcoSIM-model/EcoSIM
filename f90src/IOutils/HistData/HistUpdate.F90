@@ -25,6 +25,8 @@ contains
 
   module procedure ZeroPlantHistVars
   implicit none
+  this%h1D_PTSHTR_ptc(nptc) = 0._r8
+  this%h1D_fSnowCan_ptc(nptc) = 0._r8
   this%h1D_RootAct1stC_ptc(nptc) = 0._r8
   this%h1D_RootMeDStrutC_ptc(nptc)=0._r8
   this%h1D_Root2ndStrutC_ptc(nptc)          = 0._r8
@@ -70,11 +72,17 @@ contains
   this%h2D_RootNonstC_rpvr(nptc,1:JZ)     = 0._r8
   this%h2D_RootSinkWeight_pvr(nptc,1:JZ)  = 0._r8
   this%h2D_RootMSinkWeight_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_Root1stSinkWeight_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_Root2ndSinkWeight_pvr(nptc,1:JZ) = 0._r8
   this%h2D_Root1stRadius_rpvr(nptc,1:JZ)  = 0._r8
   this%h2D_RootNonstBConc_pvr(nptc,1:JZ)  = 0._r8
   this%h2D_Root1stAxesNumL_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_RootMedAxesNumL_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_RootmedRadius_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_Rootmedlength_pvr(nptc,1:JZ) = 0._r8
   this%h2D_Root1stLenPP_pvr(nptc,1:JZ)    = 0._r8
   this%h2D_Root2ndAxesNumL_pvr(nptc,1:JZ) = 0._r8
+  this%h2D_Root2ndMeanLen_pvr(nptc,1:JZ)  = 0._r8
   this%h2D_RootKond2H2O_pvr(nptc,1:JZ)    = 0._r8
 
   this%h2D_RootMedC_pvr(nptc,1:JZ) = 0._r8
@@ -128,6 +136,7 @@ contains
   this%h1D_CanPhenol_TSTRSS_ptc(nptc)=0._r8
   this%h1D_STOML_RSC_H2O_ptc(nptc)  = 0._r8
   this%h1D_BLYR_RSC_H2O_ptc(nptc)  = 0._r8
+  this%h1D_BLYR_RSC_HEAT_ptc(nptc)  = 0._r8
   this%h1D_CdH2ORootxSoil_ptc(nptc) = 0._r8
   this%h1D_TRANSPN_ptc(nptc)       = 0._r8
   this%h1D_NH4_UPTK_FLX_ptc(nptc)  = 0._r8

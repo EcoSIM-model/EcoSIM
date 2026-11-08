@@ -1,5 +1,5 @@
   module stomatesMod
-  use data_kind_mod, only: r8 => DAT_KIND_R8
+  use data_kind_mod, only: r8 => DAT_KIND_R8, yearIJ_type
   use DebugToolMod,  only: PrintInfo
   use EcosimConst
   use minimathmod
@@ -199,18 +199,20 @@
   end associate
   end subroutine PhotosynsDiag
 !----------------------------------------------------------------------------------------------------
-  subroutine StomatalDynamics(I,J,NZ)
+  subroutine StomatalDynamics(yearIJ,NZ,RawH2OCanopy2Atm_pft)
 !
 !     THIS subroutine CALCULATES CANOPY STOMATAL RESISTANCE AT MAXIMUM
 !     CANOPY TURGOR FOR USE IN ENERGY BALANCE EQUATIONS IN 'UPTAKE'
 !
   implicit none
-  integer, intent(in) :: I, J
+  type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
+  real(r8), optional, intent(in) :: RawH2OCanopy2Atm_pft
 
   character(len=*), parameter :: subname='StomatalDynamics'
-  integer :: K,L,M,NB,N
+  integer :: K,L,M,NB,N,I,J
   REAL(R8):: CanopyCO2BndlResist_pft
+  real(r8), parameter :: RawMinH2OCanopy2Atm = 5.56E-03_r8 ![h/m]
   real(r8):: RI
 !     begin_execution
   associate(                                                             &
@@ -231,6 +233,7 @@
     LeafIntracellularCO2_pft    => plt_photo%LeafIntracellularCO2_pft    & !output :leaf gaseous CO2 concentration, [umol m-3]
   )
   call PrintInfo('beg '//subname)
+  I=yearIJ%I;J=yearIJ%J
 !
 !     CANOPY TEMPERATURE + OFFSET FOR THERMAL ADAPTATION FROM 'READQ'
 !
@@ -243,8 +246,14 @@
 !     CanopyCO2BndlResist_pft=canopy boundary layer resistance to CO2, h/m
 !     AirConc_pft=number of moles of air per m3
 !
-  RI                       = RichardsonNumber(RIB,TairK,TKCanopy_pft(NZ))
-  CanopyCO2BndlResist_pft  = 1.34_r8*AMAX1(5.56E-03_r8,RawIsoTCanopy2Atm_pft(NZ)/(1.0_r8-10.0_r8*RI))
+  if(present(RawH2OCanopy2Atm_pft))then
+    CanopyCO2BndlResist_pft  = BndlResistCO2ToH2ORatio*RawH2OCanopy2Atm_pft
+  else
+    RI                       = RichardsonNumber(RIB,TairK,TKCanopy_pft(NZ))
+    CanopyCO2BndlResist_pft  = BndlResistCO2ToH2ORatio &
+      *AMAX1(RawMinH2OCanopy2Atm,RawIsoTCanopy2Atm_pft(NZ)/(1.0_r8-10.0_r8*RI))
+  endif
+
   AirConc_pft(NZ)          = GetMolAirPerm3(TKCanopy_pft(NZ))    !assuming pressure is one atmosphere
 
   ! For prescribed phenolgoy, the canopy CO2 concentration should be computed differently

@@ -1,9 +1,11 @@
 submodule (HistDataType) HistAllocatePlant
+  ! Allocate and initialize plant history-output buffers.
   use data_const_mod, only: spval => DAT_CONST_SPVAL, ispval => DAT_CONST_ISPVAL
   implicit none
 contains
 
   module procedure allocate_hist_plants
+    ! Initialize plant history fields to the missing-value sentinel.
     integer :: beg_col, end_col, beg_ptc, end_ptc
 
     beg_col=1; end_col=bounds%ncols
@@ -44,6 +46,7 @@ contains
   allocate(this%h1D_TURG_CAN_ptc(beg_ptc:end_ptc))        ;this%h1D_TURG_CAN_ptc(:)=spval
   allocate(this%h1D_STOML_RSC_H2O_ptc(beg_ptc:end_ptc))    ;this%h1D_STOML_RSC_H2O_ptc(:)=spval
   allocate(this%h1D_BLYR_RSC_H2O_ptc(beg_ptc:end_ptc))    ;this%h1D_BLYR_RSC_H2O_ptc(:)=spval
+  allocate(this%h1D_BLYR_RSC_HEAT_ptc(beg_ptc:end_ptc))    ;this%h1D_BLYR_RSC_HEAT_ptc(:)=spval
   allocate(this%h1D_CdH2ORootxSoil_ptc(beg_ptc:end_ptc)) ;this%h1D_CdH2ORootxSoil_ptc(:)=spval
   allocate(this%h1D_TRANSPN_ptc(beg_ptc:end_ptc))         ;this%h1D_TRANSPN_ptc(:)=spval
   allocate(this%h1D_QTRANSP_col(beg_col:end_col)); this%h1D_QTRANSP_col(:)=spval

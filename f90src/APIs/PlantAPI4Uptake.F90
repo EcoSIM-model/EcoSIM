@@ -160,6 +160,15 @@ implicit none
     plt_morph%Myco_pft(NZ)                  = Myco_pft(NZ,NY,NX)                !no mycorrhizae
     plt_biom%CanopyLeafSheathC_pft(NZ)      = CanopyLeafSheathC_pft(NZ,NY,NX)    !need to convert from leaf area
     plt_biom%CanopySapwoodC_pft(NZ)         = CanopySapwoodC_pft(NZ,NY,NX)        !need to convert from stem area
+    plt_biom%CanopyNonstElmConc_pft(:,NZ)=CanopyNonstElmConc_pft(:,NZ,NY,NX)
+    ! SP prescribes the canopy total directly; no elemental partition is inferred.
+    plt_biom%CanopyNonstOMConc_pft(NZ)=CanopyNonstOMConc_pft(NZ,NY,NX)
+    ! SP supplies this layer aggregate directly; no per-axis reduction here.
+    RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+    plt_biom%RootNonstOMConc_pvr(:,:,NZ)=0._r8
+    plt_biom%RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
+    plt_biom%RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ)= &
+      RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ,NY,NX)
     plt_site%PlantPopuLive_pft(NZ)          = PlantPopuLive_pft(NZ,NY,NX)
     plt_biom%ZERO4LeafVar_pft(NZ)           = ZERO4LeafVar_pft(NZ,NY,NX)
     plt_biom%ZERO4Groth_pft(NZ)             = ZERO4Groth_pft(NZ,NY,NX)
@@ -184,6 +193,8 @@ implicit none
       plt_morph%MRootLumenArea_pvr(L,NZ)   = MRootLumenArea_pvr(L,NZ,NY,NX)
       DO N=1,Myco_pft(NZ,NY,NX)
         plt_morph%Root2ndXNumL_rpvr(N,L,NZ)   = Root2ndXNumL_rpvr(N,L,NZ,NY,NX)
+        plt_biom%RootNonstructElmConc_pvr(:,N,L,NZ)=RootNonstructElmConc_pvr(:,N,L,NZ,NY,NX)
+        plt_biom%RootNonstOMConc_pvr(N,L,NZ)=RootNonstOMConc_pvr(N,L,NZ,NY,NX)
         plt_morph%Root1stRadius_pvr(N,L,NZ) = Root1stRadius_pvr(N,L,NZ,NY,NX)
         plt_morph%Root2ndRadius_rpvr(N,L,NZ) = Root2ndRadius_rpvr(N,L,NZ,NY,NX)
         plt_morph%Root2ndEffLen4uptk_rpvr(N,L,NZ) = Root2ndEffLen4uptk_rpvr(N,L,NZ,NY,NX)
@@ -224,7 +235,8 @@ implicit none
     plt_ew%CanopyBiomWater_pft(NZ)         = CanopyBiomWater_pft(NZ,NY,NX)    !canopy biom water,    updated iteratively
     plt_ew%TKC_pft(NZ)                     = TKC_pft(NZ,NY,NX)                !canopy temeprature updated iteratively
     plt_ew%TKCanopy_pft(NZ)                = TKCanopy_pft(NZ,NY,NX)           !canopy temperature updated iteratively
-    plt_photo%RawCanopy2Atm_pft(NZ)        = RawCanopy2Atm_pft(NZ,NY,NX)
+    plt_photo%RawH2OCanopy2Atm_pft(NZ)        = RawH2OCanopy2Atm_pft(NZ,NY,NX)
+    plt_photo%RawHeatCanopy2Atm_pft(NZ)        = RawHeatCanopy2Atm_pft(NZ,NY,NX)
     plt_ew%SnowOnCanopy_pft(NZ)            = SnowOnCanopy_pft(NZ,NY,NX)
     plt_ew%WatHeldOnCanopy_pft(NZ)         = WatHeldOnCanopy_pft(NZ,NY,NX)     !water held by canopy surface
     plt_rad%FracPARads2Canopy_pft(NZ)      = FracPARads2Canopy_pft(NZ,NY,NX)
@@ -248,6 +260,7 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantUPtakeAPIRecv(I,J,NY,NX)
+  ! Transfer prescribed-canopy fluxes and persistent exchange state to native arrays.
 
   implicit none
   integer, intent(in) :: I,J,NY,NX
@@ -289,6 +302,10 @@ implicit none
     PSICanopyOsmo_pft(NZ,NY,NX)      = plt_ew%PSICanopyOsmo_pft(NZ)
     PSICanopyTurg_pft(NZ,NY,NX)      = plt_ew%PSICanopyTurg_pft(NZ)
     CanPStomaResistH2O_pft(NZ,NY,NX) = plt_photo%CanPStomaResistH2O_pft(NZ)
+    ! Preserve the solved canopy resistances for history, restart and the next API send.
+    RawIsoTCanopy2Atm_pft(NZ,NY,NX) = plt_ew%RawIsoTCanopy2Atm_pft(NZ)
+    RawH2OCanopy2Atm_pft(NZ,NY,NX)   = plt_photo%RawH2OCanopy2Atm_pft(NZ)
+    RawHeatCanopy2Atm_pft(NZ,NY,NX)  = plt_photo%RawHeatCanopy2Atm_pft(NZ)
     TdegCCanopy_pft(NZ,NY,NX)        = plt_ew%TdegCCanopy_pft(NZ)
     DO L=1,NK_col(NY,NX)
       DO N=1,Myco_pft(NZ,NY,NX)
