@@ -1,6 +1,7 @@
 module SurfaceRadiationMod
 
   use data_kind_mod,      only: r8 => DAT_KIND_R8
+  use abortutils,         only: iulog
   use minimathmod,        only: AZMAX1
   use PlantBGCPars,       only: iforward, ibackward
   use PrescribePhenolMod, only: SetCanopyProfile
@@ -24,6 +25,7 @@ module SurfaceRadiationMod
   __FILE__
 
   public :: CanopyConditionModel
+  public :: CalcBoundaryLayerProperties
 
   real(r8), parameter :: RAM                    = 2.78E-03_r8                               !minimum boundary layer resistance (h m-1)
   real(r8), parameter :: RadSWStemAlbedo(0:1)  = (/0.1_r8,0.1_r8/)                         !stalk albedo for shortwave
@@ -63,6 +65,12 @@ module SurfaceRadiationMod
     call SetCanopyProfile(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft)
     SurfAreaZsecDead_lpft=0._r8
     plt_morph%StandDeadSurfAreaAct_pft=0._r8
+  elseif(plt_morph%CanopyLeafArea_col + plt_morph%StemArea_col &
+    + plt_morph%StandDeadSurfArea_col <= 0._r8)then
+    ! No plants: zero canopy profiles, skip dynamic phenology routines
+    LeafAreaZsecLive_lpft=0._r8
+    StemAreaZsecLive_lpft=0._r8
+    SurfAreaZsecDead_lpft=0._r8
   else
     call DeriveCanopyHeightProfile(I,J,SurfAreaZsecDead_lpft)
 

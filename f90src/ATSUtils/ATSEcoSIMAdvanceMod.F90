@@ -37,6 +37,10 @@ module ATSEcoSIMAdvanceMod
   use EcoSIMHistMod
   use PlantTraitsTransferMod
   !use PlantAPIData
+  use EcoSIMConfig,       only: iFlagRaiseZ0GbyVeg
+  use ElmIDMod,           only: itrue
+  use RedistMod,          only: UpdateCanopyAirDerivatives
+  use SurfSoilDataType,   only: HeatSensAir2Surf_col, HeatEvapAir2Surf_col
   use EcoSIMCtrlMod,      only: ldo_sp_mode
   use EcosimBGCFluxType,  only: Eco_NetRad_col, Eco_Heat_Latent_col, &
     Eco_Heat_Sens_col, Eco_Heat_GrndSurf_col
@@ -57,7 +61,7 @@ implicit none
   use SnowBalanceMod    , only : SnowMassUpdate
   use StartsMod         , only : set_ecosim_solver
   use SnowBalanceMod    , only : SnowMassUpdate, SnowpackLayering
-  use SurfaceRadiationMod
+  !use SurfaceRadiationMod  ! accessed via PlantCanopyRadsModel
   !use SoilHydroParaMod  , only : SetColdRunSoilStates
   use PlantMod
   use WthrMod
@@ -95,6 +99,8 @@ implicit none
   real(r8) :: Hinfl2SoilM(JY,JX)
   real(r8) :: VLWat_test(JZ,JY,JX)
   real(r8) :: THETF, flux_per_area
+  real(r8) :: canopy_h_save
+  real(r8) :: sw_inc_per_area, sw_gnd_per_area, grnd_alb, sw_shading_corr
   type(yearIJ_type) :: yearIJ
 
   !associate( RPlantRootH2OUptk_pvr     => plt_ew%RPlantRootH2OUptk_pvr         & !inoput :root water uptake, [m3 d-2 h-1]
@@ -245,7 +251,11 @@ implicit none
       VLiceMicP1_vr(L,NY,NX)       = 0.0
       TKSoil1_vr(L,NY,NX)          = a_TEMP(L,NY)
       TKS_vr(L,NY,NX)              = a_TEMP(L,NY)
-      VHeatCapacity1_vr(L,NY,NX)   = heat_capacity
+      !VHeatCapacity1_vr(L,NY,NX)   = heat_capacity  ! constant scalar from plist [MJ mol-1 K-1], mismatched units
+      ! Volumetric heat capacity [MJ m-3 K-1]: liquid + rock contributions
+      ! cv_liq  = 7.53e-5 MJ mol-1 K-1 (water); cv_rock = 8.0e-4 MJ kg-1 K-1 (mineral soil)
+      VHeatCapacity1_vr(L,NY,NX)   = a_PORO(L,NY) * a_LSAT(L,NY) * a_LDENS(L,NY) * 7.53e-5_r8 &
+                                    + (1._r8 - a_PORO(L,NY)) * a_RDENS(L,NY) * 8.0e-4_r8
       SoilFracAsMicP_vr(L,NY,NX)   = 1.0 !This is percentage of Soil void that is micropores (100% for now)
       !Convert Matric Pressure from ATS [Pa] to EcoSIM [MPa]
       PSISM1_vr(L,NY,NX)           = -1.0*a_MATP(L,NY)/1.0e6
@@ -399,13 +409,18 @@ implicit none
 
             call InitDimensionsandUptake(NZ,NY,NX)
 
+            !ReadPlantTraitsNC sets CanopyHeightLive_pft from the PFT trait
+            !file; save it before InitPlantPhenoMorphoBio zeros it.
+            canopy_h_save = CanopyHeightLive_pft(NZ,NY,NX)
             call InitPlantPhenoMorphoBio(NZ,NY,NX)
+            CanopyHeightLive_pft(NZ,NY,NX) = canopy_h_save
 
             call SendPlantTraits(NY,NX,NZ)
 
             !Set cuticle resistances scaled from pft trait file
             H2OCuticleResist_pft(NZ,NY,NX) = CuticleResist_pft(NZ,NY,NX)/3600.0_r8
             CO2CuticleResist_pft(NZ,NY,NX) = CuticleResist_pft(NZ,NY,NX)*1.56_r8
+            ClumpFactor_pft(NZ,NY,NX)       = ClumpFactorInit_pft(NZ,NY,NX)
             ATCA_col(NY,NX)                = 6.0_r8
 
             if (a_PlantInit(NY,1) .LT. 0.5_r8) call InitPrescribedPlantState(NZ,NY,NX)
@@ -427,24 +442,28 @@ implicit none
   !To do the phenology
   if(ldo_sp_mode) call PrescribePhenologyInterp(I, NHW, NHE, NVN, NVS)
 
-  !PlantCanopyRadsModel processes the input radiation
-  ! into radiation to ground and to canopy
+  !PlantCanopyRadsModel processes the input radiation into radiation to
+  !ground and to canopy, and computes the boundary layer resistance from
+  !the log wind profile.  A bare-ground guard in CanopyConditionModel
+  !skips the dynamic phenology routines when no plants are present, so
+  !this call is safe for both phenology and no-phenology cases.
+  !Match ATS surface-balance parameters (wind speed reference height,
+  !bare-ground roughness).  TODO: pass these through the coupling interface.
   do NY=1,NYS
-    if(ldo_sp_mode)then  
-      call PlantCanopyRadsModel(I,J,NY,NX,0.0_r8)
-      
-      !SnowPrecThrufall_col(NY,NX) = SnoFalPrec_col(NY,NX)
-      !RainPrecThrufall_col(NY,NX) = RainFalPrec_col(NY,NX)
-      !TKSnowThrufall_col(NY,NX) = TairK_col(NY,NX)
-        
+    WindMesureHeight_col(NY,NX) = 3.0_r8
+    SoilSurfRoughness_col(NY,NX) = 0.001_r8
+    iFlagRaiseZ0GbyVeg = itrue
+  enddo
+  do NY=1,NYS
+    call PlantCanopyRadsModel(I,J,NY,NX,0.0_r8)
+
+    if(ldo_sp_mode)then
       call CanopyInterceptprecip(NY,NX)
-     else
-       !If not using phenology set the thrufall snow and rain
-       !to the total
-       SnowPrecThrufall_col(NY,NX) = SnoFalPrec_col(NY,NX)
-       RainPrecThrufall_col(NY,NX) = RainFalPrec_col(NY,NX)
-       TKSnowThrufall_col(NY,NX) = TairK_col(NY,NX)
-     endif
+    else
+      SnowPrecThrufall_col(NY,NX) = SnoFalPrec_col(NY,NX)
+      RainPrecThrufall_col(NY,NX) = RainFalPrec_col(NY,NX)
+      TKSnowThrufall_col(NY,NX) = TairK_col(NY,NX)
+    endif
   enddo
 
   PSIAtFldCapacity_col = pressure_at_field_capacity
@@ -520,6 +539,17 @@ implicit none
   ! Specifically runs the CanopyEnergyH2Oiter_func
   if(ldo_sp_mode) call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
 
+  !Add surface heat/vapor exchange to canopy air stores (RedistMod:232-233).
+  !redist() is not called in ATS mode; without this the canopy air temperature
+  !is only heated by canopy leaves and never cooled by heat loss to the ground.
+  do NY=1,NYS
+    Air_Heat_Sens_store_col(NY,NX) = Air_Heat_Sens_store_col(NY,NX) &
+      + HeatSensAir2Surf_col(NY,NX) * RawTAtm2CanopySinkZ_col(NY,NX)
+    Air_Heat_Latent_store_col(NY,NX) = Air_Heat_Latent_store_col(NY,NX) &
+      + HeatEvapAir2Surf_col(NY,NX) * RawTAtm2CanopySinkZ_col(NY,NX)
+    call UpdateCanopyAirDerivatives(NY,NX)
+  enddo
+
   DO NY=1,NYS
     !for every column send the top layer to the transfer var
     !Convert heat and water flux flux from the subcycled value
@@ -533,10 +563,8 @@ implicit none
     !ATS input). Shift the energy of the exported water Qinflx2Soil_col to the
     !ATS reference, otherwise each m3 of infiltration adds ~cpw*273 MJ of heat.
     flux_per_area = (HeatFlx2Grnd_col(NY,1) - cpw*TFice*Qinflx2Soil_col(NY,1)) / column_area(NY)
-    !Uncapped export:
-    !surf_e_source(NY) = flux_per_area
-    !Cap the magnitude at surf_e_max [MJ m-2 h-1], keeping the sign
-    surf_e_source(NY) = SIGN(MIN(ABS(flux_per_area), surf_e_max), flux_per_area)
+
+    surf_e_source(NY) = flux_per_area
     
     dTexp = surf_e_source(NY)/heat_capacity
     Tfinal = TKsoil1_vr(1,NY,NX) + dTexp 
