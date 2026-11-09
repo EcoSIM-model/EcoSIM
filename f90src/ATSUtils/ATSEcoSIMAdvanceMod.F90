@@ -450,8 +450,8 @@ implicit none
   !Match ATS surface-balance parameters (wind speed reference height,
   !bare-ground roughness).  TODO: pass these through the coupling interface.
   do NY=1,NYS
-    WindMesureHeight_col(NY,NX) = 3.0_r8
-    SoilSurfRoughness_col(NY,NX) = 0.001_r8
+    WindMesureHeight_col(NY,NX) = wind_speed_ref_height
+    SoilSurfRoughness_col(NY,NX) = soil_surface_roughness
     iFlagRaiseZ0GbyVeg = itrue
   enddo
   do NY=1,NYS

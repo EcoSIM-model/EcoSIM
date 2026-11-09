@@ -132,6 +132,8 @@ module EcoContainers_module
      logical (c_bool) :: a_bool
      logical (c_bool) :: pheno_bool
      logical (c_bool) :: microbe_bool
+     real (c_double) :: wind_speed_ref_height
+     real (c_double) :: soil_surface_roughness
      type (c_ptr) :: pft_file
   end type EcoConfig
 
