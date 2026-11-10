@@ -1,5 +1,8 @@
 module TranspNoSaltFastMod
 
+  ! Description:
+  ! Advance fast gas transport, gas-water exchange, and tracer source/sink accounting.
+
   use SoilFaceMappingMod, only: SoilFaceSlot,SoilFaceIncomingRange
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use abortutils,    only: destroy, endrun
@@ -92,6 +95,8 @@ implicit none
   end subroutine TransptFastNoSaltMM
 !------------------------------------------------------------------------------------------  
   subroutine ApplyFastSourceSink(I,J,M,NHE,NHW,NVS,NVN,MM)  
+  ! Description:
+  ! Apply staged gas sources and sinks and accumulate their column mass budgets.
   implicit none
   integer, intent(in) :: I,J,NHE,NHW,NVS,NVN,M,MM
 
@@ -121,9 +126,12 @@ implicit none
 !          endif
         ENDDO
         idg=idg_NH3
+        ! NH3 fertilizer release enters the gas pool; other gas sources enter water.
+        trcg_gasml2_vr(idg,L,NY,NX)=trcg_gasml2_vr(idg,L,NY,NX)+RBGCSrceGasMM_vr(idg,L,NY,NX)
         call SubstrateDribbling(RBGCSinkGasMM_vr(idg,L,NY,NX),trcs_solml_drib_vr(idg,L,NY,NX),trcg_gasml2_vr(idg,L,NY,NX))
-        trcg_NetPro_fast_col(idg,NY,NX)=trcg_NetPro_fast_col(idg,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
-        RGasNetProdSoil_col(idg,NY,NX)=RGasNetProdSoil_col(idg,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
+        flux=RBGCSrceGasMM_vr(idg,L,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
+        trcg_NetPro_fast_col(idg,NY,NX)=trcg_NetPro_fast_col(idg,NY,NX)+flux
+        RGasNetProdSoil_col(idg,NY,NX)=RGasNetProdSoil_col(idg,NY,NX)+flux
       ENDDO  
     ENDDO
   ENDDO  

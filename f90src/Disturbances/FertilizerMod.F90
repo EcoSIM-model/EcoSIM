@@ -781,21 +781,21 @@ implicit none
 !     PCAPMB,PCAPDB,PCAPHB=concn of precip CaH4P2O8,CaHPO4,apatite in band
 !     PCACO,PCASO=precipitated CaCO3,CaSO4
 
-    Z4AX = Z4A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4
-    Z3AX = Z3A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 
-    ZUAX = ZUA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea
-    ZOAX = ZOA*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    Z4BX = Z4B*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    Z3BX = Z3B*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    ZUBX = ZUB*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    ZOBX = ZOB*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    POAX = POA*AREA_3D(3,LFDPTH,NY,NX)/patomw
-    POBX = POB*AREA_3D(3,LFDPTH,NY,NX)/patomw
+    Z4AX = Z4A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4 soil
+    Z3AX = Z3A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 soil
+    ZUAX = ZUA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea soil
+    ZOAX = ZOA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NO3 soil
+    Z4BX = Z4B*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4 band
+    Z3BX = Z3B*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 band
+    ZUBX = ZUB*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea band
+    ZOBX = ZOB*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NO3 band
+    POAX = POA*AREA_3D(3,LFDPTH,NY,NX)/patomw   !PO4 soil
+    POBX = POB*AREA_3D(3,LFDPTH,NY,NX)/patomw   !PO4 band
     PMAX = PMA*AREA_3D(3,LFDPTH,NY,NX)/(2.0_r8*patomw)
     PMBX = PMB*AREA_3D(3,LFDPTH,NY,NX)/(2.0_r8*patomw)
     PHAX = PHA*AREA_3D(3,LFDPTH,NY,NX)/(3.0_r8*patomw)
-    CACX = CAC*AREA_3D(3,LFDPTH,NY,NX)/40._r8
-    CASX = CAS*AREA_3D(3,LFDPTH,NY,NX)/40._r8
+    CACX = CAC*AREA_3D(3,LFDPTH,NY,NX)/40._r8   !lime CaCO3
+    CASX = CAS*AREA_3D(3,LFDPTH,NY,NX)/40._r8   !gypsum CaSO4
 
     FertN_mole_soil_vr(ifert_N_nh4,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_soil_vr(ifert_N_nh4,LFDPTH,NY,NX)+Z4AX*frcFert2SurfLitr)
     FertN_mole_soil_vr(ifert_N_urea,LFDPTH,NY,NX) = AZMAX1(FertN_mole_soil_vr(ifert_N_urea,LFDPTH,NY,NX)+ZUAX*frcFert2SurfLitr)
