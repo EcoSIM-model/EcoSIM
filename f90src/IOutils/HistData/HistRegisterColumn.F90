@@ -236,11 +236,11 @@ contains
 
   data1d_ptr => this%h1D_AMENDED_N_col(beg_col:end_col)
   call hist_addfld1d(fname='AMENDED_N_col',units='gN/m2',avgflag='A',&
-    long_name='Column-integrated total organic fertilizer N amendment',ptr_col=data1d_ptr,default='inactive')
+    long_name='Column-integrated total fertilizer N amendment',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_AMENDED_P_col(beg_col:end_col)
   call hist_addfld1d(fname='AMENDED_P_col',units='gP/m2',avgflag='A',&
-    long_name='Column-integrated total organic fertilizer P amendment',ptr_col=data1d_ptr,default='inactive')
+    long_name='Column-integrated total fertilizer P amendment',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_tLITRf_C_FLX_col(beg_col:end_col)
   call hist_addfld1d(fname='tLITRf_C_col',units='gC/m2/hr',avgflag='A',&

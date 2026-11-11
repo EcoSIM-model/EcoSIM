@@ -1,0 +1,135 @@
+netcdf dryland_band_only_soilmgmt_20261110 {
+dimensions:
+	ntopou = 1 ;
+	nchar1 = 10 ;
+	nchart = 24 ;
+	ntill = 12 ;
+	nfert = 12 ;
+	ncharf = 128 ;
+	year = UNLIMITED ; // (6 currently)
+variables:
+	int year(year) ;
+		year:long_name = "year AD" ;
+	int NH1(ntopou) ;
+		NH1:long_name = "Starting column from the west for a topo unit" ;
+		NH1:units = "None" ;
+	int NV1(ntopou) ;
+		NV1:long_name = "Ending column at the east for a topo unit" ;
+		NV1:units = "None" ;
+	int NH2(ntopou) ;
+		NH2:long_name = "Starting row from the north  for a topo unit" ;
+		NH2:units = "None" ;
+	int NV2(ntopou) ;
+		NV2:long_name = "Ending row at the south  for a topo unit" ;
+		NV2:units = "None" ;
+	char fertf(year, ntopou, nchar1) ;
+		fertf:long_name = "Fertilization info for a topo unit" ;
+	char tillf(year, ntopou, nchar1) ;
+		tillf:long_name = "Tillage info for a topo unit" ;
+	char irrigf(year, ntopou, nchar1) ;
+		irrigf:long_name = "Irrigation info for a topo unit" ;
+	char me01t(ntill, nchart) ;
+		me01t:long_name = "Tillage file" ;
+	char me01f(nfert, ncharf) ;
+		me01f:long_name = "fertilization file" ;
+	char me03f(nfert, ncharf) ;
+		me03f:long_name = "fertilization file" ;
+	char me05f(nfert, ncharf) ;
+		me05f:long_name = "fertilization file" ;
+
+// global attributes:
+		:description = "soil managment data created on 2023/02/10/15:03:35" ;
+		:history = "2026-11-10: Added NH3Band = 2 g N m-2 (20 kg N ha-1) on the existing 2001, 2003 and 2005 fertilizer dates as a test treatment, in addition to the original N doses.\n",
+			"2026-11-10: Derived dryland_band_only scenario: preserve updated annual total N; retain original NO3Band doses and supply remaining N as NH3Band; other fertilizer N forms are zero." ;
+data:
+
+ year = 2001, 2002, 2003, 2004, 2005, 2006 ;
+
+ NH1 = 1 ;
+
+ NV1 = 1 ;
+
+ NH2 = 1 ;
+
+ NV2 = 1 ;
+
+ fertf =
+  "me01f     ",
+  "NO        ",
+  "me03f     ",
+  "NO        ",
+  "me05f     ",
+  "NO        " ;
+
+ tillf =
+  "me01t     ",
+  "NO        ",
+  "NO        ",
+  "NO        ",
+  "NO        ",
+  "NO        " ;
+
+ irrigf =
+  "NO        ",
+  "NO        ",
+  "NO        ",
+  "NO        ",
+  "NO        ",
+  "NO        " ;
+
+ me01t =
+  "09042001,3,0.10         ",
+  "10042001,3,0.10         ",
+  "16042001,3,0.10         ",
+  "20042001,7,0.05         ",
+  "08112001,1,0.20         ",
+  "                        ",
+  "                        ",
+  "                        ",
+  "                        ",
+  "                        ",
+  "                        ",
+  "                        " ;
+
+ me01f =
+  "16052001 0 0 0 0 0 10.54 0 4.27 0 5 0 0 0 0 0 0 0 0 0 0.02 0.76 0 0 1 0 0                                                       ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                " ;
+
+ me03f =
+  "16052003 0 0 0 0 0 7.98 0 2.99 0 5 0 0 0 0 0 0 0 0 0 0.02 0.76 0 0 1 0 0                                                        ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                " ;
+
+ me05f =
+  "07042005 0 0 0 0 0 9.84 0 3.92 0 5 0 0 0 0 0 0 0 0 0 0.02 0.76 0 0 1 0 0                                                        ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                ",
+  "                                                                                                                                " ;
+}
