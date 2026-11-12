@@ -1,5 +1,7 @@
 module SurfaceRadiationMod
-
+  ! Description:
+  ! Prepare canopy geometry, optical properties and radiation, and diagnose
+  ! exposed canopy and aerodynamic paths for the current hour.
   use data_kind_mod,      only: r8 => DAT_KIND_R8
   use minimathmod,        only: AZMAX1
   use PlantBGCPars,       only: iforward, ibackward
@@ -8,6 +10,7 @@ module SurfaceRadiationMod
   use RadiationDataMod
   use DebugToolMod
   use EcoSimConst
+  use PlantMathFuncMod, only: CanopySnowOptics,CanopyRadiationFractions
   use EcoSIMConfig
   use PlantAPICommonData
   use PlantSiteAPIData, only : plt_site
@@ -24,6 +27,7 @@ module SurfaceRadiationMod
   __FILE__
 
   public :: CanopyConditionModel
+  public :: CalcBoundaryLayerProperties
 
   real(r8), parameter :: RAM                    = 2.78E-03_r8                               !minimum boundary layer resistance (h m-1)
   real(r8), parameter :: RadSWStemAlbedo(0:1)  = (/0.1_r8,0.1_r8/)                         !stalk albedo for shortwave
@@ -61,9 +65,7 @@ module SurfaceRadiationMod
 
   if(ldo_sp_mode)then
     !do prescribed phenolgoy mode
-    call SetCanopyProfile(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft)
-    SurfAreaZsecDead_lpft=0._r8
-    plt_morph%StandDeadSurfAreaAct_pft=0._r8
+    call SetCanopyProfile(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft,SurfAreaZsecDead_lpft)
   else
     call DeriveCanopyHeightProfile(I,J,SurfAreaZsecDead_lpft)
 
@@ -81,8 +83,11 @@ module SurfaceRadiationMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine CalcBoundaryLayerProperties(DepthSurfWatIce)
+  ! Description:
+  ! Diagnose canopy exposure above snow and compute neutral atmospheric and
+  ! within-canopy transport properties using that shared exposure criterion.
   implicit none
-  real(r8), intent(in) :: DepthSurfWatIce
+  real(r8), intent(in) :: DepthSurfWatIce ! surface water/ice depth [m]; currently excluded from exposure test
   character(len=*), parameter :: subname='CalcBoundaryLayerProperties'
   real(r8) :: ARLSC
   real(r8) :: ARLSG
@@ -90,6 +95,7 @@ module SurfaceRadiationMod
   REAL(R8) :: ZWind,HZnorm
   real(r8) :: WindH !wind speed at canopy height [m/h]
 !     begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                          &
     WindSpeedAtm_col            => plt_site%WindSpeedAtm_col         ,& !input  :wind speed, [m h-1]
     WindMesureHeight_col        => plt_site%WindMesureHeight_col     ,& !input  :wind speed measurement height, [m]
@@ -100,6 +106,7 @@ module SurfaceRadiationMod
     ZEROS                       => plt_site%ZEROS                    ,& !input  :threshold zero for numerical stability,[-]
     NU                          => plt_site%NU                       ,& !input  :current soil surface layer number, [-]
     TairK                       => plt_ew%TairK                      ,& !input  :air temperature, [K]
+    canopy_exposed_col          => plt_ew%canopy_exposed_col         ,& !output :canopy area protrudes above snow, [-]
     VLHeatCapSnowMin_col        => plt_ew%VLHeatCapSnowMin_col       ,& !input  :minimum snowpack heat capacity, [MJ d-2 K-1]
     SnowDepth                   => plt_ew%SnowDepth                  ,& !input  :snowpack depth, [m]
     VLHeatCapSurfSnow_col       => plt_ew%VLHeatCapSurfSnow_col      ,& !input  :snowpack heat capacity, [MJ m-3 K-1]
@@ -114,7 +121,6 @@ module SurfaceRadiationMod
     RoughnessLength             => plt_ew%RoughnessLength            ,& !output :canopy surface roughness height, [m]
     RIB                         => plt_ew%RIB                         & !output :Richardson number for calculating boundary layer resistance, [-]
   )
-  call PrintInfo('beg '//subname)
   !     CANOPY ZERO PLANE AND ROUGHNESS HEIGHTS
   !
   !     CanopyLeafArea_col,StemArea_col=leaf,stalk area of combined canopy
@@ -123,7 +129,8 @@ module SurfaceRadiationMod
   !
   ARLSC=CanopyLeafArea_col+StemArea_col+StandDeadSurfArea_col
 !  IF(ARLSC.GT.ZEROS .AND. CanopyHeight_col.GE.SnowDepth-ZERO .AND. CanopyHeight_col.GE.DepthSurfWatIce-ZERO)THEN
-  IF(ARLSC.GT.ZEROS .AND. CanopyHeight_col.GE.SnowDepth-ZERO)then 
+  canopy_exposed_col=ARLSC.GT.ZEROS .AND. CanopyHeight_col.GE.SnowDepth-ZERO
+  IF(canopy_exposed_col)then
     !
     ARLSG = ARLSC/AREA3(NU)
     ZX    = EXP(-0.5_r8*ARLSG)
@@ -160,27 +167,29 @@ module SurfaceRadiationMod
     RawIsoTAtm2CanopySinkZ_col = AMAX1(RAM,(LOG((ZWind-ZeroPlaneDisplacem_col)/RoughnessLength))**2/(0.168_r8*WindSpeedAtm_col))
     HZnorm                     = (CanopyHeight_col-ZeroPlaneDisplacem_col)/RoughnessLength
 
-    if(HZnorm.GT.1._r8)then
+    if(canopy_exposed_col .and. HZnorm.GT.1._r8)then
       WindH=WindSpeedAtm_col*log(HZnorm)/(log(ZWind-ZeroPlaneDisplacem_col)-log(RoughnessLength))
       !eq. (24) from Choudhury and Monteith (1988)  
       RawIsoTSurf2CanopyHScal_col = log((CanopyHeight_col-ZeroPlaneDisplacem_col)/RoughnessLength) &
         /(0.168*(CanopyHeight_col-ZeroPlaneDisplacem_col)*WindH)
       RawCanopyH2SinkZ_col = AMAX1(RAM,(LOG(HZnorm))**2/(0.168_r8*WindH))
     else
-      RawIsoTSurf2CanopyHScal_col=0._r8
-      WindH                = WindSpeedAtm_col
-      RawCanopyH2SinkZ_col = 0._r8
+      RawIsoTSurf2CanopyHScal_col = 0._r8
+      WindH                       = WindSpeedAtm_col
+      RawCanopyH2SinkZ_col        = 0._r8
     endif  
     !
     !1.27E+08_r8=g*(3600^2), from eq. (19) in Choudhury and Monteith (1988)
     RIB  = 1.27E+08_r8*(ZWind-RoughnessLength)/(WindSpeedAtm_col**2*TairK)
   ELSE
-    RawIsoTAtm2CanopySinkZ_col = RAM
-    RIB                    = 0.0_r8
-    RoughnessLength        = 0._r8
+    RawIsoTAtm2CanopySinkZ_col  = RAM
+    RawIsoTSurf2CanopyHScal_col = 0._r8
+    RawCanopyH2SinkZ_col        = 0._r8
+    RIB                         = 0.0_r8
+    RoughnessLength             = 0._r8
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CalcBoundaryLayerProperties
 
 !----------------------------------------------------------------------------------------------------
@@ -396,7 +405,6 @@ module SurfaceRadiationMod
           !add stem/stalk area
           LeafStalkAreaAct_pft(NZ) = LeafStalkAreaAct_pft(NZ)+CanopyStalkSurfArea_lbrch(L,NB,NZ)
           LeafStalkAreaAll_col     = LeafStalkAreaAll_col+CanopyStalkSurfArea_lbrch(L,NB,NZ)
-          !write(*,*)LeafStalkAreaAll_col,CanopyStalkSurfArea_lbrch(L,NB,NZ),L,NB,CanopySurfAreaProfDead_pft(L,NZ)
         ENDDO  
       ENDIF      
     enddo    
@@ -434,9 +442,9 @@ module SurfaceRadiationMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine SurfaceRadiation(I,J,DepthSurfWatIce,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft,SurfAreaZsecDead_lpft)
-  !
-  !Description:
-  !
+  ! Description:
+  ! Calculate multilayer shortwave absorption and the canopy/ground longwave
+  ! partition using physical plus retained-snow area for both radiation paths.
   implicit none
   integer, intent(in) :: I,J
   real(r8), intent(in) :: DepthSurfWatIce   !surface water/ice thickness above soil surface
@@ -448,9 +456,10 @@ module SurfaceRadiationMod
   real(r8) :: DGAZI
   real(r8) :: SolarAzimuthAngle,CosineSunInclAngle,cosGroundIncidentSolarAngle
   integer  :: NZ,N
-  real(r8) :: FRadPARbyLeafT,LAIEff
+  real(r8) :: GroundRadiationFraction
   real(r8) :: RadSW2Ground,RadPAR2Ground
   !     begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     ZEROS                        => plt_site%ZEROS                        ,& !input  :threshold zero for numerical stability,[-]
     ZERO                         => plt_site%ZERO                         ,& !input  :threshold zero for numerical stability, [-]
@@ -467,9 +476,8 @@ module SurfaceRadiationMod
     LeafStalkAreaAct_pft         => plt_morph%LeafStalkAreaAct_pft        ,& !input  :plant leaf+stem/stalk area, [m2 d-2]    
     StandDeadSurfAreaAct_pft     => plt_morph%StandDeadSurfAreaAct_pft    ,& !input  :standing-dead surface area, [m2 d-2]
     LeafStalkAreaAll_col         => plt_morph%LeafStalkAreaAll_col        ,& !input  :stalk area of combined, each PFT canopy,[m^2 d-2]
-    BulkFactor4Snow_col          => plt_ew%BulkFactor4Snow_col            ,& !input  :grid bulking factor for canopy snow interception effect on radiation, [m2 (m3 SWE)-1]
-    fSnowCanopy_col              => plt_ew%fSnowCanopy_col                ,& !input  :fraction snow covered canopy, [-]
-    SnowOnCanopy_col             => plt_ew%SnowOnCanopy_col               ,& !input  :Snow held by canopy, [m3 d-2]
+    SnowOnCanopy_pft             => plt_ew%SnowOnCanopy_pft               ,& ! input: retained intercepted SWE [m3/cell, PFT]
+    SnowType                    => plt_pheno%iPlantSnowIntercepType_pft ,& ! input: snow interception class [0:4, PFT]
     RadSWDirect_col              => plt_rad%RadSWDirect_col               ,& !inoput :direct shortwave radiation, [W m-2]
     RadSWDiffus_col              => plt_rad%RadSWDiffus_col               ,& !inoput :diffuse shortwave radiation, [W m-2]
     RadDirectPAR_col             => plt_rad%RadDirectPAR_col              ,& !inoput :direct PAR, [umol m-2 s-1]
@@ -488,7 +496,6 @@ module SurfaceRadiationMod
     ClumpFactorNow_pft           => plt_morph%ClumpFactorNow_pft           & !output :clumping factor for self-shading in canopy layer at current LAI, [-]
   )
 
-  call PrintInfo('beg '//subname)
   !
   !     MULTILAYER CANOPY INTERECEPTION OF DIRECT AND DIFFUSE RADIATION
   !     IN SW AND VISIBLE BANDS BY INCLINATION N, AZIMUTH M, LAYER L,
@@ -583,30 +590,14 @@ module SurfaceRadiationMod
   !
   FracSWRad2Grnd_col=1.0_r8
   
-  IF(LeafStalkAreaAll_col.GT.ZEROS)THEN
-    !will compute a weighted bulking factor (for snow) considering vertical distribution of LAI.
-    !Beer's law
-    LAIEff         = LeafStalkAreaAll_col*(1._r8+BulkFactor4Snow_col*SnowOnCanopy_col)/AREA3(NU)
-
-    FRadPARbyLeafT = 1.0_r8-EXP(-(0.65_r8*(1._r8-fSnowCanopy_col) + 0.8_r8*fSnowCanopy_col)*LAIEff)
-
-    ! Total canopy includes live leaves, live stems, and standing dead.
-    IF(.not.ldo_radiation_test)THEN
-      FracSWRad2Grnd_col = AMAX1(0._r8,1._r8-FRadPARbyLeafT)
-    ENDIF
-
-    D145: DO NZ=1,NP
-      FracPARads2Canopy_pft(NZ) = FRadPARbyLeafT*(LeafStalkAreaAct_pft(NZ)+StandDeadSurfAreaAct_pft(NZ))/LeafStalkAreaAll_col
-      FracPARads2LiveCanopy_pft(NZ) = FRadPARbyLeafT*LeafStalkAreaAct_pft(NZ)/LeafStalkAreaAll_col
-    ENDDO D145
-  ELSE
-    D146: DO NZ=1,NP
-      FracPARads2Canopy_pft(NZ)=0.0_r8
-      FracPARads2LiveCanopy_pft(NZ) = 0._R8
-    ENDDO D146
-  ENDIF
-  call PrintInfo('end '//subname)
+  ! Use retained PFT snow rather than the column output sum cleared by HOUR1.
+  ! PFT radiative weights and the column optical depth share the same added areas.
+  call CanopyRadiationFractions(LeafStalkAreaAct_pft(1:NP),StandDeadSurfAreaAct_pft(1:NP), &
+    SnowOnCanopy_pft(1:NP),SnowType(1:NP),AREA3(NU),FracPARads2Canopy_pft(1:NP), &
+    FracPARads2LiveCanopy_pft(1:NP),GroundRadiationFraction)
+  if(.not.ldo_radiation_test)FracSWRad2Grnd_col=GroundRadiationFraction
   end associate
+  call PrintInfo('end '//subname)
   end subroutine SurfaceRadiation
 
 !----------------------------------------------------------------------------------------------------
@@ -1615,6 +1606,9 @@ module SurfaceRadiationMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine UpdateOpticalProperties(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft,SurfAreaZsecDead_lpft)
+  ! Description:
+  ! Derive snow optics from retained SWE and current exposed area, then distribute
+  ! physical plus snow-added area over the exposed leaf/live-stem/dead profile.
   implicit none
   integer, intent(in) :: I,J
   real(r8), intent(inout) :: LeafAreaZsecLive_lpft(NumLeafInclinationClasses1,NumCanopyLayers1,JP1)    !leaf area in different angle sector
@@ -1628,7 +1622,9 @@ module SurfaceRadiationMod
   real(r8) :: LeafSWAlbedoEff,LeafSWTransmEff
   real(r8) :: LeafPARAlbedoEff,leafPARTransmEff
   real(r8) :: DstemSWAlbedoEff,DstemPARAlbedoEff,DstemSWTransmEff,DstemPARTransmEff  
+  real(r8) :: PhysicalArea,EffectiveArea,AreaMultiplier
 
+  call PrintInfo('beg '//subname)
   associate(                                                            &
     ZEROS                      => plt_site%ZEROS                       ,& !input  :threshold zero for numerical stability,[-]
     NP                         => plt_site%NP                          ,& !input  :current number of plant species,[-]    
@@ -1636,9 +1632,11 @@ module SurfaceRadiationMod
     SnowOnCanopy_pft           => plt_ew%SnowOnCanopy_pft              ,& !input  :snow water equivalent held on canopy, [m3 d-2]    
     ZERO                       => plt_site%ZERO                        ,& !input  :threshold zero for numerical stability, [-]    
     iPlant2ndGrothPattern_pft  => plt_pheno%iPlant2ndGrothPattern_pft  ,& !input  :Plant expression of secondary growth, [0/1] 
-    fSnowCanopy_pft            => plt_ew%fSnowCanopy_pft               ,& !input  :fraction of canopy is snow covered, [-]
+    fSnowCanopy_pft            => plt_ew%fSnowCanopy_pft               ,& ! output: retained snow cover on current exposed area [-, PFT]
+    SnowType                  => plt_pheno%iPlantSnowIntercepType_pft,& ! input: snow interception class [0:4, PFT]
+    LiveArea                  => plt_morph%LeafStalkAreaAct_pft       ,& ! input: exposed physical live area [m2/cell, PFT]
+    DeadArea                  => plt_morph%StandDeadSurfAreaAct_pft   ,& ! input: exposed physical dead area [m2/cell, PFT]
     ClumpFactor_pft            => plt_morph%ClumpFactor_pft            ,& !input  :clumping factor for self-shading in canopy layer, [-]    
-    BulkFactor4Snow_pft        => plt_ew%BulkFactor4Snow_pft           ,& !input  :pft bulking factor for canopy snow interception effect on radiation, [m2 (ton SWE)-1]
     SnowDepth                  => plt_ew%SnowDepth                     ,& !input  :snowpack depth, [m]    
     RadSWLeafAlbedo_pft        => plt_rad%RadSWLeafAlbedo_pft          ,& !input  :canopy shortwave albedo, [-]
     RadPARLeafAlbedo_pft       => plt_rad%RadPARLeafAlbedo_pft         ,& !input  :canopy PAR albedo, [-]
@@ -1650,8 +1648,11 @@ module SurfaceRadiationMod
     ClumpFactorNow_pft         => plt_morph%ClumpFactorNow_pft          & !input  :clumping factor for self-shading in canopy layer at current LAI, [-]    
   )
 
-  call PrintInfo('beg '//subname)
   DO NZ=1,NP
+    PhysicalArea=LiveArea(NZ)+DeadArea(NZ)
+    call CanopySnowOptics(SnowType(NZ),PhysicalArea,SnowOnCanopy_pft(NZ),fSnowCanopy_pft(NZ),EffectiveArea)
+    AreaMultiplier=1._r8
+    if(PhysicalArea>0._r8)AreaMultiplier=EffectiveArea/PhysicalArea
     ClumpFactorNow_pft(NZ)  = ClumpFactor_pft(NZ)*(1.0_r8-0.025_r8*CanopyLeafArea_pft(NZ)/AREA3(NU))
     StemClumpFactor_pft(NZ) = StemClumpFactor(iPlant2ndGrothPattern_pft(NZ))
 
@@ -1679,9 +1680,9 @@ module SurfaceRadiationMod
       DO  L=NumCanopyLayers1,1,-1
         IF(CanopyHeightZ_col(L-1).GE.SnowDepth-ZERO)THEN      
           DO  N=1,NumLeafInclinationClasses1
-            LeafAreaZsecLive_lpft(N,L,NZ) = LeafAreaZsecLive_lpft(N,L,NZ)*(1._r8+BulkFactor4Snow_pft(NZ)*SnowOnCanopy_pft(NZ))
-            StemAreaZsecLive_lpft(N,L,NZ) = StemAreaZsecLive_lpft(N,L,NZ)*(1._r8+BulkFactor4Snow_pft(NZ)*SnowOnCanopy_pft(NZ))
-            SurfAreaZsecDead_lpft(N,L,NZ) = SurfAreaZsecDead_lpft(N,L,NZ)*(1._r8+BulkFactor4Snow_pft(NZ)*SnowOnCanopy_pft(NZ))
+            LeafAreaZsecLive_lpft(N,L,NZ) = LeafAreaZsecLive_lpft(N,L,NZ)*AreaMultiplier
+            StemAreaZsecLive_lpft(N,L,NZ) = StemAreaZsecLive_lpft(N,L,NZ)*AreaMultiplier
+            SurfAreaZsecDead_lpft(N,L,NZ) = SurfAreaZsecDead_lpft(N,L,NZ)*AreaMultiplier
           enddo
 
           if(L.eq.NumCanopyLayers1)then
@@ -1823,8 +1824,8 @@ module SurfaceRadiationMod
       ENDDO
     endif
   ENDDO
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine UpdateOpticalProperties
 !----------------------------------------------------------------------------------------------------
 

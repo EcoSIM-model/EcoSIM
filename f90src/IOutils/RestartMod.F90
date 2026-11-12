@@ -5502,6 +5502,15 @@ implicit none
   associate(NHW => bounds%NHW, NHE => bounds%NHE, NVN => bounds%NVN, NVS => bounds%NVS)
   call PrintInfo('beg '//subname)
   complete=.true.
+  if(allocated(VGThetaR_vr))then
+    call restart_soil_profile_cache(ncid,flag,'VG_THETA_R',VGThetaR_vr, &
+      'van Genuchten residual liquid content per micropore soil volume','m3 m-3',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_ALPHA',VGAlpha_vr, &
+      'van Genuchten inverse pressure scale','MPa-1',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_N',VGN_vr,'van Genuchten shape exponent','none',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_L',VGL_vr,'Mualem pore-connectivity exponent','none',complete)
+    if(.not.complete)call endrun('Van Genuchten checkpoint is missing parameter fields')
+  endif
   ! Pending litter-property updates use the previous geometry before HOUR1
   ! rebuilds it. Other columns retain their geometry until a disturbance.
   call restart_soil_profile_cache(ncid,flag,'VGeomLayer_vr',VGeomLayer_vr, &
@@ -5538,6 +5547,12 @@ implicit none
     'solid thermal conductivity denominator','none',complete)
   call restart_soil_profile_cache(ncid,flag,'ThetaSat_vr',ThetaSat_vr, &
     'water content at conductivity threshold','m3 m-3',complete)
+  if(use_ecosys_drainage)then
+    ! This policy derives air-entry pressure from the conductivity table. It
+    ! must travel with ThetaSat/table caches rather than be reset by STARTS.
+    call restart_soil_profile_cache(ncid,flag,'PSISoilAirEntry_vr',PSISoilAirEntry_vr, &
+      'matric pressure at drainage conductivity threshold','MPa',complete)
+  endif
   call restart_soil_profile_cache(ncid,flag,'PathLenMacPore_vr',PathLenMacPore_vr, &
     'distance between macropores','m',complete)
   call restart_soil_profile_cache(ncid,flag,'MacPoreRadius_vr',MacPoreRadius_vr, &

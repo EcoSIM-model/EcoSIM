@@ -1,5 +1,6 @@
 submodule (HistDataType) HistUpdateSoil
   use GridConsts, only: JZ
+  use data_const_mod, only: spval => DAT_CONST_SPVAL
   use ElmIDMod, only: ielmc, ielmn, ielmp, ipltroot, NumPlantChemElms
   use EcoSIMConfig, only: jcplx => jcplxc
   use EcosimConst, only: natomw, patomw
@@ -35,6 +36,8 @@ submodule (HistDataType) HistUpdateSoil
 contains
 
   module procedure update_hist_soil
+    ! Description:
+    ! Update soil histories and clear skipped profiles when pond layers retire.
     integer :: L
     real(r8) :: micBE(1:NumPlantChemElms)
     real(r8) :: DOM(idom_beg:idom_end)
@@ -74,7 +77,132 @@ contains
         this%h2D_Eco_HR_CO2_vr(ncol,L)    = ECO_HR_CO2_vr(L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_Gchem_CO2_prod_vr(ncol,L)= TProd_CO2_geochem_soil_vr(L,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h2D_SoilBulkStress_vr(ncol,L) = SoilBulkModulus4RootPent_vr(L,NY,NX)
-        if(DVOLL<=1.e-8_r8)cycle
+        if(DVOLL<=1.e-8_r8)then
+          ! A retired/vanishing layer has no current sample. Leaving these
+          ! fields untouched repeats its last value until the next restart.
+          this%h2D_QDrainloss_vr(ncol,L)=spval
+          this%h2D_FermOXYI_vr(ncol,L)=spval
+          this%h2D_DOC_vr(ncol,L)=spval
+          this%h2D_DON_vr(ncol,L)=spval
+          this%h2D_DOP_vr(ncol,L)=spval
+          this%h2D_BotDEPZ_vr(ncol,L)=spval
+          this%h2D_acetate_vr(ncol,L)=spval
+          this%h2D_litrC_vr(ncol,L)=spval
+          this%h2D_litrN_vr(ncol,L)=spval
+          this%h2D_litrP_vr(ncol,L)=spval
+          this%h2D_tSOC_vr(ncol,L)=spval
+          this%h2D_POM_C_vr(ncol,L)=spval
+          this%h2D_MAOM_C_vr(ncol,L)=spval
+          this%h2D_microbC_vr(ncol,L)=spval
+          this%h2D_microbN_vr(ncol,L)=spval
+          this%h2D_microbP_vr(ncol,L)=spval
+          this%h2D_AeroBact_PrimS_lim_vr(ncol,L)=spval
+          this%h2D_AeroFung_PrimS_lim_vr(ncol,L)=spval
+          this%h2D_tSOCL_vr(ncol,L)=spval
+          this%h2D_tSON_vr(ncol,L)=spval
+          this%h2D_tSOP_vr(ncol,L)=spval
+          this%h2D_VHeatCap_vr(ncol,L)=spval
+          this%h2D_Root_CO2_vr(ncol,L)=spval
+          this%h2D_NO3_vr(ncol,L)=spval
+          this%h2D_NH4_vr(ncol,L)=spval
+          this%h2D_Aqua_CO2_vr(ncol,L)=spval
+          this%h2D_Aqua_CH4_vr(ncol,L)=spval
+          this%h2D_Aqua_O2_vr(ncol,L)=spval
+          this%h2D_Aqua_N2O_vr(ncol,L)=spval
+          this%h2D_Aqua_NH3_vr(ncol,L)=spval
+          this%h2D_Aqua_N2_vr(ncol,L)=spval
+          this%h2D_Aqua_Ar_vr(ncol,L)=spval
+          this%h2D_Aqua_H2_vr(ncol,L)=spval
+          this%h2D_TEMP_vr(ncol,L)=spval
+          this%h2D_decomp_OStress_vr(ncol,L)=spval
+          this%h2D_RO2Decomp_vr(ncol,L)=spval
+          this%h2D_Decomp_temp_FN_vr(ncol,L)=spval
+          this%h2D_FracLitMix_vr(ncol,L)=spval
+          this%h2D_Decomp_Moist_FN_vr(ncol,L)=spval
+          this%h2D_HeatFlow_vr(ncol,L)=spval
+          this%h2D_HeatUptk_vr(ncol,L)=spval
+          this%h2D_VSPore_vr(ncol,L)=spval
+          this%h2D_FLO_MICP_vr(ncol,L)=spval
+          this%h2D_FLO_MACP_vr(ncol,L)=spval
+          this%h2D_PSI_vr(ncol,L)=spval
+          this%h2D_PsiO_vr(ncol,L)=spval
+          this%h2D_RootH2OUP_vr(ncol,L)=spval
+          this%h2D_cNH4t_vr(ncol,L)=spval
+          this%h2D_cNO3t_vr(ncol,L)=spval
+          this%h2D_cPO4_vr(ncol,L)=spval
+          this%h2D_cEXCH_P_vr(ncol,L)=spval
+          this%h2D_microb_N2fix_vr(ncol,L)=spval
+          this%h2D_ElectricConductivity_vr(ncol,L)=spval
+          this%h2D_HydCondSoil_vr(ncol,L)=spval
+          this%h2D_cyanoBactC_vr(ncol,L)=spval
+          this%h2D_AeroHrBactC_vr(ncol,L)=spval
+          this%h2D_AeroHrBactN_vr(ncol,L)=spval
+          this%h2D_AeroHrBactP_vr(ncol,L)=spval
+          this%h2D_faculDenitC_vr(ncol,L)=spval
+          this%h2D_faculDenitN_vr(ncol,L)=spval
+          this%h2D_faculDenitP_vr(ncol,L)=spval
+          this%h2D_AeroHrFungC_vr(ncol,L)=spval
+          this%h2D_AeroHrFungN_vr(ncol,L)=spval
+          this%h2D_AeroHrFungP_vr(ncol,L)=spval
+          this%h2D_fermentorC_vr(ncol,L)=spval
+          this%h2D_fermentorN_vr(ncol,L)=spval
+          this%h2D_fermentorP_vr(ncol,L)=spval
+          this%h2D_fermentor_frac_vr(ncol,L)=spval
+          this%h2D_acetometgC_vr(ncol,L)=spval
+          this%h2D_acetometgN_vr(ncol,L)=spval
+          this%h2D_acetometgP_vr(ncol,L)=spval
+          this%h2D_acetometh_frac_vr(ncol,L)=spval
+          this%h2D_aeroN2fixC_vr(ncol,L)=spval
+          this%h2D_aeroN2fixN_vr(ncol,L)=spval
+          this%h2D_aeroN2fixP_vr(ncol,L)=spval
+          this%h2D_RDECOMPC_SOM_vr(ncol,L)=spval
+          this%h2D_RDECOMPC_BReSOM_vr(ncol,L)=spval
+          this%h2D_RDECOMPC_SorpSOM_vr(ncol,L)=spval
+          this%h2D_MicrobAct_vr(ncol,L)=spval
+          this%h3D_MicrobActCps_vr(ncol,L,:)=spval
+          this%h3D_SOMHydrylScalCps_vr(ncol,L,:)=spval
+          this%h3D_HydrolCSOMCps_vr(ncol,L,:)=spval
+          this%h2D_anaeN2FixC_vr(ncol,L)=spval
+          this%h2D_anaeN2FixN_vr(ncol,L)=spval
+          this%h2D_anaeN2FixP_vr(ncol,L)=spval
+          this%h2D_NH3OxiBactC_vr(ncol,L)=spval
+          this%h2D_NH3OxiBactN_vr(ncol,L)=spval
+          this%h2D_NH3OxiBactP_vr(ncol,L)=spval
+          this%h2D_NO2OxiBactC_vr(ncol,L)=spval
+          this%h2D_NO2OxiBactN_vr(ncol,L)=spval
+          this%h2D_NO2OxiBactP_vr(ncol,L)=spval
+          this%h2D_CH4AeroOxiC_vr(ncol,L)=spval
+          this%h2D_CH4AeroOxiN_vr(ncol,L)=spval
+          this%h2D_CH4AeroOxiP_vr(ncol,L)=spval
+          this%h2D_tRespGrossHeterUlm_vr(ncol,L)=spval
+          this%h2D_tRespGrossHeter_vr(ncol,L)=spval
+          this%h2D_H2MethogenC_vr(ncol,L)=spval
+          this%h2D_H2MethogenN_vr(ncol,L)=spval
+          this%h2D_H2MethogenP_vr(ncol,L)=spval
+          this%h2D_hydrogMeth_frac_vr(ncol,L)=spval
+          this%h2D_TSolidOMActC_vr(ncol,L)=spval
+          this%h2D_TSolidOMActCDens_vr(ncol,L)=spval
+          this%h2D_tOMActCDens_vr(ncol,L)=spval
+          this%h2D_RCH4ProdAcetcl_vr(ncol,L)=spval
+          this%h2D_RCH4ProdHydrog_vr(ncol,L)=spval
+          this%h2D_RCH4Oxi_aero_vr(ncol,L)=spval
+          this%h2D_RCH4Oxi_anmo_vr(ncol,L)=spval
+          this%h2D_RFerment_vr(ncol,L)=spval
+          this%h2D_RDen_NO3toNO2_vr(ncol,L)=spval
+          this%h2D_RNit_NO2toNO3_vr(ncol,L)=spval
+          this%h2D_nh3oxi_vr(ncol,L)=spval
+          this%h2D_N2Oprod_vr(ncol,L)=spval
+          this%h2D_RootAR_vr(ncol,L)=spval
+          this%h2D_PAR_RAD_vr(ncol,L)=spval
+          this%h2D_RootAR2soil_vr(ncol,L)=spval
+          this%h2D_RootAR2Root_vr(ncol,L)=spval
+          this%h2D_RootMassC_vr(ncol,L)=spval
+          this%h2D_RootMassN_vr(ncol,L)=spval
+          this%h2D_RootMassP_vr(ncol,L)=spval
+          this%h2D_rVSICE_vr(ncol,L)=spval
+          this%h2D_rVSM_vr(ncol,L)=spval
+          cycle
+        endif
 
         call sumDOML(L,NY,NX,DOM)
         call sumMicBiomLayL(L,NY,NX,micBE,I,J)

@@ -135,7 +135,7 @@ contains
   this%h1D_CanPhenol_WSTRSS_ptc(nptc)=0._r8
   this%h1D_CanPhenol_TSTRSS_ptc(nptc)=0._r8
   this%h1D_STOML_RSC_H2O_ptc(nptc)  = 0._r8
-  this%h1D_BLYR_RSC_H2O_ptc(nptc)  = 0._r8
+  this%h1D_BLYR_RS_H2O_ptc(nptc)  = 0._r8
   this%h1D_BLYR_RSC_HEAT_ptc(nptc)  = 0._r8
   this%h1D_CdH2ORootxSoil_ptc(nptc) = 0._r8
   this%h1D_TRANSPN_ptc(nptc)       = 0._r8

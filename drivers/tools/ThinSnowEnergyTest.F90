@@ -110,6 +110,21 @@ program ThinSnowEnergyTest
   call check_close('merged mass',sum(VLDrySnoWE_snvr),BeforeWater)
   call check_close('single occupied merged layer',real(nsnol_col(1,1),r8),1._r8)
 
+  ! The substep solver may empty one snow layer after accepting phase change.
+  ! Its hourly heat remains part of the budget alongside a surviving layer.
+  call reset_state()
+  call set_layer(2,2.e-4_r8,265._r8)
+  XPhaseChangeHeatL_snvr(1,1,1)=-8.e-3_r8
+  XPhaseChangeHeatL_snvr(2,1,1)=2.e-3_r8
+  call SnowMassUpdate(1,1,1,1)
+  call check_close('phase heat from disappeared and surviving layers',THeatSnowThaw_col(1,1),-6.e-3_r8)
+
+  ! Phase heat also survives complete snowpack disappearance.
+  call reset_state()
+  XPhaseChangeHeatL_snvr(1,1,1)=-8.e-3_r8
+  call SnowMassUpdate(1,1,1,1)
+  call check_close('phase heat from completely disappeared snow',THeatSnowThaw_col(1,1),-8.e-3_r8)
+
   ! Optional coupling outputs are defined even when no transfer occurs.
   call reset_state()
   ReturnedWater=-1._r8; ReturnedHeat=-1._r8

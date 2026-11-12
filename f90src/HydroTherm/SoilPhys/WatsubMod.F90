@@ -130,7 +130,6 @@ module WatsubMod
   !
   call InitSoilHydrauics(NHW,NHE,NVN,NVS)
 
-  !if(lverb)  write(*,*)'DYNAMIC LOOP FOR FLUX CALCULATIONS'
 !  dtime=0._r8
   ! iterate for NPH times
   D3320: DO M=1,NPH
@@ -176,8 +175,9 @@ module WatsubMod
 !------------------------------------------------------------------------------------------
 
   subroutine ExitSoilHydroUpdate(NHW,NHE,NVN,NVS)
-  ! Diagnose the frozen boundary from the final hydrology solution, then commit
-  ! water, ice and temperature states and update surface PAR for later processes.
+  ! Description:
+  ! Diagnose the frozen boundary and commit accepted water, ice, temperature
+  ! and heat capacity before later processes update the material inventories.
   implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
   integer :: NX,NY,L
@@ -213,6 +213,9 @@ module WatsubMod
         !micropore water change due to freeze-thaw:=final-initial
         DVLiceMicP_vr(L,NY,NX)       = VLiceMicP1_vr(L,NY,NX)+VLiceMacP1_vr(L,NY,NX)-VLiceMicP_vr(L,NY,NX)-VLiceMacP_vr(L,NY,NX)
 
+        ! Commit accepted capacity with temperature before biology/disturbance
+        ! can change the organic pools used by the later diagnostic refresh.
+        VHeatCapacity_vr(L,NY,NX) = VHeatCapacity1_vr(L,NY,NX)
         TKS_vr(L,NY,NX)        = TKSoil1_vr(L,NY,NX)
         VLWatMicP_vr(L,NY,NX)  = VLWatMicP1_vr(L,NY,NX)
         VLWatMicPX_vr(L,NY,NX) = VLWatMicPX1_vr(L,NY,NX)
@@ -432,13 +435,6 @@ module WatsubMod
           exit
         ENDIF
       ENDDO D65
-      if(NX==4 .and. .false.)then
-      write(994,*)I*1000+J
-      write(994,*)'micl',(VLWatMicP_vr(L,NY,NX),L=NUM_col(NY,NX),NL_col(NY,NX))
-      write(994,*)'mici',(VLiceMicP_vr(L,NY,NX),L=NUM_col(NY,NX),NL_col(NY,NX))
-      write(994,*)'macl',(VLWatMacP_vr(L,NY,NX),L=NUM_col(NY,NX),NL_col(NY,NX))
-      write(994,*)'maci',(VLiceMacP_vr(L,NY,NX),L=NUM_col(NY,NX),NL_col(NY,NX))
-      endif
       D30: DO L=NUM_col(NY,NX),NL_col(NY,NX)
         !
         !   ENTER STATE VARIABLES AND DRIVERS INTO LOCAL ARRAYS
@@ -1096,6 +1092,9 @@ module WatsubMod
   end subroutine XBoundaryFlowM
 !------------------------------------------------------------------------------------------
   subroutine Summarize3DFlowM(I,J,M,NHW,NHE,NVN,NVS,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
+  ! Description:
+  ! Assemble accepted soil face transfers and freeze/thaw, tallying internal
+  ! lateral water and heat separately from external drainage and vertical flow.
   implicit none
   integer, intent(in) :: I,J,M
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -1176,14 +1175,23 @@ module WatsubMod
 
                 IF((N.EQ.iWestEastDirection .AND. NX.EQ.NHW .AND. NHW.LT.NHE) .OR. & !western boundary
                   (N.EQ.iNorthSouthDirection .AND. NY.EQ.NVN .AND. NVN.LT.NVS)) THEN !northern boundary 
+                  ! External boundary heat is already in the drainage ledger.
+                  ! Only exchanges with another active column enter this tally.
+                  HeatLateral2Cell_col(N2,N1)=HeatLateral2Cell_col(N2,N1) &
+                    -HeatFlow2Soili_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
                   QLaterFlow2Cell_col(N2,N1)  = QLaterFlow2Cell_col(N2,N1)-WaterFlow2Micpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)-WaterFlow2Macpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
                   QLaterFlow2CellM_col(N2,N1) = QLaterFlow2CellM_col(N2,N1)-WaterFlow2Micpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)-WaterFlow2Macpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
                   
                 ELSEIF((N.EQ.iWestEastDirection .AND. NX.EQ.NHE .AND. NHW.LT.NHE) .OR. & !eastern boundary
                   (N.EQ.iNorthSouthDirection .AND. NY.EQ.NVS .AND. NVN.LT.NVS)) THEN !southern boundary 
+                  HeatLateral2Cell_col(N2,N1)=HeatLateral2Cell_col(N2,N1) &
+                    +sum(HeatFlow2Soili_3D(N,first_face:last_face,N2,N1))
                   QLaterFlow2Cell_col(N2,N1)  = QLaterFlow2Cell_col(N2,N1)+sum(WaterFlow2Micpt_3D(N,first_face:last_face,N2,N1))+sum(WaterFlow2Macpt_3D(N,first_face:last_face,N2,N1))
                   QLaterFlow2CellM_col(N2,N1) = QLaterFlow2CellM_col(N2,N1)+sum(WaterFlow2Micpt_3D(N,first_face:last_face,N2,N1))+sum(WaterFlow2Macpt_3D(N,first_face:last_face,N2,N1))
                 ELSEIF(CHECKGRID)THEN
+                  HeatLateral2Cell_col(N2,N1)=HeatLateral2Cell_col(N2,N1) &
+                    +sum(HeatFlow2Soili_3D(N,first_face:last_face,N2,N1)) &
+                    -HeatFlow2Soili_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
                   QLaterFlow2Cell_col(N2,N1)  = QLaterFlow2Cell_col(N2,N1)+sum(WaterFlow2Micpt_3D(N,first_face:last_face,N2,N1))-WaterFlow2Micpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4) &
                     +sum(WaterFlow2Macpt_3D(N,first_face:last_face,N2,N1))-WaterFlow2Macpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
                   QLaterFlow2CellM_col(N2,N1) = QLaterFlow2CellM_col(N2,N1)+sum(WaterFlow2Micpt_3D(N,first_face:last_face,N2,N1))-WaterFlow2Micpt_3D(N,SoilFaceSlot(N,N3,N6),N5,N4) &
@@ -1419,7 +1427,11 @@ module WatsubMod
             TWaterPlantRoot2SoilXM_col(NY,NX) = TWaterPlantRoot2SoilXM_col(NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
             TWaterPlantRoot2SoilX_col(NY,NX) = TWaterPlantRoot2SoilX_col(NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
 
-            if(dWaterPlantRoot2SoilPrev_vr(L,NY,NX)>0._r8)then              
+            if(dWaterPlantRoot2SoilPrev_vr(L,NY,NX)>0._r8)then
+              ! The previous-hour transfer is applied here. Tally its accepted
+              ! donor enthalpy in both directions for the delayed-transfer ledger.
+              THeatPlantRoot2SoilPrev_vr(L,NY,NX)=THeatPlantRoot2SoilPrev_vr(L,NY,NX) &
+                +dHeatPlantRoot2SoilPrev_vr(L,NY,NX)
               VHeatCapacity1_vr(L,NY,NX) = VHeatCapacity1_vr(L,NY,NX)+cpw*dWaterPlantRoot2SoilPrev_vr(L,NY,NX)
               if(L.EQ.NUM_col(NY,NX))then
                 TKSoil1_vr(L,NY,NX)  = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
@@ -1489,14 +1501,7 @@ module WatsubMod
           ENDIF
         ENDIF
       ENDDO D13
-!      if(NY==1.and.NX==6)then
-!        write(996,*)('-',L=1,100)
-!        write(996,*)I*1000+J/24.,'M=',M,NY,NX
-!        write(996,*)'dwat=',dwat-dwat1
-!        write(996,*)'irrig=',IrrigSubsurf_col(NY,NX)
-!        write(996,*)'updatedflow=',dflow_mic,dflow_mac,dflow_mac+dflow_mic
-!        write(994,*)'updatedflow=',dflow_mic,dflow_mac, 'tot=',dflow_mac+dflow_mic
-!      endif
+
     ENDDO D12
   ENDDO D11
   call PrintInfo('end '//subname)
@@ -2145,8 +2150,9 @@ module WatsubMod
 !------------------------------------------------------------------------------------------
   subroutine MacropXgridFLow(N,N1,N2,N3,N4,N5,N6,WaterMacpFlow,HeatByFlowMacP,LInvalidMacP)
   !
-  !Description
-  !Macropore flow across internal grids
+  ! Description:
+  ! Compute internal macropore water and donor-temperature heat transfers.
+  ! Limit upward overflow to liquid water available in the lower layer.
   implicit none
   integer, intent(in) :: N          !flow direction
   integer, intent(in) :: N1,N2,N3   !source grid
@@ -2199,7 +2205,11 @@ module WatsubMod
     ENDIF
 
     IF(N.EQ.iVerticalDirection)THEN
-      WaterMacpFlow=WaterMacpFlow+AZMIN1(VLairMacP_vr(N6,N5,N4))
+      ! Negative air space includes ice expansion; it is not a liquid donor.
+      ! Bound the accepted upward transfer before computing its heat and solute
+      ! transport, as for the other Darcy fluxes. Retain excess ice in place.
+      WaterMacpFlow=AMAX1(-AZMAX1(VLWatMacP1_vr(N6,N5,N4)*dts_wat), &
+        WaterMacpFlow+AZMIN1(VLairMacP_vr(N6,N5,N4)))
     ENDIF
 
     if(abs(WaterMacpFlow).LT.tiny_wat)then

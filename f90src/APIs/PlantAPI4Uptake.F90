@@ -1,4 +1,8 @@
 module PlantAPI4Uptake
+  ! Description:
+  ! Transfer column and PFT state to/from the uptake workspace, preserving
+  ! prescribed plant existence separately from snow-exposed exchange area.
+  use EcoSIMCtrlMod, only: ldo_sp_mode
 !
 ! interface to integrate the plant model
 ! for prescribed phenology
@@ -54,11 +58,17 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantUptakeAPISend(I,J,NY,NX)
-
+  ! Description:
+  ! Load the current column's plant, soil and atmospheric inputs into the uptake
+  ! workspace, including its hourly canopy-exposure diagnostic.
   implicit none
   integer, intent(in) :: I,J,NY,NX
   integer :: M,L,NZ,N,NB,K
 
+  ! Current root transfers are accumulated after hydrology and applied next
+  ! hour. Reset the SP workspace per column, including its unused layer slots.
+  plt_ew%TWaterPlantRoot2Soil_vr=0._r8
+  plt_ew%THeatLossRoot2Soil_vr=0._r8
   !sent variables also modified
   plt_site%PlantPopu_col           = PlantPopu_col(NY,NX)              !total plant population in the column
   plt_site%ZERO                    = ZERO                              !numerical threshold
@@ -75,6 +85,7 @@ implicit none
   plt_site%ALT                     = SurfElevation_col(NY,NX)                    !column altitude [m]
   plt_ew%TKSnow                    = TKSnow_snvr(1,NY,NX)              !surface snow temperature
   plt_ew%SnowDepth                 = SnowDepth_col(NY,NX)              !total snow depth
+  plt_ew%canopy_exposed_col        = canopy_exposed_col(NY,NX)         !hourly exposed-canopy flag for this column
   plt_ew%RawIsoTAtm2CanopySinkZ_col   = RawIsoTAtm2CanopySinkZ_col(NY,NX)    !aboveground canopy resistance,  computed in the radiation code
   plt_ew%TairK                     = TairK_col(NY,NX)                  !air temperature
   plt_ew%RoughnessLength               = RoughnessLength_col(NY,NX)            !computed in the radiation coce
@@ -99,6 +110,8 @@ implicit none
   plt_ew%QVegET_col                = QVegET_col(NY,NX)                 !canopy evapotranspiration, reset to zero in hour1.F90
   plt_ew%VapXAir2Canopy_col        = VapXAir2Canopy_col(NY,NX)         !canopy evaporation, reset to zero in hour1.F90
   plt_ew%CanopyHeatStor_col        = CanopyHeatStor_col(NY,NX)         !canopy heat storage, reset to zero in hour1.F90
+  plt_ew%HeatSensVapAir2Canopy_col        = HeatSensVapAir2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
+  plt_ew%HeatPrecAir2Canopy_col        = HeatPrecAir2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
   plt_ew%HeatFlx2Canopy_col        = HeatFlx2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
   plt_ew%LWRadCanG                 = LWRadCanG_col(NY,NX)              !longwave radiation onto groud, reset to zero in hour1.F90
   DO L=1,NK_col(NY,NX)
@@ -135,6 +148,15 @@ implicit none
         else
           IsPlantActive_pft(NZ,NY,NX)=iFalse
       endif
+    elseif(ldo_sp_mode)then
+      ! Burial disables atmospheric exchange, not the prescribed PFT itself.
+      ! Keep it eligible for the zero-exchange fallback, which clears old fluxes
+      ! while retaining tissue water and intercepted stores through snow cover.
+      if(CanopyLeafArea_pft(NZ,NY,NX)+CanopyStemSurfArea_pft(NZ,NY,NX)>ZERO4LeafVar_pft(NZ,NY,NX))then
+        IsPlantActive_pft(NZ,NY,NX)=iTrue
+      else
+        IsPlantActive_pft(NZ,NY,NX)=iFalse
+      endif
     else
       if(LeafStalkAreaAct_pft(NZ,NY,NX).GT.ZERO4LeafVar_pft(NZ,NY,NX))then
         IsPlantActive_pft(NZ,NY,NX)=iTrue
@@ -147,8 +169,12 @@ implicit none
     plt_morph%RootSingleVesselArea_pft(NZ)     = RootSingleVesselArea_pft(NZ,NY,NX)
     plt_ew%ETCanopy_CumYr_pft(NZ)              = ETCanopy_CumYr_pft(NZ,NY,NX)
     plt_ew%ENGYX_pft(NZ)                       = ENGYX_pft(NZ,NY,NX)
+    plt_ew%VHeatCapCanopy_pft(NZ)                = VHeatCapCanopy_pft(NZ,NY,NX)
     plt_morph%NGTopRootLayer_pft(NZ)        = 1
     plt_morph%LeafStalkAreaAct_pft(NZ)      = LeafStalkAreaAct_pft(NZ,NY,NX)      !pft leaf+stalk area
+    plt_morph%StandDeadSurfAreaAct_pft(NZ)  = StandDeadSurfAreaAct_pft(NZ,NY,NX)
+    plt_morph%StandDeadSurfArea_pft(NZ)     = StandDeadSurfArea_pft(NZ,NY,NX)
+    plt_biom%StandDeadStrutElms_pft(:,NZ)   = StandDeadStrutElms_pft(:,NZ,NY,NX)
     plt_morph%HypocotHeight_pft(NZ)         = HypocotHeight_pft(NZ,NY,NX)      !(approximately) plant height
     plt_morph%NumOfBranches_pft(NZ)         = NumOfBranches_pft(NZ,NY,NX)      !number of branches, can be set to one for simplicity
     plt_ew%RawIsoTCanopy2Atm_pft(NZ)        = RawIsoTCanopy2Atm_pft(NZ,NY,NX)    !canopy resistance, updated iteratively
@@ -260,6 +286,7 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantUPtakeAPIRecv(I,J,NY,NX)
+  ! Description:
   ! Transfer prescribed-canopy fluxes and persistent exchange state to native arrays.
 
   implicit none
@@ -278,8 +305,15 @@ implicit none
   QVegET_col(NY,NX)                = plt_ew%QVegET_col
   VapXAir2Canopy_col(NY,NX)        = plt_ew%VapXAir2Canopy_col
   CanopyHeatStor_col(NY,NX)        = plt_ew%CanopyHeatStor_col
+  HeatSensVapAir2Canopy_col(NY,NX)        = plt_ew%HeatSensVapAir2Canopy_col
+  HeatPrecAir2Canopy_col(NY,NX)        = plt_ew%HeatPrecAir2Canopy_col
   HeatFlx2Canopy_col(NY,NX)        = plt_ew%HeatFlx2Canopy_col
   LWRadCanG_col(NY,NX)             = plt_ew%LWRadCanG
+  ! Preserve the accepted root-transfer queue for the next hydrology step.
+  do L=1,NL_col(NY,NX)
+    TWaterPlantRoot2Soil_vr(L,NY,NX)=plt_ew%TWaterPlantRoot2Soil_vr(L)
+    THeatLossRoot2Soil_vr(L,NY,NX)=plt_ew%THeatLossRoot2Soil_vr(L)
+  enddo
   DO NZ=1,NP0_col(NY,NX)
     CdH2ORootxSoil_pft(NZ,NY,NX)     = plt_ew%CdH2ORootxSoil_pft(NZ)
     ENGYX_pft(NZ,NY,NX)              = plt_ew%ENGYX_pft(NZ)
@@ -287,6 +321,8 @@ implicit none
     DeltaTKC_pft(NZ,NY,NX)           = plt_ew%DeltaTKC_pft(NZ)
     CanopyEvapTransLHeat_pft(NZ,NY,NX)     = plt_ew%CanopyEvapTransLHeat_pft(NZ)
     HeatXAir2PCan_pft(NZ,NY,NX)      = plt_ew%HeatXAir2PCan_pft(NZ)
+    HeatStorCanopy_pft(NZ,NY,NX)    = plt_ew%HeatStorCanopy_pft(NZ)
+    VHeatCapCanopy_pft(NZ,NY,NX)    = plt_ew%VHeatCapCanopy_pft(NZ)
     TKC_pft(NZ,NY,NX)                = plt_ew%TKC_pft(NZ)
     Transpiration_pft(NZ,NY,NX)      = plt_ew%Transpiration_pft(NZ)
     VapXAir2Canopy_pft(NZ,NY,NX)     = plt_ew%VapXAir2Canopy_pft(NZ)

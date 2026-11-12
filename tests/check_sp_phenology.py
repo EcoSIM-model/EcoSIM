@@ -182,7 +182,8 @@ def main():
         body = (folder / "run.log").read_text(errors="replace")
         if expected is None:
             message = ("missing PlantPopuLive_pft" if name == "missing-population"
-                       else "prescribed PlantPopuLive_pft must be finite and positive" if name.startswith("invalid-population-")
+                       else "zero-population SP slots require LAI=0" if name == "invalid-population-zero"
+                       else "prescribed PlantPopuLive_pft must be finite and nonnegative" if name.startswith("invalid-population-")
                        else "prescribed PFT CCPOLT must be finite and nonnegative" if name.startswith("invalid-canopy-concentration-")
                        else "prescribed PFT MFRUTL must be finite and at least Root2ndTipLen4uptk" if name.startswith("invalid-axis-length-")
                        else "prescribed PFT IROOTJK must be between 1 and 10" if name.startswith("invalid-root-type-")

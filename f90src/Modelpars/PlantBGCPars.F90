@@ -1,6 +1,6 @@
 module PlantBGCPars
-
-! USES:
+  ! Description:
+  ! Define shared plant process parameters, including canopy snow capacity and area.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts, only : jroots
   use EcoSIMConfig, only : jcplxc
@@ -10,6 +10,11 @@ module PlantBGCPars
   save
   character(len=*),private, parameter :: mod_filename = &
   __FILE__
+  ! Indexed by isnowcept_*: bryophytes, grasses, shrubs, deciduous trees, conifers.
+  real(r8), parameter :: CanopySnowCapacityPerArea(0:4) = &
+    [1.e-4_r8,2.e-4_r8,3.e-4_r8,2.e-3_r8,7.e-3_r8] ! retained SWE capacity [m3/m2]
+  real(r8), parameter :: CanopySnowAreaCoeff(0:4) = &
+    [30._r8,20._r8,70._r8,40._r8,100._r8] ! added interception area per retained SWE [m2/m3]
 !
 !
   real(r8), parameter :: dmax = 0.015_r8          !Eco-evolutionary responses of species distributions to climate change [m]    

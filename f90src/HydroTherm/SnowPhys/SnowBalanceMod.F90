@@ -405,6 +405,9 @@ implicit none
 ! begin_execution
 
   call PrintInfo('beg '//subname)
+  ! Phase change was accepted by the substep solver even if the layer has
+  ! since disappeared or transferred its remaining constituents to the ground.
+  THeatSnowThaw_col(NY,NX)=THeatSnowThaw_col(NY,NX)+XPhaseChangeHeatL_snvr(L,NY,NX)
   !the line below is a hack, and likely a better snow layering scheme is needed.
   if(L.eq.1.and.isclose(TCSnow_snvr(1,NY,NX),spval))then
     TCSnow_snvr(1,NY,NX)=units%Kelvin2Celcius(TairK_col(NY,NX))
@@ -515,7 +518,6 @@ implicit none
     ! reset or compensating external heat input is introduced here.
     IF(VLHeatCapSnow_snvr(L,NY,NX).GT.0._r8)THEN
       TKSnow_snvr(L,NY,NX)=ENGYW/VLHeatCapSnow_snvr(L,NY,NX)
-      THeatSnowThaw_col(NY,NX)=THeatSnowThaw_col(NY,NX)+XPhaseChangeHeatL_snvr(L,NY,NX)
     ENDIF
     !there is no snow in layer L, shrink, and add those mass to layer below?
   ELSE

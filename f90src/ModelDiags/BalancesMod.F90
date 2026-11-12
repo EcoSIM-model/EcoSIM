@@ -1,12 +1,18 @@
 module BalancesMod
-  use data_kind_mod,     only: r8 => DAT_KIND_R8
+  ! Description:
+  ! Summarize native column inventories and check water, tracer and heat budgets.
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use data_kind_mod,     only: r8 => DAT_KIND_R8,yearIJ_type
   use CanopyDataType,    only: QVegET_col
   use GridDataType,      only: NU_col, NL_col
-  use EcoSimConst,       only: DENSICE
-  use abortutils,        only: endrun
-  use EcoSIMCtrlMod,     only: fixWaterLevel,etimer
+  use EcoSimConst,       only: DENSICE,cpo,cpw,cpi
+  use SOMDataType, only: SoilOrgM_vr
+  use MiniFuncMod, only: gOC_to_m3_OM
+  use EcoSIMConfig, only: is_cold_run
+  use abortutils,        only: endrun,iulog
+  use EcoSIMCtrlMod,     only: fixWaterLevel,etimer,ldo_radiation_test
   use AqueChemDatatype,  only: trcg_mass_cumerr_col
-  use PlantMgmtDataType, only: iDayPlanting_pft, iDayPlantHarvest_pft
+  use PlantMgmtDataType, only: iDayPlanting_pft, iDayPlantHarvest_pft,NP0_col
   use EcoSIMCtrlMod,     only: iVerbLevel
   use NumericalAuxMod
   use RootDataType
@@ -35,9 +41,8 @@ implicit none
 contains
 
   subroutine BegCheckBalances(I,J,NHW,NHE,NVN,NVS)  
-  !
-  !Description
-  !Prepare for next mass balance check
+  ! Description:
+  ! Record beginning inventories for the next hourly conservation checks.
   implicit none
   integer, intent(in) :: I,J,NHW,NHE,NVN,NVS
   integer :: NY,NX,idg,ids,L
@@ -46,7 +51,22 @@ contains
     DO  NY=NVN,NVS
       WaterErr_col(NY,NX)           = WatMass_col(NY,NX)
       TillageLitr2SoilH2O_col(NY,NX) = 0._r8
-      HeatErr_col(NY,NX)            = HeatStore_col(NY,NX)
+      ! ResetFluxArrays clears column accumulators. Recompute the physical
+      ! beginning store; retained ENGYX supplies the previous canopy inventory.
+      ! Startup organic pools include initialized dissolved/biological material
+      ! added after the first heat-capacity estimate. Use the same mass-based
+      ! litter capacity as the thermal solver before recording initial energy.
+      if(is_cold_run().and.etimer%is_first_step())then
+        VHeatCapacity_vr(0,NY,NX)=cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,0,NY,NX)) &
+          +cpw*VLWatMicP_vr(0,NY,NX)+cpi*VLiceMicP_vr(0,NY,NX)
+      endif
+      call SumUpHeatStorage(NY,NX,.false.)
+      CanopyHeatBeg_col(NY,NX)=sum(ENGYX_pft(1:NP0_col(NY,NX),NY,NX))
+      LitterHeatBeg_col(NY,NX)=VHeatCapacity_vr(0,NY,NX)*TKS_vr(0,NY,NX)
+      SoilHeatBeg_col(NY,NX)=HeatStore_col(NY,NX)-CanopyHeatStor_col(NY,NX) &
+        -LitterHeatBeg_col(NY,NX)-SnowEngyEnd_col(NY,NX)
+      HeatErr_col(NY,NX)=SnowEngyEnd_col(NY,NX)+CanopyHeatBeg_col(NY,NX) &
+        +LitterHeatBeg_col(NY,NX)+SoilHeatBeg_col(NY,NX)
       SnowEngyBeg_col(NY,NX)        = SnowEngyEnd_col(NY,NX)
       CanopyWaterMassBeg_col(NY,NX) = CanopyWaterMassEnd_col(NY,NX)
       SnowMassBeg_col(NY,NX)        = SnowMassEnd_col(NY,NX)
@@ -108,11 +128,18 @@ contains
   end subroutine SummarizeSnowMass
 !------------------------------------------------------------------------------------------
   subroutine SumUpWaterStorage(NY,NX)
-
+  ! Description:
+  ! Sum retained canopy, snow, litter and soil water for the column ledger.
   implicit none
   integer, intent(in) :: NY,NX
   integer :: L
 
+  ! Radiation-only runs skip extracts, but their existing canopy stocks remain.
+  if(ldo_radiation_test)then
+    WatHeldOnCanopy_col(NY,NX)=sum(WatHeldOnCanopy_pft(1:NP0_col(NY,NX),NY,NX))
+    CanopyBiomWater_col(NY,NX)=sum(CanopyBiomWater_pft(1:NP0_col(NY,NX),NY,NX))
+    SnowOnCanopy_col(NY,NX)=sum(SnowOnCanopy_pft(1:NP0_col(NY,NX),NY,NX))
+  endif
   !canopy
   CanopyWaterMassEnd_col(NY,NX) = WatHeldOnCanopy_col(NY,NX)+CanopyBiomWater_col(NY,NX)+SnowOnCanopy_col(NY,NX)
   !snow  
@@ -130,10 +157,6 @@ contains
   DO L=NU_col(NY,NX),NL_col(NY,NX)
     SoilWatMassEnd_col(NY,NX) = SoilWatMassEnd_col(NY,NX)+ VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)+(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))*DENSICE
   ENDDO
-!  write(444,*)'bal',('=x',L=1,50)
-!  write(444,*)(VLWatMicP_vr(L,NY,NX),L=NU_col(NY,NX),NL_col(NY,NX))
-!  write(444,*)(VLWatMacP_vr(L,NY,NX),L=NU_col(NY,NX),NL_col(NY,NX))
-!  write(444,*)((VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))*DENSICE,L=NU_col(NY,NX),NL_col(NY,NX))
 
   WatMass_col(NY,NX)=WatMass_col(NY,NX)+SoilWatMassEnd_col(NY,NX)
 
@@ -142,10 +165,14 @@ contains
   end subroutine SumUpWaterStorage
 
 !------------------------------------------------------------------------------------------
-  subroutine SumUpHeatStorage(NY,NX)
+  subroutine SumUpHeatStorage(NY,NX,AccumulateLandscape)
+  ! Description:
+  ! Sum sensible heat in snow, canopy, litter and soil; optionally add to the
+  ! landscape total, leaving that accumulator unchanged for beginning checks.
 
   implicit none
   integer, intent(in) :: NY,NX
+  logical, optional, intent(in) :: AccumulateLandscape ! add this column to landscape total [-]
   integer :: L
 
   HeatStore_col(NY,NX) = 0._r8
@@ -155,6 +182,9 @@ contains
     HeatStore_col(NY,NX) = HeatStore_col(NY,NX)+ VLHeatCapSnow_snvr(L,NY,NX)*TKSnow_snvr(L,NY,NX)    
   ENDDO
   SnowEngyEnd_col(NY,NX) = HeatStore_col(NY,NX)
+  ! Radiation-only runs have no canopy exchange; retain the unchanged stock
+  ! after the hourly column reset rather than interpreting it as a heat loss.
+  if(ldo_radiation_test)CanopyHeatStor_col(NY,NX)=sum(ENGYX_pft(1:NP0_col(NY,NX),NY,NX))
   !add canopy + litter
   HeatStore_col(NY,NX)   = HeatStore_col(NY,NX)+CanopyHeatStor_col(NY,NX) + TKS_vr(0,NY,NX)*VHeatCapacity_vr(0,NY,NX)
 
@@ -163,18 +193,23 @@ contains
     HeatStore_col(NY,NX) = HeatStore_col(NY,NX)+ VHeatCapacity_vr(L,NY,NX)*TKS_vr(L,NY,NX)
   ENDDO
 
-  HeatStore_lnd = HeatStore_lnd+HeatStore_col(NY,NX)
+  if(present(AccumulateLandscape))then
+    if(AccumulateLandscape)HeatStore_lnd=HeatStore_lnd+HeatStore_col(NY,NX)
+  else
+    HeatStore_lnd=HeatStore_lnd+HeatStore_col(NY,NX)
+  endif
 
   end subroutine SumUpHeatStorage
 !------------------------------------------------------------------------------------------
 
-  subroutine EndCheckBalances(I,J,NHW,NHE,NVN,NVS)  
-  !
-  !Description
-  !Do mass balance check
+  subroutine EndCheckBalances(yearIJ,NHW,NHE,NVN,NVS)
+  ! Description:
+  ! Compare end inventories against beginning inventories and accepted transfers.
+  ! Heat uses sensible storage C*T, with latent phase-change heat as a flux.
   implicit none
-  integer, intent(in) :: I,J,NHW,NHE,NVN,NVS
-  integer :: NY,NX
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NHW,NHE,NVN,NVS
+  integer :: NY,NX,I,J
   real(r8), parameter :: err_h2o=1.e-4_r8
   real(r8), parameter :: err_engy=1.e-6_r8
   real(r8) :: WaterErr_test
@@ -194,6 +229,7 @@ contains
   integer  :: ii,idg,ids,L
   real(r8) :: trcs_solml_drib_col(ids_beg:ids_end)
 
+  I=yearIJ%I;J=yearIJ%J
   call SummarizeTracerMass(I,J,NHW,NHE,NVN,NVS)
 
   DO  NX=NHW,NHE
@@ -216,18 +252,26 @@ contains
       SnowMassErr_test = SnowMassBeg_col(NY,NX)-SnowMassEnd_col(NY,NX)+Prec2Snow_col(NY,NX)-QSnowH2Oloss_col(NY,NX)
 
       canopyH2Oerr_test=CanopyWaterMassBeg_col(NY,NX)-CanopyWaterMassEnd_col(NY,NX)+RainIntceptByCanopy_col(NY,NX) &
-        +QVegET_col(NY,NX)-TPlantRootH2OUptake_col(NY,NX)-QCanopyWatLoss2Dist_col(NY,NX)+SnowIntceptByCanopy_col(NY,NX)
+        +QVegET_col(NY,NX)-sum(TWaterPlantRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX)) &
+        -QCanopyWatLoss2Dist_col(NY,NX)+SnowIntceptByCanopy_col(NY,NX)
 
       if(fixWaterLevel)then
         WaterErr_test = WaterErr_col(NY,NX)-WatMass_col(NY,NX)
       else      
         WaterErr_test = WaterErr_col(NY,NX)-WatMass_col(NY,NX)+PrecAtm_col(NY,NX)+Irrigation_col(NY,NX)+QLaterFlow2Cell_col(NY,NX) &
           +RainLitr_col(NY,NX)+VapXAir2GSurf_col(NY,NX)+QVegET_col(NY,NX)+QRunSurf_col(NY,NX) &
-          -QDrain_col(NY,NX)-QDischarg2WTBL_col(NY,NX)+TPlantRootH2OUptake_col(NY,NX)-QCanopyWatLoss2Dist_col(NY,NX)
+          -QDrain_col(NY,NX)-QDischarg2WTBL_col(NY,NX)+TPlantRootH2OUptake_col(NY,NX)-QCanopyWatLoss2Dist_col(NY,NX) &
+          -sum(TWaterPlantRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX))
       endif
+      ! The plant solver follows hydrology: this hour's canopy-to-soil transfer
+      ! is queued until the next hour. Balance applied old minus queued new
+      ! transfers; treating the new root uptake as already debited loses heat.
       HeatErr_test = HeatErr_col(NY,NX)-HeatStore_col(NY,NX)+THeatRootRelease_col(NY,NX) &
+        -sum(THeatLossRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX)) &
         +HeatSource_col(NY,NX)+Eco_NetRad_col(NY,NX)+Eco_Heat_Latent_col(NY,NX)+Eco_Heat_Sens_col(NY,NX)&
-        +PrecHeat_col(NY,NX)+THeatSoiThaw_col(NY,NX)+THeatSnowThaw_col(NY,NX)+HeatRunSurf_col(NY,NX) &
+        +HeatSensVapAir2Surf_col(NY,NX)+HeatSensVapAir2Canopy_col(NY,NX) &
+        +HeatPrecAir2Canopy_col(NY,NX)-HeatCanopyUnload_col(NY,NX) &
+        +PrecHeat_col(NY,NX)+THeatSoiThaw_col(NY,NX)+THeatSnowThaw_col(NY,NX)+HeatRunSurf_col(NY,NX)+HeatLateral2Cell_col(NY,NX) &
         -HeatDrain_col(NY,NX)-HeatDischar_col(NY,NX)-CanopyHeatLoss2Dist_col(NY,NX)
 
       if(abs(WaterErr_test)>err_h2o .and. etimer%get_nstep()>1)then
@@ -358,7 +402,6 @@ contains
             write(111,*)'xroot beg_end_delta mass     =',trcg_TotalMass_beg_col(idg,NY,NX)-trcg_rootMass_beg_col(idg,NY,NX),&
               trcg_TotalMass_col(idg,NY,NX)-trcg_rootMass_col(idg,NY,NX),trcg_TotalMass_beg_col(idg,NY,NX)-trcg_rootMass_beg_col(idg,NY,NX) &
               -(trcg_TotalMass_col(idg,NY,NX)-trcg_rootMass_col(idg,NY,NX))  
-!            write(194,*)'balmas',trcg_TotalMass_beg_col(idg,NY,NX)-trcg_rootMass_beg_col(idg,NY,NX),trcg_TotalMass_col(idg,NY,NX)-trcg_rootMass_col(idg,NY,NX)  
             write(111,*)'soil beg_end mass delta dmass=',trcg_soilMass_beg_col(idg,NY,NX), trcg_soilMass_col(idg,NY,NX),&
               trcg_soilMass_beg_col(idg,NY,NX)-trcg_soilMass_col(idg,NY,NX)
             write(111,*)'soil2atm         =',trcg_ebu_flx_col(idg,NY,NX)+GasDiff2Surf_flx_col(idg,NY,NX)+Gas_WetDeposit_flx_col(idg,NY,NX)  
@@ -409,23 +452,37 @@ contains
       DO ids=ids_beg,ids_end
         trcs_solml_dribBeg_col(ids,NY,NX)=trcs_solml_drib_col(ids)
       ENDDO        
-      cycle      
-      if(abs(HeatErr_test)>err_engy)then
-        write(110,*)('-',ii=1,50)
-        write(110,*)I+J/24.,'NY,NX,Engy conservation error',NY,NX,HeatErr_test
-        write(110,*)'Init Engy=',HeatErr_col(NY,NX)
-        write(110,*)'Final Engy=',HeatStore_col(NY,NX)
-        write(110,*)'Delta Engy=',HeatStore_col(NY,NX)-HeatErr_col(NY,NX)
-        write(110,*)'Delta snow engy=',SnowEngyEnd_col(NY,NX)-SnowEngyBeg_col(NY,NX)
-        write(110,*)'Heat source=',HeatSource_col(NY,NX)
-        write(110,*)'Net Rad=',Eco_NetRad_col(NY,NX)
-        write(110,*)'Latent Heat=',Eco_Heat_Latent_col(NY,NX)
-        write(110,*)'Sensible Heat=',Eco_Heat_Sens_col(NY,NX)
-        write(110,*)'Heat prec=',PrecHeat_col(NY,NX)
-        write(110,*)'Heat phase change, soil, snow=',THeatSoiThaw_col(NY,NX),THeatSnowThaw_col(NY,NX)
-        write(110,*)'Heat runoff=',HeatRunSurf_col(NY,NX)
-        write(110,*)'Heat drain=',HeatDrain_col(NY,NX)
-        write(110,*)'Heat disch=',HeatDischar_col(NY,NX)
+
+      if(.not.ieee_is_finite(HeatErr_test).or.abs(HeatErr_test)>err_engy)then
+        write(iulog,*)('-',ii=1,50)
+        write(iulog,*)I+J/24.,'NY,NX,Engy conservation error',NY,NX,HeatErr_test
+        write(iulog,*)'Init Engy=',HeatErr_col(NY,NX)
+        write(iulog,*)'Final Engy=',HeatStore_col(NY,NX)
+        write(iulog,*)'Delta Engy=',HeatStore_col(NY,NX)-HeatErr_col(NY,NX)
+        write(iulog,*)'Delta snow engy=',SnowEngyEnd_col(NY,NX)-SnowEngyBeg_col(NY,NX)
+        write(iulog,*)'Root heat applied, queued=',THeatRootRelease_col(NY,NX), &
+          sum(THeatLossRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX))
+        write(iulog,*)'Heat source=',HeatSource_col(NY,NX)
+        write(iulog,*)'Net Rad=',Eco_NetRad_col(NY,NX)
+        write(iulog,*)'Latent Heat=',Eco_Heat_Latent_col(NY,NX)
+        write(iulog,*)'Sensible Heat=',Eco_Heat_Sens_col(NY,NX)
+        write(iulog,*)'Heat prec ground, canopy, unloading=',PrecHeat_col(NY,NX), &
+          HeatPrecAir2Canopy_col(NY,NX),HeatCanopyUnload_col(NY,NX)
+        write(iulog,*)'Heat vapor sensible ground, canopy=',HeatSensVapAir2Surf_col(NY,NX),HeatSensVapAir2Canopy_col(NY,NX)
+        write(iulog,*)'Heat phase change, soil, snow=',THeatSoiThaw_col(NY,NX),THeatSnowThaw_col(NY,NX)
+        write(iulog,*)'Heat lateral soil and snow=',HeatLateral2Cell_col(NY,NX)
+        write(iulog,*)'Heat runoff=',HeatRunSurf_col(NY,NX)
+        write(iulog,*)'Heat drain=',HeatDrain_col(NY,NX)
+        write(iulog,*)'Heat disch=',HeatDischar_col(NY,NX)
+        write(iulog,*)'Delta canopy heat=',CanopyHeatStor_col(NY,NX)-CanopyHeatBeg_col(NY,NX)
+        write(iulog,*)'Delta litter heat=',VHeatCapacity_vr(0,NY,NX)*TKS_vr(0,NY,NX)-LitterHeatBeg_col(NY,NX)
+        write(iulog,*)'Delta soil heat=',HeatStore_col(NY,NX)-CanopyHeatStor_col(NY,NX)-SnowEngyEnd_col(NY,NX) &
+          -VHeatCapacity_vr(0,NY,NX)*TKS_vr(0,NY,NX)-SoilHeatBeg_col(NY,NX)
+        write(iulog,*)'Accepted soil heat=',THeatFlow2Soil_col(NY,NX),THeatSoiThaw_col(NY,NX),HeatSource_col(NY,NX)
+        write(iulog,*)'Accepted litter heat=',HeatFLoByWat2LitR_col(NY,NX),TLitrIceHeatFlxFrez_col(NY,NX)
+        write(iulog,*)'Ground boundary total=',HeatNet2Surf_col(NY,NX)
+        write(iulog,*)'Canopy boundary Rn LE H=',sum(RadNet2Canopy_pft(1:NP0_col(NY,NX),NY,NX)), &
+          sum(CanopyEvapTransLHeat_pft(1:NP0_col(NY,NX),NY,NX)),sum(HeatXAir2PCan_pft(1:NP0_col(NY,NX),NY,NX))
         call endrun('Engy error test failure in '//trim(mod_filename)//' at line',__LINE__)
       endif
 

@@ -66,6 +66,7 @@ implicit none
   integer :: iErosionMode         = -1         !erosion option
   logical :: use_ecosys_drainage = .false.
   character(len=*), parameter :: DefaultSoilHydraulicScheme='ecosim'
+  character(len=*), parameter :: VanGenuchtenSchemeName='van_genuchten'
   character(len=32) :: soil_hydraulic_scheme=DefaultSoilHydraulicScheme
   logical :: plant_model          = .true.
   logical :: microbial_model      = .true.

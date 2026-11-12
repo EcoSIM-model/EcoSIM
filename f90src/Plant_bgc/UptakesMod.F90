@@ -1,7 +1,8 @@
 module UptakesMod
+  ! Description:
   ! Solve plant water uptake, canopy energy balance and coupled gas exchange.
   use, intrinsic :: ieee_arithmetic, only : ieee_is_finite
-  use abortutils, only : endrun
+  use abortutils, only : endrun, iulog
   use data_kind_mod , only : r8 => DAT_KIND_R8,yearIJ_type
   use data_const_mod, only: GravAcceleration=>DAT_CONST_G
   use StomatesMod,    only: StomatalDynamics, PhotosynsDiag
@@ -37,6 +38,18 @@ module UptakesMod
 
   public :: RootUptakes
   public :: InitUptake
+  public :: SolvePassiveCanopyEnergy,PassiveCanopyResult
+  public :: CanopyStemThermalCarbon,CanopyExchangeAreaFraction
+  public :: CanopyVaporResistance
+
+
+  type :: PassiveCanopyResult
+    ! Description:
+    ! Accepted one-hour passive surface state and integrated energy/water fluxes.
+    real(r8) :: temperature,water,snow,capacity,resistance ! K, m3, m3 SWE, MJ/K, h/m
+    real(r8) :: net_radiation,sensible,latent,vapor_enthalpy ! MJ per PFT/cell/hour
+    real(r8) :: water_flux,snow_flux ! m3 per PFT/cell/hour, positive into canopy
+  end type PassiveCanopyResult
 
   contains
   ![header]
@@ -51,16 +64,16 @@ module UptakesMod
 
 
 !----------------------------------------------------------------------------------------------------
-  subroutine RootUptakes(yearIJ)
-!  
-!  Description: MAIN_CALL
-!
-!     THIS subroutine CALCULATES EXCHANGES OF ENERGY, C, N AND P
-!     BETWEEN THE CANOPY AND THE ATMOSPHERE AND BETWEEN ROOTS AND THE SOIL
-!
+  subroutine RootUptakes(yearIJ,LiveExchange_pft,PassiveExchange_pft)
+  ! Description:
+  ! Compute canopy atmospheric exchange and root energy/C/N/P transfers. Live
+  ! exchange follows biological/hydraulic eligibility; standing dead exchanges
+  ! heat and intercepted water independently, using the same exposure geometry.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
-  
+  logical, intent(out) :: PassiveExchange_pft(JP1) ! PFTs producing passive exchanges before management [-]
+  logical, intent(out) :: LiveExchange_pft(JP1) ! PFTs producing live exchanges this hour, before management [-]
+
 
   character(len=*), parameter :: subname='RootUptakes'
   integer :: NN,N,NZ,K,L
@@ -80,22 +93,27 @@ module UptakesMod
   real(r8) :: AirMicPore4Fill_vr(JZ1)  !
   real(r8) :: WatAvail4Uptake_vr(JZ1)
   real(r8) :: TKCX,CdH2ORootxSoil,PrecpHeatbyCanopy
-  real(r8) :: VHeatCapCanopyPrev_pft  !canopy heat capacity, J/K
+  real(r8) :: VHeatCapCanopyPrev_pft  !canopy heat capacity [MJ/cell/K]
   real(r8) :: DIFF
   real(r8) :: PSIGravCanopyHeight               !gravitation potential at effective canopy height [MPa]
   real(r8) :: cumPRootH2OUptake,HeatEvapSens
   real(r8) :: CumPlantHeatLoss2Soil,RawH2OAtm2CanopySinkZ_pft,RawHeatAtm2CanopySinkZ_pft
   real(r8) :: FDMP
+  real(r8) :: DeadHeatCapacity,LiveAreaFraction,DeadAreaColumn,PFTArea,PriorTemperature
   logical  :: HydroActivePlant
   logical  :: HydraulicPathAvailable
   logical  :: SoiLayerHasRoot_rvr(pltpar%jroots,JZ1)
 !     begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                        &
+    HeatSensVapAir2Canopy_col => plt_ew%HeatSensVapAir2Canopy_col, &
+    HeatPrecAir2Canopy_col => plt_ew%HeatPrecAir2Canopy_col, &
     AREA3                     => plt_site%AREA3                    ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
+    canopy_exposed_col        => plt_ew%canopy_exposed_col         ,& !input  :hourly exposed-canopy diagnostic, [-]
     CanopyBiomWater_pft       => plt_ew%CanopyBiomWater_pft        ,& !input  :canopy water content, [m3 d-2]
-    CanopyStemSurfArea_pft    => plt_morph%CanopyStemSurfArea_pft  ,& !input  :plant stem area, [m2 d-2]    
+    CanopyStemSurfArea_pft    => plt_morph%CanopyStemSurfArea_pft  ,& !input  :plant stem area, [m2 d-2]
     RawH2OCanopy2Atm_pft      => plt_photo%RawH2OCanopy2Atm_pft    ,& !input  :canopy boundary layer resistance, [h m-1]
-    RawHeatCanopy2Atm_pft      => plt_photo%RawHeatCanopy2Atm_pft    ,& !input  :canopy sensible-heat boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft     => plt_photo%RawHeatCanopy2Atm_pft   ,& !input  :canopy sensible-heat boundary layer resistance, [h m-1]
     CanopyLeafArea_col        => plt_morph%CanopyLeafArea_col      ,& !input  :grid canopy leaf area, [m2 d-2]
     CanopyLeafSheathC_pft     => plt_biom%CanopyLeafSheathC_pft    ,& !input  :canopy leaf + sheath C, [g d-2]
     CanopySapwoodC_pft        => plt_biom%CanopySapwoodC_pft       ,& !input  :canopy active stalk C, [g d-2]
@@ -105,6 +123,9 @@ module UptakesMod
     IsPlantActive_pft         => plt_pheno%IsPlantActive_pft       ,& !input  :flag for living pft, [-]
     LeafStalkAreaAll_col      => plt_morph%LeafStalkAreaAll_col    ,& !input  :stalk area of combined, each PFT canopy,[m^2 d-2]
     LeafStalkAreaAct_pft      => plt_morph%LeafStalkAreaAct_pft    ,& !input  :plant leaf+stem/stalk area, [m2 d-2]
+    StandDeadSurfAreaAct_pft  => plt_morph%StandDeadSurfAreaAct_pft,& !input  :exposed standing dead area, [m2]
+    StandDeadSurfArea_pft     => plt_morph%StandDeadSurfArea_pft, & !input: total dead area, including buried stems [m2]
+    StandDeadStrutElms_pft    => plt_biom%StandDeadStrutElms_pft   ,& !input  :aboveground standing dead C/N/P, [g]
     MainBranchNum_pft         => plt_morph%MainBranchNum_pft       ,& !input  :number of main branch,[-]
     NP                        => plt_site%NP                       ,& !input  :current number of plant species,[-]
     NU                        => plt_site%NU                       ,& !input  :current soil surface layer number, [-]
@@ -115,15 +136,15 @@ module UptakesMod
     Root1stDepz_raxes         => plt_morph%Root1stDepz_raxes       ,& !input  :root layer depth, [m]
     SeedDepth_pft             => plt_morph%SeedDepth_pft           ,& !input  :seeding depth, [m]
     TKC_pft                   => plt_ew%TKC_pft                    ,& !input  :canopy temperature, [K]
-    StemSpecVolume_pft        => plt_morph%StemSpecVolume_pft      ,& !input  :stalk specific volume, [m3 gC-1]     
+    StemSpecVolume_pft        => plt_morph%StemSpecVolume_pft      ,& !input  :stalk specific volume, [m3 gC-1]
     TairK                     => plt_ew%TairK                      ,& !input  :air temperature, [K]
     WatHeldOnCanopy_pft       => plt_ew%WatHeldOnCanopy_pft        ,& !input  :canopy surface water content, [m3 d-2]
     SnowOnCanopy_pft          => plt_ew%SnowOnCanopy_pft           ,& !input  :snow water equivalent held on canopy, [m3 d-2]
     ZERO4LeafVar_pft          => plt_biom%ZERO4LeafVar_pft         ,& !input  :threshold zero for leaf calculation, [-]
     ZEROS                     => plt_site%ZEROS                    ,& !input  :threshold zero for numerical stability,[-]
     iPlantCalendar_brch       => plt_pheno%iPlantCalendar_brch     ,& !input  :plant growth stage, [-]
-    RawIsoTAtm2CanopySinkZ_col=> plt_ew%RawIsoTAtm2CanopySinkZ_col ,& !input  :isothermal aerodynamic resistance between canopy top and wind ref height in atmosphere, [h m-1]    
-    RawIsoTCanopy2Atm_pft     => plt_ew%RawIsoTCanopy2Atm_pft      ,& !input  :!isothermal aerodynamic resistance from canopy to free atmosphere (where wind speed is measured)     
+    RawIsoTAtm2CanopySinkZ_col=> plt_ew%RawIsoTAtm2CanopySinkZ_col ,& !input  :isothermal aerodynamic resistance between canopy top and wind ref height in atmosphere, [h m-1]
+    RawIsoTCanopy2Atm_pft     => plt_ew%RawIsoTCanopy2Atm_pft      ,& !input  :!isothermal aerodynamic resistance from canopy to free atmosphere (where wind speed is measured)
     Air_Heat_Latent_store_col => plt_ew%Air_Heat_Latent_store_col  ,& !inoput :total latent heat flux x boundary layer resistance, [MJ m-1]
     Air_Heat_Sens_store_col   => plt_ew%Air_Heat_Sens_store_col    ,& !inoput :total sensible heat flux x boundary layer resistance, [MJ m-1]
     PSICanopy_pft             => plt_ew%PSICanopy_pft              ,& !inoput :canopy total water potential, [Mpa]
@@ -133,150 +154,462 @@ module UptakesMod
     VapXAir2Canopy_pft        => plt_ew%VapXAir2Canopy_pft          & !output :canopy evaporation, [m2 d-2 h-1]
   )
 
-  call PrintInfo('beg '//subname)
-
+  HeatSensVapAir2Canopy_col=0._r8
+  HeatPrecAir2Canopy_col=0._r8
+  LiveExchange_pft=.false.
+  PassiveExchange_pft=.false.
   call ZeroNutrientUptake
 
   call PrepNutrientUptake(yearIJ,TotalSoilPSIMPa_vr,AllRootC_vr,AirMicPore4Fill_vr,WatAvail4Uptake_vr)
   !
   !     IF PLANT SPECIES EXISTS
+  if(NP.GT.0)THEN
+    DeadAreaColumn   = sum(StandDeadSurfAreaAct_pft(1:NP))
 
-  DO NZ=1,NP
-    
-    IF(IsPlantActive_pft(NZ).EQ.iTrue .AND. PlantPopuLive_pft(NZ).GT.0.0_r8)THEN
+    DO NZ=1,NP
+      DeadHeatCapacity = cpo*gOC_to_m3_OM(CanopyStemThermalCarbon(StandDeadStrutElms_pft(ielmc,NZ), &
+        StandDeadSurfArea_pft(NZ),StemSpecVolume_pft(NZ)))
+      PFTArea          = LeafStalkAreaAct_pft(NZ)+StandDeadSurfAreaAct_pft(NZ)
+      LiveAreaFraction = 1._r8
 
-      call PhotosynsDiag(yearIJ%I,yearIJ%J,NZ)  
+      if(PFTArea>ZEROS)LiveAreaFraction=LeafStalkAreaAct_pft(NZ)/PFTArea
 
-      call UpdateCanopyProperty(yearIJ%I,yearIJ%J,NZ)
+      FracGridPFTCovered=0._r8
 
-!     STOMATE=solve for minimum canopy stomatal resistance
-      
-      CALL StomatalDynamics(yearIJ,NZ)
-      !
-      call UpdateRootProperty(yearIJ,NZ,RadialMeanLen_rvr,FineRootRadius_rvr,AllRootC_vr,FracPRoot4Uptake_pvr,&
-        FracMinRoot4Uptake_rpvr,FracSoilLBy1stRoots_pvr,RootEffLen4Absorption_pvr)
-      !
-      !     CALCULATE CANOPY WATER STATUS FROM CONVERGENCE SOLUTION FOR
-      !     TRANSPIRATION - ROOT WATER UPTAKE = CHANGE IN CANOPY WATER CONTENT
-      !     [SpecStalkVolume]=[m3/gC], assuming mean sapwood thicknees is 2.5 mm.
-      CanopyMassC4H2OStorage = CanopyLeafSheathC_pft(NZ)+AMIN1(CanopySapwoodC_pft(NZ),&
-        2.5e-3_r8*CanopyStemSurfArea_pft(NZ)/StemSpecVolume_pft(NZ))
+      if(LeafStalkAreaAll_col>ZEROS) &
+        FracGridPFTCovered=CanopyExchangeAreaFraction(PFTArea,LeafStalkAreaAll_col, &
+          CanopyLeafArea_col,DeadAreaColumn,AREA3(NU))
 
-      ! A negative reservoir cannot be repaired by changing pressure. Reject it
-      ! before exchanging water; silently clipping it would create water.
-      if (.not.ieee_is_finite(CanopyBiomWater_pft(NZ)) .or. CanopyBiomWater_pft(NZ)<0._r8 &
-          .or. .not.ieee_is_finite(CanopyMassC4H2OStorage)) then
-        write(iulog,*)subname,': invalid canopy hydraulic storage; year/day/hour/PFT, water, storage C: ', &
-          yearIJ%year,yearIJ%I,yearIJ%J,NZ,CanopyBiomWater_pft(NZ),CanopyMassC4H2OStorage
-        call endrun('Invalid canopy hydraulic storage; use a valid checkpoint or an accounted water correction',__LINE__)
-      endif
+      IF(IsPlantActive_pft(NZ).EQ.iTrue .AND. PlantPopuLive_pft(NZ).GT.0.0_r8)THEN
+        LiveExchange_pft(NZ)=.true.
 
-      CanopyMassC4H2OStorage=MAX(0._r8,CanopyMassC4H2OStorage)
-      VHeatCapCanopyPrev_pft = cpo*gOC_to_m3_OM(CanopyMassC4H2OStorage)+cpw*(WatHeldOnCanopy_pft(NZ)+CanopyBiomWater_pft(NZ)) &
-        +cps*SnowOnCanopy_pft(NZ)
+        call PhotosynsDiag(yearIJ%I,yearIJ%J,NZ)
 
-      if(ldo_sp_mode .and. LeafStalkAreaAct_pft(NZ).GT.ZERO4LeafVar_pft(NZ))then
-        HydroActivePlant=.true.
-      else
-        HydroActivePlant=(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0)             &  !plant emerged
-          .AND.(LeafStalkAreaAct_pft(NZ).GT.ZERO4LeafVar_pft(NZ).AND.FracPARads2Canopy_pft(NZ).GT.0.0_r8)   &  !active canopy
-          .AND.(Root1stDepz_raxes(1,NZ).GT.SeedDepth_pft(NZ)+CumSoilThickness_vr(0))                        !active root
-      endif
-      !add snow coverage check 
+        call UpdateCanopyProperty(yearIJ%I,yearIJ%J,NZ)
 
-      IF(HydroActivePlant)THEN  
-      
-        call CalcPlantHydroResistance(yearIJ,NZ,RadialMeanLen_rvr,FineRootRadius_rvr,RootEffLen4Absorption_pvr,&
-          SoilResist4H2O_rvr,SoilRootResist4H2O_pvr,CdH2ORootxSoil,PSIGravCanopyHeight,SoiLayerHasRoot_rvr)
+        !     STOMATE=solve for minimum canopy stomatal resistance
 
-        ! Second-stage eligibility: biological activity alone does not imply
-        ! a connected hydraulic reservoir. Zero water is allowed to refill;
-        ! small positive conductance and storage C retain their physical scale.
-        if (.not.ieee_is_finite(CdH2ORootxSoil) .or. CdH2ORootxSoil<0._r8) then
-          write(iulog,*)subname,': invalid root conductance; day/hour/PFT, conductance: ', &
-            yearIJ%I,yearIJ%J,NZ,CdH2ORootxSoil
-          call endrun('Invalid soil-canopy hydraulic conductance',__LINE__)
-        endif
-
-        HydraulicPathAvailable=CanopyMassC4H2OStorage>0._r8 .and. &
-          CdH2ORootxSoil>0._r8 .and. any(SoiLayerHasRoot_rvr)
-        if (.not.HydraulicPathAvailable) SoiLayerHasRoot_rvr=.false.
+        CALL StomatalDynamics(yearIJ,NZ)
         !
-        !       INITIALIZE CANOPY WATER POTENTIAL, OTHER VARIABLES USED IN ENERGY
-        !       BALANCE THAT DON'T NEED TO BE RECALCULATED DURING CONVERGENCE
-        !
-        if (HydraulicPathAvailable) then
-          PSICanopy_pft(NZ) = AMIN1(-ppmc,0.667_r8*PSICanopy_pft(NZ))
-        else
-          !canopy evaporation/condensation can still occur with standing dead
-          PSICanopy_pft(NZ) = TotalSoilPSIMPa_vr(NU)
-        endif
-        PrecpHeatbyCanopy      = (RainIntcptByCanopy_pft(NZ)*cpw+SnowIntcptByCanopy_pft(NZ)*cps)*TairK
-        !
-        IF(LeafStalkAreaAll_col.GT.ZEROS)THEN
-          !the grid has significant canopy (leaf+steam) area
-          FracGridPFTCovered=LeafStalkAreaAct_pft(NZ)/LeafStalkAreaAll_col*AMIN1(1.0_r8,0.5_r8*CanopyLeafArea_col/AREA3(NU))
-        ELSEIF(PlantPopu_col.GT.ZEROS)THEN
-          !total population is > 0
-          FracGridPFTCovered=PlantPopuLive_pft(NZ)/PlantPopu_col
-        ELSE
-          FracGridPFTCovered=1.0_r8/NP
-        ENDIF
-
-        TKCX   = TKC_pft(NZ)
-        !
-        !     CONVERGENCE SOLUTION
-        !
-        NN=CanopyEnergyH2OIter_func(yearIJ,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,&
-          TotalSoilPSIMPa_vr,CdHeatCanopyAir,DIFF,cumPRootH2OUptake,CumPlantHeatLoss2Soil,&
-          HeatEvapSens,FDMP,SoilRootResist4H2O_pvr,FracPRoot4Uptake_pvr,AirMicPore4Fill_vr,&
-          WatAvail4Uptake_vr,TKCX,CdH2ORootxSoil,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,&
-          PSIGravCanopyHeight,SoiLayerHasRoot_rvr,HydraulicPathAvailable)
-        !
-        !     IF CONVERGENCE NOT ACHIEVED (RARE), SET DEFAULT
-        !     TEMPERATURES, ENERGY FLUXES, WATER POTENTIALS, RESISTANCES
-        !
-        ! Reject stalled solves and exchanges that would overdraw the reservoir.
-        if (.not.ieee_is_finite(DIFF)) DIFF=1._r8
-        if (.not.ieee_is_finite(Transpiration_pft(NZ)-cumPRootH2OUptake)) DIFF=1._r8
-        if (CanopyBiomWater_pft(NZ)+Transpiration_pft(NZ)-cumPRootH2OUptake<0._r8) DIFF=MAX(1._r8,DIFF)
-        IF(NN.GE.MaxIterNum .or. DIFF.GE.DIFFY)THEN
-          call HandlingDivergence(yearIJ,NZ,TotalSoilPSIMPa_vr,DIFF,FDMP,cumPRootH2OUptake,HeatEvapSens, &
-            CumPlantHeatLoss2Soil)
-        endif
-
-        call UpdatePlantWaterVars(NZ,CdHeatCanopyAir,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,SoilResist4H2O_rvr,SoilRootResist4H2O_pvr,&
-          TKCX,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,SoiLayerHasRoot_rvr)
-        !
-        !     DEFAULT VALUES IF PLANT SPECIES DOES NOT EXIST
-        !
-      ELSE
-        call HandleBareSoil(NZ,TotalSoilPSIMPa_vr,FDMP)
-      ENDIF
-      !
-      RawH2OAtm2CanopySinkZ_pft    = RawH2OCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
-      RawHeatAtm2CanopySinkZ_pft = RawHeatCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
-      Air_Heat_Latent_store_col = Air_Heat_Latent_store_col+CanopyEvapTransLHeat_pft(NZ)*RawH2OAtm2CanopySinkZ_pft
-      Air_Heat_Sens_store_col   = Air_Heat_Sens_store_col+HeatXAir2PCan_pft(NZ)*RawHeatAtm2CanopySinkZ_pft
-      TdegCCanopy_pft(NZ)       = units%Kelvin2Celcius(TKC_pft(NZ))
-      
-      if(.not.ldo_sp_mode) then      
-        call SetCanopyGrowthFuncs(yearIJ,NZ)
-    
-        call PlantNutientO2Uptake(yearIJ,NZ,FDMP,RadialMeanLen_rvr,FineRootRadius_rvr,FracPRoot4Uptake_pvr,&
+        call UpdateRootProperty(yearIJ,NZ,RadialMeanLen_rvr,FineRootRadius_rvr,AllRootC_vr,FracPRoot4Uptake_pvr,&
           FracMinRoot4Uptake_rpvr,FracSoilLBy1stRoots_pvr,RootEffLen4Absorption_pvr)
-      endif    
-    ELSE
-      ! This PFT skips all root uptake, so discard its previous O2 demand.
-      plt_rbgc%RootO2Dmnd4Resp_pvr(:,:,NZ) = 0._r8
-    ENDIF
+        !
+        !     CALCULATE CANOPY WATER STATUS FROM CONVERGENCE SOLUTION FOR
+        !     TRANSPIRATION - ROOT WATER UPTAKE = CHANGE IN CANOPY WATER CONTENT
+        !     [SpecStalkVolume]=[m3/gC], assuming mean sapwood thicknees is 2.5 mm.
+        CanopyMassC4H2OStorage = CanopyLeafSheathC_pft(NZ)+CanopyStemThermalCarbon(CanopySapwoodC_pft(NZ), &
+          CanopyStemSurfArea_pft(NZ),StemSpecVolume_pft(NZ))
 
-  ENDDO
+        ! A negative reservoir cannot be repaired by changing pressure. Reject it
+        ! before exchanging water; silently clipping it would create water.
+        if (.not.ieee_is_finite(CanopyBiomWater_pft(NZ)) .or. CanopyBiomWater_pft(NZ)<0._r8 &
+            .or. .not.ieee_is_finite(CanopyMassC4H2OStorage)) then
+          write(iulog,*)subname,': invalid canopy hydraulic storage; year/day/hour/PFT, water, storage C: ', &
+            yearIJ%year,yearIJ%I,yearIJ%J,NZ,CanopyBiomWater_pft(NZ),CanopyMassC4H2OStorage
+          call endrun('Invalid canopy hydraulic storage; use a valid checkpoint or an accounted water correction',__LINE__)
+        endif
 
-  call PrintInfo('end '//subname)
-  RETURN
+        CanopyMassC4H2OStorage=MAX(0._r8,CanopyMassC4H2OStorage)
+        VHeatCapCanopyPrev_pft = cpo*gOC_to_m3_OM(CanopyMassC4H2OStorage)+DeadHeatCapacity &
+          +cpw*(WatHeldOnCanopy_pft(NZ)+CanopyBiomWater_pft(NZ)) &
+          +cps*SnowOnCanopy_pft(NZ)
+
+        if(ldo_sp_mode)then
+          ! Prescribed PFTs do not initialize the full-model branch calendar.
+          HydroActivePlant=LeafStalkAreaAct_pft(NZ)>ZERO4LeafVar_pft(NZ)
+        else
+          HydroActivePlant=(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0)               &  !plant emerged
+            .AND.(LeafStalkAreaAct_pft(NZ).GT.ZERO4LeafVar_pft(NZ).AND.FracPARads2Canopy_pft(NZ).GT.0.0_r8)  &  !active canopy
+            .AND.(Root1stDepz_raxes(1,NZ).GT.SeedDepth_pft(NZ)+CumSoilThickness_vr(0))                          !active root
+        endif
+        !
+        ! LeafStalkAreaAct is snow-exposed per-PFT area prepared at the same hour
+        ! as the column flag and precipitation interception. Keep this geometry
+        ! fixed through ground substeps, even if snow depth changes during them.
+        HydroActivePlant=HydroActivePlant .and. canopy_exposed_col
+
+        IF(HydroActivePlant)THEN
+
+          call CalcPlantHydroResistance(yearIJ,NZ,RadialMeanLen_rvr,FineRootRadius_rvr,RootEffLen4Absorption_pvr,&
+            SoilResist4H2O_rvr,SoilRootResist4H2O_pvr,CdH2ORootxSoil,PSIGravCanopyHeight,SoiLayerHasRoot_rvr)
+
+          ! Second-stage eligibility: biological activity alone does not imply
+          ! a connected hydraulic reservoir. Zero water is allowed to refill;
+          ! small positive conductance and storage C retain their physical scale.
+          if (.not.ieee_is_finite(CdH2ORootxSoil) .or. CdH2ORootxSoil<0._r8) then
+            write(iulog,*)subname,': invalid root conductance; day/hour/PFT, conductance: ', &
+              yearIJ%I,yearIJ%J,NZ,CdH2ORootxSoil
+            call endrun('Invalid soil-canopy hydraulic conductance',__LINE__)
+          endif
+
+          HydraulicPathAvailable=CanopyMassC4H2OStorage>0._r8 .and. &
+            CdH2ORootxSoil>0._r8 .and. any(SoiLayerHasRoot_rvr)
+          if (.not.HydraulicPathAvailable) SoiLayerHasRoot_rvr=.false.
+          !
+          !       INITIALIZE CANOPY WATER POTENTIAL, OTHER VARIABLES USED IN ENERGY
+          !       BALANCE THAT DON'T NEED TO BE RECALCULATED DURING CONVERGENCE
+          !
+          if (HydraulicPathAvailable) then
+            PSICanopy_pft(NZ) = AMIN1(-ppmc,0.667_r8*PSICanopy_pft(NZ))
+          else
+            !canopy evaporation/condensation can still occur with standing dead
+            PSICanopy_pft(NZ) = TotalSoilPSIMPa_vr(NU)
+          endif
+          PrecpHeatbyCanopy      = (RainIntcptByCanopy_pft(NZ)*cpw+SnowIntcptByCanopy_pft(NZ)*cps)*TairK
+          !
+          IF(LeafStalkAreaAll_col.GT.ZEROS)THEN
+            !the grid has significant canopy (leaf+steam) area
+            FracGridPFTCovered=CanopyExchangeAreaFraction(PFTArea,LeafStalkAreaAll_col, &
+              CanopyLeafArea_col,DeadAreaColumn,AREA3(NU))
+          ELSEIF(PlantPopu_col.GT.ZEROS)THEN
+            !total population is > 0
+            FracGridPFTCovered=PlantPopuLive_pft(NZ)/PlantPopu_col
+          ELSE
+            FracGridPFTCovered=1.0_r8/NP
+          ENDIF
+
+          TKCX   = TKC_pft(NZ)
+          !
+          !     CONVERGENCE SOLUTION
+          !
+          NN=CanopyEnergyH2OIter_func(yearIJ,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,&
+            TotalSoilPSIMPa_vr,CdHeatCanopyAir,DIFF,cumPRootH2OUptake,CumPlantHeatLoss2Soil,&
+            HeatEvapSens,FDMP,SoilRootResist4H2O_pvr,FracPRoot4Uptake_pvr,AirMicPore4Fill_vr,&
+            WatAvail4Uptake_vr,TKCX,CdH2ORootxSoil,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,&
+            PSIGravCanopyHeight,SoiLayerHasRoot_rvr,HydraulicPathAvailable,LiveAreaFraction)
+          !
+          !     IF CONVERGENCE NOT ACHIEVED (RARE), SET DEFAULT
+          !     TEMPERATURES, ENERGY FLUXES, WATER POTENTIALS, RESISTANCES
+          !
+          ! Reject stalled solves and exchanges that would overdraw the reservoir.
+          if (.not.ieee_is_finite(DIFF)) DIFF=1._r8
+          if (.not.ieee_is_finite(Transpiration_pft(NZ)-cumPRootH2OUptake)) DIFF=1._r8
+          if (CanopyBiomWater_pft(NZ)+Transpiration_pft(NZ)-cumPRootH2OUptake<0._r8) DIFF=MAX(1._r8,DIFF)
+          IF(NN.GE.MaxIterNum .or. DIFF.GE.DIFFY)THEN
+            ! Reject unaccepted root exchange, preserving the intentional lag
+            ! of earlier transfers. The wet canopy still needs a conservative
+            ! thermal solution, rather than zero fluxes and an arbitrary reset.
+            DIFF=MAX(DIFF,1._r8)
+            call HandlingDivergence(yearIJ,NZ,TotalSoilPSIMPa_vr,DIFF,FDMP,cumPRootH2OUptake,HeatEvapSens, &
+              CumPlantHeatLoss2Soil)
+            TKC_pft(NZ)=TKCX
+            call PassiveCanopyExchange(NZ,FracGridPFTCovered,CanopyMassC4H2OStorage)
+            PassiveExchange_pft(NZ)=.true.
+          else
+            call UpdatePlantWaterVars(NZ,CdHeatCanopyAir,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,SoilResist4H2O_rvr,SoilRootResist4H2O_pvr,&
+              TKCX,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,SoiLayerHasRoot_rvr,DeadHeatCapacity)
+            HeatSensVapAir2Canopy_col=HeatSensVapAir2Canopy_col+HeatEvapSens
+            HeatPrecAir2Canopy_col=HeatPrecAir2Canopy_col+PrecpHeatbyCanopy
+          endif
+          !
+          !     DEFAULT VALUES IF PLANT SPECIES DOES NOT EXIST
+          !
+        ELSE
+          PriorTemperature=TKC_pft(NZ)
+          call HandleBareSoil(NZ,TotalSoilPSIMPa_vr,FDMP,VHeatCapCanopyPrev_pft)
+          if(StandDeadStrutElms_pft(ielmc,NZ)>0._r8)then
+            TKC_pft(NZ)=PriorTemperature
+            call PassiveCanopyExchange(NZ,FracGridPFTCovered,CanopyMassC4H2OStorage)
+            PassiveExchange_pft(NZ)=.true.
+          endif
+        ENDIF
+        !
+        RawH2OAtm2CanopySinkZ_pft  = RawH2OCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+        RawHeatAtm2CanopySinkZ_pft = RawHeatCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+        Air_Heat_Latent_store_col  = Air_Heat_Latent_store_col+CanopyEvapTransLHeat_pft(NZ)*RawH2OAtm2CanopySinkZ_pft
+        Air_Heat_Sens_store_col    = Air_Heat_Sens_store_col+HeatXAir2PCan_pft(NZ)*RawHeatAtm2CanopySinkZ_pft
+        TdegCCanopy_pft(NZ)        = units%Kelvin2Celcius(TKC_pft(NZ))
+
+        if(.not.ldo_sp_mode) then
+          call SetCanopyGrowthFuncs(yearIJ,NZ)
+
+          call PlantNutientO2Uptake(yearIJ,NZ,FDMP,RadialMeanLen_rvr,FineRootRadius_rvr,FracPRoot4Uptake_pvr,&
+            FracMinRoot4Uptake_rpvr,FracSoilLBy1stRoots_pvr,RootEffLen4Absorption_pvr)
+        endif
+      ELSE
+        ! This PFT skips all root uptake, so discard its previous O2 demand.
+        plt_rbgc%RootO2Dmnd4Resp_pvr(:,:,NZ) = 0._r8
+        if(StandDeadStrutElms_pft(ielmc,NZ)>0._r8)then
+          call UpdateCanopyProperty(yearIJ%I,yearIJ%J,NZ)
+          call PassiveCanopyExchange(NZ,FracGridPFTCovered,0._r8)
+          PassiveExchange_pft(NZ)=.true.
+
+          RawH2OAtm2CanopySinkZ_pft  = RawH2OCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+          RawHeatAtm2CanopySinkZ_pft = RawHeatCanopy2Atm_pft(NZ)*RawIsoTAtm2CanopySinkZ_col/RawIsoTCanopy2Atm_pft(NZ)
+          Air_Heat_Latent_store_col  = Air_Heat_Latent_store_col+CanopyEvapTransLHeat_pft(NZ)*RawH2OAtm2CanopySinkZ_pft
+          Air_Heat_Sens_store_col    = Air_Heat_Sens_store_col+HeatXAir2PCan_pft(NZ)*RawHeatAtm2CanopySinkZ_pft
+          TdegCCanopy_pft(NZ)        = units%Kelvin2Celcius(TKC_pft(NZ))
+        endif
+      ENDIF
+    ENDDO
+  ENDIF
+
   end associate
+  call PrintInfo('end '//subname)
   END subroutine RootUptakes
+
+!------------------------------------------------------------------------------------------
+
+
+!------------------------------------------------------------------------------------------
+  function CanopyExchangeAreaFraction(PFTArea,TotalArea,LeafArea,DeadArea,GroundArea) result(Fraction)
+    ! Description:
+    ! Partition effective projected cover among exposed PFTs. The inherited 0.5
+    ! area-to-cover coefficient uses live leaf plus dead area continuously.
+    real(r8), intent(in) :: PFTArea,TotalArea ! PFT and column exposed live+dead surface area [m2/cell]
+    real(r8), intent(in) :: LeafArea,DeadArea ! column leaf area and exposed dead stem area [m2/cell]
+    real(r8), intent(in) :: GroundArea ! column ground area [m2/cell]
+    real(r8) :: Fraction ! PFT effective exchange area / ground area [-]
+    character(len=*), parameter :: subname='CanopyExchangeAreaFraction'
+    call PrintInfo('beg '//subname)
+    Fraction=0._r8
+    if(TotalArea>0._r8)Fraction=PFTArea/TotalArea*MIN(1._r8,0.5_r8*(LeafArea+DeadArea)/GroundArea)
+    call PrintInfo('end '//subname)
+  end function CanopyExchangeAreaFraction
+
+!------------------------------------------------------------------------------------------
+  function CanopyVaporResistance(NeutralResistance,Rib,AirTemperature,CanopyTemperature) result(Resistance)
+    ! Description:
+    ! Apply the common Richardson correction and physical minimum to canopy
+    ! vapor transport. Iteration damping belongs to the caller, not this law.
+    real(r8), intent(in) :: NeutralResistance ! neutral canopy-to-air resistance [h/m]
+    real(r8), intent(in) :: Rib ! Richardson-number prefactor [1/K]
+    real(r8), intent(in) :: AirTemperature,CanopyTemperature ! air and canopy temperatures [K]
+    real(r8) :: Resistance ! stability-corrected vapor resistance [h/m]
+    real(r8) :: Ri
+    character(len=*), parameter :: subname='CanopyVaporResistance'
+    call PrintInfo('beg '//subname)
+    Ri=RichardsonNumber(Rib,AirTemperature,CanopyTemperature)
+    Resistance=MAX(RawMinH2OCanopy2Atm_pft,NeutralResistance/(1._r8-10._r8*Ri))
+    call PrintInfo('end '//subname)
+  end function CanopyVaporResistance
+!------------------------------------------------------------------------------------------
+  subroutine SolvePassiveCanopyEnergy(T0,Ta,qa,Cdry,Wtissue,W0,S0,Rain,Snowfall,Area,SW,LW,F,Ra,Rib,Result)
+    ! Description:
+    ! Solve a one-hour passive canopy energy balance with accepted, donor-limited
+    ! liquid/snow vapor fluxes and their sensible enthalpy. No root or stomatal
+    ! state is accessed. All extensive quantities are per PFT and grid cell.
+    real(r8), intent(in) :: T0,Ta                    ! previous canopy and reference-air temperatures [K]
+    real(r8), intent(in) :: qa                       ! reference vapor water-equivalent concentration [m3/m3]
+    real(r8), intent(in) :: Cdry                     ! live plus dead dry-material heat capacity [MJ/K]
+    real(r8), intent(in) :: Wtissue,W0,S0            ! tissue liquid, intercepted liquid and snow SWE [m3]
+    real(r8), intent(in) :: Rain,Snowfall            ! intercepted precipitation during this hour [m3]
+    real(r8), intent(in) :: Area                     ! effective projected exchange area [m2]
+    real(r8), intent(in) :: SW,LW,F                  ! absorbed SW, incident LW [MJ], one-side emission factor [MJ/K4]
+    real(r8), intent(in) :: Ra,Rib                   ! neutral vapor resistance [h/m], Richardson prefactor [1/K]
+    type(PassiveCanopyResult), intent(out) :: Result ! accepted state and integrated fluxes
+    character(len=*), parameter :: subname='SolvePassiveCanopyEnergy'
+    type(PassiveCanopyResult) :: Trial
+    real(r8) :: Cold,Eold,Qprec,Tlo,Thi,Tmid,Flo,Fhi,Residual,Tolerance
+    integer :: iteration
+    integer, parameter :: itmax=100
+
+    call PrintInfo('beg '//subname)
+    if(any(.not.ieee_is_finite([T0,Ta,qa,Cdry,Wtissue,W0,S0,Rain,Snowfall,Area,SW,LW,F,Ra,Rib])) &
+      .or. MIN(Cdry,Wtissue,W0,S0,Rain,Snowfall,Area,F)<0._r8 .or. Ra<=0._r8)then
+      write(iulog,*)subname,': invalid passive canopy inputs'
+      call endrun('Invalid passive canopy state',__LINE__)
+    endif
+
+    Cold      = Cdry+cpw*(Wtissue+W0)+cps*S0
+    Eold      = Cold*T0
+    Qprec     = (cpw*Rain+cps*Snowfall)*Ta
+    Tolerance = 1.e-12_r8*MAX(1._r8,ABS(Eold),ABS(SW)+ABS(LW)+ABS(Qprec))
+
+    if(Area==0._r8 .and. SW==0._r8 .and. LW==0._r8 .and. F==0._r8 &
+      .and. Rain==0._r8 .and. Snowfall==0._r8)then
+      call EvaluatePassiveFluxes(T0,Result,Residual)
+      call PrintInfo('end '//subname)
+      return
+    endif
+
+    Tlo=100._r8;Thi=400._r8
+    call EvaluatePassiveFluxes(Tlo,Trial,Flo)
+    call EvaluatePassiveFluxes(Thi,Trial,Fhi)
+    if(Flo>0._r8 .or. Fhi<0._r8)then
+      write(iulog,*)subname,': passive temperature not bracketed',T0,Ta,Flo,Fhi
+      call endrun('Passive canopy energy balance has no physical temperature bracket',__LINE__)
+    endif
+
+    do iteration=1,itmax
+      Tmid=0.5_r8*(Tlo+Thi)
+      call EvaluatePassiveFluxes(Tmid,Result,Residual)
+      if(ABS(Residual)<=Tolerance)exit
+      if(Residual>0._r8)then
+        Thi=Tmid
+      else
+        Tlo=Tmid
+      endif
+    enddo
+
+    if(ABS(Residual)>Tolerance)then
+      write(iulog,*)subname,': unconverged energy residual [MJ]',Residual
+      call endrun('Passive canopy energy balance did not converge',__LINE__)
+    endif
+    call PrintInfo('end '//subname)
+  contains
+    subroutine EvaluatePassiveFluxes(T,State,Error)
+      ! Description:
+      ! Evaluate the nonlinear boundary and mass/storage terms at one trial temperature.
+      real(r8), intent(in) :: T ! trial temperature [K]
+      type(PassiveCanopyResult), intent(out) :: State ! trial accepted donor-limited fluxes
+      real(r8), intent(out) :: Error ! stored-energy change minus accepted boundary heat [MJ]
+      character(len=*), parameter :: subname='EvaluatePassiveFluxes'
+      real(r8) :: Cd,Potential,DonorTemperature
+
+      call PrintInfo('beg '//subname)
+      associate(                        &
+        Tout   => State%temperature,    &
+        Wout   => State%water,          &
+        Sout   => State%snow,           &
+        Cout   => State%capacity,       &
+        Rout   => State%resistance,     &
+        RnOut  => State%net_radiation,  &
+        Hout   => State%sensible,       &
+        LEout  => State%latent,         &
+        AdvOut => State%vapor_enthalpy, &
+        dWout  => State%water_flux,     &
+        dSout  => State%snow_flux       &
+      )
+      Rout      = CanopyVaporResistance(Ra,Rib,Ta,T)
+      Cd        = Area/(Rout+ResistLeafSurf)
+      ! As in the live canopy path, condensation remains liquid below freezing.
+      ! Use liquid latent heat/enthalpy consistently; frost/freezing is not represented.
+      Potential = Cd*(qa-vapsat(T))
+      dWout     = MAX(Potential,-(W0+Rain))
+      dSout     = MAX(MIN(0._r8,Potential-dWout),-(S0+Snowfall))
+      Wout      = W0+Rain+dWout
+      Sout      = S0+Snowfall+dSout
+      Tout      = T
+      Cout      = Cdry+cpw*(Wtissue+Wout)+cps*Sout
+      Hout      = 1.25e-3_r8*Area/(Rout/BndlResistH2OToHeatRatio)*(Ta-T)
+      LEout     = EvapLHTC*dWout+SublmHTC*dSout
+
+      DonorTemperature = T
+      if(dWout>0._r8)DonorTemperature=Ta
+      AdvOut = cpw*DonorTemperature*dWout+cps*T*dSout
+      RnOut  = SW+LW-2._r8*F*T**4
+      Error  = Cout*T-Eold-(RnOut+Hout+LEout+AdvOut+Qprec)
+      end associate
+      call PrintInfo('end '//subname)
+    end subroutine EvaluatePassiveFluxes
+  end subroutine SolvePassiveCanopyEnergy
+!------------------------------------------------------------------------------------------
+  subroutine PassiveCanopyExchange(NZ,Cover,LiveDryCarbon)
+    ! Description:
+    ! Advance the passive thermal/wet-surface state at the existing PFT temperature.
+    ! Include dead material once, suppress root/transpiration transfers, and retain
+    ! material/temperature through burial. No biological activity flags are changed.
+    integer, intent(in) :: NZ             ! named PFT slot [-]
+    real(r8), intent(in) :: Cover         ! effective projected fraction of the grid cell [-]
+    real(r8), intent(in) :: LiveDryCarbon ! thermally represented live dry carbon [gC/cell]
+    character(len=*), parameter :: subname='PassiveCanopyExchange'
+    type(PassiveCanopyResult) :: Result
+    real(r8) :: DryCapacity,OldCapacity,Told,Area,SW,LW,F,Qprec
+    call PrintInfo('beg '//subname)
+
+    associate(                                                 &
+      HeatSensVapAir2Canopy_col => plt_ew%HeatSensVapAir2Canopy_col, &
+      HeatPrecAir2Canopy_col => plt_ew%HeatPrecAir2Canopy_col, &
+      Dead               => plt_biom%StandDeadStrutElms_pft,   &
+      DeadArea           => plt_morph%StandDeadSurfArea_pft, &
+      StemVolume         => plt_morph%StemSpecVolume_pft, &
+      Ta                 => plt_ew%TairK,                      &
+      qa                 => plt_ew%VPA,                        &
+      Exposed            => plt_ew%canopy_exposed_col,         &
+      GridArea           => plt_site%AREA3,                    &
+      NU                 => plt_site%NU,                       &
+      Tissue             => plt_ew%CanopyBiomWater_pft,        &
+      Water              => plt_ew%WatHeldOnCanopy_pft,        &
+      Snow               => plt_ew%SnowOnCanopy_pft,           &
+      Rain               => plt_ew%RainIntcptByCanopy_pft,     &
+      Snowfall           => plt_ew%SnowIntcptByCanopy_pft,     &
+      Tc                 => plt_ew%TKC_pft,                    &
+      Ttrial             => plt_ew%TKCanopy_pft,               &
+      Offset             => plt_ew%DeltaTKC_pft,               &
+      Capacity           => plt_ew%VHeatCapCanopy_pft,         &
+      Ra                 => plt_ew%RawIsoTCanopy2Atm_pft,      &
+      Rib                => plt_ew%RIB,                        &
+      Rwater             => plt_photo%RawH2OCanopy2Atm_pft,    &
+      Rheat              => plt_photo%RawHeatCanopy2Atm_pft,   &
+      Fraction           => plt_rad%FracPARads2Canopy_pft,     &
+      AbsSW              => plt_rad%RadSWCanopyAbsorption_pft, &
+      SkyLW              => plt_rad%LWRadSky_col,              &
+      GroundLW           => plt_rad%LWRadGrnd_col,             &
+      Emissivity         => plt_ew%EMS_Modify_Scalar_col,      &
+      Rn                 => plt_rad%RadNet2Canopy_pft,         &
+      LWout              => plt_rad%LWRadCanopy_pft,           &
+      H                  => plt_ew%HeatXAir2PCan_pft,          &
+      LE                 => plt_ew%CanopyEvapTransLHeat_pft,   &
+      Storage            => plt_ew%HeatStorCanopy_pft,         &
+      Evap               => plt_ew%VapXAir2Canopy_pft,         &
+      LiquidFlux         => plt_ew%VapXAir2CanopyLiq_pft,      &
+      SnowFlux           => plt_ew%SnoSub2AirCanopy_pft,       &
+      Dew                => plt_ew%QdewCanopy_pft,             &
+      Transp             => plt_ew%Transpiration_pft,          &
+      RootFlux           => plt_ew%RPlantRootH2OUptk_pvr,      &
+      RootStress         => plt_ew%RootH2OUptkStress_pvr,      &
+      RootCd             => plt_ew%CdH2ORootxSoil_pft,         &
+      AcceptedT          => Result%temperature,                &
+      AcceptedWater      => Result%water,                      &
+      AcceptedSnow       => Result%snow,                       &
+      AcceptedCapacity   => Result%capacity,                   &
+      AcceptedResistance => Result%resistance,                 &
+      AcceptedRn         => Result%net_radiation,              &
+      AcceptedH          => Result%sensible,                   &
+      AcceptedLE         => Result%latent,                     &
+      AcceptedAdv        => Result%vapor_enthalpy,             &
+      AcceptedLiquidFlux => Result%water_flux,                 &
+      AcceptedSnowFlux   => Result%snow_flux                   &
+    )
+      Told=Tc(NZ)
+      ! A cold-start/legacy dead-only slot may have no previously initialized temperature.
+      if(Told==spval .or. Told<=0._r8)Told=Ta
+
+      DryCapacity = cpo*gOC_to_m3_OM(LiveDryCarbon+ &
+        CanopyStemThermalCarbon(Dead(ielmc,NZ),DeadArea(NZ),StemVolume(NZ)))
+      OldCapacity = DryCapacity+cpw*(Tissue(NZ)+Water(NZ))+cps*Snow(NZ)
+      Area        = 0._r8
+      SW          = 0._r8
+      LW          = 0._r8
+      F           = 0._r8
+      if(Exposed .and. Cover>0._r8)then
+        Area = Cover*GridArea(NU)
+        SW   = AbsSW(NZ)
+        LW   = (SkyLW+GroundLW)*Fraction(NZ)
+        F    = EMMC*stefboltz_const*Fraction(NZ)*GridArea(NU)*Emissivity
+      endif
+
+      call SolvePassiveCanopyEnergy(Told,Ta,qa,DryCapacity,Tissue(NZ),Water(NZ),Snow(NZ),Rain(NZ),Snowfall(NZ), &
+        Area,SW,LW,F,Ra(NZ),Rib,Result)
+
+      Qprec              = (cpw*Rain(NZ)+cps*Snowfall(NZ))*Ta
+      HeatSensVapAir2Canopy_col=HeatSensVapAir2Canopy_col+AcceptedAdv
+      HeatPrecAir2Canopy_col=HeatPrecAir2Canopy_col+Qprec
+      Water(NZ)          = AcceptedWater
+      Snow(NZ)           = AcceptedSnow
+      Tc(NZ)             = AcceptedT
+      Ttrial(NZ)         = Tc(NZ)
+      Offset(NZ)         = Tc(NZ)-Ta
+      Capacity(NZ)       = AcceptedCapacity
+      Rwater(NZ)         = AcceptedResistance
+      Rheat(NZ)          = Rwater(NZ)/BndlResistH2OToHeatRatio
+      Rn(NZ)             = AcceptedRn
+      LWout(NZ)          = F*Tc(NZ)**4
+      H(NZ)              = AcceptedH
+      LE(NZ)             = AcceptedLE
+      Storage(NZ)        = OldCapacity*Told-Capacity(NZ)*Tc(NZ)+AcceptedAdv+Qprec
+      LiquidFlux(NZ)     = AcceptedLiquidFlux
+      SnowFlux(NZ)       = AcceptedSnowFlux
+      Evap(NZ)           = LiquidFlux(NZ)+SnowFlux(NZ)
+      Dew(NZ)            = MAX(0._r8,LiquidFlux(NZ))
+      Transp(NZ)         = 0._r8
+      RootCd(NZ)         = 0._r8
+      RootFlux(:,:,NZ)   = 0._r8
+      RootStress(:,:,NZ) = 0._r8
+    end associate
+    call PrintInfo('end '//subname)
+  end subroutine PassiveCanopyExchange
 
 !----------------------------------------------------------------------------------------------------
   subroutine PrepNutrientUptake(yearIJ,TotalSoilPSIMPa_vr,AllRootC_vr,AirMicPore4Fill_vr,WatAvail4Uptake_vr)
@@ -351,9 +684,8 @@ module UptakesMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine UpdateCanopyProperty(I,J,NZ)
-  !
-  !Description:
-  ! Update canopy characterization
+  ! Description:
+  ! Update canopy resistance and trial temperature using exposed live/dead geometry.
   implicit none
   integer, intent(in) :: I,J,NZ
 
@@ -361,8 +693,10 @@ module UptakesMod
   real(r8) :: ALFZ       !attenuation coefficient
   real(r8) :: TFRADP     !total fraction of PAR on canopy
   real(r8) :: RawCanopy2SinkZ_pft(JP1) !isothermal aerodynamic resistance between current pft top to the sink height
+  real(r8) :: ExchangeHeight(JP1),ExchangeArea(JP1)
   integer :: NB,K,L,N,NZZ
 
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     RawIsoTAtm2CanopySinkZ_col    => plt_ew%RawIsoTAtm2CanopySinkZ_col    ,& !input  :isothermal aerodynamic resistance between canopy top and wind ref height in atmosphere, [h m-1]
     RawIsoTSurf2CanopyHScal_col   => plt_ew%RawIsoTSurf2CanopyHScal_col   ,& !input  :scalar for isothermal aerodynamic resistance between zero-sink height and ground surface, [h m-1]
@@ -375,6 +709,8 @@ module UptakesMod
     LeafArea_node                 => plt_morph%LeafArea_node              ,& !input  :leaf area, [m2 d-2]
     LeafProteinC_node             => plt_biom%LeafProteinC_node           ,& !input  :layer leaf protein N, [g d-2]
     LeafStalkAreaAct_pft          => plt_morph%LeafStalkAreaAct_pft       ,& !input  :plant leaf+stem/stalk area, [m2 d-2]
+    DeadArea                     => plt_morph%StandDeadSurfAreaAct_pft, &
+    DeadHeight                   => plt_morph%CanopyHeightDead_pft, &
     NP                            => plt_site%NP                          ,& !input  :current number of plant species,[-]
     NumOfBranches_pft             => plt_morph%NumOfBranches_pft          ,& !input  :number of branches,[-]
     RoughnessLength               => plt_ew%RoughnessLength               ,& !input  :canopy surface roughness height, [m]
@@ -391,7 +727,6 @@ module UptakesMod
 !     INCLINATION N, LAYER L, NODE K, BRANCH NB, SPECIES NZ,
 !     N-S POSITION NY, E-W POSITION NX(AZIMUTH M ASSUMED UNIFORM)
 !
-  call PrintInfo('beg '//subname)
 
 !  D500: DO NB=1,NumOfBranches_pft(NZ)
 !    D550: DO K=1,MaxNodesPerBranch1
@@ -416,11 +751,18 @@ module UptakesMod
   !     ZC,ZT,RoughnessLength=PFT canopy,grid biome,surface roughness height
   !     FracPARads2Canopy_pft=fraction of radiation received by each PFT canopy
   !
-  IF(LeafStalkAreaAct_pft(NZ).GT.0.0_r8)THEN
+  ExchangeHeight(1:NP)=CanopyHeightLive_pft(1:NP)
+  ExchangeArea(1:NP)=LeafStalkAreaAct_pft(1:NP)+DeadArea(1:NP)
+  do NZZ=1,NP
+    if(DeadArea(NZZ)>0._r8 .and. ExchangeArea(NZZ)>0._r8) &
+      ExchangeHeight(NZZ)=(LeafStalkAreaAct_pft(NZZ)*CanopyHeightLive_pft(NZZ) &
+        +DeadArea(NZZ)*DeadHeight(NZZ))/ExchangeArea(NZZ)
+  enddo
+  IF(ExchangeArea(NZ).GT.0.0_r8)THEN
     IF(KoppenClimZone.GE.0)THEN
       TFRADP=0.0_r8
       D700: DO NZZ=1,NP
-        IF(CanopyHeightLive_pft(NZZ).GT.CanopyHeightLive_pft(NZ)+RoughnessLength)THEN
+        IF(ExchangeHeight(NZZ).GT.ExchangeHeight(NZ)+RoughnessLength)THEN
           TFRADP=TFRADP+FracPARads2Canopy_pft(NZZ)
         ENDIF
       ENDDO D700
@@ -433,7 +775,7 @@ module UptakesMod
         !eq.(25) from Choudhury and Monteith (1988)
         !resistance between current pft canopy height and sink height (=zero plane displacement + roughness length)
         RawCanopy2SinkZ_pft(NZ)=AMIN1(RACX,AZMAX1(CanopyHeight_col*EXP(ALFZ) &
-          /(ALFZ/RawIsoTSurf2CanopyHScal_col)*(EXP(-ALFZ*CanopyHeightLive_pft(NZ)/CanopyHeight_col) &
+          /(ALFZ/RawIsoTSurf2CanopyHScal_col)*(EXP(-ALFZ*ExchangeHeight(NZ)/CanopyHeight_col) &
           -EXP(-ALFZ*(ZeroPlaneDisplacem_col+RoughnessLength)/CanopyHeight_col))))
       ELSE
         RawCanopy2SinkZ_pft(NZ)=0.0_r8
@@ -458,8 +800,8 @@ module UptakesMod
   !
   TKCanopy_pft(NZ)=TairK+DeltaTKC_pft(NZ)
 
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine UpdateCanopyProperty
 
 !----------------------------------------------------------------------------------------------------
@@ -589,7 +931,9 @@ module UptakesMod
 !----------------------------------------------------------------------------------------------------
   subroutine HandlingDivergence(yearIJ,NZ,TotalSoilPSIMPa_vr,DIFF,FDMP,cumPRootH2OUptake,HeatEvapSens, &
     CumPlantHeatLoss2Soil)
-
+  ! Description:
+  ! Reject unaccepted root exchange and prepare the conservative passive canopy
+  ! fallback. Report routine fallback use only when verbose logging is enabled.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer  , intent(in) :: NZ
@@ -606,7 +950,10 @@ module UptakesMod
 
   integer :: N,L
 ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                               &
+    NY                          => plt_site%NY                            ,& ! input: column row index [-]
+    NX                          => plt_site%NX                            ,& ! input: column index [-]
     AREA3                       => plt_site%AREA3                         ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft         => plt_ew%OrganOsmoPsi0pt_pft             ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
     CanopyNonstOMConc_pft       => plt_biom%CanopyNonstOMConc_pft         ,& !input  :canopy nonstructural C+N+P concentration, [g gC-1]
@@ -638,10 +985,8 @@ module UptakesMod
     LWRadCanopy_pft             => plt_rad%LWRadCanopy_pft                ,& !output :canopy longwave radiation, [MJ d-2 h-1]
     VHeatCapCanopy_pft          => plt_ew%VHeatCapCanopy_pft               & !output :canopy heat capacity, [MJ d-2 K-1]
   )
-  call PrintInfo('beg '//subname)
-
-    WRITE(iulog,9999)iYearCurrent,yearIJ%I,yearIJ%J,NZ
-9999  FORMAT('CONVERGENCE FOR WATER UPTAKE NOT ACHIEVED ON   ',6I4)
+    if(do_debug())write(iulog,'(a,6i6)') &
+      'Using passive canopy fallback; year/day/hour/row/column/PFT: ',iYearCurrent,yearIJ%I,yearIJ%J,NY,NX,NZ
 
     IF(DIFF.GE.DIFFY)THEN
       cumPRootH2OUptake=0._r8;HeatEvapSens=0._r8
@@ -689,17 +1034,16 @@ module UptakesMod
       ENDDO D4290
     ENDIF
 
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine HandlingDivergence
 
 !----------------------------------------------------------------------------------------------------
   function CanopyEnergyH2OIter_func(yearIJ,NZ,FracGridPFTCovered,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,  &
     CdHeatCanopyAir,DIFF,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,FDMP,                       &
     SoilRootResist4H2O_pvr,FracPRoot4Uptake_pvr,AirMicPore4Fill_vr,WatAvail4Uptake_vr,TKCX,CdH2ORootxSoil,&
-    VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,PSIGravCanopyHeight,SoiLayerHasRoot_rvr,HydraulicPathAvailable) result(NN)
-  !
-  !Description:
+    VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,PSIGravCanopyHeight,SoiLayerHasRoot_rvr,HydraulicPathAvailable,LiveAreaFraction) result(NN)
+  ! Description:
   !The relationship between plant root water uptake and canopy water storage is approximated using the water tower concept. That is
   !Root at each soil layer interacts directly with the canopy water reservoir
   !Negative flux represents water taken up from soil
@@ -740,12 +1084,14 @@ module UptakesMod
   real(r8) :: PSILC               !canopy height adjusted canopy water potential, [MPa]
   real(r8) :: RSSUX,RSSU,RA1,RSSZ
   real(r8) :: TKC1,TKCY
+  real(r8) :: HeatResidual ! accepted canopy energy-budget residual [MJ/cell]
+  real(r8), parameter :: CanopyHeatTolerance=1.e-9_r8 ! accepted hourly energy closure [MJ/cell]
   real(r8) :: cumPRootH2OUptakePre
   real(r8) :: SymplasmicWaterPrev,SymplasmicWater  !previous, current biomass-bounded water
   real(r8) :: VPLeaf !Vapor pressure in an average leaf (or canopy)
   real(r8) :: scal
   real(r8) :: XC,Stomata_Stress, dCanopyAvailWater
-  real(r8) :: RichardsNO,psi_H2O_flx
+  real(r8) :: psi_H2O_flx
   real(r8) :: CanopyAvailWater      !available canopy water for canopy ET and hydraulic redistribution
   real(r8) :: CanopyAvailSnow       !available canopy snow for sublimation
   real(r8) :: CumHeatPlant2Soil,CumHeatSoil2Plant
@@ -753,6 +1099,7 @@ module UptakesMod
   real(r8) :: dRadNetdT
   integer :: I, J
 
+  real(r8), intent(in) :: LiveAreaFraction ! exposed live / total live+dead surface area [-]
   character(len=*), parameter :: subname='CanopyEnergyH2OIter_func'
   integer  :: IC
   logical :: LIterationExit
@@ -767,6 +1114,7 @@ module UptakesMod
   integer :: N,L
 !     begin_execution
 
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     AREA3                       => plt_site%AREA3                         ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft         => plt_ew%OrganOsmoPsi0pt_pft             ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
@@ -797,7 +1145,7 @@ module UptakesMod
     TKCanopy_pft                => plt_ew%TKCanopy_pft                    ,& !inoput :canopy/vegetation temperature, [K]
     CanPStomaResistH2O_pft      => plt_photo%CanPStomaResistH2O_pft       ,& !output :canopy stomatal resistance, [h m-1]
     RawH2OCanopy2Atm_pft        => plt_photo%RawH2OCanopy2Atm_pft         ,& !output :canopy boundary layer resistance, [h m-1]
-    RawHeatCanopy2Atm_pft        => plt_photo%RawHeatCanopy2Atm_pft         ,& !output :canopy sensible-heat boundary layer resistance, [h m-1]
+    RawHeatCanopy2Atm_pft       => plt_photo%RawHeatCanopy2Atm_pft        ,& !output :canopy sensible-heat boundary layer resistance, [h m-1]
     CanopyEvapTransLHeat_pft    => plt_ew%CanopyEvapTransLHeat_pft        ,& !output :canopy latent heat flux, [MJ d-2 h-1]
     LWRadCanopy_pft             => plt_rad%LWRadCanopy_pft                ,& !output :canopy longwave radiation, [MJ d-2 h-1]
     RadNet2Canopy_pft           => plt_rad%RadNet2Canopy_pft              ,& !output :canopy net radiation, [MJ d-2 h-1]
@@ -812,7 +1160,6 @@ module UptakesMod
     QdewCanopy_pft              => plt_ew%QdewCanopy_pft                  ,& !output :dew fall on to canopy, [m3 H2O d-2 h-1]
     RootH2OUptkStress_pvr       => plt_ew%RootH2OUptkStress_pvr            & !output :root water uptake stress indicated by rate, [m3 d-2 h-1]
   )
-  call PrintInfo('beg '//subname)
   I=yearIJ%I;J=yearIJ%J
   !CCPOLT: total nonstructural canopy C,N,P concentration
   !FTHRM:coefficient for LW emitted by canopy
@@ -864,12 +1211,13 @@ module UptakesMod
     !     RA=canopy boundary layer resistance
     !     EvapConductCanopy,CdHeatCanopyAir=canopy latent,sensible heat conductance
     !
-    RichardsNO            = RichardsonNumber(RIB,TairK,TKC1)
-    RawH2OCanopy2Atm_pft(NZ) = AMAX1(RawMinH2OCanopy2Atm_pft,0.9_r8*RA1,AMIN1(1.1_r8*RA1,RawIsoTCanopy2Atm_pft(NZ)/(1.0_r8-10.0_r8*RichardsNO)))
-    RA1                   = RawH2OCanopy2Atm_pft(NZ)
+    ! Relax toward the same resistance used by the passive scalar solve.
+    RawH2OCanopy2Atm_pft(NZ)  = MAX(RawMinH2OCanopy2Atm_pft,0.9_r8*RA1, &
+      MIN(1.1_r8*RA1,CanopyVaporResistance(RawIsoTCanopy2Atm_pft(NZ),RIB,TairK,TKC1)))
+    RA1                       = RawH2OCanopy2Atm_pft(NZ)
     RawHeatCanopy2Atm_pft(NZ) = RawH2OCanopy2Atm_pft(NZ)/BndlResistH2OToHeatRatio
-    CdVapCanopyAir        = EffPFTGridArea4H2O/RawH2OCanopy2Atm_pft(NZ)
-    CdHeatCanopyAir       = EffPFTGridArea4Heat/RawHeatCanopy2Atm_pft(NZ) !canopy-air heat conductance for sensible heat
+    CdVapCanopyAir            = EffPFTGridArea4H2O/RawH2OCanopy2Atm_pft(NZ)
+    CdHeatCanopyAir           = EffPFTGridArea4Heat/RawHeatCanopy2Atm_pft(NZ) !canopy-air heat conductance for sensible heat
     !
     !     CANOPY WATER AND OSMOTIC POTENTIALS
     !
@@ -902,6 +1250,8 @@ module UptakesMod
     !
     !area-scaled air to canopy water vap gradient, [m/h]*[ton/m3] = [ton H2O/(h*m2)] < 0, transpire into air
     EX                     = CdVapCanopyAir*(VPA-VPLeaf)
+    if(LiveAreaFraction<1._r8) &
+      EX=CdVapCanopyAir*(VPA-(LiveAreaFraction*VPLeaf+(1._r8-LiveAreaFraction)*vapsat(TKC1)))
     VapXAir2Canopy_pft(NZ) = EX*RawH2OCanopy2Atm_pft(NZ)/(RawH2OCanopy2Atm_pft(NZ)+ResistLeafSurf)
     !
     !Dew condensation to canopy >0 to canopy
@@ -943,6 +1293,8 @@ module UptakesMod
     !Transpiration_pft<0 means canopy lose water through transpiration
     !CanopyEvapTransLHeat_pft:latent heat flux, negative means into atmosphere
     !
+    if(LiveAreaFraction<1._r8) &
+      EX=MIN(0._r8,LiveAreaFraction*(CdVapCanopyAir*(VPA-VPLeaf)-VapXAir2Canopy_pft(NZ)))
     Transpiration_pft(NZ)        = EX*RawH2OCanopy2Atm_pft(NZ)/(RawH2OCanopy2Atm_pft(NZ)+CanPStomaResistH2O_pft(NZ))
     if (.not.HydraulicPathAvailable) Transpiration_pft(NZ)=0._r8
     CanopyEvapTransLHeat_pft(NZ) = (Transpiration_pft(NZ)+VapXAir2CanopyLiq_pft(NZ))*EvapLHTC+SnoSub2AirCanopy_pft(NZ)*SublmHTC
@@ -968,18 +1320,21 @@ module UptakesMod
        +Transpiration_pft(NZ)-cumPRootH2OUptake)+cps*(SnowIntcptByCanopy_pft(NZ)+SnoSub2AirCanopy_pft(NZ))
     !   
     ! new canopy temperature 
-    TKCY=(TKCX*(VHeatCapCanopyPrev_pft-dRadNetdT)+HeatAdd2Can+TairK*CdHeatCanopyAir) &
+    ! Linearize radiation about the current trial temperature TKC1; TKCX
+    ! belongs only to the retained beginning inventory.
+    TKCY=(TKCX*VHeatCapCanopyPrev_pft-dRadNetdT*TKC1+HeatAdd2Can+TairK*CdHeatCanopyAir) &
       /(VHeatCapCanopy_pft(NZ)+CdHeatCanopyAir-dRadNetdT)
 
-    !limit canopy temperature to no different from air for more than 10 K
-    TKCY=AMIN1(TairK+5.0_r8,AMAX1(TairK-5.0_r8,TKCY))
+    ! Limit each nonlinear step, not the final departure from air. A fixed
+    ! air-temperature bound can exclude the heat-balanced solution.
+    TKCY=AMIN1(TKC1+5.0_r8,AMAX1(TKC1-5.0_r8,TKCY))
     !
     !     RESET CANOPY TEMPERATURE FOR NEXT ITERATION
     !
     !     XC,IC=magnitude,direction of change in canopy temp for next cycle
     !
-    IF((IC.EQ.0 .AND. TKCY.GT.TKC1)        & !canopy temperature from cooling or no change to increase
-      .OR. (IC.EQ.1 .AND. TKCY.LT.TKC1))THEN !canopy temperature from increase to decrease
+    IF((IC.EQ.0 .AND. TKCY.GT.TKC1)        & !canopy temperature shifts from cooling or no change to warming
+      .OR. (IC.EQ.1 .AND. TKCY.LT.TKC1))THEN !canopy temperature shifts from warming to cooling
       !reducing update rate when temperature update change direction
       XC=0.5_r8*XC
     ENDIF
@@ -1002,10 +1357,16 @@ module UptakesMod
       !cooling or no change
       IC=0
     ENDIF
+    ! Match the capacity and accepted fluxes committed by UpdatePlantWaterVars.
+    VHeatCapCanopy_pft(NZ)=VHeatCapCanopyPrev_pft+cpw*(RainIntcptByCanopy_pft(NZ)+VapXAir2CanopyLiq_pft(NZ) &
+      +Transpiration_pft(NZ)-cumPRootH2OUptake)+cps*(SnowIntcptByCanopy_pft(NZ)+SnoSub2AirCanopy_pft(NZ))
+    HeatResidual=TKCX*VHeatCapCanopyPrev_pft-TKCanopy_pft(NZ)*VHeatCapCanopy_pft(NZ) &
+      +RadNet2Canopy_pft(NZ)+CanopyEvapTransLHeat_pft(NZ)+HeatEvapSens+PrecpHeatbyCanopy &
+      -CumPlantHeatLoss2Soil+CdHeatCanopyAir*(TairK-TKCanopy_pft(NZ))
     ! A disconnected canopy still exchanges heat and intercepted water with
     ! the atmosphere. Its biomass reservoir and root fluxes remain unchanged.
     if (.not.HydraulicPathAvailable) then
-      if (ABS(TKCY-TKC1)<0.05_r8) then
+      if (ABS(HeatResidual)<CanopyHeatTolerance) then
         DIFF=0._r8
         exit D4000
       endif
@@ -1132,11 +1493,19 @@ module UptakesMod
         DIFF=0._r8  
       ENDIF
 
-      !the relative difference is small enough'
+      ! Water convergence also requires closure of the accepted heat budget.
+    ! Match the capacity and accepted fluxes committed by UpdatePlantWaterVars.
+    VHeatCapCanopy_pft(NZ)=VHeatCapCanopyPrev_pft+cpw*(RainIntcptByCanopy_pft(NZ)+VapXAir2CanopyLiq_pft(NZ) &
+      +Transpiration_pft(NZ)-cumPRootH2OUptake)+cps*(SnowIntcptByCanopy_pft(NZ)+SnoSub2AirCanopy_pft(NZ))
+    HeatResidual=TKCX*VHeatCapCanopyPrev_pft-TKCanopy_pft(NZ)*VHeatCapCanopy_pft(NZ) &
+      +RadNet2Canopy_pft(NZ)+CanopyEvapTransLHeat_pft(NZ)+HeatEvapSens+PrecpHeatbyCanopy &
+      -CumPlantHeatLoss2Soil+CdHeatCanopyAir*(TairK-TKCanopy_pft(NZ))
       IF(DIFF.LT.DIFFY)THEN
-        IF(LIterationExit)EXIT
-        LIterationExit=.true.
-        CALL StomatalDynamics(yearIJ,NZ,RawH2OCanopy2Atm_pft(NZ))
+        IF(LIterationExit.and.ABS(HeatResidual)<CanopyHeatTolerance)EXIT
+        if(.not.LIterationExit)then
+          LIterationExit=.true.
+          CALL StomatalDynamics(yearIJ,NZ,RawH2OCanopy2Atm_pft(NZ))
+        endif
         CYCLE
       ENDIF
       !
@@ -1206,7 +1575,6 @@ module UptakesMod
 
   call update_osmo_turg_pressure(PSICanopy_pft(NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKC1 &
       ,PSICanopyOsmo_pft(NZ),PSICanopyTurg_pft(NZ),FDMP)  
-  !write(9901,*)I*1000+J/24.,PSICanopy_pft(NZ),PSICanopyTurg_pft(NZ),PSICanopyOsmo_pft(NZ)
 
   !
   !     FINAL CANOPY TEMPERATURE, DIFFERENCE WITH AIR TEMPERATURE
@@ -1218,8 +1586,8 @@ module UptakesMod
   TKC_pft(NZ)      = TKCanopy_pft(NZ)
   DeltaTKC_pft(NZ) = TKC_pft(NZ)-TairK
   
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end function CanopyEnergyH2OIter_func
 
 !----------------------------------------------------------------------------------------------------
@@ -1310,7 +1678,7 @@ module UptakesMod
   PSIGravCanopyHeight            = mGravAccelerat*CanopyHeight4WatUptake_pft(NZ)
   !
   !Hagen-Poiseuille law of stalk xylem/tracheid vessels
-  FRADW                          = 1.0E+04_r8*(AMAX1(0.5_r8,1.0_r8+PSICanopy_pft(NZ)/EMODW))**4
+  FRADW  = 1.0E+04_r8*(AMAX1(0.5_r8,1.0_r8+PSICanopy_pft(NZ)/EMODW))**4
   !
   !     SOIL AND ROOT HYDRAULIC RESISTANCES TO ROOT WATER UPTAKE
   !
@@ -1413,14 +1781,17 @@ module UptakesMod
   end subroutine CalcPlantHydroResistance
 
 !----------------------------------------------------------------------------------------------------
-  subroutine HandleBareSoil(NZ,TotalSoilPSIMPa_vr,FDMP)
-  !
-  !plant has not emerged yet
+  subroutine HandleBareSoil(NZ,TotalSoilPSIMPa_vr,FDMP,CanopyHeatCapacity)
+  ! Description:
+  ! Clear atmospheric/root-water fluxes when exchange is inactive. Retain the
+  ! canopy temperature and actual biomass/water capacity in both plant modes;
+  ! resetting either without an accepted heat transfer changes the inventory.
   use data_const_mod, only : spval => DAT_CONST_SPVAL
   implicit none
   integer, intent(in) :: NZ
   real(r8), intent(in) :: TotalSoilPSIMPa_vr(JZ1)
   real(r8), intent(out):: FDMP
+  real(r8), intent(in) :: CanopyHeatCapacity ! current biomass/water heat capacity [MJ K-1]
   character(len=*), parameter :: subname='HandleBareSoil'
   integer :: N,L
   real(r8) :: APSILT
@@ -1429,6 +1800,7 @@ module UptakesMod
   real(r8) :: OSWT
 
 ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                                      &
     AREA3                          => plt_site%AREA3                             ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
     OrganOsmoPsi0pt_pft            => plt_ew%OrganOsmoPsi0pt_pft                 ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
@@ -1444,7 +1816,7 @@ module UptakesMod
     PSIRootTurg_vr                 => plt_ew%PSIRootTurg_vr                      ,& !input  :root turgor water potential, [Mpa]
     EMS_Modify_Scalar_col          => plt_ew%EMS_Modify_Scalar_col               ,& !input  :canopy longwave radiation emissivity scalar
     RawIsoTCanopy2Atm_pft          => plt_ew%RawIsoTCanopy2Atm_pft               ,& !input  :canopy roughness height, [m]
-    RootNonstOMConc_pvr           => plt_biom%RootNonstOMConc_pvr              ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
+    RootNonstOMConc_pvr            => plt_biom%RootNonstOMConc_pvr               ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     ShootElms_pft                  => plt_biom%ShootElms_pft                     ,& !input  :canopy shoot structural chemical element mass, [g d-2]
     SnowDepth                      => plt_ew%SnowDepth                           ,& !input  :snowpack depth, [m]
     MaxNumRootLays                 => plt_site%MaxNumRootLays                    ,& !input  :maximum root layer number,[-]
@@ -1456,6 +1828,7 @@ module UptakesMod
     PSICanopy_pft                  => plt_ew%PSICanopy_pft                       ,& !output :canopy total water potential, [Mpa]
     PSIRoot_pvr                    => plt_ew%PSIRoot_pvr                         ,& !output :root total water potential, [Mpa]
     TKC_pft                        => plt_ew%TKC_pft                             ,& !output :canopy temperature, [K]
+    TKCanopy_pft                   => plt_ew%TKCanopy_pft                        ,& !output :canopy iteration temperature, [K]
     RPlantRootH2OUptk_pvr          => plt_ew%RPlantRootH2OUptk_pvr               ,& !output :whole population root water uptake, [m3 d-2 h-1]
     RootH2OUptkStress_pvr          => plt_ew%RootH2OUptkStress_pvr               ,& !output :pontential root water uptake rate, [m3 d-2 h-1]
     CanPStomaResistH2O_pft         => plt_photo%CanPStomaResistH2O_pft           ,& !output :canopy stomatal resistance, [h m-1]
@@ -1474,7 +1847,6 @@ module UptakesMod
     VapXAir2CanopyLiq_pft          => plt_ew%VapXAir2CanopyLiq_pft               ,& !output :canopy evaporation, [m2 d-2 h-1]
     VapXAir2Canopy_pft             => plt_ew%VapXAir2Canopy_pft                   & !output :canopy evaporation+sublimation, [m2 d-2 h-1]
   )
-  call PrintInfo('beg '//subname)
   RadNet2Canopy_pft(NZ)        = 0.0_r8
   CanopyEvapTransLHeat_pft(NZ) = 0.0_r8
   HeatXAir2PCan_pft(NZ)        = 0.0_r8
@@ -1485,16 +1857,13 @@ module UptakesMod
   Transpiration_pft(NZ)        = 0.0_r8
   QdewCanopy_pft(NZ)           = 0.0_r8
   
-  IF(CanopyHeightLive_pft(NZ).GE.SnowDepth-ZERO .or. TKSnow==spval)THEN
-    TKC_pft(NZ)=TairK
-  ELSE
-    TKC_pft(NZ)=TKSnow
-  ENDIF
+  TKCanopy_pft(NZ)=TKC_pft(NZ)
 
-  FTHRM                  = EMMC*stefboltz_const*FracPARads2Canopy_pft(NZ)*AREA3(NU)*EMS_Modify_Scalar_col
-  LWRadCanopy_pft(NZ)    = FTHRM*TKC_pft(NZ)**4
-  PSICanopy_pft(NZ)      = TotalSoilPSIMPa_vr(NGTopRootLayer_pft(NZ))
-  CCPOLT = CanopyNonstOMConc_pft(NZ)
+  FTHRM               = EMMC*stefboltz_const*FracPARads2Canopy_pft(NZ)*AREA3(NU)*EMS_Modify_Scalar_col
+  LWRadCanopy_pft(NZ) = FTHRM*TKC_pft(NZ)**4
+  PSICanopy_pft(NZ)   = TotalSoilPSIMPa_vr(NGTopRootLayer_pft(NZ))
+  CCPOLT              = CanopyNonstOMConc_pft(NZ)
+
   call update_osmo_turg_pressure(PSICanopy_pft(NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKC_pft(NZ)&
     ,PSICanopyOsmo_pft(NZ),PSICanopyTurg_pft(NZ),FDMP)
   !
@@ -1502,8 +1871,8 @@ module UptakesMod
   !
   RawH2OCanopy2Atm_pft(NZ)  = RawIsoTCanopy2Atm_pft(NZ)
   RawHeatCanopy2Atm_pft(NZ) = RawH2OCanopy2Atm_pft(NZ)/BndlResistH2OToHeatRatio
-  VHeatCapCanopy_pft(NZ) = cpw*(ShootElms_pft(ielmc,NZ)*10.0E-06_r8)
-  DeltaTKC_pft(NZ)       = 0.0_r8
+  VHeatCapCanopy_pft(NZ)    = CanopyHeatCapacity
+  DeltaTKC_pft(NZ)          = TKC_pft(NZ)-TairK
 
   DO N=1,Myco_pft(NZ)
     DO  L=NU,MaxNumRootLays
@@ -1520,15 +1889,14 @@ module UptakesMod
     enddo
   ENDDO
   
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine HandleBareSoil
 
 !----------------------------------------------------------------------------------------------------
   subroutine UpdatePlantWaterVars(NZ,CdHeatCanopyAir,CanopyMassC4H2OStorage,TotalSoilPSIMPa_vr,SoilResist4H2O_rvr,SoilRootResist4H2O_pvr,&
-    TKCX,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,SoiLayerHasRoot_rvr)
-  !
-  !Description
+    TKCX,VHeatCapCanopyPrev_pft,PrecpHeatbyCanopy,cumPRootH2OUptake,CumPlantHeatLoss2Soil,HeatEvapSens,SoiLayerHasRoot_rvr,DeadHeatCapacity)
+  ! Description:
   !Update canopy heat and water states after the numerical iterations.
   implicit none
   integer, intent(in) :: NZ
@@ -1544,10 +1912,12 @@ module UptakesMod
   real(r8), intent(in) :: CumPlantHeatLoss2Soil
   logical , intent(in) :: SoiLayerHasRoot_rvr(pltpar%jroots,JZ1)  !indicator of root prescence
 
+  real(r8), intent(in) :: DeadHeatCapacity ! standing-dead dry-material capacity [MJ/K]
   character(len=*), parameter :: subname='UpdatePlantWaterVars'
   real(r8) :: CCPOLT
   real(r8) :: OSWT
   integer :: N,L
+  call PrintInfo('beg '//subname)
   associate(                                                          &
     OrganOsmoPsi0pt_pft       => plt_ew%OrganOsmoPsi0pt_pft          ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
     MaxSoilLays4Root_pft      => plt_morph%MaxSoilLays4Root_pft      ,& !input  :maximum soil layer number for all root axes,[-]
@@ -1558,7 +1928,7 @@ module UptakesMod
     PSIRootTurg_vr            => plt_ew%PSIRootTurg_vr               ,& !input  :root turgor water potential, [Mpa]
     RainIntcptByCanopy_pft    => plt_ew%RainIntcptByCanopy_pft       ,& !input  :water flux into canopy, [m3 d-2 h-1]
     SnowIntcptByCanopy_pft    => plt_ew%SnowIntcptByCanopy_pft       ,& !input  :Snow intercepted by canopy, [m3 d-2 h-1]
-    RootNonstOMConc_pvr      => plt_biom%RootNonstOMConc_pvr       ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
+    RootNonstOMConc_pvr       => plt_biom%RootNonstOMConc_pvr        ,& !input  :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     TKCanopy_pft              => plt_ew%TKCanopy_pft                 ,& !input  :canopy temperature, [K]
     RootResist4H2O_pvr        => plt_ew%RootResist4H2O_pvr           ,& !input  :total root (axial+radial) resistance for water uptake
     TKS_vr                    => plt_ew%TKS_vr                       ,& !input  :mean annual soil temperature, [K]
@@ -1575,7 +1945,6 @@ module UptakesMod
     HeatStorCanopy_pft        => plt_ew%HeatStorCanopy_pft           ,& !output :canopy storage heat flux, [MJ d-2 h-1]
     HeatXAir2PCan_pft         => plt_ew%HeatXAir2PCan_pft             & !output :canopy sensible heat flux, [MJ d-2 h-1]
   )
-  call PrintInfo('beg '//subname)
   !
   !     CANOPY SURFACE WATER STORAGE, SENSIBLE AND STORAGE HEAT FLUXES
   !     (NOT EXPLICITLY CALCULATED IN CONVERGENCE SOLUTION)
@@ -1592,7 +1961,7 @@ module UptakesMod
   CanopyBiomWater_pft(NZ) = CanopyBiomWater_pft(NZ)+Transpiration_pft(NZ)-cumPRootH2OUptake
   WatHeldOnCanopy_pft(NZ) = WatHeldOnCanopy_pft(NZ)+RainIntcptByCanopy_pft(NZ)+VapXAir2CanopyLiq_pft(NZ)
   SnowOnCanopy_pft(NZ)    = SnowOnCanopy_pft(NZ)+SnowIntcptByCanopy_pft(NZ)+SnoSub2AirCanopy_pft(NZ)
-  VHeatCapCanopy_pft(NZ)  = cpo*gOC_to_m3_OM(CanopyMassC4H2OStorage)+cpw*(WatHeldOnCanopy_pft(NZ)+CanopyBiomWater_pft(NZ)) &
+  VHeatCapCanopy_pft(NZ)  = cpo*gOC_to_m3_OM(CanopyMassC4H2OStorage)+DeadHeatCapacity+cpw*(WatHeldOnCanopy_pft(NZ)+CanopyBiomWater_pft(NZ)) &
     +cps*SnowOnCanopy_pft(NZ)
   HeatXAir2PCan_pft(NZ)   = CdHeatCanopyAir*(TairK-TKCanopy_pft(NZ))
   HeatStorCanopy_pft(NZ)  = TKCX*VHeatCapCanopyPrev_pft-TKCanopy_pft(NZ)*VHeatCapCanopy_pft(NZ)+HeatEvapSens+PrecpHeatbyCanopy
@@ -1628,8 +1997,8 @@ module UptakesMod
 
     ENDDO D4510
   ENDDO D4505
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine UpdatePlantWaterVars
 
 !----------------------------------------------------------------------------------------------------

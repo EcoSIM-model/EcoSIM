@@ -1,4 +1,6 @@
 module PlantPhenologyAPIData
+  ! Description:
+  ! Own plant phenology API state and trait identifiers used by plant and canopy processes.
   ! Owns the phenology API type, instance and lifecycle procedures.
   use PlantAPICommonData
   implicit none
@@ -61,6 +63,7 @@ module PlantPhenologyAPIData
   integer,  pointer :: iPlantDevelopPattern_pft(:)       => null()  !plant growth habit (determinate or indeterminate),[-]
   integer,  pointer :: iPlantPhotoperiodType_pft(:)      => null()  !photoperiod type (neutral, long day, short day),[-]
   integer,  pointer :: iPlantRootProfile_pft(:)          => null()  !plant growth type (vascular, non-vascular),[-]
+  integer, pointer :: iPlantSnowIntercepType_pft(:) => null() ! snow interception class [0:4, PFT]
   integer,  pointer :: doInitPlant_pft(:)                => null()  !PFT initialization flag:0=no,1=yes,[-]
   integer,  pointer :: KLowestGroLeafNode_brch(:,:)      => null()  !leaf growth stage counter,                        [-]
   integer,  pointer :: iPlantCalendar_brch(:,:,:)        => null()  !plant growth stage,                               [-]
@@ -100,6 +103,8 @@ module PlantPhenologyAPIData
 contains
 
   subroutine plt_pheno_init(this)
+  ! Description:
+  ! Allocate phenology state and PFT trait identifiers for the plant API.
   implicit none
   class(plant_pheno_type) :: this
 
@@ -160,6 +165,7 @@ contains
   allocate(this%doInitPlant_pft(JP1));this%doInitPlant_pft=0
   allocate(this%doReSeed_pft(JP1)); this%doReSeed_pft=.false.
   allocate(this%iPlantRootProfile_pft(JP1));this%iPlantRootProfile_pft=0
+  allocate(this%iPlantSnowIntercepType_pft(JP1));this%iPlantSnowIntercepType_pft=0
   allocate(this%KHiestGroLeafNode_brch(MaxNumBranches,JP1));this%KHiestGroLeafNode_brch=0
   allocate(this%KLowestGroLeafNode_brch(MaxNumBranches,JP1));this%KLowestGroLeafNode_brch=0
   allocate(this%fRootGrowPSISense_pvr(jroots,JZ1,JP1)); this%fRootGrowPSISense_pvr=spval
@@ -189,9 +195,11 @@ contains
   end subroutine plt_pheno_init
 
   subroutine plt_pheno_destroy(this)
+  ! Description:
+  ! Release the transient canopy snow-class mapping owned by this API instance.
   implicit none
   class(plant_pheno_type) :: this
-
+  if(associated(this%iPlantSnowIntercepType_pft))deallocate(this%iPlantSnowIntercepType_pft)
 
   end subroutine plt_pheno_destroy
 end module PlantPhenologyAPIData
