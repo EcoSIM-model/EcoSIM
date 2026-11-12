@@ -58,7 +58,7 @@ module RedistMod
 
   real(r8), pointer :: ThetaCX(:)   !water concentration in litter
 
-  public :: redist, InitRedist
+  public :: redist, InitRedist, UpdateCanopyAirDerivatives
   contains
 
   subroutine InitRedist
