@@ -1,4 +1,6 @@
 module PlantMod
+  ! Description:
+  ! Coordinate canopy radiation and plant processes, preserving hourly exchanges through management.
   use data_kind_mod,     only: r8 => DAT_KIND_R8,yearIJ_type
   use grosubsMod,        only: GrowPlants
   use PlantPhenolMod,    only: PhenologyUpdate
@@ -36,14 +38,15 @@ implicit none
   contains
 
   subroutine PlantModel(yearIJ,NHW,NHE,NVN,NVS)
-  !
-  !run the plant biogeochemistry model
-  !
+  ! Description:
+  ! Run plant processes and aggregate exchanges accepted before growth or population removal.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NHW,NHE,NVN,NVS
   real(r8) :: t1,tvegE(NumPlantChemElms)
   real(r8) :: SeedCDeposition_1d(JP1), PPmax_1d(JP1)
+  logical :: PassiveExchange_pft(JP1) ! passive exchange accepted before growth/management [-]
+  logical :: LiveExchange_pft(JP1) ! live exchange eligibility recorded before growth/management [-]
 
   integer :: NY,NX,NZ
   character(len=*), parameter :: subname='PlantModel'
@@ -62,9 +65,9 @@ implicit none
         !do prescribed phenolgoy
         call PlantUptakeAPISend(yearIJ%I,yearIJ%J,NY,NX)        
 
-        CALL ROOTUPTAKES(yearIJ)
+        CALL ROOTUPTAKES(yearIJ,LiveExchange_pft,PassiveExchange_pft)
         
-        call extracts(yearIJ)
+        call extracts(yearIJ,LiveExchange_pft,PassiveExchange_pft)
         
         call PlantUPtakeAPIRecv(yearIJ%I,yearIJ%J,NY,NX)
       else
@@ -83,13 +86,13 @@ implicit none
         CALL PhenologyUpdate(yearIJ)
 
         !Predict uptake fluxes of nutrients and O2        
-        CALL ROOTUPTAKES(yearIJ)
+        CALL ROOTUPTAKES(yearIJ,LiveExchange_pft,PassiveExchange_pft)
 
         !Do growth of active branches and roots
         CALL GROWPLANTS(yearIJ)
 
         !aggregate varaibles
-        CALL EXTRACTs(yearIJ)
+        CALL EXTRACTs(yearIJ,LiveExchange_pft,PassiveExchange_pft)
         
         Call ReSeedPlants(yearIJ,NP_col(NY,NX))
         

@@ -1,4 +1,6 @@
 module MiniFuncMod
+  ! Description:
+  ! Supply shared physical response functions and safe numerical combinations.
 
   use data_kind_mod     , only : r8 => DAT_KIND_R8
   use EcosimConst
@@ -12,18 +14,23 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   pure function FilmThickness(PSISM, is_top_layer)result(ans)
-
+  ! Description:
+  ! Evaluate the empirical water-film thickness. Limit its suction argument at
+  ! the former saturated-soil value PSIPS, retaining a finite saturated film
+  ! when a retention scheme reaches zero pressure. Soil pressure is unchanged.
   implicit none
-  real(r8), intent(in) :: PSISM
-  logical, optional, intent(in) :: is_top_layer
-  real(r8) :: ans
+  real(r8), intent(in) :: PSISM ! matric potential [MPa]
+  logical, optional, intent(in) :: is_top_layer ! select the surface-film fit [-]
+  real(r8) :: ans ! water-film thickness [m]
+  real(r8) :: psi_film
   logical :: is_top_layer_loc
   is_top_layer_loc=.false.
   if(PRESENT(is_top_layer))is_top_layer_loc=is_top_layer
+  psi_film=AMIN1(PSISM,PSIPS)
   if(is_top_layer_loc)then
-    ans=AMAX1(ppmc,EXP(-13.650_r8-0.857_r8*LOG(-PSISM)))
+    ans=AMAX1(ppmc,EXP(-13.650_r8-0.857_r8*LOG(-psi_film)))
   else
-    ans=AMAX1(ppmc,EXP(-13.833_r8-0.857_r8*LOG(-PSISM)))
+    ans=AMAX1(ppmc,EXP(-13.833_r8-0.857_r8*LOG(-psi_film)))
   endif
   end function FilmThickness
 !------------------------------------------------------------------------------------------

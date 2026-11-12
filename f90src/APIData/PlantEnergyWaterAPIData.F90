@@ -1,4 +1,5 @@
 module PlantEnergyWaterAPIData
+  ! Description:
   ! Owns the energywater API type, instance and lifecycle procedures.
   use PlantAPICommonData
   implicit none
@@ -6,6 +7,7 @@ module PlantEnergyWaterAPIData
   public :: plt_ew_init, plt_ew_destroy
 
   type, public :: plant_ew_type
+  logical :: canopy_exposed_col=.false.      ! canopy area protrudes above snow; hourly diagnostic, [-]
   real(r8) :: SnowDepth                     !snowpack depth, [m]
   real(r8) :: VcumWatSnow_col               !water volume in snowpack, [m3 d-2]
   real(r8) :: VcumDrySnoWE_col              !snow volume in snowpack (water equivalent), [m3 d-2]
@@ -16,6 +18,8 @@ module PlantEnergyWaterAPIData
   real(r8) :: LWRadCanG                     !grid total canopy LW emission, [MJ d-2 h-1]
   real(r8) :: QVegET_col                    !total canopy evaporation + transpiration, [m3 d-2]
   real(r8) :: VapXAir2Canopy_col            !grid canopy evaporation, [m3 d-2]
+  real(r8) :: HeatSensVapAir2Canopy_col=0._r8 ! accepted atmospheric transfer [MJ/cell/hour]
+  real(r8) :: HeatPrecAir2Canopy_col=0._r8 ! accepted atmospheric transfer [MJ/cell/hour]
   real(r8) :: HeatFlx2Canopy_col            !total canopy heat flux, [MJ  d-2]
   real(r8) :: H2OLoss_CumYr_col             !total subsurface water flux, [m3 d-2]
   real(r8) :: VPA                           !vapor concentration, [m3 m-3]
@@ -97,10 +101,12 @@ module PlantEnergyWaterAPIData
 contains
 
   subroutine  plt_ew_init(this)
-
+  ! Description:
+  ! Initialize the plant energy/water workspace and derived canopy exposure.
   implicit none
   class(plant_ew_type) :: this
 
+  this%canopy_exposed_col=.false.
   allocate(this%RootResist4H2O_pvr(jroots,JZ1,JP1)); this%RootResist4H2O_pvr=spval
   allocate(this%RootRadialKond2H2O_pvr(jroots,JZ1,JP1));this%RootRadialKond2H2O_pvr=spval
   allocate(this%RootAxialKond2H2O_pvr(jroots,JZ1,JP1));this%RootAxialKond2H2O_pvr=spval

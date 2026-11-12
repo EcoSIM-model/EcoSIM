@@ -277,7 +277,8 @@ contains
       this%h1D_tSWC_col(ncol)             = WatMass_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_tHeat_col(ncol)            = HeatStore_col(NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_QDISCHG_FLX_col(ncol)      = QDischarg2WTBL_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
-      this%h1D_HeatDISCHG_FLX_col(ncol)   = HeatDischar_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      ! Heat is already in MJ/cell; only water depths require the m-to-mm factor.
+      this%h1D_HeatDISCHG_FLX_col(ncol)   = HeatDischar_col(NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SNOWPACK_col(ncol)         = AZMAX1((VcumSnowWE_col(NY,NX))*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX))
       if(this%h1D_SNOWPACK_col(ncol)>0._r8)then
         this%h1D_SNOWDENS_col(ncol)         = this%h1D_SNOWPACK_col(ncol)/SnowDepth_col(NY,NX)

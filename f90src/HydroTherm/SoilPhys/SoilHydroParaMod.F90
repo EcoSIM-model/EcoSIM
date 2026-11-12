@@ -7,6 +7,7 @@ module SoilHydroParaMod
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
   use data_kind_mod,    only: r8 => DAT_KIND_R8
+  use abortutils, only: endrun,iulog
   use EcoSiMParDataMod, only: micpar
   use minimathmod,      only: isclose, AZMAX1, AZMIN1, Viscosity_H2O
   Use SoilPhysParaMod,  only: ComputePsiMCM,ComputePSIPond,getMoistK, &
@@ -165,7 +166,11 @@ contains
 
   ! Cold-start volumes were initialized in STARTS before chemistry. Refresh
   ! estimated hydraulic limits here without resetting water, ice or heat capacity.
-  if(is_cold_run())call EstimateSoilWaterLimits(L,NY,NX)
+  if(soil_hydraulic_scheme==VanGenuchtenSchemeName)then
+    if(L==0.or.SoilBulkDensity_vr(L,NY,NX)<=ZERO)PSI_at_Sautration_vr(L,NY,NX)=PSIPS
+  endif
+  if(is_cold_run().or.(soil_hydraulic_scheme==VanGenuchtenSchemeName.and.L>0.and. &
+    SoilBulkDensity_vr(L,NY,NX)>ZERO))call EstimateSoilWaterLimits(L,NY,NX)
   LOGFldCapacity_vr(L,NY,NX) = LOG(FieldCapacity_vr(L,NY,NX))
   LOGWiltPoint_vr(L,NY,NX)   = LOG(WiltPoint_vr(L,NY,NX))
   PSD_vr(L,NY,NX)            = LOGPOROS_vr(L,NY,NX)-LOGFldCapacity_vr(L,NY,NX)
@@ -307,13 +312,30 @@ contains
 
 !------------------------------------------------------------------------------------------
   subroutine EstimateSoilWaterLimits(L,NY,NX)
-  ! Estimate both FC and WP when either was unspecified; retain the input flags.
+  ! Description:
+  ! Derive ordinary-soil VG limits from its curve, or retain the existing EcoSIM
+  ! estimator/input rules. Input flags retain their cold-water initialization role.
   implicit none
   integer, intent(in) :: L,NY,NX
   character(len=*), parameter :: subname='EstimateSoilWaterLimits'
+  type(SoilHydraulicParameters) :: parameters
+  class(SoilHydraulicModel), pointer :: model
 
   call PrintInfo('beg '//subname)
-  IF(ISOIL_vr(isoi_fc,L,NY,NX).EQ.isoi_unset .OR. ISOIL_vr(isoi_wp,L,NY,NX).EQ.isoi_unset)THEN
+  IF(soil_hydraulic_scheme==VanGenuchtenSchemeName.AND.L>0.AND.SoilBulkDensity_vr(L,NY,NX)>ZERO)THEN
+    if(PSIAtFldCapacity_col(NY,NX)>=0._r8.or.PSIAtWiltPoint_col(NY,NX)>=PSIAtFldCapacity_col(NY,NX)) &
+      call endrun('Van Genuchten requires negative, ordered FC and WP anchor pressures')
+    parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
+    model=>GetSoilHydraulicModel()
+    FieldCapacity_vr(L,NY,NX)=model%water_content(parameters,PSIAtFldCapacity_col(NY,NX))
+    WiltPoint_vr(L,NY,NX)=model%water_content(parameters,PSIAtWiltPoint_col(NY,NX))
+    if(.not.(WiltPoint_vr(L,NY,NX)>0._r8.and.WiltPoint_vr(L,NY,NX)<FieldCapacity_vr(L,NY,NX).and. &
+      FieldCapacity_vr(L,NY,NX)<POROS_vr(L,NY,NX)))then
+      write(iulog,*) 'VG WP,FC,porosity at L,NY,NX=',L,NY,NX,WiltPoint_vr(L,NY,NX),FieldCapacity_vr(L,NY,NX),POROS_vr(L,NY,NX)
+      call endrun('Van Genuchten parameters yield unresolved FC/WP/porosity limits')
+    endif
+    PSI_at_Sautration_vr(L,NY,NX)=0._r8
+  ELSEIF(ISOIL_vr(isoi_fc,L,NY,NX).EQ.isoi_unset .OR. ISOIL_vr(isoi_wp,L,NY,NX).EQ.isoi_unset)THEN
     !when either field capacity or wilting point is not provided, both are recomputed 
     !for consistency.
     !calculating FC or WP

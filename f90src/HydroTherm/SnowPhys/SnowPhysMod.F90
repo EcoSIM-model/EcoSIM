@@ -19,6 +19,7 @@ module SnowPhysMod
   use EcoSIMCtrlDataType
   use SoilWaterDataType
   use HydroThermData
+  use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
   use SurfLitterDataType
   use SurfSoilDataType
   use SoilHeatDataType
@@ -834,6 +835,7 @@ contains
 !------------------------------------------------------------------------------------------
   subroutine SnowAtmosExchangeMM(I,J,M,NY,NX,SnoFallWE,Rainfall,IceFallVol,TopLaySnoVol,HeatSnofall2Snow,&
     LatentHeatAir2Sno,HeatSensEvapAir2Snow,HeatNetFlx2Snow,Radnet2Snow,HeatSensAir2Snow,SnowSensibleDeriv)
+  ! Description:
   ! Evaluate snow-atmosphere exchange at the old state and return the frozen
   ! sensible coefficient for the semi-implicit snow-temperature correction.
   implicit none
@@ -902,7 +904,7 @@ contains
   RAGX = AMAX1(RAM,0.8_r8*RawH2OSnow2CanAir_col(NY,NX), &
     AMIN1(1.2_r8*RawH2OSnow2CanAir_col(NY,NX),RawIsoTSoil2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
   RawH2OSnow2CanAir_col(NY,NX) = RAGX
-  RAa                          = RAGX
+  RAa = SurfaceExchangeResistance(NY,NX,TKSnow1_snvr(1,NY,NX),RAGX)
   !
   ! PARAMETERS FOR CALCULATING LATENT AND SENSIBLE HEAT FLUXES
   !
@@ -986,6 +988,8 @@ contains
 
   Prec2Snow_col(NY,NX)     = Prec2Snow_col(NY,NX)+SnoFallWE+Rainfall+IceFallVol
   PrecHeat2Snow_col(NY,NX) = PrecHeat2Snow_col(NY,NX)+HeatSnofall2Snow
+  ! Record the actual nested-substep input, also when snow later disappears.
+  PrecHeat_col(NY,NX) = PrecHeat_col(NY,NX)+HeatSnofall2Snow
   QSnowH2Oloss_col(NY,NX)  = QSnowH2Oloss_col(NY,NX)-EvapSublimation2-EVAPW2
   RainPrec2Sno_col(NY,NX)  = RainPrec2Sno_col(NY,NX)+Rainfall
 
@@ -1134,6 +1138,9 @@ contains
 
 !------------------------------------------------------------------------------------------
   subroutine AccumulateSnowRedisFluxM(I,J,M,NHW,NHE,NVN,NVS)
+  ! Description:
+  ! Accumulate accepted lateral snow constituents and sensible heat for native
+  ! snow updates and the column heat balance, with positive heat into the cell.
   implicit none
   integer, intent(in) :: I,J,M
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -1145,6 +1152,8 @@ contains
       CumWat2SnowL_snvr(1,NY,NX)  = CumWat2SnowL_snvr(1,NY,NX)+cumWatSnoByRedistM_col(NY,NX)
       CumIce2SnowL_snvr(1,NY,NX)  = CumIce2SnowL_snvr(1,NY,NX)+cumIceSnoByRedistM_col(NY,NX)
       CumHeat2SnowL_snvr(1,NY,NX) = CumHeat2SnowL_snvr(1,NY,NX)+cumHeatSnoByRedistM_col(NY,NX)
+      ! This is internal transport, separate from atmospheric heat exchange.
+      HeatLateral2Cell_col(NY,NX)=HeatLateral2Cell_col(NY,NX)+cumHeatSnoByRedistM_col(NY,NX)
     ENDDO
   ENDDO
   end subroutine AccumulateSnowRedisFluxM

@@ -14,6 +14,9 @@ module Read4SatePhenolMod
 !   float LAI(year,ntopou,maxpfts,month)     : leaf area index, [m2 m-2]
 !   float SAI(year,ntopou,maxpfts,month)     : stem area index, [m2 m-2]
 !   float HTOP(year,ntopou,maxpfts,month)    : canopy top height, [m]
+! A named slot with zero living population is standing dead only: LAI must
+! be zero, SAI prescribes dead stem area, and HTOP is dead stem height.
+! Its initial dead C/N/P comes from WTSTDI and the PFT litter composition.
 ! A file with a single year record is a climatology applied to every year;
 ! otherwise the record matching the forcing year is used.
 !
@@ -44,8 +47,7 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine ReadSatePhenol(yeari,NHW,NHE,NVN,NVS)
-  !
-  !Description:
+  ! Description:
   ! Load PFT names, population densities, slot counts and monthly canopy structure for forcing year yeari.
   implicit none
   integer, intent(in) :: yeari    !forcing calendar year, [AD]
@@ -189,11 +191,18 @@ implicit none
           endif
           if(.not.ieee_is_finite(popdens(NZ,NTOPO)))then
             write(iulog,*)subname//': nonfinite population density, topo/PFT=',NTOPO,NZ
-            call endrun('prescribed PlantPopuLive_pft must be finite and positive in '//mod_filename,__LINE__)
+            call endrun('prescribed PlantPopuLive_pft must be finite and nonnegative in '//mod_filename,__LINE__)
           endif
-          if(popdens(NZ,NTOPO)<=0._r8 .or. popdens(NZ,NTOPO)>1.e10_r8)then
+          if(popdens(NZ,NTOPO)<0._r8 .or. popdens(NZ,NTOPO)>1.e10_r8)then
             write(iulog,*)subname//': invalid population density, topo/PFT/value=',NTOPO,NZ,popdens(NZ,NTOPO)
-            call endrun('prescribed PlantPopuLive_pft must be finite and positive in '//mod_filename,__LINE__)
+            call endrun('prescribed PlantPopuLive_pft must be finite and nonnegative in '//mod_filename,__LINE__)
+          endif
+          if(popdens(NZ,NTOPO)==0._r8)then
+            if(any(lai(:,NZ,NTOPO)/=0._r8) .or. .not.any(sai(:,NZ,NTOPO)>0._r8) &
+              .or. any(sai(:,NZ,NTOPO)>0._r8 .and. htop(:,NZ,NTOPO)<=0._r8))then
+              write(iulog,*)subname//': invalid standing-dead geometry, topo/PFT=',NTOPO,NZ
+              call endrun('zero-population SP slots require LAI=0 and positive dead SAI/HTOP',__LINE__)
+            endif
           endif
           sp_popdens_pft(NZ,NY,NX)=popdens(NZ,NTOPO)
           PlantPopuLive_pft(NZ,NY,NX)=popdens(NZ,NTOPO)*AREA_3D(3,NU_col(NY,NX),NY,NX)

@@ -128,6 +128,16 @@ contains
         endif
         if (PlantPopuLive_pft(NZ,NY,NX) .LE. 0._r8)then
           call this%ZeroPlantHistVars(nptc)
+          if(StandDeadStrutElms_pft(ielmc,NZ,NY,NX)>0._r8)then
+            ! Passive canopy physics remains visible with zero living population.
+            this%h1D_CAN_RN_ptc(nptc)=MJ2W*RadNet2Canopy_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h1D_CAN_LE_ptc(nptc)=MJ2W*CanopyEvapTransLHeat_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h1D_CAN_H_ptc(nptc)=MJ2W*HeatXAir2PCan_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h1D_CAN_G_ptc(nptc)=MJ2W*HeatStorCanopy_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+            this%h1D_CAN_TEMPC_ptc(nptc)=TdegCCanopy_pft(NZ,NY,NX)
+            this%h1D_BLYR_RS_H2O_ptc(nptc)=RawH2OCanopy2Atm_pft(NZ,NY,NX)*secs1hour
+            this%h1D_BLYR_RSC_HEAT_ptc(nptc)=RawHeatCanopy2Atm_pft(NZ,NY,NX)*secs1hour
+          endif
           cycle
         endif
         this%h1D_PTSHTR_ptc(nptc) = PTSHTR_pft(NZ,NY,NX)
@@ -182,7 +192,7 @@ contains
         this%h1D_PSI_CAN_ptc(nptc)       = PSICanopy_pft(NZ,NY,NX)
         this%h1D_TURG_CAN_ptc(nptc)      = PSICanopyTurg_pft(NZ,NY,NX)
         this%h1D_STOML_RSC_H2O_ptc(nptc)  = CanPStomaResistH2O_pft(NZ,NY,NX)*secs1hour
-        this%h1D_BLYR_RSC_H2O_ptc(nptc)  = RawH2OCanopy2Atm_pft(NZ,NY,NX)*secs1hour
+        this%h1D_BLYR_RS_H2O_ptc(nptc)  = RawH2OCanopy2Atm_pft(NZ,NY,NX)*secs1hour
         this%h1D_BLYR_RSC_HEAT_ptc(nptc)  = RawHeatCanopy2Atm_pft(NZ,NY,NX)*secs1hour
         this%h1D_CdH2ORootxSoil_ptc(nptc) = CdH2ORootxSoil_pft(NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_TRANSPN_ptc(nptc)       = Transpiration_pft(NZ,NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)

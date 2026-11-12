@@ -45,7 +45,7 @@ contains
   allocate(this%h1D_RootLenPerPlant_ptc(beg_ptc:end_ptc))         ;this%h1D_RootLenPerPlant_ptc(:)=spval
   allocate(this%h1D_TURG_CAN_ptc(beg_ptc:end_ptc))        ;this%h1D_TURG_CAN_ptc(:)=spval
   allocate(this%h1D_STOML_RSC_H2O_ptc(beg_ptc:end_ptc))    ;this%h1D_STOML_RSC_H2O_ptc(:)=spval
-  allocate(this%h1D_BLYR_RSC_H2O_ptc(beg_ptc:end_ptc))    ;this%h1D_BLYR_RSC_H2O_ptc(:)=spval
+  allocate(this%h1D_BLYR_RS_H2O_ptc(beg_ptc:end_ptc))    ;this%h1D_BLYR_RS_H2O_ptc(:)=spval
   allocate(this%h1D_BLYR_RSC_HEAT_ptc(beg_ptc:end_ptc))    ;this%h1D_BLYR_RSC_HEAT_ptc(:)=spval
   allocate(this%h1D_CdH2ORootxSoil_ptc(beg_ptc:end_ptc)) ;this%h1D_CdH2ORootxSoil_ptc(:)=spval
   allocate(this%h1D_TRANSPN_ptc(beg_ptc:end_ptc))         ;this%h1D_TRANSPN_ptc(:)=spval

@@ -1,5 +1,7 @@
 module SoilHeatDatatype
-
+  ! Description:
+  ! Store native soil temperatures, capacities and accepted heat transfers for
+  ! physical updates and column/landscape energy accounting.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
@@ -26,6 +28,7 @@ module SoilHeatDatatype
   real(r8),target,allocatable ::  HeatRunSurf_col(:,:)               !heat loss through surface runoff, [MJ d-2 h-1]
   real(r8),target,allocatable ::  HeatDischar_col(:,:)               !Heat loss through discharge, [MJ d-2 h-1]
   real(r8),target,allocatable ::  THeatFlow2Soil_col(:,:)            !Heat flow into colum, [MJ d-2 h-1]
+  real(r8), allocatable :: HeatLateral2Cell_col(:,:) ! hour-integrated internal lateral heat, positive into column [MJ/cell]
   real(r8),target,allocatable ::  HeatSource_col(:,:)                !Heat source from heating, [MJ d-2 h-1]
   real(r8),target,allocatable ::  THeatSoiThaw_col(:,:)              !Heat associated with freeze-thaw, [MJ d-2 h-1]
   real(r8),target,allocatable ::  QSnoHeatXfer2Soil_col(:,:)         !Heat flux from snow into soil, [MJ d-2 h-1]
@@ -40,6 +43,7 @@ contains
 
   allocate(QIceInflx_vr(JZ,JY,JX));  QIceInflx_vr = 0._r8
   allocate(QSnoHeatXfer2Soil_col(JY,JX)); QSnoHeatXfer2Soil_col = 0._r8
+  allocate(HeatLateral2Cell_col(JY,JX)); HeatLateral2Cell_col=0._r8
   allocate(HeatSource_col(JY,JX)); HeatSource_col = 0._r8
   allocate(TKS_vr(0:JZ,JY,JX));    TKS_vr                              = 0._r8
   allocate(HeatFlx2Grnd_col(JY,JX));   HeatFlx2Grnd_col                = 0._r8
@@ -85,6 +89,7 @@ contains
   call destroy(HeatDrain_col)
   call destroy(HeatRunSurf_col)
   call destroy(HeatDischar_col)
+  call destroy(HeatLateral2Cell_col)
   call destroy(THeatFlow2Soil_col)
   end subroutine DestructSoilHeatData
 

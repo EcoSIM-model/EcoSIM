@@ -549,18 +549,6 @@ module PlantDisturbsMod
     HarvestAbgElmnt2Litr(NE) = LeafElmntHarv2Litr(NE)+PetolShethElmntHarv2Litr(NE)+WoodyElmntHarv2Litr(NE)+StandeadElmntHarv2Litr(NE)
   ENDDO
 
-  if(yearIJ%I>=181 .and. .false.)then
-    write(374,*)('-',NE=1,100)
-    write(374,*)yearIJ%I*1000+yearIJ%J/24.,NZ,TotalAbgElmntRemoval(ielmc),TotalAbgElmnt2Litr(ielmc),HarvestAbgElmnt2Litr(ielmc),'ttl litr hav',PlantElmDistLoss_pft(ielmc,NZ),&
-      TotalAbgElmntRemoval(ielmc)-TotalAbgElmnt2Litr(ielmc),TotalAbgElmntRemoval(ielmc)-TotalAbgElmnt2Litr(ielmc)+PlantElmDistLoss_pft(ielmc,NZ)
-    NE=ielmc
-    write(798,*)'rm',CanopyNonstElmRemoval(NE),LeafElmntRemoval(NE),PetoleShethElmntRemoval(NE),WoodyElmntRemoval(NE),StandeadElmntRemoval(NE)
-    write(798,*)'st',plt_biom%ShootNonstElms_pft(NE,NZ),plt_biom%ShootLeafElms_pft(NE,NZ),plt_biom%ShootFineNonLeafElms_pft(NE,NZ),&
-      plt_biom%ShootWoodyElms_pft(NE,NZ),plt_biom%StandDeadStrutElms_pft(NE,NZ)
-    write(798,*)plt_biom%CanopyNonstElms_pft(NE,NZ),plt_biom%ShootNoduleElms_pft(NE,NZ)
-    write(798,*)'totrm, litr=',TotalAbgElmntRemoval(ielmc),TotalAbgElmnt2Litr(ielmc),TotalAbgElmntRemoval(ielmc)-TotalAbgElmnt2Litr(ielmc)
-  endif
-
   IF(jHarvstType_pft(NZ).NE.jharvtyp_tmareseed .and. iHarvstType_pft(NZ).NE.iharvtyp_fire)THEN
    !not do harvest and reseed
     DO NE=1,NumPlantChemElms  
@@ -1949,10 +1937,16 @@ module PlantDisturbsMod
   real(r8) :: VOLWPX,WVPLT  
   real(r8) :: BranchLength  !Branch node length subject to removal
   real(r8) :: FDM  
-  real(r8) :: watflx,VHeatCapCanopyPrev,CanopyMassC
+  real(r8) :: watflx,VHeatCapCanopyPrev,CanopyMassC,ThermalCarbon,StemArea,DeadCarbon
   real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
   
+  call PrintInfo('beg '//subname)
   associate(                                                           &
+    WatHeldOnCanopy_pft        => plt_ew%WatHeldOnCanopy_pft, &
+    SnowOnCanopy_pft           => plt_ew%SnowOnCanopy_pft, &
+    CanopyStalkSurfArea_lbrch  => plt_morph%CanopyStalkSurfArea_lbrch, &
+    StandDeadSurfArea_pft      => plt_morph%StandDeadSurfArea_pft, &
+    StandDeadCompKElms_pft     => plt_biom%StandDeadCompKElms_pft, &
     TKC_pft                   => plt_ew%TKC_pft                       ,& !input  :canopy temperature, [K]
     PlantPopuLive_pft         => plt_site%PlantPopuLive_pft           ,& !input  :plant population, [d-2]
     jHarvstType_pft           => plt_distb%jHarvstType_pft            ,& !input  :flag for stand replacing disturbance,[-]
@@ -1980,7 +1974,6 @@ module PlantDisturbsMod
     isPlantBranchAlive_brch   => plt_pheno%isPlantBranchAlive_brch     & !output :flag to detect branch death, [-]
   )
   I=yearIJ%I;J=yearIJ%J
-  call PrintInfo('beg '//subname)
   
   D9835: DO NB=1,NumOfBranches_pft(NZ)
 
@@ -2056,11 +2049,17 @@ module PlantDisturbsMod
   QH2OLoss_lnds       = QH2OLoss_lnds+VOLWPX-CanopyBiomWater_pft(NZ)
   H2OLoss_CumYr_col   = H2OLoss_CumYr_col+watflx
 
-  VHeatCapCanopy_pft(NZ)  = cpw*(CanopyMassC*StemSpecVolume_pft(NZ)+CanopyBiomWater_pft(NZ))
+  StemArea=SUM(CanopyStalkSurfArea_lbrch(:,1:NumOfBranches_pft(NZ),NZ))
+  ThermalCarbon=CanopyLeafSheathC_pft(NZ)+CanopyStemThermalCarbon(CanopySapwoodC_pft(NZ), &
+    StemArea,StemSpecVolume_pft(NZ))
+  DeadCarbon=CanopyStemThermalCarbon(SUM(StandDeadCompKElms_pft(ielmc,:,NZ)), &
+    StandDeadSurfArea_pft(NZ),StemSpecVolume_pft(NZ))
+  VHeatCapCanopy_pft(NZ)=cpo*gOC_to_m3_OM(ThermalCarbon+DeadCarbon) &
+    +cpw*(CanopyBiomWater_pft(NZ)+WatHeldOnCanopy_pft(NZ))+cps*SnowOnCanopy_pft(NZ)
   QCanopyWatLoss2Dist_col = QCanopyWatLoss2Dist_col+watflx
   CanopyHeatLoss2Dist_col = CanopyHeatLoss2Dist_col+(VHeatCapCanopyPrev-VHeatCapCanopy_pft(NZ))*TKC_pft(NZ)
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CutPlant
 
 !----------------------------------------------------------------------------------------------------

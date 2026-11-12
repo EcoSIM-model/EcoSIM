@@ -79,6 +79,8 @@ contains
   QVegET_col(NY,NX)                                   = plt_ew%QVegET_col
   LWRadCanG_col(NY,NX)                                = plt_ew%LWRadCanG
   VapXAir2Canopy_col(NY,NX)                           = plt_ew%VapXAir2Canopy_col
+  HeatSensVapAir2Canopy_col(NY,NX)                           = plt_ew%HeatSensVapAir2Canopy_col
+  HeatPrecAir2Canopy_col(NY,NX)                           = plt_ew%HeatPrecAir2Canopy_col
   HeatFlx2Canopy_col(NY,NX)                           = plt_ew%HeatFlx2Canopy_col
   CanopyBiomWater_col(NY,NX)                          = plt_ew%CanopyBiomWater_col
   CanopyHeatStor_col(NY,NX)                           = plt_ew%CanopyHeatStor_col
@@ -163,6 +165,9 @@ contains
   end subroutine ReceivePlantColumns
 
   subroutine SendPlantColumnInputs(I,NY,NX,I1)
+  ! Description:
+  ! Load current column forcing, surface exposure and geometry for the full
+  ! plant model before its energy/water and biogeochemical processes.
   use EcoSIMConfig, only : jsken=>jskenc,jcplx=>jcplxc
   integer, intent(in) :: I,NY,NX
   integer, intent(out) :: I1
@@ -197,6 +202,7 @@ contains
   plt_site%DayLenthPrev               = DayLenthPrev_col(NY,NX)
   plt_site%DayLenthCurrent            = DayLensCurr_col(NY,NX)
   plt_ew%SnowDepth                    = SnowDepth_col(NY,NX)
+  plt_ew%canopy_exposed_col           = canopy_exposed_col(NY,NX)
   plt_site%DayLenthMax_col                = DayLenthMax_col(NY,NX)
   plt_site%KoppenClimZone             = KoppenClimZone_col(NY,NX)
   plt_site%iYearCurrent               = iYearCurrent
@@ -345,6 +351,8 @@ contains
   plt_rbgc%TRootGasLossDisturb_col(idg_beg:idg_NH3)    = TRootGasLossDisturb_col(idg_beg:idg_NH3,NY,NX)
   plt_ew%Eco_Heat_GrndSurf_col                           = Eco_Heat_GrndSurf_col(NY,NX)
   plt_ew%QVegET_col                                        = QVegET_col(NY,NX)
+  plt_ew%HeatSensVapAir2Canopy_col                              = HeatSensVapAir2Canopy_col(NY,NX)
+  plt_ew%HeatPrecAir2Canopy_col                              = HeatPrecAir2Canopy_col(NY,NX)
   plt_ew%HeatFlx2Canopy_col                              = HeatFlx2Canopy_col(NY,NX)
   plt_ew%LWRadCanG                                       = LWRadCanG_col(NY,NX)
   plt_ew%CanopyBiomWater_col                                   = CanopyBiomWater_col(NY,NX)

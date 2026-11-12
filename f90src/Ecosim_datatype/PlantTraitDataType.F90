@@ -1,4 +1,7 @@
 module PlantTraitDataType
+  ! Description:
+  ! Store plant traits and canopy geometry, including hourly exposed live and
+  ! standing-dead areas used by radiation and atmospheric exchange.
 
 !
 !!
@@ -27,6 +30,7 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  CanopyStemSurfArea_pft(:,:,:)                  !plant stem area, [m2 d-2]
   real(r8),target,allocatable ::  CanopyHeightLive_pft(:,:,:)                !live pft canopy height, [m]
   real(r8),target,allocatable ::  StandDeadSurfArea_pft(:,:,:)               !surface area of standing dead, [m2 d-2]
+  real(r8),target,allocatable :: StandDeadSurfAreaAct_pft(:,:,:) ! hourly snow-exposed dead surface area [PFT,NY,NX], [m2]
   real(r8),target,allocatable ::  CanopyHeightDead_pft(:,:,:)                !standing dead plant canopy height, [m]
   real(r8),target,allocatable ::  StalkHeight_pft(:,:,:)                     !pft stalk height, [m]
   real(r8),target,allocatable ::  StalkAveRadius_pft(:,:,:)               !pft tree ring mean radius, [m]
@@ -231,6 +235,7 @@ contains
   allocate(CanopyHeightLive_pft(JP,JY,JX));       CanopyHeightLive_pft=0._r8
   allocate(CanopyHeightDead_pft(JP,JY,JX)); CanopyHeightDead_pft=0._r8
   allocate(StandDeadSurfArea_pft(JP,JY,JX)); StandDeadSurfArea_pft=0._r8
+  allocate(StandDeadSurfAreaAct_pft(JP,JY,JX)); StandDeadSurfAreaAct_pft=0._r8
   allocate(StalkHeight_pft(JP,JY,JX)); StalkHeight_pft=0._r8
   allocate(StalkAveRadius_pft(JP,JY,JX)); StalkAveRadius_pft=0._r8
   allocate(CanopyLeafAareZ_col(NumCanopyLayers,JY,JX));    CanopyLeafAareZ_col=0._r8
@@ -435,6 +440,7 @@ contains
   call destroy(enh_cyto_pft)
   call destroy(StalkAxialResist_pft)
   call destroy(StandDeadSurfArea_pft)
+  call destroy(StandDeadSurfAreaAct_pft)
   call destroy(CanopyHeightLive_pft)
   call destroy(StalkHeight_pft)
   call destroy(CanopyLeafAareZ_col)

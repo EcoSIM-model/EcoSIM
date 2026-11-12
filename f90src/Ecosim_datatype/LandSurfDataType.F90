@@ -1,5 +1,7 @@
 module LandSurfDataType
-
+  ! Description:
+  ! Store column surface geometry, aerodynamic exchange properties and air
+  ! endpoints, including the hourly diagnosed exposure of the plant canopy.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
   use TracerIDMod, only : idg_beg,idg_end
@@ -9,6 +11,7 @@ module LandSurfDataType
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
   real(r8) :: ALTIG                                                      !Altitude of landscape, [m]
+  logical,allocatable :: canopy_exposed_col(:,:) ! canopy area protrudes above snow, [NY,NX], [-]
   real(r8),target,allocatable ::  SoilSurfRoughness_col(:,:)           !Initial soil surface roughness height, [m]
   real(r8),target,allocatable ::  ZeroPlaneDisplacem_col(:,:)            !Zero plane displacement height, [m]
   real(r8),target,allocatable ::  RoughnessLength_col(:,:)                   !Canopy surface roughness height, [m]
@@ -33,8 +36,10 @@ module LandSurfDataType
 
 contains
   subroutine InitLandSurfData
-
+  ! Description:
+  ! Allocate surface fields; canopy exposure is rebuilt by hourly preparation.
   implicit none
+  allocate(canopy_exposed_col(JY,JX)); canopy_exposed_col=.false.
   allocate(RawTAtm2CanopySinkZ_col(JY,JX)); RawTAtm2CanopySinkZ_col=0._r8
   allocate(RawCanopyH2SinkZ_col(JY,JX)); RawCanopyH2SinkZ_col=0._r8
   allocate(RawIsoTSurf2CanopyHScal_col(JY,JX)) ; RawIsoTSurf2CanopyHScal_col=0._r8
@@ -59,8 +64,11 @@ contains
 
 !----------------------------------------------------------------------
   subroutine DestructLandSurfData
+  ! Description:
+  ! Release the column surface geometry and exchange fields.
   use abortutils, only : destroy
   implicit none
+  call destroy(canopy_exposed_col)
   call destroy(VPQ_col)    
   call destroy(TKQ_col)  
   call destroy(SoilSurfRoughness_col)

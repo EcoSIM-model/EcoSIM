@@ -1,9 +1,10 @@
 module readiMod
+! Description:
 !!
 ! code to read site, topographic data
 !
   use data_kind_mod,    only: r8 => DAT_KIND_R8
-  use abortutils,       only: endrun
+  use abortutils,       only: endrun,iulog
   use fileUtil,         only: open_safe, check_read
   use minimathmod,      only: isclose,   AZMAX1, safe_adb
   use MiniFuncMod,      only: GetDayLength
@@ -190,6 +191,69 @@ module readiMod
 
   end subroutine read_aerosol_vars
 
+!------------------------------------------------------------------------------------------
+  subroutine ReadVanGenuchtenProfile(ntp,NY,NX)
+  !
+  ! Description:
+  ! Read layer parameters on the FC/WP volume basis. Alpha must declare pressure
+  ! or head units; convert head-based coefficients using the model gravity factor.
+  use netcdf, only: nf90_global,nf90_inq_varid,nf90_inquire_attribute,nf90_get_att,nf90_noerr,nf90_char
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  implicit none
+  integer, intent(in) :: ntp     ! topographic-unit record in the input dataset [-]
+  integer, intent(in) :: NY,NX   ! source grid row and column [-]
+  type(Var_desc_t) :: vardesc
+  logical :: found
+  integer :: variable,status,attribute_type,attribute_length,L
+  real(r8) :: alpha_factor
+  character(len=64) :: units
+  character(len=*), parameter :: subname='ReadVanGenuchtenProfile'
+
+  call PrintInfo('beg '//subname)
+  associate(handle => grid_nfid%fh)
+  if(allocated(VGThetaR_vr))then
+    call check_var(grid_nfid,'VG_THETA_R',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_THETA_R')
+    call ncd_getvar(grid_nfid,'VG_THETA_R',ntp,VGThetaR_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_ALPHA',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_ALPHA')
+    call ncd_getvar(grid_nfid,'VG_ALPHA',ntp,VGAlpha_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_N',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_N')
+    call ncd_getvar(grid_nfid,'VG_N',ntp,VGN_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_L',vardesc,found)
+    VGL_vr(1:JZ,NY,NX)=.5_r8
+    if(found)call ncd_getvar(grid_nfid,'VG_L',ntp,VGL_vr(1:JZ,NY,NX))
+
+
+    call check_ret(nf90_inq_varid(handle,'VG_ALPHA',variable),subname)
+    status=nf90_inquire_attribute(handle,variable,'units',xtype=attribute_type,len=attribute_length)
+    if(status/=nf90_noerr)call endrun('VG_ALPHA requires explicit units: MPa-1, m-1, or cm-1')
+    if(attribute_type/=nf90_char.or.attribute_length>len(units))call endrun('Invalid VG_ALPHA units attribute')
+    units=''
+    call check_ret(nf90_get_att(handle,variable,'units',units),subname)
+
+    select case(trim(adjustl(units)))
+    case('MPa-1','MPa^-1','1/MPa')
+      alpha_factor=1._r8
+    case('m-1','m^-1','1/m')
+      alpha_factor=1._r8/mGravAccelerat
+    case('cm-1','cm^-1','1/cm')
+      alpha_factor=100._r8/mGravAccelerat
+    case default
+      write(iulog,*) 'Unsupported VG_ALPHA units: ',trim(units)
+      call endrun('VG_ALPHA requires explicit units: MPa-1, m-1, or cm-1')
+    end select
+    do L=1,JZ
+      if(ieee_is_finite(VGAlpha_vr(L,NY,NX)))then
+        if(ABS(VGAlpha_vr(L,NY,NX))>huge(1._r8)/alpha_factor)call endrun('VG_ALPHA unit conversion overflows')
+        VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L,NY,NX)*alpha_factor
+      endif
+    enddo
+  endif
+  end associate
+  call PrintInfo('end '//subname)
+  end subroutine ReadVanGenuchtenProfile
 !------------------------------------------------------------------------------------------
 
   subroutine readsiteNC(NHW,NHE,NVN,NVS)
@@ -475,6 +539,7 @@ module readiMod
     call ncd_getvar(grid_nfid, 'WP', ntp,WiltPoint_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'SCNV', ntp,SatHydroCondVert_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'SCNH', ntp,SatHydroCondHrzn_vr(1:JZ,NV1,NH1))
+    call ReadVanGenuchtenProfile(ntp,NV1,NH1)
 
     call ncd_getvar(grid_nfid, 'CSAND',ntp,CSAND_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'CSILT',ntp,CSILT_vr(1:JZ,NV1,NH1))
@@ -591,6 +656,12 @@ module readiMod
             if(SoiBulkDensityt0_vr(L,NY,NX).LE.ZERO)iPondBotLev_col(NY,NX)=L
             FieldCapacity_vr(L,NY,NX)     = FieldCapacity_vr(L,NV1,NH1)
             WiltPoint_vr(L,NY,NX)         = WiltPoint_vr(L,NV1,NH1)
+            if(allocated(VGThetaR_vr))then
+              VGThetaR_vr(L,NY,NX)=VGThetaR_vr(L,NV1,NH1)
+              VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L,NV1,NH1)
+              VGN_vr(L,NY,NX)=VGN_vr(L,NV1,NH1)
+              VGL_vr(L,NY,NX)=VGL_vr(L,NV1,NH1)
+            endif
             SatHydroCondVert_vr(L,NY,NX)  = SatHydroCondVert_vr(L,NV1,NH1)
             SatHydroCondHrzn_vr(L,NY,NX)  = SatHydroCondHrzn_vr(L,NV1,NH1)
             CSAND_vr(L,NY,NX)             = CSAND_vr(L,NV1,NH1)
@@ -697,6 +768,12 @@ module readiMod
               SoiBulkDensityt0_vr(L,NY,NX) = SoiBulkDensityt0_vr(L+1,NY,NX)
               FieldCapacity_vr(L,NY,NX)    = FieldCapacity_vr(L+1,NY,NX)
               WiltPoint_vr(L,NY,NX)        = WiltPoint_vr(L+1,NY,NX)
+              if(allocated(VGThetaR_vr))then
+                VGThetaR_vr(L,NY,NX)=VGThetaR_vr(L+1,NY,NX)
+                VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L+1,NY,NX)
+                VGN_vr(L,NY,NX)=VGN_vr(L+1,NY,NX)
+                VGL_vr(L,NY,NX)=VGL_vr(L+1,NY,NX)
+              endif
               SatHydroCondVert_vr(L,NY,NX) = SatHydroCondVert_vr(L+1,NY,NX)
               SatHydroCondHrzn_vr(L,NY,NX) = SatHydroCondHrzn_vr(L+1,NY,NX)
               CSAND_vr(L,NY,NX)            = CSAND_vr(L+1,NY,NX)

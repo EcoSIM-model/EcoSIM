@@ -1,6 +1,6 @@
 module PrescribePhenolMod
   !
-  ! !Description:
+  ! Description:
   ! Prescribe canopy structure and per-PFT root profiles for standalone SP and ATS.
   use abortutils, only: endrun, iulog
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -17,6 +17,7 @@ module PrescribePhenolMod
   use PlantAPICommonData
   use PlantSiteAPIData, only : plt_site
   use PlantMorphologyAPIData, only : plt_morph
+  use PlantEnergyWaterAPIData, only : plt_ew
   use PlantBGCPars, only: Root2ndTipLen4uptk
   use ClimForcDataType
   use PlantTraitDataType
@@ -140,27 +141,36 @@ implicit none
   end function TreeStem_diameter_taperEq
 !------------------------------------------------------------------------
 
-  subroutine SetCanopyProfile(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft)
-  !
-  !Description:
-  !distribute leaf area and stem area within the crown defined by top and bottom heights.
-  !For simplicity, unifrom distribution is adopted
-  !
+  subroutine SetCanopyProfile(I,J,LeafAreaZsecLive_lpft,StemAreaZsecLive_lpft,SurfAreaZsecDead_lpft)
+  ! Description:
+  ! Distribute prescribed leaf/stem area into canopy sectors. Exclude fully
+  ! snow-buried PFTs from active exchange area without changing prescribed totals
+  ! or material pools; use this hourly area in radiation, interception and uptake.
   implicit none
   integer , intent(in) :: I,J
   real(r8),intent(out) :: LeafAreaZsecLive_lpft(NumLeafInclinationClasses1,NumCanopyLayers1,JP1)     !leaf area in different zenith sectors in different canopy layers
   real(r8),intent(out) :: StemAreaZsecLive_lpft(NumLeafInclinationClasses1,NumCanopyLayers1,JP1)     !stem area in different zenith sectors in different canopy layers
+  real(r8),intent(out) :: SurfAreaZsecDead_lpft(NumLeafInclinationClasses1,NumCanopyLayers1,JP1) ! exposed dead area by inclination/layer/PFT [m2/cell]
   real(r8) :: dangle
+  logical :: AllCanopiesExposed
   integer  :: N,L,NZ,NB
+  character(len=*), parameter :: subname='SetCanopyProfile'
 
+  call PrintInfo('beg '//subname)
   associate(                                                        &
     CanopyStemSurfAreaZ_pft  => plt_morph%CanopyStemSurfAreaZ_pft  ,& !input  :plant canopy layer stem area, [m2 d-2]
     CanopyLeafAreaZ_pft      => plt_morph%CanopyLeafAreaZ_pft      ,& !inoput :total leaf area, [m2 d-2]
+    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col       ,& !input  :total prescribed leaf area, [m2]
+    StemArea_col             => plt_morph%StemArea_col             ,& !input  :total prescribed stem area, [m2]
     LeafStalkAreaAct_pft     => plt_morph%LeafStalkAreaAct_pft     ,& !inoput :plant leaf+stem/stalk area, [m2 d-2]
     LeafStalkAreaAll_col     => plt_morph%LeafStalkAreaAll_col     ,& !inoput :stalk area of combined, each PFT canopy,[m^2 d-2]
-    StemArea_col             => plt_morph%StemArea_col             ,& !input  :grid canopy stem area, [m2 d-2]
+    CanopyHeightLive_pft      => plt_morph%CanopyHeightLive_pft      ,& !input  :live PFT canopy height, [m]
+    DeadHeight               => plt_morph%CanopyHeightDead_pft, & !input: prescribed dead height [m]
+    DeadProfile              => plt_morph%CanopySurfAreaProfDead_pft, & !input: dead area by layer [m2/cell]
+    DeadAreaAct              => plt_morph%StandDeadSurfAreaAct_pft, & !output: exposed dead area [m2/cell]
+    SnowDepth                => plt_ew%SnowDepth                    ,& !input  :snow depth at hourly canopy preparation, [m]
+    ZERO                     => plt_site%ZERO                      ,& !input  :height comparison tolerance, [m]
     LeafAngleClass_pft       => plt_morph%LeafAngleClass_pft       ,& !input  :fractionction of leaves in different angle classes, [-]
-    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col       ,& !input  :grid canopy leaf area, [m2 d-2]
     LeafAreaZsec_brch        => plt_morph%LeafAreaZsec_brch        ,& !input  :leaf surface area, [m2 d-2]
     NP                       => plt_site%NP                         & !input  :current number of plant species,[-]
   )
@@ -168,32 +178,46 @@ implicit none
 
   StemAreaZsecLive_lpft  = 0._r8
   LeafAreaZsecLive_lpft  = 0._r8
+  SurfAreaZsecDead_lpft  = 0._r8
+  DeadAreaAct            = 0._r8
   dangle            = PICON2h/real(NumLeafInclinationClasses1,r8)         !the angle section width
-  LeafStalkAreaAll_col = StemArea_col+CanopyLeafArea_col
+  LeafStalkAreaAll_col = 0._r8
+  AllCanopiesExposed=.true.
   DO NZ=1,NP
     LeafStalkAreaAct_pft(NZ)=0._r8
     NB=1
+    if(CanopyHeightLive_pft(NZ)<SnowDepth-ZERO .or. SUM(DeadProfile(1:NumCanopyLayers,NZ))>0._r8)AllCanopiesExposed=.false.
     DO L=1,NumCanopyLayers1
-      DO N=1,NumLeafInclinationClasses1
-        LeafAreaZsecLive_lpft(N,L,NZ)=LeafAngleClass_pft(N,NZ)*CanopyLeafAreaZ_pft(L,NZ)/real(NumOfLeafAzimuthSectors1,r8)
-      ENDDO
-      StemAreaZsecLive_lpft(:,L,NZ)=0._r8
-      StemAreaZsecLive_lpft(NumLeafInclinationClasses1,L,NZ)=CanopyStemSurfAreaZ_pft(L,NZ)/real(NumLeafInclinationClasses1,kind=r8)
-      LeafStalkAreaAct_pft(NZ)=LeafStalkAreaAct_pft(NZ)+CanopyLeafAreaZ_pft(L,NZ)+CanopyStemSurfAreaZ_pft(L,NZ)
+      if(CanopyHeightLive_pft(NZ)>=SnowDepth-ZERO)then
+        DO N=1,NumLeafInclinationClasses1
+          LeafAreaZsecLive_lpft(N,L,NZ)=LeafAngleClass_pft(N,NZ)*CanopyLeafAreaZ_pft(L,NZ)/real(NumOfLeafAzimuthSectors1,r8)
+        ENDDO
+        StemAreaZsecLive_lpft(NumLeafInclinationClasses1,L,NZ)=CanopyStemSurfAreaZ_pft(L,NZ)/real(NumLeafInclinationClasses1,kind=r8)
+        LeafStalkAreaAct_pft(NZ)=LeafStalkAreaAct_pft(NZ)+CanopyLeafAreaZ_pft(L,NZ)+CanopyStemSurfAreaZ_pft(L,NZ)
+      endif
+      if(DeadHeight(NZ)>=SnowDepth-ZERO)then
+        SurfAreaZsecDead_lpft(:,L,NZ)=DeadProfile(L,NZ)/real(NumLeafInclinationClasses1*NumOfLeafAzimuthSectors1,r8)
+        DeadAreaAct(NZ)=DeadAreaAct(NZ)+DeadProfile(L,NZ)
+      endif
 
       !Assuming uniform azimuth desitribution for leaves
       DO N=1,NumLeafInclinationClasses1
         LeafAreaZsec_brch(N,L,L,NB,NZ)=LeafAreaZsecLive_lpft(N,L,NZ)
       ENDDO
     ENDDO
+    LeafStalkAreaAll_col=LeafStalkAreaAll_col+LeafStalkAreaAct_pft(NZ)+DeadAreaAct(NZ)
 
   ENDDO
+  ! Preserve the existing summation order for fully exposed canopies.
+  if(AllCanopiesExposed)LeafStalkAreaAll_col=CanopyLeafArea_col+StemArea_col
 
   end associate
+  call PrintInfo('end '//subname)
   end subroutine SetCanopyProfile
 
 !------------------------------------------------------------------------------------------
   subroutine PrescribePhenologyInterp(I, NHW, NHE, NVN, NVS)
+  ! Description:
   ! Interpolate prescribed canopy structure and assign each named PFT's root profile.
   implicit none
   integer, intent(in) :: I
@@ -209,6 +233,7 @@ implicit none
   real(r8) :: RootCBelow       !root C per plant at or below the current layer, [gC]
   real(r8) :: ZL1(0:NumCanopyLayers)
   real(r8) :: AreaInterval,AreaL
+  real(r8) :: DeadArea ! total prescribed dead stem area [m2/cell]
   real(r8) :: ARX  !interval canopy area: leaf+stem
   real(r8) :: DZL  !canopy interval height
   REAL(R8) :: PerPlantFineRootC_vr(1:JZ)
@@ -254,7 +279,8 @@ implicit none
       Root2ndEffLen4uptk_rpvr(:,:,1:NP0_col(NY,NX),NY,NX)    = Root2ndTipLen4uptk
       CanopyLeafArea_col(NY,NX)                              = 0._r8
       StemArea_col(NY,NX)                                    = 0._r8
-      !CanopyHeight_col(NY,NX)                               = 0.0_r8
+      CanopyHeight_col(NY,NX)                               = 0.0_r8
+      DeadArea                                              = 0._r8
 
       DO NZ=1,NP_col(NY,NX)
         if(.not.ats_cpl_mode)then
@@ -275,9 +301,35 @@ implicit none
           PlantPopuLive_pft(NZ,NY,NX)=sp_popdens_pft(NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)
         endif
 
+        StandDeadSurfArea_pft(NZ,NY,NX)=0._r8
+        CanopyHeightDead_pft(NZ,NY,NX)=0._r8
+        CanopySurfAreaProfDead_pft(:,NZ,NY,NX)=0._r8
+        if(.not.ats_cpl_mode .and. PlantPopuLive_pft(NZ,NY,NX)==0._r8)then
+          ! A dead-only slot uses SAI/HTOP for dead stems, not living sapwood.
+          if(.not.ieee_is_finite(StandDeadStrutElms_pft(ielmc,NZ,NY,NX)) &
+            .or. StandDeadStrutElms_pft(ielmc,NZ,NY,NX)<=0._r8)then
+            write(iulog,*)'Standing-dead SP slot has no dead carbon; PFT/cell:',NZ,NY,NX
+            call endrun('standing-dead SP requires positive initial WTSTDI or checkpoint dead carbon',__LINE__)
+          endif
+          StandDeadSurfArea_pft(NZ,NY,NX)=tsai_day_pft(NZ,NY,NX)
+          CanopyHeightDead_pft(NZ,NY,NX)=CanopyHeightLive_pft(NZ,NY,NX)
+          CanopySurfAreaProfDead_pft(1:NumCanopyLayers,NZ,NY,NX)= &
+            StandDeadSurfArea_pft(NZ,NY,NX)/real(NumCanopyLayers,r8)
+          DeadArea=DeadArea+StandDeadSurfArea_pft(NZ,NY,NX)
+          CanopyHeightLive_pft(NZ,NY,NX)=0._r8
+          tlai_day_pft(NZ,NY,NX)=0._r8
+          tsai_day_pft(NZ,NY,NX)=0._r8
+          if(StandDeadSurfArea_pft(NZ,NY,NX)>ZEROS(NY,NX)) &
+            CanopyHeight_col(NY,NX)=MAX(CanopyHeight_col(NY,NX),CanopyHeightDead_pft(NZ,NY,NX))
+        endif
+
         CanopyLeafArea_col(NY,NX)  = CanopyLeafArea_col(NY,NX)+tlai_day_pft(NZ,NY,NX)
         StemArea_col(NY,NX)        = StemArea_col(NY,NX)+tsai_day_pft(NZ,NY,NX)
-        CanopyHeight_col(NY,NX)    = AMAX1(CanopyHeight_col(NY,NX),CanopyHeightLive_pft(NZ,NY,NX))
+        ! Retain each prescribed PFT height, but empty canopy slots must not
+        ! set the column aerodynamic height or its snow-exposure diagnostic.
+        if(tlai_day_pft(NZ,NY,NX)+tsai_day_pft(NZ,NY,NX)>ZEROS(NY,NX))then
+          CanopyHeight_col(NY,NX)=MAX(CanopyHeight_col(NY,NX),CanopyHeightLive_pft(NZ,NY,NX))
+        endif
         CanopyLeafAreaZ_pft(1:NumCanopyLayers,NZ,NY,NX)=tlai_day_pft(NZ,NY,NX)/real(NumCanopyLayers,kind=r8)
         CanopyStemSurfAreaZ_pft(1:NumCanopyLayers,NZ,NY,NX)=tsai_day_pft(NZ,NY,NX)/real(NumCanopyLayers,kind=r8)
 
@@ -317,7 +369,7 @@ implicit none
 
       !for simplicity, right now unifrom division is used
       !divide total are into NumCanopyLayers1, from top to bottom
-      AreaInterval = (CanopyLeafArea_col(NY,NX)+StemArea_col(NY,NX))/NumCanopyLayers
+      AreaInterval = (CanopyLeafArea_col(NY,NX)+StemArea_col(NY,NX)+DeadArea)/NumCanopyLayers
       DZL          = CanopyHeightZ_col(NumCanopyLayers,NY,NX)/real(NumCanopyLayers,kind=r8)
 
       IF(AreaInterval.GT.ZEROS(NY,NX))THEN
@@ -329,12 +381,14 @@ implicit none
       DO NZ=1,NP_col(NY,NX)
         !empty ATS PFT slot: zero its roots rather than inheriting the
         !profile left in PerPlantRoot*_vr by the previous slot
-        if(ats_cpl_mode .and. DATAPI(NZ,NY,NX).EQ.0)then
+        if((ats_cpl_mode .and. DATAPI(NZ,NY,NX).EQ.0) .or. &
+          (.not.ats_cpl_mode .and. PlantPopuLive_pft(NZ,NY,NX)==0._r8))then
           DO L=NU_col(NY,NX),NL_col(NY,NX)
             RootTotLenPerPlant_pvr(ipltroot,L,NZ,NY,NX)    = 0._r8
             RootLenDensPerPlant_pvr(ipltroot,L,NZ,NY,NX)   = 0._r8
             PopuRootMycoC_pvr(ipltroot,L,NZ,NY,NX)         = 0._r8
             RootAbsorbLenPerPlant_pvr(ipltroot,L,NZ,NY,NX) = 0._r8
+            Root1stXNumL_pvr(L,NZ,NY,NX)                = 0._r8
           ENDDO
           cycle
         endif

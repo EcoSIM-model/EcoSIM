@@ -1,6 +1,7 @@
 set(SOIL_HYDRAULIC_SOURCES
   SoilHydraulicModelMod.F90
   EcoSIMSoilHydraulicMod.F90
+  VanGenuchtenSoilHydraulicMod.F90
   SoilHydraulicSchemeMod.F90
 )
 include(add_ecosim_library)

@@ -159,8 +159,8 @@ contains
     long_name='Canopy stomatal resistance for H2O',ptr_patch=data1d_ptr,&
     default='inactive')
 
-  data1d_ptr => this%h1D_BLYR_RSC_H2O_ptc(beg_ptc:end_ptc)
-  call hist_addfld1d(fname='BLYR_RSC_H2O_pft',units='s/m',avgflag='A',&
+  data1d_ptr => this%h1D_BLYR_RS_H2O_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='BLYR_RS_H2O_pft',units='s/m',avgflag='A',&
     long_name='Canopy boundary layer resistance for H2O',ptr_patch=data1d_ptr,&
     default='inactive')
 

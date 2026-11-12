@@ -124,7 +124,7 @@ contains
   if(do_timing)call start_timer(t1)
   call DiagSoilGasPressure(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)    
 
-  call EndCheckBalances(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
+  call EndCheckBalances(yearIJ,NHW,NHE,NVN,NVS)
 
   if(do_timing)call end_timer('Diagnostics',t1)
   call PrintInfo('end '//subname)

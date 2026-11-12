@@ -47,7 +47,7 @@ def main():
         ('forc_periods', '2013,2014,1', 'ecosim'),
         ('finidat', "''", 'ecosim'),
         ('hist_nhtfrq', '1', 'ecosim'), ('hist_mfilt', '8760', 'ecosim'),
-        ('hist_fincl1', "'BLYR_RSC_H2O_pft','BLYR_RSC_HEAT_pft','CAN_H_pft'", 'ecosim'),
+        ('hist_fincl1', "'BLYR_RS_H2O_pft','BLYR_RSC_HEAT_pft','CAN_H_pft'", 'ecosim'),
         ('stop_option', "'nsteps'", 'ecosim_time'),
         ('rest_opt', "'never'", 'ecosim_time')]:
         text = stage.set_value(text, key, value, group)
@@ -88,7 +88,7 @@ def main():
         assert not compare(history, history), folder
         with Dataset(history) as nc:
             heat = nc['BLYR_RSC_HEAT_pft'][:]
-            water = nc['BLYR_RSC_H2O_pft'][:]
+            water = nc['BLYR_RS_H2O_pft'][:]
             assert nc['BLYR_RSC_HEAT_pft'].units == 's/m'
             np.testing.assert_array_equal(np.ma.getmaskarray(water), np.ma.getmaskarray(heat))
             np.testing.assert_allclose(heat.compressed(), water.compressed() / .92, rtol=2.e-7)

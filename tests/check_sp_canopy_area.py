@@ -62,7 +62,7 @@ def main():
             ("forc_periods", "2013,2014,1", "ecosim"),
             ("continue_run", ".false.", "ecosim"), ("finidat", "''", "ecosim"),
             ("hist_nhtfrq", "1", "ecosim"), ("hist_mfilt", "8760", "ecosim"),
-            ("hist_fincl1", "'BLYR_RSC_H2O_pft','STOM_RSC_H2O_pft','CAN_RN_pft','CAN_H_pft','CAN_LE_pft'", "ecosim"),
+            ("hist_fincl1", "'BLYR_RS_H2O_pft','STOM_RSC_H2O_pft','CAN_RN_pft','CAN_H_pft','CAN_LE_pft'", "ecosim"),
             ("stop_option", "'nsteps'", "ecosim_time"), ("stop_n", "48", "ecosim_time"),
             ("rest_opt", "'never'", "ecosim_time"),
         ):
@@ -93,7 +93,7 @@ def main():
               "CanopyLeafAareZ_col", "CanopyStemAareZ_col",
               "CanopyLeafSheathC_pft", "CanopySapwoodC_pft")
     geometry = ("RoughnessLength", "ZeroPlaneDisplacem_col", "RawIsoTAtm2CanopySinkZ_col")
-    densities = ("ECO_LAI_col", "ECO_SAI_col", "BLYR_RSC_H2O_pft", "STOM_RSC_H2O_pft")
+    densities = ("ECO_LAI_col", "ECO_SAI_col", "BLYR_RS_H2O_pft", "STOM_RSC_H2O_pft")
     flux_fields = ("ECO_RADSW_col", "ECO_HeatS_col", "ECO_LE_col", "CAN_RN_pft", "CAN_H_pft", "CAN_LE_pft")
     flux_differences = {}
     with Dataset(results[1][0]) as a, Dataset(results[6][0]) as b:

@@ -1,4 +1,8 @@
 module RedistMod
+  ! Description:
+  ! Redistribute accepted process transfers, close model ledgers and update
+  ! diagnostics and the canopy-air feedback for columns with canopy area.
+  use SurfaceAirExchangeMod, only: CanopyFreeSurface
   use data_kind_mod,     only: r8 => DAT_KIND_R8
   use abortutils,        only: padr, print_info, endrun,  destroy
   use minimathmod,       only: safe_adb, AZMAX1, AZERO, fixEXConsumpFlux, fixnegmass, isclose
@@ -160,6 +164,7 @@ module RedistMod
 !------------------------------------------------------------------------------------------
 
   subroutine UpdateCanopyAirDerivatives(NY,NX)
+  ! Description:
   ! Save frozen-state resistance derivatives and matching hourly references.
   ! Surface temperatures and resistances are held fixed; latent derivatives
   ! respect the local water-donor limits of each accepted exchange branch.
@@ -169,15 +174,22 @@ module RedistMod
   ! Match the resistance weight used for accepted hourly surface heat.
   ! Plants use ambient TairK/VPA, so they have no direct Tq/VPQ derivatives;
   ! their full fluxes remain in the sensible and latent heat stores.
-  dSensHeatdTKQ_col(NY,NX)=RawTAtm2CanopySinkZ_col(NY,NX)*SurfSensHeatConduct_col(NY,NX)
+  if(CanopyFreeSurface(NY,NX))then
+    dSensHeatdTKQ_col(NY,NX) = 0._r8
+    dLatHeatdVPQ_col(NY,NX)  = 0._r8
+  else
+    dSensHeatdTKQ_col(NY,NX) = RawTAtm2CanopySinkZ_col(NY,NX)*SurfSensHeatConduct_col(NY,NX)
+    dLatHeatdVPQ_col(NY,NX)  = RawTAtm2CanopySinkZ_col(NY,NX)*SurfLatHeatVapDeriv_col(NY,NX)
+  endif
   TKQHeatRef_col(NY,NX)=TKQ_col(NY,NX)
-  dLatHeatdVPQ_col(NY,NX)=RawTAtm2CanopySinkZ_col(NY,NX)*SurfLatHeatVapDeriv_col(NY,NX)
   VPQLatHeatRef_col(NY,NX)=VPQ_col(NY,NX)
   end subroutine UpdateCanopyAirDerivatives
 
 !------------------------------------------------------------------------------------------
   subroutine UpdateOutputVars(I,J,NY,NX,Txchem_CO2_col)
-
+  ! Description:
+  ! Accumulate accepted process ledgers and diagnostics, and weight surface
+  ! heat for the next canopy-air prediction only where canopy area is present.
   use TillageMixMod
   implicit none
   integer, intent(in) :: I,J,NY,NX
@@ -229,8 +241,10 @@ module RedistMod
   Eco_Heat_Sens_col(NY,NX)     = Eco_Heat_Sens_col(NY,NX)+HeatSensAir2Surf_col(NY,NX)
   Eco_Heat_GrndSurf_col(NY,NX) = Eco_Heat_GrndSurf_col(NY,NX)-(HeatNet2Surf_col(NY,NX)-HeatSensVapAir2Surf_col(NY,NX))
 
-  Air_Heat_Latent_store_col(NY,NX) = Air_Heat_Latent_store_col(NY,NX)+HeatEvapAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX) 
-  Air_Heat_Sens_store_col(NY,NX)   = Air_Heat_Sens_store_col(NY,NX)+HeatSensAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX) 
+  if(.not.CanopyFreeSurface(NY,NX))then
+    Air_Heat_Latent_store_col(NY,NX) = Air_Heat_Latent_store_col(NY,NX)+HeatEvapAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
+    Air_Heat_Sens_store_col(NY,NX)   = Air_Heat_Sens_store_col(NY,NX)+HeatSensAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
+  endif
 
   Eco_NEE_col(NY,NX)               = Canopy_NEE_col(NY,NX)+SurfGasEmiss_all_flx_col(idg_CO2,NY,NX)
   ECO_ER_col(NY,NX)                = ECO_ER_col(NY,NX)+SurfGasEmiss_all_flx_col(idg_CO2,NY,NX)
@@ -440,7 +454,9 @@ module RedistMod
   !     SURFACE BOUNDARY HEAT FLUXES
   !
   HEATIN_lnd=HEATIN_lnd+cpw*TairK_col(NY,NX)*PrecRainAndIrrig_col(NY,NX)+cps*TairK_col(NY,NX)*SnoFalPrec_col(NY,NX)
-  HEATIN_lnd=HEATIN_lnd+HeatNet2Surf_col(NY,NX)+HeatFlx2Canopy_col(NY,NX)
+  ! Canopy inventory change includes the heat lost by unloading. Return the same
+  ! internal heat on the ground side of this inventory-based landscape ledger.
+  HEATIN_lnd=HEATIN_lnd+HeatNet2Surf_col(NY,NX)+HeatFlx2Canopy_col(NY,NX)+HeatCanopyUnload_col(NY,NX)
 
   D5150: DO L=1,JS
     HEATIN_lnd=HEATIN_lnd+XPhaseChangeHeatL_snvr(L,NY,NX)
@@ -691,12 +707,16 @@ module RedistMod
 !------------------------------------------------------------------------------------------
 
   subroutine LitterLayerSummary(I,J,NY,NX)
+  ! Description:
+  ! Summarize surface organic matter and tracers, retaining accepted litter heat
+  ! when the updated organic inventory changes its dry thermal capacity.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NY,NX
   character(len=*), parameter :: subname='LitterLayerSummary'
 
   integer :: K,N,M,NGL,NB,NE
+  real(r8) :: LitterEnergy ! accepted sensible energy before the diagnostic capacity refresh [MJ/cell]
   real(r8) :: PSS,HS,CS
   real(r8) :: OS
   real(r8) :: POS,POX,POP
@@ -716,8 +736,16 @@ module RedistMod
 
   SoilOrgM_vr(1:NumPlantChemElms,0,NY,NX)=litrOM_vr(1:NumPlantChemElms,0,NY,NX)
   
-  !update heat capacity for consistency
+  ! Transport and biogeochemistry change the summarized organic mass after the
+  ! thermal solve. Refresh its capacity at conserved sensible energy; a diagnostic
+  ! refresh supplies no heat. Explicit litterfall enthalpy was already applied by
+  ! AddFlux2SurfaceResidue/UpdateLitRPhys. Chemical reaction heat is not modeled.
+  LitterEnergy=VHeatCapacity_vr(0,NY,NX)*TKS_vr(0,NY,NX)
   VHeatCapacity_vr(0,NY,NX) = cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,0,NY,NX))+cpw*VLWatMicP_vr(0,NY,NX)+cpi*VLiceMicP_vr(0,NY,NX)
+  if(VHeatCapacity_vr(0,NY,NX)>0._r8)then
+    TKS_vr(0,NY,NX)=LitterEnergy/VHeatCapacity_vr(0,NY,NX)
+    TCS_vr(0,NY,NX)=units%Kelvin2Celcius(TKS_vr(0,NY,NX))
+  endif
   DO NE=1,NumPlantChemElms
     tSoilOrgM_col(NE,NY,NX)=tSoilOrgM_col(NE,NY,NX)+SoilOrgM_vr(NE,0,NY,NX)
   enddo
@@ -797,11 +825,10 @@ module RedistMod
   UION_col(NY,NX)=UION_col(NY,NX)+SSS
   end subroutine DiagSurfLitRLayerSalt
 !------------------------------------------------------------------------------------------
-  subroutine UpdateTSoilVSMProfile(I,J,NY,NX,VOLISO)    
-  !
-  ! Description
-  ! Update profiles of WATER, ICE, HEAT, TEMPERATUR
-  !
+  subroutine UpdateTSoilVSMProfile(I,J,NY,NX,VOLISO)
+  ! Description:
+  ! Commit water, ice and accepted temperatures and summarize soil heat
+  ! transfers. Retired pond slots carry no remaining thermal inventory.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NY,NX
@@ -826,7 +853,7 @@ module RedistMod
   TVOLI               = 0.0_r8
   TVOLIH              = 0.0_r8
   TENGY               = 0.0_r8
-  THeatFlow2Soil_col  = 0._r8
+  THeatFlow2Soil_col(NY,NX) = 0._r8
   twatmass0(NY,NX)    = 0._r8
   twatmass1(NY,NX)    = 0._r8
   tplantH2O           = 0._r8
@@ -865,6 +892,9 @@ module RedistMod
       VLWatMacP_vr(L,NY,NX)  = 0._r8
       VLiceMicP_vr(L,NY,NX)  = 0._r8
       VLiceMacP_vr(L,NY,NX)  = 0._r8
+      ! Its remaining water and heat were merged into the new surface layer
+      ! in Watsub. The empty geometric slot has no thermal inventory.
+      VHeatCapacity_vr(L,NY,NX) = 0._r8
       TKS_vr(L,NY,NX)        = TairK_col(NY,NX)
       TCS_vr(L,NY,NX)         = units%Kelvin2Celcius(TKS_vr(L,NY,NX))
     ENDDO
