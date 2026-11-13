@@ -1901,16 +1901,16 @@ module UptakesMod
   implicit none
   integer, intent(in) :: NZ
   real(r8), intent(in) :: CdHeatCanopyAir
-  real(r8), intent(in) :: CanopyMassC4H2OStorage         ![gC/m2]
-  real(r8), intent(in) :: TotalSoilPSIMPa_vr(JZ1)    !Elevation adjusted soil water potential [MPa]
+  real(r8), intent(in) :: CanopyMassC4H2OStorage                      ![gC/m2]
+  real(r8), intent(in) :: TotalSoilPSIMPa_vr(JZ1)                     !Elevation adjusted soil water potential [MPa]
   real(r8), intent(in) :: SoilResist4H2O_rvr(pltpar%jroots,JZ1)
   real(r8), intent(in) :: SoilRootResist4H2O_pvr(pltpar%jroots,JZ1)
   real(r8), intent(in) :: TKCX,VHeatCapCanopyPrev_pft
   real(r8), intent(in) :: PrecpHeatbyCanopy
   real(r8), intent(in) :: cumPRootH2OUptake
-  real(r8), intent(in) :: HeatEvapSens                     !sensible heat associated with evaporation [MJ/h]
+  real(r8), intent(in) :: HeatEvapSens                               !sensible heat associated with evaporation [MJ/h]
   real(r8), intent(in) :: CumPlantHeatLoss2Soil
-  logical , intent(in) :: SoiLayerHasRoot_rvr(pltpar%jroots,JZ1)  !indicator of root prescence
+  logical , intent(in) :: SoiLayerHasRoot_rvr(pltpar%jroots,JZ1)     !indicator of root prescence
 
   real(r8), intent(in) :: DeadHeatCapacity ! standing-dead dry-material capacity [MJ/K]
   character(len=*), parameter :: subname='UpdatePlantWaterVars'

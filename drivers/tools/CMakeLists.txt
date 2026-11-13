@@ -196,6 +196,7 @@ target_include_directories(GroundResistanceTest.x PRIVATE
 target_include_directories(GroundResistanceTest.x PRIVATE ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/)
 
 add_ecosim_executable(ThinSnowEnergyTest.x ThinSnowEnergyTest.F90)
+add_test(NAME thin_snow_energy_conservation COMMAND ThinSnowEnergyTest.x)
 target_include_directories(ThinSnowEnergyTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/Minimath/

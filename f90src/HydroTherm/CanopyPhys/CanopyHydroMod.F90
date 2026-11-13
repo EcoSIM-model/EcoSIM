@@ -3,6 +3,7 @@ module CanopyHydroMod
   ! Partition precipitation and canopy snow unloading using the exposed live
   ! and standing-dead surface area, preserving water routed to the ground.
   ! Radiation-only runs keep canopy stores inert and use full throughfall.
+  ! Drain stores exceeding the capacity of remaining total canopy material.
   ! Synchronize canopy thermal inventories before hourly exchange.
   use data_kind_mod,     only: r8 => DAT_KIND_R8
   use EcoSIMCtrlMod, only: ldo_radiation_test,ldo_sp_mode
@@ -13,7 +14,7 @@ module CanopyHydroMod
   use EcoSimConst, only: cpw,cps,cpo
   use EcoSIMSolverPar, only: NPH,dts_HeatWatTP
   use MiniFuncMod, only: gOC_to_m3_OM
-  use PlantMathFuncMod, only: CanopyStemThermalCarbon,CanopySnowOptics
+  use PlantMathFuncMod, only: CanopyStemThermalCarbon,CanopySnowOptics,get_FDM
   use PlantBGCPars, only: CanopySnowCapacityPerArea,CanopySnowAreaCoeff
   USE EcoSIMCtrlDataType,ONLY: ZEROS
   use DebugToolMod  
@@ -44,6 +45,7 @@ implicit none
   real(r8) :: CanopyWatHeldCap,CanopySnowHeldCap  !maximum rain/snow holding capacity by canopy (leaf+stem) [m3 H2O]~ [ton H2O]
   real(r8) :: rain2canopy_pft,snow2canopy_pft     !rain/snowfall onto canopy [m H2O/h]
   real(r8) :: SLArea                              !stem+leaf surface area [m2]
+  real(r8) :: RetentionArea,SupportCarbon,TissueCapacity,ReleasedTissue,ReleasedCapacity
   real(r8) :: SnowWindUnload,SnowTempUnload,CanopySnowUnload_col,SnowUnload_pft
   real(r8) :: SnowRadiativeArea ! physical plus retained-snow interception area [m2/cell]
   real(r8) :: ENGYS,ENGYW,ReleasedWater,ReleasedSnow,ReleasedHeat,ReleaseInterval
@@ -81,23 +83,42 @@ implicit none
       cycle
     endif
 
-    ! Total material, rather than exposed area, distinguishes removal from burial.
-    ! Population also excludes residual live geometry left in an inactive slot.
-    HasCanopyMaterial=StandDeadStrutElms_pft(ielmc,NZ,NY,NX)>0._r8.or. &
-      (PlantPopuLive_pft(NZ,NY,NX)>0._r8.and. &
-       CanopyLeafArea_pft(NZ,NY,NX)+CanopyStemSurfArea_pft(NZ,NY,NX)>ZEROS(NY,NX))
-    if(.not.HasCanopyMaterial)then
-      ReleasedWater=WatHeldOnCanopy_pft(NZ,NY,NX)
-      ReleasedSnow=SnowOnCanopy_pft(NZ,NY,NX)
-      ReleasedHeat=(cpw*ReleasedWater+cps*ReleasedSnow)*TKC_pft(NZ,NY,NX)
+    ! Holding capacity follows total material, not exposure: burial alone must
+    ! not unload stores. Exclude stale live/dead geometry in retired slots.
+    RetentionArea=0._r8
+    SupportCarbon=0._r8
+    if(PlantPopuLive_pft(NZ,NY,NX)>0._r8)then
+      RetentionArea=CanopyLeafArea_pft(NZ,NY,NX)+CanopyStemSurfArea_pft(NZ,NY,NX)
+      SupportCarbon=CanopyLeafSheathC_pft(NZ,NY,NX)+CanopyStemThermalCarbon( &
+        CanopySapwoodC_pft(NZ,NY,NX),CanopyStemSurfArea_pft(NZ,NY,NX),StemSpecVolume_pft(NZ,NY,NX))
+    endif
+    if(StandDeadStrutElms_pft(ielmc,NZ,NY,NX)>0._r8)then
+      RetentionArea=RetentionArea+StandDeadSurfArea_pft(NZ,NY,NX)
+      SupportCarbon=SupportCarbon+CanopyStemThermalCarbon(StandDeadStrutElms_pft(ielmc,NZ,NY,NX), &
+        StandDeadSurfArea_pft(NZ,NY,NX),StemSpecVolume_pft(NZ,NY,NX))
+    endif
+    HasCanopyMaterial=RetentionArea>ZEROS(NY,NX)
+    CanopyWatHeldCap=FoliarWatRetcap(iPlantRootProfile_pft(NZ,NY,NX))*RetentionArea
+    CanopySnowHeldCap=CanopySnowCapacityPerArea(iPlantSnowIntercepType_pft(NZ,NY,NX))*RetentionArea
+    ! The hydraulic solve uses 1e-6*C/get_FDM(psi). Its maximum at psi=0
+    ! bounds old tissue water after material loss; it never creates water.
+    TissueCapacity=1.e-6_r8*SupportCarbon/get_FDM(0._r8)
+    ReleasedTissue=MAX(0._r8,CanopyBiomWater_pft(NZ,NY,NX)-TissueCapacity)
+    ReleasedWater=MAX(0._r8,WatHeldOnCanopy_pft(NZ,NY,NX)-CanopyWatHeldCap)
+    ReleasedSnow=MAX(0._r8,SnowOnCanopy_pft(NZ,NY,NX)-CanopySnowHeldCap)
+    ReleasedCapacity=cpw*(ReleasedWater+ReleasedTissue)+cps*ReleasedSnow
+    if(ReleasedCapacity>0._r8)then
+      ReleasedHeat=ReleasedCapacity*TKC_pft(NZ,NY,NX)
+      ReleasedWater=ReleasedWater+ReleasedTissue
       RainCanopyUnload_col(NY,NX)=RainCanopyUnload_col(NY,NX)+ReleasedWater
       CanopySnowUnload_col=CanopySnowUnload_col+ReleasedSnow
       ENGYW=ENGYW+ReleasedWater*TKC_pft(NZ,NY,NX)
       ENGYS=ENGYS+ReleasedSnow*TKC_pft(NZ,NY,NX)
       HeatCanopyUnload_col(NY,NX)=HeatCanopyUnload_col(NY,NX)+ReleasedHeat
-      WatHeldOnCanopy_pft(NZ,NY,NX)=0._r8
-      SnowOnCanopy_pft(NZ,NY,NX)=0._r8
-      VHeatCapCanopy_pft(NZ,NY,NX)=cpw*CanopyBiomWater_pft(NZ,NY,NX)
+      WatHeldOnCanopy_pft(NZ,NY,NX)=MIN(WatHeldOnCanopy_pft(NZ,NY,NX),CanopyWatHeldCap)
+      SnowOnCanopy_pft(NZ,NY,NX)=MIN(SnowOnCanopy_pft(NZ,NY,NX),CanopySnowHeldCap)
+      CanopyBiomWater_pft(NZ,NY,NX)=MIN(CanopyBiomWater_pft(NZ,NY,NX),TissueCapacity)
+      VHeatCapCanopy_pft(NZ,NY,NX)=MAX(0._r8,VHeatCapCanopy_pft(NZ,NY,NX)-ReleasedCapacity)
     endif
 
     SLArea=LeafStalkAreaAct_pft(NZ,NY,NX)+StandDeadSurfAreaAct_pft(NZ,NY,NX)

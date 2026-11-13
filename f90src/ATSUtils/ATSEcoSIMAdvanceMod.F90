@@ -49,6 +49,9 @@ implicit none
   contains
 
   subroutine RunEcoSIMSurfaceBalance(NYS)
+  ! Description:
+  ! Stage and advance the surface balance using coupled soil states and the
+  ! shared snow, litter and atmospheric exchange preparation.
   !
   use EcoSimConst
   use GridMod           , only : SetMeshATS
@@ -451,15 +454,8 @@ implicit none
 
   PSIAtFldCapacity_col = pressure_at_field_capacity
   PSIAtWiltPoint_col = pressure_at_wilting_point
-  !This does the surface energy and water balance. In the case of plants
-  ! it processes the precipitation and radiation already separated out in
-  ! PlantCanopyRadsModel
-  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
-
-  VHeatCapacity1_vr(0,1,1) = 0.0
-
-  !These arrays sometimes have junk in them when initialized so we have to zero
-  !them out before iteration
+  ! Reset hourly accumulators before shared staging so any staged transfer
+  ! remains in the ledger consumed by the surface iterations.
   do NY=1, NYS
     Qinfl2MicP_col(NY,NX)=0.0_r8
     HeatInfl2Soil(NY,NX)=0.0_r8
@@ -479,6 +475,13 @@ implicit none
     LatentHeatEvapAir2Grnd_col(NY,NX)=0.0_r8
     HeatSensVapAir2Grnd_col(NY,NX)=0.0_r8
   enddo
+
+  !This does the surface energy and water balance. In the case of plants
+  ! it processes the precipitation and radiation already separated out in
+  ! PlantCanopyRadsModel
+  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
+
+  VHeatCapacity1_vr(0,1,1) = 0.0
 
   !Runs the main subcycling for the surface energy and water balance in
   !addition to snow.

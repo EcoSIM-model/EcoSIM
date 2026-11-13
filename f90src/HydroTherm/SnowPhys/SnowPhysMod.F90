@@ -45,6 +45,7 @@ implicit none
   public :: PrepIterSnowLayerM
   public :: InitSnowAccumsM
   public :: StageSnowModel
+  public :: LimitSnowPhaseChange
   public :: SolveSnowpackM
   public :: SumSnowDriftByRunoffM
   public :: UpdateSnowAtM
@@ -517,9 +518,51 @@ contains
 
 !------------------------------------------------------------------------------------------
 
+  subroutine LimitSnowPhaseChange(RequestedHeat,DrySnowWE,IceVolume,LiquidVolume,PhaseHeat,SnowMeltWE,IceMeltWE)
+  ! Description:
+  ! Limit melting/freezing by positive donor inventories, including tiny films.
+  ! Derive latent heat from the accepted mass so no heat is booked without its
+  ! corresponding phase transfer. Negative ice melt denotes freezing.
+  implicit none
+  real(r8), intent(in) :: RequestedHeat !requested latent heat, positive for freezing [MJ/cell]
+  real(r8), intent(in) :: DrySnowWE     !available dry snow [m3 water equivalent/cell]
+  real(r8), intent(in) :: IceVolume     !available ice [m3 ice/cell]
+  real(r8), intent(in) :: LiquidVolume  !available liquid [m3 water/cell]
+  real(r8), intent(out) :: PhaseHeat   !accepted latent heat [MJ/cell]
+  real(r8), intent(out) :: SnowMeltWE  !dry snow converted to liquid [m3 water/cell]
+  real(r8), intent(out) :: IceMeltWE   !ice converted to liquid, negative for freezing [m3 water/cell]
+  character(len=*), parameter :: subname='LimitSnowPhaseChange'
+  real(r8) :: SolidWE,MeltWE,DryWE,FrozenWE
+
+  call PrintInfo('beg '//subname)
+  SnowMeltWE=0._r8
+  IceMeltWE=0._r8
+  if(RequestedHeat<0._r8)then
+    DryWE=max(0._r8,DrySnowWE)
+    FrozenWE=DENSICE*max(0._r8,IceVolume)
+    SolidWE=DryWE+FrozenWE
+    if(SolidWE>0._r8)then
+      MeltWE=min(SolidWE,-RequestedHeat/LtHeatIceMelt)
+      if(MeltWE==SolidWE)then
+        SnowMeltWE=DryWE
+        IceMeltWE=FrozenWE
+      else
+        SnowMeltWE=MeltWE*(DryWE/SolidWE)
+        IceMeltWE=min(FrozenWE,max(0._r8,MeltWE-SnowMeltWE))
+      endif
+    endif
+  else
+    IceMeltWE=-min(max(0._r8,LiquidVolume),RequestedHeat/LtHeatIceMelt)
+  endif
+  PhaseHeat=-LtHeatIceMelt*(SnowMeltWE+IceMeltWE)
+  call PrintInfo('end '//subname)
+  end subroutine LimitSnowPhaseChange
+
+!------------------------------------------------------------------------------------------
   subroutine SolveSnowpackM(I,J,M,NY,NX,LatentHeatAir2Sno,Radnet2Snow,HeatSensEvapAir2Snow,HeatSensAir2Snow,&
     HeatNetFlx2Snow,CumWatFlx2SoiMacP,CumWatFlx2SoiMicP,CumWatXFlx2SoiMicP,CumSnowWatFLow2LitR,&
     CumNetHeatFlow2LitR,cumNetHeatFlow2Soil)
+  ! Description:
   ! Subcycle snow mass, heat and phase change with linearized longwave and
   ! sensible exchange; accumulate the same accepted fluxes for outer updates.
   implicit none
@@ -539,11 +582,11 @@ contains
   integer :: MM,L,L2
 
   real(r8) :: TotWatXFlx2SoiMicP,TotHeatFlow2Soi
-  real(r8) :: ENGY0,FVOLI0,FVOLS0
+  real(r8) :: ENGY0
   real(r8) :: TKApp,TKXR,TK1X
   real(r8) :: WatFlowSno2MacP,TotSnoWatFlow2Litr,TotSnoHeatFlow2Litr
   real(r8) :: NetIce2LayL,NetSno2LayL,NetWat2LayL,HeatByFrezThaw,TFLX1
-  real(r8) :: NetHeat2LayL,TotSnowLMass,VLHeatCapSnowMX
+  real(r8) :: NetHeat2LayL,VLHeatCapSnowMX
   real(r8) :: VOLI0X,VOLS0X,VOLW0X,IceThawMass,SnowThawMass
   real(r8) :: tNetWat2LayL,vwat,vdry,vice
   real(r8) :: dt_SnoHeat   !time step size for snow model iteration
@@ -553,10 +596,7 @@ contains
   real(r8) :: SensibleCorrection                             !additional outgoing sensible heat [MJ/cell]
   real(r8) :: SnoFallWE,Rainfall,IceFallVol,HeatSnofall2Snow
   real(r8) :: TopLaySnoVol      !sum of constituent-volume weights for empirical albedo [m3]
-  real(r8), parameter :: tinyw=1.e-14_r8
-  real(r8), parameter :: mscalp1=1.00001_r8
   real(r8), parameter :: Kirchhoff_cf=1._r8+TFICE*(cpw-cps)/LtHeatIceMelt
-  real(r8) :: tinyw1
   !     begin_execution
   !     HEAT AND VAPOR FLUXES BETWEEN SNOWPACK AND ATMOSPHERE
   !
@@ -584,7 +624,6 @@ contains
   CumSnowWatFLow2LitR = 0._r8
   tNetWat2LayL        = 0._r8    !local diagnostics
   MMit                = 0
-  tinyw1              = tinyw*NPS*5._r8
   dt_snoHeat          = dts_HeatWatTP*XNPS
   SnoFallWE           = SnowFallt_col(NY,NX)*XNPS
   Rainfall            = Rain2Snowt_col(NY,NX)*XNPS
@@ -668,7 +707,6 @@ contains
 !     VHCPWMM,VLHeatCapSnowMX,VLHeatCapSnowMin_col=previous,current,minimum heat capacity
 !     NetHeat2LayL=net conductive+convective heat flux
 !     TFLX1=unconstrained latent heat flux from freeze-thaw
-!     FVOLS0,FVOLI0=fractions of total water in water,ice
 !     HeatByFrezThaw=source-limited latent heat flux from freeze-thaw
 !     SnowThawMass,IceThawMass=freeze-thaw changes in water,ice
 !     SnowThawMassL,IceThawMassL=accumulated freeze-thaw
@@ -698,30 +736,9 @@ contains
           !freeze-thaw condition met
           TFLX1=(VLHeatCapSnowMX+BoundaryHeatDeriv)*(TFice-TKApp)/Kirchhoff_cf*dts_wat
 
-          IF(TFLX1.LT.0.0_r8)THEN
-            TotSnowLMass=VOLS0X+VOLI0X*DENSICE
-            IF(TotSnowLMass.GT.ZEROS2(NY,NX))THEN
-              FVOLS0=VOLS0X/TotSnowLMass
-              FVOLI0=VOLI0X*DENSICE/TotSnowLMass
-            ELSE
-              FVOLS0=0.0_r8
-              FVOLI0=0.0_r8
-            ENDIF
-            HeatByFrezThaw = AMAX1(-LtHeatIceMelt*TotSnowLMass,TFLX1)
-            SnowThawMass   = -HeatByFrezThaw*FVOLS0/LtHeatIceMelt
-            IceThawMass    = -HeatByFrezThaw*FVOLI0/LtHeatIceMelt
-            !freeze
-          ELSE
-            FVOLS0         = 0.0_r8
-            FVOLI0         = 0.0_r8
-            HeatByFrezThaw = AMIN1(LtHeatIceMelt*AZMAX1(VOLW0X-tinyw1*mscalp1),TFLX1)
-            SnowThawMass   = 0.0_r8
-            IceThawMass    = -AZMAX1d(HeatByFrezThaw/LtHeatIceMelt,tinyw)
-          ENDIF
+          call LimitSnowPhaseChange(TFLX1,VOLS0X,VOLI0X,VOLW0X,HeatByFrezThaw,SnowThawMass,IceThawMass)
         ELSE
           TFLX1          = 0.0_r8
-          FVOLS0         = 0.0_r8
-          FVOLI0         = 0.0_r8
           HeatByFrezThaw = 0.0_r8
           SnowThawMass   = 0.0_r8
           IceThawMass    = 0.0_r8
@@ -1159,10 +1176,9 @@ contains
   end subroutine AccumulateSnowRedisFluxM
 !------------------------------------------------------------------------------------------
   subroutine UpdateSnowAtM(I,J,M,NY,NX)
-  !
-  !Description
-  !Update snow at Mth iteration of the soil heat-moisture solution
-  !it is called after AccumulateSnowRedisFluxM, in UpdateSurfaceAtM
+  ! Description:
+  ! Update snow after redistribution and transfer unresolved native films to
+  ! the receiving surface with their phases and energy intact.
   implicit none
   integer, intent(in) :: M,NY,NX,I,J
 
@@ -1231,7 +1247,10 @@ contains
   ! Test the current constituents, including redistribution, on every substep.
   VLHeatCapSnow_snvr(1,NY,NX) = cps*VLDrySnoWE0_snvr(1,NY,NX) &
     +cpw*VLWatSnow0_snvr(1,NY,NX)+cpi*VLIceSnow0_snvr(1,NY,NX)
-  IF(VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) .AND. TairK_col(NY,NX).GT.TFice)THEN
+  IF(VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) .AND. &
+    (TairK_col(NY,NX).GT.TFice.or.(.not.ats_cpl_mode.and..not.fixWaterLevel.and. &
+      sum(VLDrySnoWE0_snvr(:,NY,NX))+sum(VLWatSnow0_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow0_snvr(:,NY,NX)) &
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))))THEN
     FLWS                      = VLDrySnoWE0_snvr(1,NY,NX)
     FLWW                      = VLWatSnow0_snvr(1,NY,NX)
     FLWI                      = VLIceSnow0_snvr(1,NY,NX)

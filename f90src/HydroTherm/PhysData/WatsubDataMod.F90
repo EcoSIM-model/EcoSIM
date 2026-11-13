@@ -1,12 +1,15 @@
 module WatsubDataMod
+! Description:
+! Own temporary soil hydrology and heat workspaces shared by surface staging
+! and the native soil solver. Allocation remains with InitWatsubData.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
 implicit none
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
 
-  real(r8),allocatable ::  TMLiceThawedMicP_vr(:,:,:)              !micropore layer integrated ice mass loss due to thaw, 
-  real(r8),allocatable ::  TMLiceThawedMacP_vr(:,:,:)              !macropore layer integrated ice mass loss due to thaw, 
+  real(r8),allocatable ::  TMLiceThawedMicP_vr(:,:,:)              !micropore layer integrated ice mass loss due to thaw,
+  real(r8),allocatable ::  TMLiceThawedMacP_vr(:,:,:)              !macropore layer integrated ice mass loss due to thaw,
 
   real(r8),allocatable ::  FracLayVolBelowExtWTBL_vr(:,:,:)          !fraction of layer volume below external water table [0-1]
   real(r8),allocatable ::  FracLayVolBelowTileWTBL_vr(:,:,:)                !
@@ -21,7 +24,7 @@ implicit none
   real(r8),allocatable ::  THeatFlow2Soil_3DM_vr(:,:,:)            !total heat flux add to soil layer in iteration M
   real(r8),allocatable ::  FIceThawedMicP_vr(:,:,:)                !Ice mass thawed in micropore during an iteration time step [ton H2O/d2]
   real(r8),allocatable ::  SoilWatFrezHeatRelease_vr(:,:,:)        !latent energy released during freeze-thaw
-  real(r8),allocatable ::  AVCNHL_3D(:,:,:,:)                      !Macropore hydraulic conductivity 
+  real(r8),allocatable ::  AVCNHL_3D(:,:,:,:)                      !Macropore hydraulic conductivity
   real(r8),allocatable :: TWaterPlantRoot2SoilX_vr(:,:,:)          !water flux from plant root to soil at iteration M [m3 H2O d-2]
   real(r8),allocatable ::  WatNetFlow2MicptX_3DM_vr(:,:,:)         !water flux in iteration M [m3 H2O/d2]
   real(r8),allocatable ::  FWatIrrigate2MicP1_vr(:,:,:)            !water flux due to irrigation [m3 H2O/d2]

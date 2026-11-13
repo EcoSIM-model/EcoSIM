@@ -828,7 +828,8 @@ module RedistMod
   subroutine UpdateTSoilVSMProfile(I,J,NY,NX,VOLISO)
   ! Description:
   ! Commit water, ice and accepted temperatures and summarize soil heat
-  ! transfers. Retired pond slots carry no remaining thermal inventory.
+  ! transfers. Preserve accepted energy when refreshing root heat capacity;
+  ! retired pond slots carry no remaining thermal inventory.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NY,NX
@@ -906,12 +907,19 @@ module RedistMod
 
       TPlantRootH2OUptake_col(NY,NX) = TPlantRootH2OUptake_col(NY,NX)+TWaterPlantRoot2SoilPrev_vr(L,NY,NX)
 
+      ! Biology can change root carbon after Watsub committed this C*T.
+      ! A diagnostic capacity refresh supplies no additional heat.
+      ENGY = VHeatCapacity_vr(L,NY,NX)*TKS_vr(L,NY,NX)
       VHeatCapacity_vr(L,NY,NX) = VHeatCapSolidSoil_vr(L,NY,NX)+cpw*(VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)) &
         +cpi*(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))
 
       if(plantOM4Heat .and. VHeatCapacity_vr(L,NY,NX)>0._r8)then
         rootC=sum(RootMycoMassElm_vr(ielmc,:,L,NY,NX))
         VHeatCapacity_vr(L,NY,NX)=VHeatCapacity_vr(L,NY,NX)+cpo*gOC_to_m3_OM(rootC)
+      endif
+
+      if(VHeatCapacity_vr(L,NY,NX)>0._r8)then
+        TKS_vr(L,NY,NX)=ENGY/VHeatCapacity_vr(L,NY,NX)
       endif
 
       !
