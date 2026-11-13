@@ -58,6 +58,8 @@ contains
   p_bool = config%p_bool
   a_bool = config%a_bool
   pheno_bool = config%pheno_bool
+  wind_speed_ref_height = config%wind_speed_ref_height
+  soil_surface_roughness = config%soil_surface_roughness
 
   end subroutine CopyConfigFromATS
 !------------------------------------------------------------------------------------------
