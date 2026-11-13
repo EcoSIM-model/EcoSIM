@@ -31,7 +31,7 @@ program EcoATSTest
   a_bool = .false.
   pheno_bool = .true.
   !Set pft file manually
-  pft_file_in = '../../../../input_data/ecosim_pftpar_20260303.nc'
+  pft_file_in = '../../../../input_data/ecosim_pftpar_20261021.nc'
   
   call Init_ATSEcoSIM_driver()
 

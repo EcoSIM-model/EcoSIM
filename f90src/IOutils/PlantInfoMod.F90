@@ -961,6 +961,26 @@ implicit none
     endif
     CanopyNonstOMConc_pft(NZ,NY,NX) = CanopyNonstOMConc_tab(loc)
   endif
+  if(ldo_sp_mode)then
+    if(.not.ieee_is_finite(RootNonstOMConc_tab(loc)))then
+      write(iulog,*)'Invalid RTNSC for PFT table record:',loc,RootNonstOMConc_tab(loc)
+      call endrun('prescribed PFT RTNSC must be finite and nonnegative',__LINE__)
+    endif
+    if(RootNonstOMConc_tab(loc)<0._r8)then
+      write(iulog,*)'Negative RTNSC for PFT table record:',loc,RootNonstOMConc_tab(loc)
+      call endrun('prescribed PFT RTNSC must be finite and nonnegative',__LINE__)
+    endif
+    PrescribedRootNonstOMConc_pft(NZ,NY,NX) = RootNonstOMConc_tab(loc)
+    if(.not.ieee_is_finite(LeafProteinDensity_tab(loc)))then
+      write(iulog,*)'Invalid LFPRTC for PFT table record:',loc,LeafProteinDensity_tab(loc)
+      call endrun('prescribed PFT LFPRTC must be finite and nonnegative',__LINE__)
+    endif
+    if(LeafProteinDensity_tab(loc)<0._r8)then
+      write(iulog,*)'Negative LFPRTC for PFT table record:',loc,LeafProteinDensity_tab(loc)
+      call endrun('prescribed PFT LFPRTC must be finite and nonnegative',__LINE__)
+    endif
+    PrescribedLeafProteinDensity_pft(NZ,NY,NX) = LeafProteinDensity_tab(loc)
+  endif
   if(ats_cpl_mode)then
     CanopyHeightLive_pft(NZ,NY,NX) = CanopyHeightLive_tab(loc)
   endif
@@ -1259,8 +1279,8 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine photosyns_trait_disp(nu_plt,NZ,NY,NX)
-  !
-  !Description
+  ! Description:
+  ! Write the active PFT photosynthetic traits and SP prescribed protein density.
   implicit none
   integer, intent(in) :: NZ,NY,NX
   integer, intent(in) :: nu_plt
@@ -1269,6 +1289,11 @@ implicit none
   write(nu_plt,*)('-',j=1,110)
   write(nu_plt,*)'PHOTOSYNTHETIC PROPERTIES'
   id=0;
+  if(ldo_sp_mode)then
+    id=addone(id)
+    call writefixl(nu_plt,id,'LFPRTC','Prescribed leaf protein carbon per leaf area [gC protein m-2 leaf]', &
+      PrescribedLeafProteinDensity_pft(NZ,NY,NX),110)
+  endif
   if(iPlantPhotosynsType_pft(NZ,NY,NX).eq.ic3_photo)then
     id=addone(id)
     call writefixl(nu_plt,id,'VCMX','Saturated specific carboxylation rate by Rubisco at 25oC  [umol CO2 (gC rubisco)-1 s-1]',VmaxSpecRubCarboxyRef_pft(NZ,NY,NX),110)
@@ -1963,9 +1988,12 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   Subroutine ReadPlantTraitTable()
-
+  ! Description:
+  ! Read the PFT trait catalog, including prescribed concentrations for SP mode.
   implicit none
   character(len=*), parameter :: subname='ReadPlantTraitTable'
+  type(Var_desc_t) :: vardesc
+  logical :: readvar
 
   call PrintInfo('beg '//subname)
 
@@ -2105,6 +2133,14 @@ implicit none
     call ncd_getvar(pft_nfid, 'IROOTJK', irootType_tab)
     call ncd_getvar(pft_nfid, 'MFRUTL', MeanSecondaryAxisLength_tab)
     call ncd_getvar(pft_nfid, 'CCPOLT', CanopyNonstOMConc_tab)
+  endif
+  if(ldo_sp_mode)then
+    call check_var(pft_nfid, 'RTNSC', vardesc, readvar)
+    if(.not.readvar)call endrun('missing prescribed PFT RTNSC',__LINE__)
+    call ncd_getvar(pft_nfid, 'RTNSC', RootNonstOMConc_tab)
+    call check_var(pft_nfid, 'LFPRTC', vardesc, readvar)
+    if(.not.readvar)call endrun('missing prescribed PFT LFPRTC',__LINE__)
+    call ncd_getvar(pft_nfid, 'LFPRTC', LeafProteinDensity_tab)
   endif
   if(ats_cpl_mode)then
     call ncd_getvar(pft_nfid, 'CANHT', CanopyHeightLive_tab)

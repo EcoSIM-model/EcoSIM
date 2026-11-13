@@ -23,6 +23,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--workdir", type=Path, required=True)
+    parser.add_argument("--inputs-only", action="store_true",
+                        help="run the two-day input checks without the annual-transition branch")
     args = parser.parse_args()
     executable = args.executable.resolve(strict=True)
     work = args.workdir.resolve()
@@ -50,7 +52,9 @@ def main():
         ("forc_periods", "2013,2014,1", "ecosim"),
         ("hist_nhtfrq", "1", "ecosim"),
         ("hist_fincl1", "'RootC_2nd_pvr','RootN_2nd_pvr','RootP_2nd_pvr',"
-         "'Root2ndBiomC_pft','MycoBiomC_pvr','Root2nd_AxesNumL_pvr','Root2ndMeanLen_pvr'", "ecosim"),
+         "'Root2ndBiomC_pft','MycoBiomC_pvr','Root2nd_AxesNumL_pvr','Root2ndMeanLen_pvr',"
+         "'RootNonstBConc_pvr','CAN_GPP_pft','LeafProteinN_pft','VcMax25C_RUBISCO_pft',"
+         "'JMax25C_photo_pft','VcMax25C_PEP_pft','STOML_MinRSC_CO2_pft'", "ecosim"),
         ("stop_option", "'ndays'", "ecosim_time"),
         ("stop_n", "2", "ecosim_time"),
     ):
@@ -60,6 +64,10 @@ def main():
         root_types = nc["IROOTJK"][:]
         mean_axis_lengths = np.array(nc["MFRUTL"][:], dtype=float)
         canopy_concentrations = np.array(nc["CCPOLT"][:], dtype=float)
+        root_concentrations = np.array(nc["RTNSC"][:], dtype=float)
+        leaf_protein_densities = np.array(nc["LFPRTC"][:], dtype=float)
+        photo_traits = {field: np.array(nc[field][:], dtype=float) for field in
+                        ("ICTYP", "VCMX", "RUBP", "VCMX4", "PEPC", "ETMX", "CHL", "fCHLMESO")}
     with Dataset(ROOT / "examples/inputs/blodgett/Blodget_sp_phenol_20261103.nc") as nc:
         monthly = {name: np.array(nc[name][0, 0, 0, :]) for name in ("LAI", "SAI", "HTOP")}
 
@@ -114,6 +122,21 @@ def main():
              ("invalid-canopy-concentration-nan", [["ndlf00", "dfir00"]], 2, None),
              ("invalid-canopy-concentration-inf", [["ndlf00", "dfir00"]], 2, None),
              ("invalid-canopy-concentration-fill", [["ndlf00", "dfir00"]], 2, None),
+             ("zero-root-concentration", [["ndlf00", "dfir00"]], 2, 2),
+             ("missing-root-concentration", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-root-concentration-negative", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-root-concentration-nan", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-root-concentration-inf", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-root-concentration-fill", [["ndlf00", "dfir00"]], 2, None),
+             ("low-leaf-protein", [["ndlf00", "dfir00"]], 2, 2),
+             ("high-leaf-protein", [["ndlf00", "dfir00"]], 2, 2),
+             ("zero-leaf-protein", [["ndlf00", "dfir00"]], 2, 2),
+             ("c4-leaf-protein", [["ndlf00", "dfir00"]], 2, 2),
+             ("missing-leaf-protein", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-leaf-protein-negative", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-leaf-protein-nan", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-leaf-protein-inf", [["ndlf00", "dfir00"]], 2, None),
+             ("invalid-leaf-protein-fill", [["ndlf00", "dfir00"]], 2, None),
              ("missing-population", [["ndlf00", "dfir00"]], 2, None),
              ("invalid-population-zero", [["ndlf00", "dfir00"]], 2, None),
              ("invalid-population-negative", [["ndlf00", "dfir00"]], 2, None),
@@ -135,6 +158,9 @@ def main():
         current = stage.set_value(text, "sp_phenol_in", "'" + str(data) + "'", "ecosim")
         axis_lengths = mean_axis_lengths.copy()
         concentrations = canopy_concentrations.copy()
+        root_totals = root_concentrations.copy()
+        protein_densities = leaf_protein_densities.copy()
+        current_photo_traits = {field: values.copy() for field, values in photo_traits.items()}
         if name in ("mixed-root-types", "minimum-axis-length") or name.startswith("invalid-axis-length-"):
             traits = folder / "axis-length-traits.nc"
             shutil.copyfile(ROOT / "input_data/ecosim_pftpar_20261021.nc", traits)
@@ -144,6 +170,8 @@ def main():
                     nc["MFRUTL"][catalog.index("gr3a34")] = .02
                     nc["CCPOLT"][catalog.index("ndlf34")] = .05
                     nc["CCPOLT"][catalog.index("gr3a34")] = .2
+                    nc["RTNSC"][catalog.index("ndlf34")] = .03
+                    nc["RTNSC"][catalog.index("gr3a34")] = .3
                 else:
                     value = (.002 if name == "minimum-axis-length" else
                              {"zero": 0., "negative": -.01, "short": .001,
@@ -153,6 +181,7 @@ def main():
                 nc.set_auto_mask(False)  # Invalid fixtures deliberately violate valid_min.
                 axis_lengths = np.array(nc["MFRUTL"][:], dtype=float)
                 concentrations = np.array(nc["CCPOLT"][:], dtype=float)
+                root_totals = np.array(nc["RTNSC"][:], dtype=float)
             current = stage.set_value(current, "pft_file_in", "'" + str(traits) + "'", "ecosim")
         if name == "zero-canopy-concentration" or name.startswith("invalid-canopy-concentration-"):
             traits = folder / "canopy-concentration-traits.nc"
@@ -175,6 +204,48 @@ def main():
             with Dataset(traits) as nc:
                 assert nc["IROOTJK"][catalog.index("ndlf34")] == invalid_type
             current = stage.set_value(current, "pft_file_in", "'" + str(traits) + "'", "ecosim")
+        if (name in ("zero-root-concentration", "missing-root-concentration") or
+                name.startswith("invalid-root-concentration-")):
+            traits = folder / "root-concentration-traits.nc"
+            shutil.copyfile(ROOT / "input_data/ecosim_pftpar_20261021.nc", traits)
+            with Dataset(traits, "r+") as nc:
+                if name == "missing-root-concentration":
+                    nc.renameVariable("RTNSC", "omitted_root_concentration")
+                else:
+                    value = (0. if name == "zero-root-concentration" else
+                             {"negative": -.1, "nan": np.nan, "inf": np.inf,
+                              "fill": -9999.}[name.rsplit("-", 1)[1]])
+                    nc["RTNSC"][catalog.index("ndlf34")] = value
+            if name != "missing-root-concentration":
+                with Dataset(traits) as nc:
+                    nc.set_auto_mask(False)
+                    root_totals = np.array(nc["RTNSC"][:], dtype=float)
+            current = stage.set_value(current, "pft_file_in", "'" + str(traits) + "'", "ecosim")
+        if (name in ("zero-leaf-protein", "low-leaf-protein", "high-leaf-protein", "c4-leaf-protein", "missing-leaf-protein") or
+                name.startswith("invalid-leaf-protein-")):
+            traits = folder / "leaf-protein-traits.nc"
+            shutil.copyfile(ROOT / "input_data/ecosim_pftpar_20261021.nc", traits)
+            with Dataset(traits, "r+") as nc:
+                if name == "missing-leaf-protein":
+                    nc.renameVariable("LFPRTC", "omitted_leaf_protein")
+                elif name == "c4-leaf-protein":
+                    # Exercise the C4 biochemical path with actual maize enzyme
+                    # traits; retain the fixture's root type and grid/PFT mapping.
+                    for field in ("ICTYP", "VCMX4", "PEPC", "fCHLMESO", "XKCO24", "FCO2"):
+                        nc[field][catalog.index("ndlf34")] = nc[field][catalog.index("maiz31")]
+                    nc["LFPRTC"][catalog.index("ndlf34")] = 10.
+                else:
+                    value = (0. if name == "zero-leaf-protein" else .25 if name == "low-leaf-protein" else
+                             10. if name == "high-leaf-protein" else
+                             {"negative": -.1, "nan": np.nan, "inf": np.inf,
+                              "fill": -9999.}[name.rsplit("-", 1)[1]])
+                    nc["LFPRTC"][catalog.index("ndlf34")] = value
+            if name != "missing-leaf-protein":
+                with Dataset(traits) as nc:
+                    nc.set_auto_mask(False)
+                    protein_densities = np.array(nc["LFPRTC"][:], dtype=float)
+                    current_photo_traits = {field: np.array(nc[field][:], dtype=float) for field in photo_traits}
+            current = stage.set_value(current, "pft_file_in", "'" + str(traits) + "'", "ecosim")
         (folder / "case.namelist").write_text(current)
         with (folder / "run.log").open("w") as log:
             result = subprocess.run([str(executable), "case.namelist"], cwd=folder,
@@ -185,6 +256,10 @@ def main():
                        else "zero-population SP slots require LAI=0" if name == "invalid-population-zero"
                        else "prescribed PlantPopuLive_pft must be finite and nonnegative" if name.startswith("invalid-population-")
                        else "prescribed PFT CCPOLT must be finite and nonnegative" if name.startswith("invalid-canopy-concentration-")
+                       else "missing prescribed PFT RTNSC" if name == "missing-root-concentration"
+                       else "prescribed PFT RTNSC must be finite and nonnegative" if name.startswith("invalid-root-concentration-")
+                       else "missing prescribed PFT LFPRTC" if name == "missing-leaf-protein"
+                       else "prescribed PFT LFPRTC must be finite and nonnegative" if name.startswith("invalid-leaf-protein-")
                        else "prescribed PFT MFRUTL must be finite and at least Root2ndTipLen4uptk" if name.startswith("invalid-axis-length-")
                        else "prescribed PFT IROOTJK must be between 1 and 10" if name.startswith("invalid-root-type-")
                        else "invalid PFT slot count" if name == "too-many-slots"
@@ -203,6 +278,9 @@ def main():
             assert np.all(nc["PlantPopuLive_pft"][expected:slots] == 0)
             assert np.all(nc["IsPlantActive_pft"][expected:slots] == 0)
             assert np.all(nc["NumStructuralRootAxes_pft"][:expected] == 0)
+            np.testing.assert_array_equal(nc["cGPP_pft"][:expected], 0.)
+            np.testing.assert_array_equal(nc["GPP_DaySum_col"][:], 0.)
+            np.testing.assert_array_equal(nc["GPP_PrevDay_col"][:], 0.)
             # Jan 2 uses the Dec/Jan interpolation; native area is the index
             # times cell area, while history returns the prescribed index.
             weight = 1.5 / 31.
@@ -252,6 +330,28 @@ def main():
                     canopy_concentration = hist["CanopyNonstOMConc_pft"][-1, j]
                     assert not np.any(np.ma.getmaskarray(canopy_concentration)), folder
                     np.testing.assert_allclose(canopy_concentration, concentrations[loc], rtol=1.e-6)
+                    assert hist["RootNonstBConc_pvr"].units == "g/gC"
+                    root_total = hist["RootNonstBConc_pvr"][:, :nl, j]
+                    assert not np.any(np.ma.getmaskarray(root_total)), folder
+                    np.testing.assert_allclose(root_total, root_totals[loc], rtol=1.e-6)
+                    protein = protein_densities[loc]
+                    np.testing.assert_allclose(hist["LeafProteinN_pft"][:, j], protein / 3.3, rtol=1.e-6)
+                    expected_vcmax = (current_photo_traits["VCMX"][loc] * 1.92 *
+                                      current_photo_traits["RUBP"][loc] * protein)
+                    np.testing.assert_allclose(hist["VcMax25C_RUBISCO_pft"][:, j], expected_vcmax, rtol=1.e-6)
+                    chl = protein * current_photo_traits["CHL"][loc]
+                    if current_photo_traits["ICTYP"][loc] == 4:
+                        chl *= current_photo_traits["fCHLMESO"][loc] / 3.7
+                        expected_pep = (current_photo_traits["VCMX4"][loc] * 1.92 *
+                                        current_photo_traits["PEPC"][loc] * protein)
+                        np.testing.assert_allclose(hist["VcMax25C_PEP_pft"][:, j], expected_pep, rtol=1.e-6)
+                    else:
+                        chl /= 3.5
+                    np.testing.assert_allclose(hist["JMax25C_photo_pft"][:, j],
+                                               current_photo_traits["ETMX"][loc] * 1.35 * chl, rtol=1.e-6)
+                    # SP supplies the potential-fixation inputs for stomatal
+                    # resistance without calculating an independent GPP flux.
+                    np.testing.assert_array_equal(hist["CAN_GPP_pft"][:, j], 0.)
                     values = hist["RootC_2nd_pvr"][-1, :nl, j]
                     assert not np.any(np.ma.getmaskarray(values)), folder
                     np.testing.assert_allclose(values, carbon_per_area * fractions / thickness,
@@ -268,6 +368,28 @@ def main():
                         assert not np.any(np.ma.getmaskarray(values)), (folder, field)
                         np.testing.assert_array_equal(values, 0.)
         report[name] = "PASS"
+
+    # RTNSC must affect the solved osmotic state, as well as history mapping.
+    # Changing only the first PFT's root concentration leaves the second intact.
+    with Dataset(next((work / "two-pfts").glob("*.ecosim.r.*.nc"))) as normal, \
+            Dataset(next((work / "zero-root-concentration").glob("*.ecosim.r.*.nc"))) as zero:
+        rooted = normal["RootTotLenPerPlant_pvr"][:, 0, 0] > 0.
+        assert np.any(rooted)
+        assert np.all(zero["PSIRootOSMO_vr"][rooted, 0, 0] > normal["PSIRootOSMO_vr"][rooted, 0, 0])
+        np.testing.assert_array_equal(zero["PSIRootOSMO_vr"][:, 0, 1], normal["PSIRootOSMO_vr"][:, 0, 1])
+
+    with Dataset(next((work / "two-pfts").glob("*.ecosim.h0.*.nc"))) as normal, \
+            Dataset(next((work / "zero-leaf-protein").glob("*.ecosim.h0.*.nc"))) as zero, \
+            Dataset(next((work / "low-leaf-protein").glob("*.ecosim.h0.*.nc"))) as low, \
+            Dataset(next((work / "high-leaf-protein").glob("*.ecosim.h0.*.nc"))) as high, \
+            Dataset(next((work / "c4-leaf-protein").glob("*.ecosim.h0.*.nc"))) as c4:
+        assert np.any(high["STOML_MinRSC_CO2_pft"][:, 0] < low["STOML_MinRSC_CO2_pft"][:, 0])
+        assert np.any(c4["STOML_MinRSC_CO2_pft"][:, 0] < zero["STOML_MinRSC_CO2_pft"][:, 0])
+
+    (work / "summary.json").write_text(json.dumps(report, indent=2) + "\n")
+    if args.inputs_only:
+        print(json.dumps(report, indent=2))
+        return 0
 
     # Change both PFT populations at January 1. A fresh-history
     # branch applies the new annual record after restoring the old year's state.

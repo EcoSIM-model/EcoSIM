@@ -19,6 +19,7 @@ module RootDataType
   integer,target,allocatable ::  irootType_col(:,:)                              !Root type integer from ATS [-]
   integer,target,allocatable ::  irootType_pft(:,:,:)                            !Jackson et al. root biome type per pft [-]
   real(sp),target,allocatable :: MeanSecondaryAxisLength_pft(:,:,:)             !MFRUTL: prescribed mean secondary axis length [m]
+  real(sp),target,allocatable :: PrescribedRootNonstOMConc_pft(:,:,:)           !RTNSC: SP root nonstructural C+N+P concentration [g gC-1]
   real(sp),target,allocatable :: RootElmsbeg_pft(:,:,:,:)                        !root biomass per pft
   real(sp),target,allocatable ::  RootBiomGrosYld_pft(:,:,:)                     !root growth yield, [g g-1]
   real(sp),target,allocatable ::  NonstCMinCon2InitRoot_pft(:,:,:)                  !threshold root nonstructural C content for initiating new root axis, [g g-1]
@@ -186,6 +187,7 @@ contains
   allocate(irootType_col(JY,JX));  irootType_col=1  !set to one to avoid numerical failure
   allocate(irootType_pft(JP,JY,JX)); irootType_pft=0
   allocate(MeanSecondaryAxisLength_pft(JP,JY,JX));MeanSecondaryAxisLength_pft=0._sp
+  allocate(PrescribedRootNonstOMConc_pft(JP,JY,JX));PrescribedRootNonstOMConc_pft=0._sp
   allocate(NMaxRootBotLayer_pft(JP,JY,JX));      NMaxRootBotLayer_pft=0
   allocate(MaxSoilLays4Root_pft(JP,JY,JX));       MaxSoilLays4Root_pft=0
   allocate(RootElmsbeg_pft(NumPlantChemElms,JP,JY,JX)); RootElmsbeg_pft=0._sp
@@ -345,6 +347,7 @@ contains
   call destroy(irootType_col)
   call destroy(irootType_pft)
   call destroy(MeanSecondaryAxisLength_pft)
+  call destroy(PrescribedRootNonstOMConc_pft)
   call destroy(isPlantRootAlive_pft)
   call destroy(NMaxRootBotLayer_pft)
   call destroy(MaxSoilLays4Root_pft)

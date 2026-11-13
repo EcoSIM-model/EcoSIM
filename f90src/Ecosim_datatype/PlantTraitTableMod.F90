@@ -134,6 +134,8 @@ module PlantTraitTableMod
   integer , target, allocatable :: irootType_tab(:)
   real(r8), target, allocatable :: MeanSecondaryAxisLength_tab(:) !MFRUTL: prescribed mean secondary axis length [m]
   real(r8), target, allocatable :: CanopyNonstOMConc_tab(:) !CCPOLT: prescribed canopy nonstructural C+N+P concentration [g gC-1]
+  real(r8), target, allocatable :: RootNonstOMConc_tab(:) !RTNSC: prescribed root nonstructural C+N+P concentration [g gC-1]
+  real(r8), target, allocatable :: LeafProteinDensity_tab(:) !LFPRTC: prescribed protein C per leaf area [gC protein m-2 leaf]
   real(r8), target, allocatable :: CanopyHeightLive_tab(:)
   character(len=10),allocatable :: pftss_tab(:)               !pft trait record name, including short pft-type name and koppen climate zone code
   character(len=40),allocatable :: pft_long_tab(:)            !long pft-type name
@@ -279,6 +281,8 @@ module PlantTraitTableMod
   allocate(irootType_tab(npfts));irootType_tab=0
   allocate(MeanSecondaryAxisLength_tab(npfts));MeanSecondaryAxisLength_tab=0._r8
   allocate(CanopyNonstOMConc_tab(npfts));CanopyNonstOMConc_tab=0._r8
+  allocate(RootNonstOMConc_tab(npfts));RootNonstOMConc_tab=0._r8
+  allocate(LeafProteinDensity_tab(npfts));LeafProteinDensity_tab=0._r8
   allocate(CanopyHeightLive_tab(npfts));CanopyHeightLive_tab=0._r8
   allocate(pftss_tab(npfts))
   allocate(pft_long_tab(npft))
@@ -423,6 +427,8 @@ module PlantTraitTableMod
   call destroy(irootType_tab)
   call destroy(MeanSecondaryAxisLength_tab)
   call destroy(CanopyNonstOMConc_tab)
+  call destroy(RootNonstOMConc_tab)
+  call destroy(LeafProteinDensity_tab)
   call destroy(CanopyHeightLive_tab)
   end Subroutine DestructPlantTraitTable
 

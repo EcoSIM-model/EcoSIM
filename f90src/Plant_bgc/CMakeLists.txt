@@ -25,6 +25,7 @@ set(PLANT_BGC_SOURCES
   InitPlantMod.F90
   PlantPhenolMod.F90
   PrescribePhenolMod.F90
+  PrescribedLeafBiochemMod.F90
 )
 include(add_ecosim_library)
 add_ecosim_library(plant_bgc ${PLANT_BGC_SOURCES})
