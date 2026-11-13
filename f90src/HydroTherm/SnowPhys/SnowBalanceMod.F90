@@ -1,10 +1,11 @@
 module SnowBalanceMod
+  ! Description:
   ! Preserve snow mass and energy through hourly updates, removal and relayering.
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use data_const_mod,   only: spval => DAT_CONST_SPVAL
   use abortutils,       only: endrun
   use SnowTransportMod, only: SoluteTransportThruSnow
-  use EcoSIMCtrlMod,    only: lverb,  snowRedist_model, fixWaterLevel
+  use EcoSIMCtrlMod,    only: lverb,  snowRedist_model, fixWaterLevel, ats_cpl_mode
   use minimathmod,      only: AZMAX1, isclose, AZMIN1, AZMAX1d, AZERO
   use MiniFuncMod,      only: gOC_to_m3_OM
   use DebugToolMod
@@ -39,8 +40,118 @@ implicit none
   public :: SnowpackLayering   !called in redist after SnowMassUpdate
   public :: ZeroSnowArrays
   public :: DebugSnowPrint
+  public :: RetireNumericalSnow
   contains
 
+!------------------------------------------------------------------------------------------
+  subroutine RetireNumericalSnow(I,J,NY,NX)
+  !
+  ! Description:
+  ! Merge a numerically unresolved native snowpack into its receiving surface
+  ! before copying thermal states. Preserve water phases, sensible energy and
+  ! all snow tracers; geometry is rebuilt before surface area partitioning.
+  implicit none
+  integer, intent(in) :: I,J   !model day of year and hour [-]
+  integer, intent(in) :: NY,NX !column row and column indices [-]
+  character(len=*), parameter :: subname='RetireNumericalSnow'
+  real(r8) :: WaterWE,Energy,Capacity,ReturnedWater,ReturnedHeat
+  integer :: L,Receiver
+  logical :: Merged
+
+  call PrintInfo('beg '//subname)
+  ! Coupled and prescribed-water columns retain their existing ownership policy.
+  if(.not.ats_cpl_mode.and..not.fixWaterLevel)then
+    WaterWE=sum(VLDrySnoWE_snvr(:,NY,NX))+sum(VLWatSnow_snvr(:,NY,NX)) &
+      +DENSICE*sum(VLIceSnow_snvr(:,NY,NX))
+    if(WaterWE>0._r8.and.WaterWE<=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))then
+      Energy=0._r8
+      do L=1,JS
+        Capacity=cps*VLDrySnoWE_snvr(L,NY,NX)+cpw*VLWatSnow_snvr(L,NY,NX)+cpi*VLIceSnow_snvr(L,NY,NX)
+        if(Capacity>0._r8)Energy=Energy+Capacity*TKSnow_snvr(L,NY,NX)
+      enddo
+      ! Consolidate all occupied slots. Solutes stay in their snow slots until
+      ! SnowpackLayering transfers them after the physical pack is retired.
+      VLDrySnoWE_snvr(1,NY,NX)    = sum(VLDrySnoWE_snvr(:,NY,NX))
+      VLWatSnow_snvr(1,NY,NX)     = sum(VLWatSnow_snvr(:,NY,NX))
+      VLIceSnow_snvr(1,NY,NX)     = sum(VLIceSnow_snvr(:,NY,NX))
+      VLDrySnoWE_snvr(2:JS,NY,NX) = 0._r8
+      VLWatSnow_snvr(2:JS,NY,NX)  = 0._r8
+      VLIceSnow_snvr(2:JS,NY,NX)  = 0._r8
+      VLHeatCapSnow_snvr(:,NY,NX) = 0._r8
+      Capacity                    = cps*VLDrySnoWE_snvr(1,NY,NX)+cpw*VLWatSnow_snvr(1,NY,NX)+cpi*VLIceSnow_snvr(1,NY,NX)
+      VLHeatCapSnow_snvr(1,NY,NX) = Capacity
+      TKSnow_snvr(1,NY,NX)        = Energy/Capacity
+      VLSnoDWIprev_snvr(:,NY,NX)  = 0._r8
+      SnowThickL_snvr(:,NY,NX)    = 0._r8
+      cumSnowDepz_col(:,NY,NX)    = 0._r8
+      call SnowpackDisapper(I,J,NY,NX,.false.,ReturnedWater,ReturnedHeat)
+      call SnowpackLayering(I,J,NY,NX)
+    else if(WaterWE>0._r8)then
+      ! A tiny layer within a resolved pack belongs to another snow layer,
+      ! rather than to the ground beneath the whole pack.
+      Merged=.false.
+      do L=1,JS
+        WaterWE=VLDrySnoWE_snvr(L,NY,NX)+VLWatSnow_snvr(L,NY,NX)+DENSICE*VLIceSnow_snvr(L,NY,NX)
+        if(WaterWE<=0._r8.or.WaterWE>MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))cycle
+        Receiver=0
+        do Receiver=L+1,JS
+          if(VLDrySnoWE_snvr(Receiver,NY,NX)+VLWatSnow_snvr(Receiver,NY,NX)+DENSICE*VLIceSnow_snvr(Receiver,NY,NX)>0._r8)exit
+        enddo
+        if(Receiver>JS)then
+          do Receiver=L-1,1,-1
+            if(VLDrySnoWE_snvr(Receiver,NY,NX)+VLWatSnow_snvr(Receiver,NY,NX)+DENSICE*VLIceSnow_snvr(Receiver,NY,NX)>0._r8)exit
+          enddo
+        endif
+        if(Receiver<1.or.Receiver>JS)cycle
+        call MergeNumericalSnowLayer(L,Receiver,NY,NX)
+        Merged=.true.
+      enddo
+      if(Merged)call SnowpackLayering(I,J,NY,NX)
+    endif
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine RetireNumericalSnow
+
+!------------------------------------------------------------------------------------------
+
+  subroutine MergeNumericalSnowLayer(Donor,Receiver,NY,NX)
+  ! Description:
+  ! Merge an unresolved snow slot into an occupied snow slot, preserving its
+  ! phase inventories, dry bulk volume, sensible energy and dissolved tracers.
+  implicit none
+  integer, intent(in) :: Donor,Receiver !source and destination snow layer indices [1:JS]
+  integer, intent(in) :: NY,NX          !column row and column indices [-]
+  character(len=*), parameter :: subname='MergeNumericalSnowLayer'
+  real(r8) :: Energy,Capacity,DryVolume
+
+  call PrintInfo('beg '//subname)
+  Energy=(cps*VLDrySnoWE_snvr(Donor,NY,NX)+cpw*VLWatSnow_snvr(Donor,NY,NX)+cpi*VLIceSnow_snvr(Donor,NY,NX))*TKSnow_snvr(Donor,NY,NX) &
+    +(cps*VLDrySnoWE_snvr(Receiver,NY,NX)+cpw*VLWatSnow_snvr(Receiver,NY,NX)+cpi*VLIceSnow_snvr(Receiver,NY,NX))*TKSnow_snvr(Receiver,NY,NX)
+  DryVolume=VLDrySnoWE_snvr(Donor,NY,NX)/SnoDens_snvr(Donor,NY,NX)+VLDrySnoWE_snvr(Receiver,NY,NX)/SnoDens_snvr(Receiver,NY,NX)
+  VLDrySnoWE_snvr(Receiver,NY,NX)=VLDrySnoWE_snvr(Receiver,NY,NX)+VLDrySnoWE_snvr(Donor,NY,NX)
+  VLWatSnow_snvr(Receiver,NY,NX)=VLWatSnow_snvr(Receiver,NY,NX)+VLWatSnow_snvr(Donor,NY,NX)
+  VLIceSnow_snvr(Receiver,NY,NX)=VLIceSnow_snvr(Receiver,NY,NX)+VLIceSnow_snvr(Donor,NY,NX)
+  Capacity=cps*VLDrySnoWE_snvr(Receiver,NY,NX)+cpw*VLWatSnow_snvr(Receiver,NY,NX)+cpi*VLIceSnow_snvr(Receiver,NY,NX)
+  VLHeatCapSnow_snvr(Receiver,NY,NX)=Capacity
+  TKSnow_snvr(Receiver,NY,NX)=Energy/Capacity
+  if(DryVolume>0._r8)SnoDens_snvr(Receiver,NY,NX)=VLDrySnoWE_snvr(Receiver,NY,NX)/DryVolume
+  trcg_solsml_snvr(:,Receiver,NY,NX)=trcg_solsml_snvr(:,Receiver,NY,NX)+trcg_solsml_snvr(:,Donor,NY,NX)
+  trcn_solsml_snvr(:,Receiver,NY,NX)=trcn_solsml_snvr(:,Receiver,NY,NX)+trcn_solsml_snvr(:,Donor,NY,NX)
+  trcg_solsml_snvr(:,Donor,NY,NX)=0._r8
+  trcn_solsml_snvr(:,Donor,NY,NX)=0._r8
+  if(salt_model)then
+    trcSalt_ml_snvr(:,Receiver,NY,NX)=trcSalt_ml_snvr(:,Receiver,NY,NX)+trcSalt_ml_snvr(:,Donor,NY,NX)
+    trcSalt_ml_snvr(:,Donor,NY,NX)=0._r8
+  endif
+  VLDrySnoWE_snvr(Donor,NY,NX)=0._r8
+  VLWatSnow_snvr(Donor,NY,NX)=0._r8
+  VLIceSnow_snvr(Donor,NY,NX)=0._r8
+  VLHeatCapSnow_snvr(Donor,NY,NX)=0._r8
+  TKSnow_snvr(Donor,NY,NX)=spval
+  call PrintInfo('end '//subname)
+  end subroutine MergeNumericalSnowLayer
+
+!------------------------------------------------------------------------------------------
   subroutine DebugSnowPrint(I,J,NY,NX,info)
   implicit none
   integer, intent(in) :: I,J,NY,NX
@@ -167,6 +278,7 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine SnowpackDisapper(I,J,NY,NX,test_exist,QWatinfl2Mic,QHeatInfl2Soil)
+  ! Description:
   ! Transfer a removed top snow store's constituents and sensible energy to
   ! the receiving surface, retaining frozen water as ice in the native model.
   implicit none
@@ -185,10 +297,12 @@ implicit none
   QWatinfl2Mic=0._r8
   QHeatInfl2Soil=0._r8
   IF(VLHeatCapSnow_snvr(1,NY,NX).GT.0.0_r8 .AND. VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) &
-    .AND. TairK_col(NY,NX).GT.TFICE)THEN
+    .AND. (TairK_col(NY,NX).GT.TFICE.or.(.not.test_exist.and..not.ats_cpl_mode.and..not.fixWaterLevel.and. &
+      sum(VLDrySnoWE_snvr(:,NY,NX))+sum(VLWatSnow_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow_snvr(:,NY,NX)) &
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))))THEN
 
-    !air temperature above freezing, surface snow layer heat insignificant, so it is merged
-    !to the surface layer, and all varaibles are reset
+    ! Retire a warm thin layer or a numerically unresolved native film.
+    ! Frozen constituents enter the receiver as ice, including under cold air.
     ENGYS           = TKSnow_snvr(1,NY,NX)*VLHeatCapSnow_snvr(1,NY,NX)
     ENGY1           = TKS_vr(NUM_col(NY,NX),NY,NX)*VHeatCapacity_vr(NUM_col(NY,NX),NY,NX)
     FLWS            = VLDrySnoWE_snvr(1,NY,NX)
@@ -233,7 +347,6 @@ implicit none
         !dump all ice to micropore, assuming no macropore of the host model
         QWatinfl2Mic   = FLWW+FLWI*DENSICE+FLWS
       else
-        write(*,*)I*1000+J,'SnowpackDisapper2'
         if(.not.fixWaterLevel)then
           QWatinfl2Mic   = 0._r8
           QHeatInfl2Soil = 0._r8
@@ -254,9 +367,11 @@ implicit none
           ENDIF
         endif
         Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+FLWW+FLWI*DENSICE+FLWS
-        QSnowH2Oloss_col(NY,NX) = QSnowH2Oloss_col(NY,NX)+FLWW+FLWI*DENSICE+FLWS
-        QSnowHeatLoss_col(NY,NX)= QSnowHeatLoss_col(NY,NX)+HeatFlo2Surface
       endif
+    endif
+    if(.not.test_exist)then
+      QSnowH2Oloss_col(NY,NX) = QSnowH2Oloss_col(NY,NX)+FLWW+FLWI*DENSICE+FLWS
+      QSnowHeatLoss_col(NY,NX)= QSnowHeatLoss_col(NY,NX)+HeatFlo2Surface
     endif
   ENDIF
   call PrintInfo('end '//subname)

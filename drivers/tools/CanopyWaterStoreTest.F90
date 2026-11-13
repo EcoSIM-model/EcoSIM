@@ -4,6 +4,7 @@ program CanopyWaterStoreTest
   ! with liquid/snow donor enthalpy, including slots beyond the active NP count
   ! and inert wet stores with full throughfall in radiation-only mode.
   use data_kind_mod, only: r8 => DAT_KIND_R8
+  use PlantBGCPars, only: CanopySnowCapacityPerArea
   use CanopyHydroMod, only: CanopyInterceptPrecip,SyncCanopyThermalInventory
   use CanopyDataType
   use PlantTraitDataType
@@ -21,6 +22,8 @@ program CanopyWaterStoreTest
   use abortutils, only: iulog
   implicit none
   real(r8) :: InitialEnergy,Capacity,W,S,T,ExpectedHeat
+  real(r8) :: WaterBefore,WaterAfter,EnergyBefore,EnergyAfter,Interval,TissueBefore
+  integer :: mode
 
   allocate(NP_col(1,1),NP0_col(1,1),ZEROS(1,1),TairK_col(1,1),WindSpeedAtm_col(1,1))
   allocate(BulkFactor4Snow_col(1,1),fSnowCanopy_col(1,1),LeafStalkAreaAll_col(1,1))
@@ -44,7 +47,7 @@ program CanopyWaterStoreTest
   TairK_col=270._r8;WindSpeedAtm_col=0._r8
   LeafStalkAreaAll_col=0._r8;LeafStalkAreaAct_pft=0._r8;StandDeadSurfAreaAct_pft=0._r8
   CanopyLeafArea_pft=0._r8;CanopyStemSurfArea_pft=0._r8
-  StandDeadSurfArea_pft=0._r8;StandDeadSurfArea_pft(1,1,1)=.3_r8
+  StandDeadSurfArea_pft=0._r8;StandDeadSurfArea_pft(1,1,1)=.5_r8
   StandDeadStrutElms_pft=0._r8;StandDeadStrutElms_pft(ielmc,1,1,1)=5000._r8
   CanopyLeafSheathC_pft=0._r8;CanopySapwoodC_pft=0._r8
   StemSpecVolume_pft=2.e-6_r8;PlantPopuLive_pft=0._r8;IsPlantActive_pft=ifalse
@@ -56,13 +59,24 @@ program CanopyWaterStoreTest
   FracPARads2Canopy_pft=0._r8;PrecRainAndIrrig_col=0._r8;SnoFalPrec_col=0._r8
   call reset_fluxes()
   call SyncCanopyThermalInventory(1,1,InitialEnergy)
-  Capacity=cpo*gOC_to_m3_OM(375._r8)+cpw*W+cps*S
+  Capacity=cpo*gOC_to_m3_OM(625._r8)+cpw*W+cps*S
   call check_close('cold initial energy',InitialEnergy,Capacity*T)
   call check_close('cold previous energy',ENGYX_pft(1,1,1),Capacity*T)
   call CanopyInterceptPrecip(1,1)
   call check_close('buried liquid retained',WatHeldOnCanopy_pft(1,1,1),W)
   call check_close('buried snow retained',SnowOnCanopy_pft(1,1,1),S)
   call check_close('burial is not drainage',HeatCanopyUnload_col(1,1),0._r8)
+
+  ! Partial loss of standing-dead support also drains excess, even while buried.
+  StandDeadSurfArea_pft(1,1,1)=.1_r8
+  call SyncCanopyThermalInventory(1,1,InitialEnergy)
+  EnergyBefore=VHeatCapCanopy_pft(1,1,1)*T
+  call reset_fluxes()
+  call CanopyInterceptPrecip(1,1)
+  call check_close('dead material shrink liquid capacity',WatHeldOnCanopy_pft(1,1,1),2.5e-5_r8)
+  call check_close('dead material shrink energy conservation', &
+    VHeatCapCanopy_pft(1,1,1)*T+HeatCanopyUnload_col(1,1),EnergyBefore)
+  WatHeldOnCanopy_pft(1,1,1)=W;SnowOnCanopy_pft(1,1,1)=S
 
   ! Existing energy must be replaced by a signed increment, including live-only SP.
   ldo_sp_mode=.true.
@@ -94,7 +108,9 @@ program CanopyWaterStoreTest
   call check_close('full-model material enthalpy loss',InitialEnergy,-cpo*gOC_to_m3_OM(20._r8)*T)
   PlantPopuLive_pft=0._r8
 
-  ! Complete removal. Slot 1 is retained but is no longer inside NP.
+  ! Complete removal. Dry heat has already been exported by the plant ledger.
+  VHeatCapCanopy_pft(1,1,1)=cpw*W+cps*S
+  ! Slot 1 is retained but is no longer inside NP.
   NP_col=0;StandDeadSurfArea_pft=0._r8;StandDeadStrutElms_pft=0._r8
   ! Inactive slots may retain old geometry; it cannot support surface water.
   CanopyLeafArea_pft(1,1,1)=1._r8;LeafStalkAreaAct_pft(1,1,1)=1._r8
@@ -130,6 +146,66 @@ program CanopyWaterStoreTest
   call check_close('integrated donor heat', &
     (cpw*TKRainThrufall_col(1,1)*RainPrecThrufall_col(1,1) &
     +cps*TKSnowThrufall_col(1,1)*SnowPrecThrufall_col(1,1))*NPH*dts_HeatWatTP,ExpectedHeat)
+  ! Tissue water in a retired slot beyond NP must reach the ground as well.
+  CanopyBiomWater_pft(2,1,1)=3.e-5_r8
+  VHeatCapCanopy_pft(2,1,1)=cpw*CanopyBiomWater_pft(2,1,1)
+  call reset_fluxes()
+  call CanopyInterceptPrecip(1,1)
+  call check_close('retired tissue release integrated mass', &
+    RainPrecThrufall_col(1,1)*NPH*dts_HeatWatTP,3.e-5_r8)
+  call check_close('retired tissue release enthalpy',HeatCanopyUnload_col(1,1),cpw*3.e-5_r8*T)
+  call check_close('retired tissue store empty',CanopyBiomWater_pft(2,1,1),0._r8)
+  call check_close('retired tissue heat capacity empty',VHeatCapCanopy_pft(2,1,1),0._r8)
+
+  ! Material loss releases unsupported surface and tissue water in both modes.
+  ! Burial by itself changes exposed area, not total support or storage capacity.
+  do mode=1,2
+    ldo_sp_mode=mode==2
+    NP_col=1;NP0_col=2;PlantPopuLive_pft=0._r8;PlantPopuLive_pft(1,1,1)=40._r8
+    StandDeadStrutElms_pft=0._r8;StandDeadSurfArea_pft=0._r8
+    CanopyLeafArea_pft=0._r8;CanopyLeafArea_pft(1,1,1)=1._r8
+    CanopyStemSurfArea_pft=0._r8;CanopySapwoodC_pft=0._r8
+    CanopyLeafSheathC_pft=0._r8;CanopyLeafSheathC_pft(1,1,1)=100._r8
+    LeafStalkAreaAct_pft=0._r8;StandDeadSurfAreaAct_pft=0._r8;LeafStalkAreaAll_col=0._r8
+    iPlantRootProfile_pft=1;iPlantSnowIntercepType_pft=1
+    WatHeldOnCanopy_pft=0._r8;WatHeldOnCanopy_pft(1,1,1)=W
+    SnowOnCanopy_pft=0._r8;SnowOnCanopy_pft(1,1,1)=S
+    CanopyBiomWater_pft=0._r8;CanopyBiomWater_pft(1,1,1)=5.e-5_r8
+    call SyncCanopyThermalInventory(1,1,InitialEnergy)
+    call reset_fluxes()
+    call CanopyInterceptPrecip(1,1)
+    call check_close('live burial retains surface liquid',WatHeldOnCanopy_pft(1,1,1),W)
+    call check_close('live burial retains tissue water',CanopyBiomWater_pft(1,1,1),5.e-5_r8)
+    call check_close('live burial causes no unloading',HeatCanopyUnload_col(1,1),0._r8)
+
+    CanopyLeafArea_pft(1,1,1)=.01_r8
+    CanopyLeafSheathC_pft(1,1,1)=1._r8
+    call SyncCanopyThermalInventory(1,1,InitialEnergy)
+    WaterBefore=W+S+CanopyBiomWater_pft(1,1,1)
+    EnergyBefore=VHeatCapCanopy_pft(1,1,1)*T
+    TissueBefore=CanopyBiomWater_pft(1,1,1)
+    call reset_fluxes()
+    call CanopyInterceptPrecip(1,1)
+    Interval=real(NPH,r8)*dts_HeatWatTP
+    call check_close('shrunk liquid capacity',WatHeldOnCanopy_pft(1,1,1),2.5e-6_r8)
+    call check_close('shrunk snow capacity',SnowOnCanopy_pft(1,1,1), &
+      MIN(S,CanopySnowCapacityPerArea(1)*.01_r8))
+    call check_close('shrunk maximum tissue water',CanopyBiomWater_pft(1,1,1),1.e-6_r8/.16_r8)
+    WaterAfter=WatHeldOnCanopy_pft(1,1,1)+SnowOnCanopy_pft(1,1,1)+CanopyBiomWater_pft(1,1,1) &
+      +(RainPrecThrufall_col(1,1)+SnowPrecThrufall_col(1,1))*Interval
+    call check_close('shrink donor and ground water conservation',WaterAfter,WaterBefore)
+    EnergyAfter=VHeatCapCanopy_pft(1,1,1)*T+HeatCanopyUnload_col(1,1)
+    call check_close('shrink donor and ground heat conservation',EnergyAfter,EnergyBefore)
+    call check_close('shrink ground liquid donor temperature',TKRainThrufall_col(1,1),T)
+    call check_close('shrink ground snow donor temperature',TKSnowThrufall_col(1,1),T)
+    call check_close('shrink accepted temperature unchanged',TKC_pft(1,1,1),T)
+    call check_close('shrink net canopy water transfer',RainIntceptByCanopy_col(1,1), &
+      -(W-2.5e-6_r8+TissueBefore-CanopyBiomWater_pft(1,1,1)))
+    call reset_fluxes()
+    call CanopyInterceptPrecip(1,1)
+    call check_close('shrink release not repeated',HeatCanopyUnload_col(1,1),0._r8)
+  enddo
+  ldo_sp_mode=.false.
   ! Radiation-only mode has no plant solver to accept interception or unloading.
   ! Wet active and retired slots remain inert, even under rain, snow and wind.
   ldo_radiation_test=.true.
