@@ -1020,11 +1020,7 @@ module UptakesMod
       D4290: DO N=1,Myco_pft(NZ)
         DO  L=NU,MaxSoilLays4Root_pft(NZ)
           PSIRoot_pvr(N,L,NZ) = TotalSoilPSIMPa_vr(L)
-          if(ldo_sp_mode)then
-            CCPOLT=0.1_r8
-          else
-            CCPOLT   = RootNonstOMConc_pvr(N,L,NZ)
-          endif
+          CCPOLT = RootNonstOMConc_pvr(N,L,NZ)
           CALL update_osmo_turg_pressure(PSIRoot_pvr(N,L,NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKS_vr(L),&
             PSIRootOSMO_vr(N,L,NZ),PSIRootTurg_vr(N,L,NZ))
 
@@ -1877,11 +1873,7 @@ module UptakesMod
   DO N=1,Myco_pft(NZ)
     DO  L=NU,MaxNumRootLays
       PSIRoot_pvr(N,L,NZ)              = TotalSoilPSIMPa_vr(L)
-      if(ldo_sp_mode)then
-        CCPOLT =0.4_r8
-      else
-        CCPOLT = RootNonstOMConc_pvr(N,L,NZ)
-      endif
+      CCPOLT = RootNonstOMConc_pvr(N,L,NZ)
       RPlantRootH2OUptk_pvr(N,L,NZ) = 0.0_r8
       RootH2OUptkStress_pvr(N,L,NZ)   = 0._r8
       call update_osmo_turg_pressure(PSIRoot_pvr(N,L,NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKS_vr(L),&
@@ -1986,11 +1978,7 @@ module UptakesMod
         PSIRoot_pvr(N,L,NZ)=TotalSoilPSIMPa_vr(L)
       ENDIF
       !obtain total reserve
-      if(ldo_sp_mode)then
-        CCPOLT=0.4_r8
-      else
-        CCPOLT=RootNonstOMConc_pvr(N,L,NZ)
-      endif
+      CCPOLT=RootNonstOMConc_pvr(N,L,NZ)
 
       CALL update_osmo_turg_pressure(PSIRoot_pvr(N,L,NZ),CCPOLT,OrganOsmoPsi0pt_pft(NZ),TKS_vr(L),&
         PSIRootOSMO_vr(N,L,NZ),PSIRootTurg_vr(N,L,NZ))

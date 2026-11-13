@@ -5208,8 +5208,8 @@ implicit none
     DO NX=NHW,NHE
       DO NY=NVN,NVS
         DO NZ=1,NP0_col(NY,NX)
-          RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
           if(ldo_sp_mode)then
+            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=PrescribedRootNonstOMConc_pft(NZ,NY,NX)
             RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=0._r8
             if(NZ<=NP_col(NY,NX))then
               ! SP PopuRootMycoC stores the prescribed stock per square meter.
@@ -5217,6 +5217,7 @@ implicit none
                 PopuRootMycoC_pvr(ipltroot,:,NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)
             endif
           else
+            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
             RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=sum( &
               RootMyco2ndStrutElms_rpvr(:,:,:,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX),dim=4)
           endif
