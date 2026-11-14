@@ -22,6 +22,7 @@ include(add_ecosim_library)
 add_ecosim_library(APIData ${APIDATA_SOURCES})
 
 target_include_directories(APIData PRIVATE 
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
   ${CMAKE_BINARY_DIR}/f90src/Modelpars/

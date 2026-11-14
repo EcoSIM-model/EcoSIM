@@ -1,5 +1,7 @@
 module PlantPhotosynthesisAPIData
+  ! Description:
   ! Owns the photosynthesis API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -164,12 +166,82 @@ contains
   end subroutine plt_photo_init
 
   subroutine plt_photo_destroy(this)
-  class(plant_photosyns_type) :: this
+  ! Description:
+  ! Release every array owned by this PlantPhotosynthesisAPIData workspace.
+  class(plant_photosyns_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_photo_destroy'
 
-
-  call destroy(this%RawHeatCanopy2Atm_pft)
-  call destroy(this%DynCi2CaRatio_pft)
-  call destroy(this%CO2Intra_pft)
-  call destroy(this%CO2IntraScal_pft)
+  call PrintInfo('beg '//subname)
+  if(associated(this%iPlantPhotosynsType_pft))deallocate(this%iPlantPhotosynsType_pft);nullify(this%iPlantPhotosynsType_pft)
+  if(associated(this%SpecLeafChlAct_pft))deallocate(this%SpecLeafChlAct_pft);nullify(this%SpecLeafChlAct_pft)
+  if(associated(this%LeafProtein2Chl_pft))deallocate(this%LeafProtein2Chl_pft);nullify(this%LeafProtein2Chl_pft)
+  if(associated(this%LeafPEP2Protein_pft))deallocate(this%LeafPEP2Protein_pft);nullify(this%LeafPEP2Protein_pft)
+  if(associated(this%fMesophyllChlProtein_pft))deallocate(this%fMesophyllChlProtein_pft);nullify(this%fMesophyllChlProtein_pft)
+  if(associated(this%LeafRubisco2Protein_pft))deallocate(this%LeafRubisco2Protein_pft);nullify(this%LeafRubisco2Protein_pft)
+  if(associated(this%VmaxPEPCarboxyRef_pft))deallocate(this%VmaxPEPCarboxyRef_pft);nullify(this%VmaxPEPCarboxyRef_pft)
+  if(associated(this%VmaxRubOxyRef_pft))deallocate(this%VmaxRubOxyRef_pft);nullify(this%VmaxRubOxyRef_pft)
+  if(associated(this%VmaxSpecRubCarboxyRef_pft))deallocate(this%VmaxSpecRubCarboxyRef_pft);nullify(this%VmaxSpecRubCarboxyRef_pft)
+  if(associated(this%XKCO2_pft))deallocate(this%XKCO2_pft);nullify(this%XKCO2_pft)
+  if(associated(this%XKO2_pft))deallocate(this%XKO2_pft);nullify(this%XKO2_pft)
+  if(associated(this%RubiscoActivity_brch))deallocate(this%RubiscoActivity_brch);nullify(this%RubiscoActivity_brch)
+  if(associated(this%GrainFillDowreg_brch))deallocate(this%GrainFillDowreg_brch);nullify(this%GrainFillDowreg_brch)
+  if(associated(this%aquCO2Intraleaf_pft))deallocate(this%aquCO2Intraleaf_pft);nullify(this%aquCO2Intraleaf_pft)
+  if(associated(this%O2I_pft))deallocate(this%O2I_pft);nullify(this%O2I_pft)
+  if(associated(this%LeafIntracellularCO2_pft))deallocate(this%LeafIntracellularCO2_pft);nullify(this%LeafIntracellularCO2_pft)
+  if(associated(this%Km4RubiscoCarboxy_pft))deallocate(this%Km4RubiscoCarboxy_pft);nullify(this%Km4RubiscoCarboxy_pft)
+  if(associated(this%Km4LeafaqCO2_pft))deallocate(this%Km4LeafaqCO2_pft);nullify(this%Km4LeafaqCO2_pft)
+  if(associated(this%RCS_pft))deallocate(this%RCS_pft);nullify(this%RCS_pft)
+  if(associated(this%CanopyCi2CaRatio_pft))deallocate(this%CanopyCi2CaRatio_pft);nullify(this%CanopyCi2CaRatio_pft)
+  if(associated(this%H2OCuticleResist_pft))deallocate(this%H2OCuticleResist_pft);nullify(this%H2OCuticleResist_pft)
+  if(associated(this%ChillHours_pft))deallocate(this%ChillHours_pft);nullify(this%ChillHours_pft)
+  if(associated(this%CO2Solubility_pft))deallocate(this%CO2Solubility_pft);nullify(this%CO2Solubility_pft)
+  if(associated(this%CanopyGasCO2_pft))deallocate(this%CanopyGasCO2_pft);nullify(this%CanopyGasCO2_pft)
+  if(associated(this%O2L_pft))deallocate(this%O2L_pft);nullify(this%O2L_pft)
+  if(associated(this%Km4PEPCarboxy_pft))deallocate(this%Km4PEPCarboxy_pft);nullify(this%Km4PEPCarboxy_pft)
+  if(associated(this%CanopyMinStomaResistH2O_pft))deallocate(this%CanopyMinStomaResistH2O_pft);nullify(this%CanopyMinStomaResistH2O_pft)
+  if(associated(this%CuticleResist_pft))deallocate(this%CuticleResist_pft);nullify(this%CuticleResist_pft)
+  if(associated(this%CanPStomaResistH2O_pft))deallocate(this%CanPStomaResistH2O_pft);nullify(this%CanPStomaResistH2O_pft)
+  if(associated(this%RawH2OCanopy2Atm_pft))deallocate(this%RawH2OCanopy2Atm_pft);nullify(this%RawH2OCanopy2Atm_pft)
+  if(associated(this%RawHeatCanopy2Atm_pft))deallocate(this%RawHeatCanopy2Atm_pft);nullify(this%RawHeatCanopy2Atm_pft)
+  if(associated(this%LeafO2Solubility_pft))deallocate(this%LeafO2Solubility_pft);nullify(this%LeafO2Solubility_pft)
+  if(associated(this%CO2CuticleResist_pft))deallocate(this%CO2CuticleResist_pft);nullify(this%CO2CuticleResist_pft)
+  if(associated(this%DiffCO2Atmos2Intracel_pft))deallocate(this%DiffCO2Atmos2Intracel_pft);nullify(this%DiffCO2Atmos2Intracel_pft)
+  if(associated(this%LeafEffArea_zsec))deallocate(this%LeafEffArea_zsec);nullify(this%LeafEffArea_zsec)
+  if(associated(this%CPOOL3_node))deallocate(this%CPOOL3_node);nullify(this%CPOOL3_node)
+  if(associated(this%CPOOL4_node))deallocate(this%CPOOL4_node);nullify(this%CPOOL4_node)
+  if(associated(this%CMassCO2BundleSheath_node))deallocate(this%CMassCO2BundleSheath_node);nullify(this%CMassCO2BundleSheath_node)
+  if(associated(this%CO2CompenPoint_node))deallocate(this%CO2CompenPoint_node);nullify(this%CO2CompenPoint_node)
+  if(associated(this%VoMaxRubiscoRef_brch))deallocate(this%VoMaxRubiscoRef_brch);nullify(this%VoMaxRubiscoRef_brch)
+  if(associated(this%VcMaxRubiscoRef_brch))deallocate(this%VcMaxRubiscoRef_brch);nullify(this%VcMaxRubiscoRef_brch)
+  if(associated(this%RubiscoCarboxyEff_node))deallocate(this%RubiscoCarboxyEff_node);nullify(this%RubiscoCarboxyEff_node)
+  if(associated(this%VcMaxPEPCarboxyRef_brch))deallocate(this%VcMaxPEPCarboxyRef_brch);nullify(this%VcMaxPEPCarboxyRef_brch)
+  if(associated(this%ElectronTransptJmaxRef_brch))deallocate(this%ElectronTransptJmaxRef_brch);nullify(this%ElectronTransptJmaxRef_brch)
+  if(associated(this%C4CarboxyEff_node))deallocate(this%C4CarboxyEff_node);nullify(this%C4CarboxyEff_node)
+  if(associated(this%LigthSatCarboxyRate_node))deallocate(this%LigthSatCarboxyRate_node);nullify(this%LigthSatCarboxyRate_node)
+  if(associated(this%LigthSatC4CarboxyRate_node))deallocate(this%LigthSatC4CarboxyRate_node);nullify(this%LigthSatC4CarboxyRate_node)
+  if(associated(this%NutrientCtrlonC4Carboxy_node))deallocate(this%NutrientCtrlonC4Carboxy_node);nullify(this%NutrientCtrlonC4Carboxy_node)
+  if(associated(this%CMassHCO3BundleSheath_node))deallocate(this%CMassHCO3BundleSheath_node);nullify(this%CMassHCO3BundleSheath_node)
+  if(associated(this%Vmax4RubiscoCarboxy_node))deallocate(this%Vmax4RubiscoCarboxy_node);nullify(this%Vmax4RubiscoCarboxy_node)
+  if(associated(this%ProteinCperm2LeafArea_node))deallocate(this%ProteinCperm2LeafArea_node);nullify(this%ProteinCperm2LeafArea_node)
+  if(associated(this%CO2lmtRubiscoCarboxyRate_node))deallocate(this%CO2lmtRubiscoCarboxyRate_node);nullify(this%CO2lmtRubiscoCarboxyRate_node)
+  if(associated(this%Vmax4PEPCarboxy_node))deallocate(this%Vmax4PEPCarboxy_node);nullify(this%Vmax4PEPCarboxy_node)
+  if(associated(this%CO2lmtPEPCarboxyRate_node))deallocate(this%CO2lmtPEPCarboxyRate_node);nullify(this%CO2lmtPEPCarboxyRate_node)
+  if(associated(this%AirConc_pft))deallocate(this%AirConc_pft);nullify(this%AirConc_pft)
+  if(associated(this%CanopyVcMaxRubisco25C_pft))deallocate(this%CanopyVcMaxRubisco25C_pft);nullify(this%CanopyVcMaxRubisco25C_pft)
+  if(associated(this%CanopyVoMaxRubisco25C_pft))deallocate(this%CanopyVoMaxRubisco25C_pft);nullify(this%CanopyVoMaxRubisco25C_pft)
+  if(associated(this%CanopyVcMaxPEP25C_pft))deallocate(this%CanopyVcMaxPEP25C_pft);nullify(this%CanopyVcMaxPEP25C_pft)
+  if(associated(this%ElectronTransptJmax25C_pft))deallocate(this%ElectronTransptJmax25C_pft);nullify(this%ElectronTransptJmax25C_pft)
+  if(associated(this%TFN_Carboxy_pft))deallocate(this%TFN_Carboxy_pft);nullify(this%TFN_Carboxy_pft)
+  if(associated(this%TFN_Oxygen_pft))deallocate(this%TFN_Oxygen_pft);nullify(this%TFN_Oxygen_pft)
+  if(associated(this%TFN_eTranspt_pft))deallocate(this%TFN_eTranspt_pft);nullify(this%TFN_eTranspt_pft)
+  if(associated(this%LeafAreaSunlit_pft))deallocate(this%LeafAreaSunlit_pft);nullify(this%LeafAreaSunlit_pft)
+  if(associated(this%PARSunlit_pft))deallocate(this%PARSunlit_pft);nullify(this%PARSunlit_pft)
+  if(associated(this%PARSunsha_pft))deallocate(this%PARSunsha_pft);nullify(this%PARSunsha_pft)
+  if(associated(this%DynCi2CaRatio_pft))deallocate(this%DynCi2CaRatio_pft);nullify(this%DynCi2CaRatio_pft)
+  if(associated(this%CO2Intra_pft))deallocate(this%CO2Intra_pft);nullify(this%CO2Intra_pft)
+  if(associated(this%CO2IntraScal_pft))deallocate(this%CO2IntraScal_pft);nullify(this%CO2IntraScal_pft)
+  if(associated(this%CH2OSunlit_pft))deallocate(this%CH2OSunlit_pft);nullify(this%CH2OSunlit_pft)
+  if(associated(this%CH2OSunsha_pft))deallocate(this%CH2OSunsha_pft);nullify(this%CH2OSunsha_pft)
+  call PrintInfo('end '//subname)
   end subroutine plt_photo_destroy
 end module PlantPhotosynthesisAPIData

@@ -1,0 +1,61 @@
+&regression_test
+ cells   =           3
+/
+
+&ecosim
+case_name = 'ERT6_SP'
+do_regression_test = .false.
+pft_file_in = '../../../input_data/ecosim_pftpar_20261021.nc'
+grid_file_in = '../../inputs/ERT/ERT_grid_20250826.nc'
+!grid_file_in       = './grid_SOAP_8grid.nc'
+pft_mgmt_in = 'NO' ! PFT names, population and geometry come from sp_phenol_in
+sp_phenol_in = '../../inputs/ERT/ERT6_sp_phenol_20261114.nc'
+ldo_sp_mode = .true.
+!clm_hour_file_in   = '../../inputs/ERT/ERT.1979-2021.hour.clim.nc'
+clm_hour_file_in = '../../inputs/ERT/nldas2.ert.1979-2024.hour.nc'
+clm_factor_in      = 'NO'
+soil_mgmt_in       = 'NO'
+!change the following line according to the EcoSIM directory
+atm_ghg_in = '../../../input_data/fatm_hist_GHGs_1750-2023.nc'
+
+iVerbLevel=0    !set to 1 to enable more diagnostics
+first_topou     = .false.
+lverbose        = .false.
+disp_planttrait = .true.
+plant_model = .true.
+microbial_model = .false.
+soichem_model = .false.
+!set up output variable lists
+!set up the first year of simulation
+start_date      = '19300101000000'
+grid_mode   =1
+!idebug_day=186
+continue_run = .false.
+!set up simulation periods, spinup starts at 1, ends at 2, with 3 cycles, regular starts at 4, ends at 5.
+forc_periods=1980,1989,6,1990,2021,1,2003,2021,0
+
+!set up solvers
+NPXS      = 30, 30, 30      !number of cycles per hour for water, heat, solute flux calcns
+NPYS      = 10, 10, 10      !number of cycles per NPX for gas flux calcns
+NCYC_LITR = 20
+NCYC_SNOW = 20
+hist_fincl1='ECO_LAI_col','ECO_SAI_col','CAN_TEMPC_pft','QVegTransp_pft',
+  'RootH2OUptake_vr','RootH2OUptk_pvr','CAN_H_pft','CAN_LE_pft','CAN_GPP_pft','BLYR_RS_H2O_pft'
+!set up output frequency
+hist_mfilt  = 7300
+hist_nhtfrq = -24
+/
+
+&bbgcforc
+/
+
+!namelist for timer
+&ecosim_time
+rest_opt    = 'nmonths' !,  'nmonths', 'nyears'
+rest_frq    = 1
+delta_time  = 3600.
+stop_n      = 4            !this shall overwrite what is set in forc_periods
+stop_option = 'nyears' !run by nyears, nmonths,   ndays,
+diag_frq    = 1
+diag_opt    = 'nsteps'
+/

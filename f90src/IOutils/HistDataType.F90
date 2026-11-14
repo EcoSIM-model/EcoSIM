@@ -306,7 +306,7 @@ module HistDataType
   real(r8),pointer   :: h1D_PSI_CAN_ptc(:)      
   real(r8),pointer   :: h1D_TURG_CAN_ptc(:)     
   real(r8),pointer   :: h1D_STOML_RSC_H2O_ptc(:) 
-  real(r8),pointer   :: h1D_BLYR_RSC_H2O_ptc(:) 
+  real(r8),pointer   :: h1D_BLYR_RS_H2O_ptc(:)
   real(r8),pointer   :: h1D_BLYR_RSC_HEAT_ptc(:)
   real(r8),pointer   :: h1D_CdH2ORootxSoil_ptc(:)
   real(r8),pointer   :: h1D_TRANSPN_ptc(:)      

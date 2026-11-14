@@ -1,4 +1,8 @@
 module SurfLitterPhysMod
+  ! Description:
+  ! Evolve litter water, temperature and surface exchange, including internal
+  ! litter-soil transfers and conservative surface runoff updates.
+  use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use EcoSIMCtrlMod, only : etimer  
   use MiniFuncMod,   only : gOC_to_m3_OM
@@ -37,6 +41,7 @@ implicit none
   public :: UpdateLitRBe4RunoffM
   public :: UpdateLitRAftRunoffM
   public :: PartLitSoilFractionM
+  public :: EquilibrateThinLitterM
   contains
 
 !------------------------------------------------------------------------------------------
@@ -69,8 +74,8 @@ implicit none
   subroutine SurfLitREnergyBalanceM(I,J,M,NY,NX,PSISV1,TopLayWatVol,Prec2LitR2,RainHeat2LitR2,&
     CumNetWatFlow2LitR,CumNetHeatFlow2LitR,CumWatFlx2SoiMicP,CumWatFlx2SoiMacP,cumNetHeatFlow2Soil,&
     HeatSensLitR2Soi1,HeatSensVapLitR2Soi1,EvapLitR2Soi1,VapXAir2LitR,HeatFluxAir2LitR)
-!!
-! Description:
+  ! Description:
+  ! Solve exposed litter exchange while retaining heat in small inactive stores.
   implicit none
   integer , intent(in) :: I,J
   integer , intent(in) :: M       !soil heat-water iteration id
@@ -120,7 +125,9 @@ implicit none
   HeatSensLitR2Soi1    = 0.0_r8
   LWRadLitR            = 0.0_r8
 
-  IF(VHeatCapacity1_vr(0,NY,NX).LE.VHeatCapLitRMin_col(NY,NX))THEN
+  ! Disabling litter exchange does not remove a positive thermal inventory.
+  ! Only an empty store may take an arbitrary soil-temperature placeholder.
+  IF(VHeatCapacity1_vr(0,NY,NX).EQ.0._r8)THEN
     TKSoil1_vr(0,NY,NX)=TKSoil1_vr(NUM_col(NY,NX),NY,NX)
   ENDIF  
 !
@@ -171,7 +178,8 @@ implicit none
       HeatSensVapLitR2Soi1,LatentHeatAir2LitR,LWRadLitR,Radnet2LitR,VapXAir2LitR,HeatFluxAir2LitR)
 
     HeatByRad2Surf_col(NY,NX)      = HeatByRad2Surf_col(NY,NX)+Radnet2LitR
-    HeatNet2Surf_col(NY,NX)        = HeatNet2Surf_col(NY,NX)+Radnet2LitR+HeatSensEvapAir2LitR+HeatSensAir2LitR
+    HeatNet2Surf_col(NY,NX) = HeatNet2Surf_col(NY,NX)+Radnet2LitR &
+      +LatentHeatAir2LitR+HeatSensEvapAir2LitR+HeatSensAir2LitR
     HeatSensAir2Surf_col(NY,NX)    = HeatSensAir2Surf_col(NY,NX)+HeatSensAir2LitR
     HeatEvapAir2Surf_col(NY,NX)    = HeatEvapAir2Surf_col(NY,NX)+LatentHeatAir2LitR
     HeatSensVapAir2Surf_col(NY,NX) = HeatSensVapAir2Surf_col(NY,NX)+HeatSensEvapAir2LitR
@@ -182,6 +190,30 @@ implicit none
 
   call PrintInfo('end '//subname)
   end subroutine SurfLitREnergyBalanceM
+!------------------------------------------------------------------------------------------
+  subroutine EquilibrateThinLitterM(NY,NX)
+  ! Description:
+  ! Couple thermally small or unexposed litter to topsoil by a conservative
+  ! internal heat transfer, including snow-covered steps. Accept the transfer
+  ! before phase change and before accumulating current-step heat faces.
+  integer, intent(in) :: NY,NX ! column indices [north-south, west-east]
+  character(len=*), parameter :: subname='EquilibrateThinLitterM'
+  real(r8) :: LitterCapacity,SoilCapacity ! pending litter and current soil capacities [MJ/cell/K]
+  real(r8) :: LitterEnergy,HeatToSoil ! pending litter energy and signed internal transfer [MJ/cell]
+  call PrintInfo('beg '//subname)
+  SoilCapacity=VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)
+  LitterCapacity=cpo*m3OM_col(NY,NX)+cpw*AZMAX1(VLWatMicP1_vr(0,NY,NX) &
+    +WatFLo2LitrM_col(NY,NX))+cpi*VLiceMicP1_vr(0,NY,NX)
+  if(LitterCapacity>0._r8 .and. SoilCapacity>0._r8 .and. &
+     (LitterCapacity<=VHeatCapLitRMin_col(NY,NX) .or. FracSurfByLitR_col(NY,NX)<=ZEROL))then
+    LitterEnergy=VHeatCapacity1_vr(0,NY,NX)*TKSoil1_vr(0,NY,NX)+HeatFLoByWat2LitRM_col(NY,NX)
+    HeatToSoil=(LitterEnergy-LitterCapacity*TKSoil1_vr(NUM_col(NY,NX),NY,NX)) &
+      /(1._r8+LitterCapacity/SoilCapacity)
+    HeatFLoByWat2LitRM_col(NY,NX)=HeatFLoByWat2LitRM_col(NY,NX)-HeatToSoil
+    HeatFlow2Soili_3D(3,NUM_col(NY,NX),NY,NX)=HeatFlow2Soili_3D(3,NUM_col(NY,NX),NY,NX)+HeatToSoil
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine EquilibrateThinLitterM
 !------------------------------------------------------------------------------------------
 
   subroutine CalcLitRThermConductivity(NY,NX,DTKX,TCNDR)
@@ -221,7 +253,9 @@ implicit none
     CumNetWatFlow2LitR,CumNetHeatFlow2LitR,CumWatFlx2SoiMicP,CumWatFlx2SoiMacP,cumNetHeatFlow2Soil,&
     EvapLitR2Soi1,HeatSensAir2LitR,HeatSensEvapAir2LitR,HeatSensLitR2Soi1,&
     HeatSensVapLitR2Soi1,LatentHeatAir2LitR,LWRadLitR,Radnet2LitR,VapXAir2LitR,HeatFluxAir2LitR)
-
+  ! Description:
+  ! Advance litter water and energy through inner steps, using the selected
+  ! atmospheric endpoint and accepting matching implicit thermal corrections.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: M     !soil heat-flow iteration id
@@ -266,6 +300,7 @@ implicit none
   real(r8) :: EvapLitR2Soi2          !evaporation flux from litter to soil [kg H2O]
   real(r8) :: HeatSensVapLitR2Soi2   !advective heat by evaporation [MJ]
   real(r8) :: CdLitREvap             !conductance of evaporation [m3]
+  real(r8) :: ExchangeResistance ! complete resistance to the current air endpoint [h/m]
   real(r8) :: RAGX,RI
   real(r8) :: Radnet2LitR2           !litter net radiation,after taking out outgoing radiation from litter [MJ]
   real(r8) :: HeatFluxAir2LitR2      !total residual heat into litter [MJ]
@@ -325,8 +360,9 @@ implicit none
 
       !update aerodynamic resistance over litter
       RawH2OLitr2CanAir_col(NY,NX) = AMAX1(RAM,0.8_r8*RAGX,AMIN1(1.2_r8*RAGX,RawIsoTLitr2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
-      CdLitREvap  = AScaledCdWOverLitr_col(NY,NX)/(RawH2OLitr2CanAir_col(NY,NX)+RZ)
-      CdLitRHSens = AScaledCdHOverLitr_col(NY,NX)/RawH2OLitr2CanAir_col(NY,NX)
+      ExchangeResistance=SurfaceExchangeResistance(NY,NX,TKR1,RawH2OLitr2CanAir_col(NY,NX))
+      CdLitREvap  = AScaledCdWOverLitr_col(NY,NX)/(ExchangeResistance+RZ)
+      CdLitRHSens = AScaledCdHOverLitr_col(NY,NX)/ExchangeResistance
       !
       !     NET RADIATION AT RESIDUE SURFACE
       !
@@ -537,9 +573,9 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine UpdateLitRPhys(I,J,NY,NX,dWat,dHeat,HEATIN_lnd)
-  !
-  !Description
-  !Update Litter physical variables
+  ! Description:
+  ! Apply accepted litterfall enthalpy to the native litter inventory and tally
+  ! accepted litter phase heat independently of its exposed surface footprint.
   implicit none
   integer,  intent(in) :: I,J
   integer,  intent(in) :: NY,NX
@@ -554,7 +590,6 @@ implicit none
   real(r8) :: TKRPre,ENGYR,VLWatMicPr,VLiceMicPr
   real(r8) :: ENGYZ,HS,m3OM,HeatByMassChange
   call PrintInfo('beg '//subname)
-  IF(FracSurfByLitR_col(NY,NX).LE.ZEROL)return
 
 
   ! CALCULATE SURFACE RESIDUE TEMPERATURE FROM ITS CHANGE
@@ -571,8 +606,9 @@ implicit none
 
   THeatSoiThaw_col(NY,NX) = THeatSoiThaw_col(NY,NX)+TLitrIceHeatFlxFrez_col(NY,NX)
   
-  IF(VHeatCapacity_vr(0,NY,NX).GT.VHeatCapLitRMin_col(NY,NX))THEN
-    !when there are still significant heat capacity of the residual layer
+  ! Inventory updates and accepted phase heat do not depend on exposed area.
+  IF(VHeatCapacity_vr(0,NY,NX).GT.0._r8)THEN
+    ! Every positive store retains its sensible energy, including thin litter.
     
     ! Litterfall carries its own heat; atmospheric exchange was already solved.
     TKS_vr(0,NY,NX) = (ENGYZ+dHeat)/VHeatCapacity_vr(0,NY,NX)
@@ -589,7 +625,7 @@ implicit none
     endif  
 
   ELSE
-    HEATIN_lnd      = HEATIN_lnd+(TKS_vr(NUM_col(NY,NX),NY,NX)-TKS_vr(0,NY,NX))*VHeatCapacity_vr(0,NY,NX)
+    ! An empty store needs only a temperature placeholder; it contains no heat.
     TKS_vr(0,NY,NX) = TKS_vr(NUM_col(NY,NX),NY,NX)
   ENDIF
 
@@ -600,8 +636,9 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine UpdateLitRBe4RunoffM(I,J,M,NY,NX)
-  !
-  !update litter physical properties by processes before surface runoff
+  ! Description:
+  ! Advance litter water and sensible heat before runoff, preserving accepted
+  ! transfers even when litter is below surface-exchange activity thresholds.
   implicit none
   integer, intent(in) :: M,NY,NX,I,J
 
@@ -704,6 +741,12 @@ implicit none
       write(*,*)I,J,M      
       call endrun(trim(mod_filename)//'at line',__LINE__)
     endif
+  ELSEIF(VHeatCapacity1_vr(0,NY,NX).GT.0._r8)THEN
+    ! Small/hidden litter still receives meltwater, internal transfers and phase
+    ! heat. Advance that inventory without introducing atmospheric damping for
+    ! a surface whose exchange solve was inactive.
+    TKSoil1_vr(0,NY,NX)=(ENGYR+HeatFLoByWat2LitRM_col(NY,NX) &
+      +LitrIceHeatFlxFrez_col(NY,NX))/VHeatCapacity1_vr(0,NY,NX)
   ELSE
     TKSoil1_vr(0,NY,NX)=TKSoil1_vr(NUM_col(NY,NX),NY,NX)
   ENDIF
@@ -715,9 +758,8 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine UpdateLitRAftRunoffM(I,J,M,NY,NX)
-  !
-  !Description
-  !Update litter water after computing runoff
+  ! Description:
+  ! Commit litter water and heat after runoff without resetting positive stores.
   implicit none
   integer, intent(in) :: I,J,M,NY,NX
   real(r8) :: VOLIRZ,ENGYR,VLHeatCapLitRPre
@@ -773,7 +815,8 @@ implicit none
   ENGYR                      = VHeatCapacity1_vr(0,NY,NX)*TKSoil1_vr(0,NY,NX)  !initial energy content
   VHeatCapacity1_vr(0,NY,NX) = cpo*m3OM_col(NY,NX)+cpw*VLWatMicP1_vr(0,NY,NX)+cpi*VLiceMicP1_vr(0,NY,NX)  !update heat capacity
 
-  IF(VHeatCapacity1_vr(0,NY,NX).GT.VHeatCapLitRMin_col(NY,NX))THEN
+  ! Accepted runoff heat also belongs to a small positive litter store.
+  IF(VHeatCapacity1_vr(0,NY,NX).GT.0._r8)THEN
     TKSoil1_vr(0,NY,NX)=(ENGYR+cumHeatFlx2LitRByRunoff_col(NY,NX))/VHeatCapacity1_vr(0,NY,NX)
 !    write(*,'(50A)')('-',K=1,50)
 !    write(*,*)I,J,M,NY,NX
@@ -784,6 +827,12 @@ implicit none
 !    write(*,*)'vlwat',VLWatMicP10,cumWatFlx2LitRByRunoff_col(NY,NX),cumHeatFlx2LitRByRunoff_col(NY,NX)
    
     if(TKSoil1_vr(0,NY,NX)<100._r8 .or. TKSoil1_vr(0,NY,NX)>400._r8)then
+      write(iulog,*) 'Invalid litter temperature after runoff: I,J,M,NY,NX=',I,J,M,NY,NX
+      write(iulog,*) 'Told,Tnew,C_old,C_new,E_old,runoff_heat=',TK0Prev,TKSoil1_vr(0,NY,NX), &
+        VLHeatCapLitRPre,VHeatCapacity1_vr(0,NY,NX),ENGYR,cumHeatFlx2LitRByRunoff_col(NY,NX)
+      write(iulog,*) 'water_old,water_new,ice_old,ice_new,runoff_water=', &
+        VLWatMicP10,VLWatMicP1_vr(0,NY,NX),VLiceMicP10,VLiceMicP1_vr(0,NY,NX), &
+        cumWatFlx2LitRByRunoff_col(NY,NX)
       call endrun(trim(mod_filename)//'at line',__LINE__)
     endif
   ELSE

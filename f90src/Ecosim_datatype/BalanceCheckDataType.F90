@@ -1,4 +1,6 @@
 module BalanceCheckDataType
+  ! Description:
+  ! Own beginning inventories and transfer diagnostics for hourly balance checks.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use data_const_mod, only : spval => DAT_CONST_SPVAL     
   use GridConsts
@@ -11,6 +13,9 @@ module BalanceCheckDataType
 
   real(r8), target, allocatable :: WaterErr_col(:,:)     !water error
   real(r8), allocatable :: TillageLitr2SoilH2O_col(:,:) !internal water-equivalent transfer [m3/grid cell/step]
+  real(r8), allocatable :: CanopyHeatBeg_col(:,:) ! beginning compartment heat [MJ/cell]
+  real(r8), allocatable :: LitterHeatBeg_col(:,:) ! beginning compartment heat [MJ/cell]
+  real(r8), allocatable :: SoilHeatBeg_col(:,:) ! beginning compartment heat [MJ/cell]
   real(r8), target, allocatable :: HeatErr_col(:,:)      !heat error
   real(r8), target, allocatable :: EcoElmErr_col(:,:)    !ecosystem element error
   real(r8), target, allocatable :: PlantElmErr_col(:,:)  !Plant chemical element error
@@ -23,6 +28,9 @@ module BalanceCheckDataType
 
   allocate(WaterErr_col(JY,JX)); WaterErr_col = 0._r8
   allocate(TillageLitr2SoilH2O_col(JY,JX)); TillageLitr2SoilH2O_col = 0._r8
+  allocate(CanopyHeatBeg_col(JY,JX)); CanopyHeatBeg_col=0._r8
+  allocate(LitterHeatBeg_col(JY,JX)); LitterHeatBeg_col=0._r8
+  allocate(SoilHeatBeg_col(JY,JX)); SoilHeatBeg_col=0._r8
   allocate(HeatErr_col(JY,JX)); HeatErr_col=0._r8
   allocate(EcoElmErr_col(JY,JX)); EcoElmErr_col=0._r8
   allocate(PlantElmErr_col(JY,JX)); PlantElmErr_col=0._r8
@@ -35,6 +43,9 @@ module BalanceCheckDataType
 
   call destroy(WaterErr_col)
   call destroy(TillageLitr2SoilH2O_col)
+  call destroy(CanopyHeatBeg_col)
+  call destroy(LitterHeatBeg_col)
+  call destroy(SoilHeatBeg_col)
   call destroy(HeatErr_col)
   call destroy(EcoElmErr_col)
   call destroy(PlantElmErr_col)

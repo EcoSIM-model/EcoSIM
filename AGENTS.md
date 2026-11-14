@@ -96,6 +96,14 @@ take precedence over repository guidance.
   avoid `associate` aliases and use direct history components such as
   `this%h1D_variable_col` in allocation, registration, and update code, following
   the surrounding history-output conventions.
+- If a procedure uses `associate`, place `associate (...)` immediately after
+  `call PrintInfo('beg '//subname)`, except that safety checks for an early stop
+  may appear between this call and `associate`. Place `end associate` immediately
+  before `call PrintInfo('end '//subname)`.
+- Annotate every alias in an `associate` block with a comment describing the
+  variable's meaning, units, array dimensions where applicable, and whether it
+  is an input, output, or input/output within the procedure. Apply this rule to
+  new blocks and to aliases added or modified in existing blocks.
 - Keep edits focused. Do not hand-edit generated build files or modify dependency
   submodules unless that is part of the requested work.
 - Treat `ecosim-agent` changes as submodule changes, separate from root-repository

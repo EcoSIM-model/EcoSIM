@@ -43,6 +43,7 @@ module EcoSIMDesctruct
   use SedimentDataType    , only : DestructSedimentData
   use SoilWaterDataType   , only : DestructSoilWater
   use PlantAPIData        , only : DestructPlantAPIData
+  use PlantPhaseWorkMod   , only : DestroyPlantPhaseWork
   use PlantMgmtDataType   , only : DestructPlantMngmtData
   use InitSOMBGCMOD       , only : DestructSOMBGC
   use TranspNoSaltMod     , only : DestructTranspNoSalt
@@ -79,6 +80,7 @@ module EcoSIMDesctruct
 
   call DestructSoilWater
 
+  call DestroyPlantPhaseWork
   call DestructPlantAPIData
 
   call DestructPlantMngmtData

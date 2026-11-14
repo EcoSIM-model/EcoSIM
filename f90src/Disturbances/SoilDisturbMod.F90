@@ -1,8 +1,11 @@
 module SoilDisturbMod
+! Description:
+! Remove soil and litter organic matter during fire or management, retaining
+! accepted sensible energy and exporting the heat carried by withdrawn material.
 
 ! USES:
   use data_kind_mod, only : r8 => DAT_KIND_R8
-  use abortutils  , only : endrun
+  use abortutils  , only : endrun,iulog
   use minimathmod, only : safe_adb
   use EcoSiMParDataMod, only : micpar
   use MiniFuncMod,    only: gOC_to_m3_OM
@@ -41,9 +44,9 @@ module SoilDisturbMod
 
   subroutine SOMRemovalByDisturbance(I,J,NY,NX)
   !
-  !     Description:
-  !ITILL,DCORP=disturbance type,intensity
-  !iSoilDisturbType_col=soil disturbance type 1-20:tillage,21=litter removal,22=fire,23-24=drainage
+  ! Description:
+  ! Remove organic pools for fire (22) or litter removal (21), transferring
+  ! their elements and carried sensible heat to the corresponding ledgers.
   implicit none
   integer, intent(in) :: I,J,NY,NX
   character(len=*), parameter :: subname='SOMRemovalByDisturbance'
@@ -55,6 +58,7 @@ module SoilDisturbMod
   real(r8) :: DCORPC
   real(r8) :: FORGCX
   real(r8) :: HFLXD,rootC
+  real(r8) :: EnergyBefore,EnergyRemaining ! accepted and retained sensible energy [MJ/cell]
   real(r8) :: ONX
   REAL(R8) :: OPX,OCA,OAH
   real(r8) :: ONL(4,1:jcplx),OPL(4,1:jcplx)
@@ -65,12 +69,11 @@ module SoilDisturbMod
   real(r8) :: DCORPC1
 
 !     begin_execution
-  associate(                    &
-   iprotein => micpar%iprotein, &
-   ilignin  => micpar%ilignin   &
-  )
-
   call PrintInfo('beg '//subname)
+  associate(                    &
+   iprotein => micpar%iprotein, & ! input: protein kinetic-pool index [-]
+   ilignin  => micpar%ilignin   & ! input: lignin kinetic-pool index [-]
+  )
   IF(J.EQ.INT(SolarNoonHour_col(NY,NX)) .AND. &
     (iSoilDisturbType_col(I,NY,NX).EQ.itill_rmlitr .OR. iSoilDisturbType_col(I,NY,NX).EQ.itill_fire))THEN
     IF(iSoilDisturbType_col(I,NY,NX).EQ.itill_fire)THEN
@@ -358,8 +361,13 @@ module SoilDisturbMod
         ! event, using the same capacity law as the remaining organic matter.
         ! ORGCX is an earlier hourly snapshot and includes other C changes.
         ! This accounts for carried sensible heat, not combustion heat release.
+        EnergyBefore = VHeatCapacity_vr(L,NY,NX)*TKS_vr(L,NY,NX)
         HFLXD        = cpo*gOC_to_m3_OM(OMelm(ielmc))*TKS_vr(L,NY,NX)
         HeatOut_lnds = HeatOut_lnds+HFLXD
+        ! This event follows hydrology. Book its export directly in the column
+        ! ledger; a layer heat-source flux would be reapplied by thermal updates.
+        HeatSource_col(NY,NX)=HeatSource_col(NY,NX)-HFLXD
+        EnergyRemaining=EnergyBefore-HFLXD
         IF(L.EQ.0)then
           VHeatCapacity_vr(0,NY,NX)=cpw*VLWatMicP_vr(0,NY,NX)+cpi*VLiceMicP_vr(0,NY,NX)+cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,L,NY,NX))
         else
@@ -371,7 +379,17 @@ module SoilDisturbMod
             rootC=sum(RootMycoMassElm_vr(ielmc,:,L,NY,NX))
             VHeatCapacity_vr(L,NY,NX)=VHeatCapacity_vr(L,NY,NX)+cpo*gOC_to_m3_OM(rootC)
           endif
-        endif    
+        endif
+        ! Updating the summarized organic capacity supplies no extra heat.
+        ! Retain the accepted inventory minus the explicitly exported material
+        ! enthalpy, including organic-pool changes since its earlier estimate.
+        if(VHeatCapacity_vr(L,NY,NX)>0._r8)then
+          TKS_vr(L,NY,NX)=EnergyRemaining/VHeatCapacity_vr(L,NY,NX)
+          TCS_vr(L,NY,NX)=TKS_vr(L,NY,NX)-TC2K
+        elseif(ABS(EnergyRemaining)>1.e-12_r8*MAX(1._r8,ABS(EnergyBefore)))then
+          write(iulog,*)subname,': nonzero retained energy with zero capacity',I,J,L,NY,NX,EnergyRemaining
+          call endrun('Disturbed soil/litter has no capacity for retained energy',__LINE__)
+        endif
 
         IF(iSoilDisturbType_col(I,NY,NX).EQ.itill_rmlitr)THEN
           DO NE=1,NumPlantChemElms
@@ -401,8 +419,8 @@ module SoilDisturbMod
       ENDIF
     ENDDO D2950
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine SOMRemovalByDisturbance
 !------------------------------------------------------------------------------------------
 

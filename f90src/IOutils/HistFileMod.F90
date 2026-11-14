@@ -1,4 +1,6 @@
 module HistFileMod
+  ! Description:
+  ! Register, accumulate and persist model histories and their restart buffers.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use ncdio_pio
@@ -1659,8 +1661,7 @@ implicit none
   !-----------------------------------------------------------------------
   subroutine hist_htapes_wrapup( rstwr, nlend, bounds, lnyr )
 
-    !
-    ! !DESCRIPTION:
+    ! Description:
     ! Write history tape(s)
     ! Determine if next time step is beginning of history interval and if so:
     !   increment the current time sample counter, open a new history file
@@ -1714,13 +1715,14 @@ implicit none
     character(len=256) :: str             ! global attribute string
     logical :: if_stop                    ! true => last time step of run
     logical, save :: do_3Dtconst = .true. ! true => write out 3D time-constant data
-    integer :: hist_ntimes(ntapes)
-    integer :: hist_mfilt(ntapes)
+    logical :: rollover_tape(ntapes)       !close this tape and start its successor [-]
     character(len=14) :: ymdhs    
     character(len=*),parameter :: subname = trim(mod_filename)//'::hist_htapes_wrapup'
     !-----------------------------------------------------------------------
 
     call PrintInfo('beg '//subname)
+    ! Monthly tapes skip step zero, so initialize their rollover decision too.
+    rollover_tape(:)=.false.
     ! get current step
     
     nstep = etimer%get_nstep()
@@ -1831,13 +1833,17 @@ implicit none
           call hfields_zero(t)
 
        end if
-      hist_ntimes(t)=tape(t)%ntimes
-      hist_mfilt(t)=tape(t)%mfilt
+      ! Use one rollover decision for closing, reopening and resetting counts.
+      ! Non-negative frequencies start a fresh tape each year even when the
+      ! preceding file is partial (e.g. the last 24 hours of a leap year).
+      rollover_tape(t)=tape(t)%ntimes>0 .and. &
+        ((tape(t)%nhtfrq>=0 .and. (tape(t)%ntimes>=tape(t)%mfilt .or. lnyr)) .or. &
+         (tape(t)%nhtfrq<0 .and. tape(t)%ntimes>=tape(t)%mfilt .and. lnyr))
     end do  ! end loop over history tapes
     ! Determine if file needs to be closed
     
     if(ntapes>0)then
-      call hist_do_disp (ntapes, hist_ntimes, hist_mfilt, if_stop, if_disphist, rstwr, nlend, lnyr)
+      call hist_do_disp (ntapes, rollover_tape, if_stop, if_disphist, rstwr, nlend)
     endif
 
     ! Close open history file
@@ -1854,7 +1860,9 @@ implicit none
                 write(iulog,*)
 !             endif
              call ncd_pio_closefile(nfid(t))
-             if (.not.if_stop .and. (tape(t)%ntimes/=tape(t)%mfilt)) then
+             ! Restart flushes continue the same tape; a rolled-over tape is
+             ! already complete and must stay closed when its count is reset.
+             if (.not.if_stop .and. .not.rollover_tape(t)) then
                 call ncd_pio_openfile (nfid(t), trim(locfnh(t)), ncd_write)
              end if
           else
@@ -1863,24 +1871,12 @@ implicit none
 !                print*,tape(t)%ntimes,tape(t)%mfilt,rstwr, nlend
  !            end if
           endif
-       !else
-       !   if(lnyr)then
-!      !      if (masterproc) then
-       !        write(iulog,*)
-       !        write(iulog,*)  trim(subname),' : Closing local history file ',&
-       !             trim(locfnh(t)),' at nstep = ', etimer%get_nstep()
-       !        write(iulog,*)
-!      !      endif
-	    !      call ncd_pio_closefile(nfid(t))
-       !   endif
        endif
     end do
     ! Reset number of time samples to zero if file is full
     ! make sure for high frequency output, daily or hourly, are recorded by whole year 
     do t = 1, ntapes
-       if ( tape(t)%nhtfrq>=0 .and. ((if_disphist(t) .and. tape(t)%ntimes==tape(t)%mfilt) .or. lnyr) &
-         .or. (if_disphist(t) .and. tape(t)%ntimes>=tape(t)%mfilt .and. tape(t)%nhtfrq<0 .and. lnyr)) then
-          !print*,'htapwrap',lnyr,tape(t)%ntimes,tape(t)%mfilt
+       if (rollover_tape(t)) then
           tape(t)%ntimes = 0
        end if
     end do
@@ -2082,65 +2078,21 @@ implicit none
   end subroutine hfields_write
 
   !------------------------------------------------------------------------
-  subroutine hist_do_disp (ntapes, hist_ntimes, hist_mfilt, if_stop, if_disphist, rstwr, nlend, lnyr)
-
-    !
-    ! !DESCRIPTION:
-    ! Determine logic for closeing and/or disposing history file
-    ! Sets values for if_disphist, if_stop (arguments)
-    ! Remove history files unless this is end of run or
-    ! history file is not full.
-    !
-    ! !USES:
-    !
+  subroutine hist_do_disp (ntapes, rollover_tape, if_stop, if_disphist, rstwr, nlend)
+    ! Description:
+    ! Close rolled-over tapes and flush all open tapes for restart or run end.
     implicit none
-    ! !ARGUMENTS:
-    integer, intent(in)  :: ntapes              !actual number of history tapes
-    integer, intent(in)  :: hist_ntimes(ntapes) !current numbers of time samples on history tape
-    integer, intent(in)  :: hist_mfilt(ntapes)  !maximum number of time samples per tape
-    logical, intent(out) :: if_stop             !true => last time step of run
-    logical, intent(out) :: if_disphist(ntapes) !true => save and dispose history file
-    logical, intent(in)  :: rstwr
-    logical, intent(in)  :: nlend
-    logical, intent(in)  :: lnyr
-    !
-    ! !LOCAL VARIABLES:
-    integer :: t                   ! history tape index
-    logical :: rest_now            ! temporary
-    logical :: stop_now            ! temporary
-    !------------------------------------------------------------------------
-
-    rest_now = .false.
-    stop_now = .false.
-
-    if (nlend) stop_now = .true.
-    if (rstwr) rest_now = .true.
-
-    if_stop = stop_now
-
-    if (stop_now) then
-       ! End of run -  dispose all history files
-
-       if_disphist(1:ntapes) = .true.
-
-    else if (rest_now) then
-       ! Restart - dispose all history files
-
-       do t = 1,ntapes
-          if_disphist(t) = .true.
-       end do
-    else
-       ! Dispose
-
-       if_disphist(1:ntapes) = .false.
-       do t = 1,ntapes          
-          if ((hist_ntimes(t) ==  hist_mfilt(t) .and. tape(t)%nhtfrq >=0) .or. &
-            hist_ntimes(t) >=  hist_mfilt(t) .and. tape(t)%nhtfrq<0 .and. lnyr) then
-            if_disphist(t) = .true.
-          endif
-       end do
-    endif
-
+    integer, intent(in) :: ntapes               !number of active history tapes [-]
+    logical, intent(in) :: rollover_tape(ntapes) !true => begin a successor file [-]
+    logical, intent(out) :: if_stop              !true => final simulation step [-]
+    logical, intent(out) :: if_disphist(ntapes)   !true => close/flush this tape [-]
+    logical, intent(in) :: rstwr                 !true => write a restart this step [-]
+    logical, intent(in) :: nlend                 !true => end the run this step [-]
+    character(len=*), parameter :: subname='hist_do_disp'
+    call PrintInfo('beg '//subname)
+    if_stop=nlend
+    if_disphist(:)=rollover_tape(:).or.rstwr.or.nlend
+    call PrintInfo('end '//subname)
   end subroutine hist_do_disp
 
    !-----------------------------------------------------------------------

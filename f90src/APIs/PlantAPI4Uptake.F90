@@ -1,4 +1,8 @@
 module PlantAPI4Uptake
+  ! Description:
+  ! Transfer column and PFT state to/from the uptake workspace, preserving
+  ! prescribed plant existence separately from snow-exposed exchange area.
+  use EcoSIMCtrlMod, only: ldo_sp_mode
 !
 ! interface to integrate the plant model
 ! for prescribed phenology
@@ -42,6 +46,9 @@ module PlantAPI4Uptake
   use SoilBGCDataType
   use PlantMgmtDataType
   use PlantAPICommonData
+  use PlantTraitsTransferMod, only: SendPlantTraits
+  use PrescribedLeafBiochemMod, only: PreparePrescribedLeafBiochemistry
+  use PlantBGCRatesAPIData, only: plt_bgcr
 implicit none
 
   private
@@ -54,11 +61,16 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantUptakeAPISend(I,J,NY,NX)
-
+  ! Description:
+  ! Load the current column's plant, soil and atmospheric inputs into the uptake
+  ! workspace, including its hourly canopy-exposure diagnostic.
   implicit none
   integer, intent(in) :: I,J,NY,NX
   integer :: M,L,NZ,N,NB,K
 
+  ! Reset current root transfers per prescribed column, including unused layers.
+  plt_ew%TWaterPlantRoot2Soil_vr=0._r8
+  plt_ew%THeatLossRoot2Soil_vr=0._r8
   !sent variables also modified
   plt_site%PlantPopu_col           = PlantPopu_col(NY,NX)              !total plant population in the column
   plt_site%ZERO                    = ZERO                              !numerical threshold
@@ -75,6 +87,7 @@ implicit none
   plt_site%ALT                     = SurfElevation_col(NY,NX)                    !column altitude [m]
   plt_ew%TKSnow                    = TKSnow_snvr(1,NY,NX)              !surface snow temperature
   plt_ew%SnowDepth                 = SnowDepth_col(NY,NX)              !total snow depth
+  plt_ew%canopy_exposed_col        = canopy_exposed_col(NY,NX)         !hourly exposed-canopy flag for this column
   plt_ew%RawIsoTAtm2CanopySinkZ_col   = RawIsoTAtm2CanopySinkZ_col(NY,NX)    !aboveground canopy resistance,  computed in the radiation code
   plt_ew%TairK                     = TairK_col(NY,NX)                  !air temperature
   plt_ew%RoughnessLength               = RoughnessLength_col(NY,NX)            !computed in the radiation coce
@@ -99,6 +112,8 @@ implicit none
   plt_ew%QVegET_col                = QVegET_col(NY,NX)                 !canopy evapotranspiration, reset to zero in hour1.F90
   plt_ew%VapXAir2Canopy_col        = VapXAir2Canopy_col(NY,NX)         !canopy evaporation, reset to zero in hour1.F90
   plt_ew%CanopyHeatStor_col        = CanopyHeatStor_col(NY,NX)         !canopy heat storage, reset to zero in hour1.F90
+  plt_ew%HeatSensVapAir2Canopy_col        = HeatSensVapAir2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
+  plt_ew%HeatPrecAir2Canopy_col        = HeatPrecAir2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
   plt_ew%HeatFlx2Canopy_col        = HeatFlx2Canopy_col(NY,NX)         !heat flux to canopy, reset to zero in hour1.F90
   plt_ew%LWRadCanG                 = LWRadCanG_col(NY,NX)              !longwave radiation onto groud, reset to zero in hour1.F90
   DO L=1,NK_col(NY,NX)
@@ -135,6 +150,15 @@ implicit none
         else
           IsPlantActive_pft(NZ,NY,NX)=iFalse
       endif
+    elseif(ldo_sp_mode)then
+      ! Burial disables atmospheric exchange, not the prescribed PFT itself.
+      ! Keep it eligible for the zero-exchange fallback, which clears old fluxes
+      ! while retaining tissue water and intercepted stores through snow cover.
+      if(CanopyLeafArea_pft(NZ,NY,NX)+CanopyStemSurfArea_pft(NZ,NY,NX)>ZERO4LeafVar_pft(NZ,NY,NX))then
+        IsPlantActive_pft(NZ,NY,NX)=iTrue
+      else
+        IsPlantActive_pft(NZ,NY,NX)=iFalse
+      endif
     else
       if(LeafStalkAreaAct_pft(NZ,NY,NX).GT.ZERO4LeafVar_pft(NZ,NY,NX))then
         IsPlantActive_pft(NZ,NY,NX)=iTrue
@@ -147,8 +171,12 @@ implicit none
     plt_morph%RootSingleVesselArea_pft(NZ)     = RootSingleVesselArea_pft(NZ,NY,NX)
     plt_ew%ETCanopy_CumYr_pft(NZ)              = ETCanopy_CumYr_pft(NZ,NY,NX)
     plt_ew%ENGYX_pft(NZ)                       = ENGYX_pft(NZ,NY,NX)
+    plt_ew%VHeatCapCanopy_pft(NZ)                = VHeatCapCanopy_pft(NZ,NY,NX)
     plt_morph%NGTopRootLayer_pft(NZ)        = 1
     plt_morph%LeafStalkAreaAct_pft(NZ)      = LeafStalkAreaAct_pft(NZ,NY,NX)      !pft leaf+stalk area
+    plt_morph%StandDeadSurfAreaAct_pft(NZ)  = StandDeadSurfAreaAct_pft(NZ,NY,NX)
+    plt_morph%StandDeadSurfArea_pft(NZ)     = StandDeadSurfArea_pft(NZ,NY,NX)
+    plt_biom%StandDeadStrutElms_pft(:,NZ)   = StandDeadStrutElms_pft(:,NZ,NY,NX)
     plt_morph%HypocotHeight_pft(NZ)         = HypocotHeight_pft(NZ,NY,NX)      !(approximately) plant height
     plt_morph%NumOfBranches_pft(NZ)         = NumOfBranches_pft(NZ,NY,NX)      !number of branches, can be set to one for simplicity
     plt_ew%RawIsoTCanopy2Atm_pft(NZ)        = RawIsoTCanopy2Atm_pft(NZ,NY,NX)    !canopy resistance, updated iteratively
@@ -163,8 +191,13 @@ implicit none
     plt_biom%CanopyNonstElmConc_pft(:,NZ)=CanopyNonstElmConc_pft(:,NZ,NY,NX)
     ! SP prescribes the canopy total directly; no elemental partition is inferred.
     plt_biom%CanopyNonstOMConc_pft(NZ)=CanopyNonstOMConc_pft(NZ,NY,NX)
-    ! SP supplies this layer aggregate directly; no per-axis reduction here.
-    RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+    ! SP prescribes the same RTNSC in every root layer; no elemental partition
+    ! or nonstructural biomass pool is inferred from this osmotic input.
+    if(ldo_sp_mode)then
+      RootNonstOMConc_pvr(:,:,NZ,NY,NX)=PrescribedRootNonstOMConc_pft(NZ,NY,NX)
+    else
+      RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+    endif
     plt_biom%RootNonstOMConc_pvr(:,:,NZ)=0._r8
     plt_biom%RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
     plt_biom%RootMyco2ndStrutElms_pvr(:,:,1:NL_col(NY,NX),NZ)= &
@@ -194,6 +227,7 @@ implicit none
       DO N=1,Myco_pft(NZ,NY,NX)
         plt_morph%Root2ndXNumL_rpvr(N,L,NZ)   = Root2ndXNumL_rpvr(N,L,NZ,NY,NX)
         plt_biom%RootNonstructElmConc_pvr(:,N,L,NZ)=RootNonstructElmConc_pvr(:,N,L,NZ,NY,NX)
+        plt_biom%PopuRootMycoC_pvr(N,L,NZ)=PopuRootMycoC_pvr(N,L,NZ,NY,NX)
         plt_biom%RootNonstOMConc_pvr(N,L,NZ)=RootNonstOMConc_pvr(N,L,NZ,NY,NX)
         plt_morph%Root1stRadius_pvr(N,L,NZ) = Root1stRadius_pvr(N,L,NZ,NY,NX)
         plt_morph%Root2ndRadius_rpvr(N,L,NZ) = Root2ndRadius_rpvr(N,L,NZ,NY,NX)
@@ -256,15 +290,40 @@ implicit none
   ! of running PhenologyUpdate; keep restart filtering consistent with it.
   NumActivePlants_col(NY,NX) = sum(IsPlantActive_pft(1:NP0_col(NY,NX),NY,NX))
   plt_site%NumActivePlants = NumActivePlants_col(NY,NX)
+  if(ldo_sp_mode)then
+    ! SP uses atmospheric CO2 directly; it does not solve a canopy-air carbon
+    ! inventory using the full plant model's respiratory and growth fluxes.
+    plt_site%CO2E=CO2E_col(NY,NX)
+    plt_bgcr%NetCO2Flx2Canopy_col=0._r8
+    plt_rad%SineSunInclinationAngle_col=SineSunInclinationAngle_col(NY,NX)
+    do NZ=1,NP0_col(NY,NX)
+      call SendPlantTraits(NY,NX,NZ)
+      plt_photo%O2I_pft(NZ)=O2I_pft(NZ,NY,NX)
+      plt_photo%CO2CuticleResist_pft(NZ)=CO2CuticleResist_pft(NZ,NY,NX)
+      plt_morph%ClumpFactorNow_pft(NZ)=ClumpFactorNow_pft(NZ,NY,NX)
+      call PreparePrescribedLeafBiochemistry(I,J,NZ,PrescribedLeafProteinDensity_pft(NZ,NY,NX), &
+        CanopyLeafAreaZ_pft(:,NZ,NY,NX))
+    enddo
+  endif
   end subroutine PlantUptakeAPISend
 !------------------------------------------------------------------------------------------
 
   subroutine PlantUPtakeAPIRecv(I,J,NY,NX)
+  ! Description:
   ! Transfer prescribed-canopy fluxes and persistent exchange state to native arrays.
 
   implicit none
   integer, intent(in) :: I,J,NY,NX
   integer :: N,L,NZ
+
+  if(.not.ldo_sp_mode)then
+    ! Publish column changes made by early phenology/inventory preparation so
+    ! the later column refresh retains their accounting contributions.
+    PlantPopu_col(NY,NX)=plt_site%PlantPopu_col
+    NumActivePlants_col(NY,NX)=sum(plt_pheno%IsPlantActive_pft(1:NP0_col(NY,NX)))
+    Eco_NBP_CumYr_col(NY,NX)=plt_bgcr%Eco_NBP_CumYr_col
+    CanopyHeatLoss2Dist_col(NY,NX)=plt_ew%CanopyHeatLoss2Dist_col
+  endif
 
   Air_Heat_Latent_store_col(NY,NX) = plt_ew%Air_Heat_Latent_store_col
   Air_Heat_Sens_store_col(NY,NX)   = plt_ew%Air_Heat_Sens_store_col
@@ -278,8 +337,16 @@ implicit none
   QVegET_col(NY,NX)                = plt_ew%QVegET_col
   VapXAir2Canopy_col(NY,NX)        = plt_ew%VapXAir2Canopy_col
   CanopyHeatStor_col(NY,NX)        = plt_ew%CanopyHeatStor_col
+  HeatSensVapAir2Canopy_col(NY,NX)        = plt_ew%HeatSensVapAir2Canopy_col
+  HeatPrecAir2Canopy_col(NY,NX)        = plt_ew%HeatPrecAir2Canopy_col
   HeatFlx2Canopy_col(NY,NX)        = plt_ew%HeatFlx2Canopy_col
   LWRadCanG_col(NY,NX)             = plt_ew%LWRadCanG
+  ! Export accepted root water and donor heat. Standalone modes consume these
+  ! immediately; the external coupling interface controls its own soil update.
+  do L=1,NL_col(NY,NX)
+    TWaterPlantRoot2Soil_vr(L,NY,NX)=plt_ew%TWaterPlantRoot2Soil_vr(L)
+    THeatLossRoot2Soil_vr(L,NY,NX)=plt_ew%THeatLossRoot2Soil_vr(L)
+  enddo
   DO NZ=1,NP0_col(NY,NX)
     CdH2ORootxSoil_pft(NZ,NY,NX)     = plt_ew%CdH2ORootxSoil_pft(NZ)
     ENGYX_pft(NZ,NY,NX)              = plt_ew%ENGYX_pft(NZ)
@@ -287,6 +354,8 @@ implicit none
     DeltaTKC_pft(NZ,NY,NX)           = plt_ew%DeltaTKC_pft(NZ)
     CanopyEvapTransLHeat_pft(NZ,NY,NX)     = plt_ew%CanopyEvapTransLHeat_pft(NZ)
     HeatXAir2PCan_pft(NZ,NY,NX)      = plt_ew%HeatXAir2PCan_pft(NZ)
+    HeatStorCanopy_pft(NZ,NY,NX)    = plt_ew%HeatStorCanopy_pft(NZ)
+    VHeatCapCanopy_pft(NZ,NY,NX)    = plt_ew%VHeatCapCanopy_pft(NZ)
     TKC_pft(NZ,NY,NX)                = plt_ew%TKC_pft(NZ)
     Transpiration_pft(NZ,NY,NX)      = plt_ew%Transpiration_pft(NZ)
     VapXAir2Canopy_pft(NZ,NY,NX)     = plt_ew%VapXAir2Canopy_pft(NZ)
@@ -295,13 +364,36 @@ implicit none
     TKCanopy_pft(NZ,NY,NX)           = plt_ew%TKCanopy_pft(NZ)
     PSICanopy_pft(NZ,NY,NX)          = plt_ew%PSICanopy_pft(NZ)
     !plant tissue water is carried between steps (as PlantAPIRecv does for the
-    !full plant model); ROOTUPTAKES updates it by transpiration - root uptake
+    !full plant model); RootWaterUptake updates it by transpiration - root uptake
     CanopyBiomWater_pft(NZ,NY,NX)    = plt_ew%CanopyBiomWater_pft(NZ)
     WatHeldOnCanopy_pft(NZ,NY,NX)    = plt_ew%WatHeldOnCanopy_pft(NZ)
     SnowOnCanopy_pft(NZ,NY,NX)       = plt_ew%SnowOnCanopy_pft(NZ)
     PSICanopyOsmo_pft(NZ,NY,NX)      = plt_ew%PSICanopyOsmo_pft(NZ)
     PSICanopyTurg_pft(NZ,NY,NX)      = plt_ew%PSICanopyTurg_pft(NZ)
     CanPStomaResistH2O_pft(NZ,NY,NX) = plt_photo%CanPStomaResistH2O_pft(NZ)
+    if(ldo_sp_mode)then
+      ! Retain the biochemical capacity and resistance diagnostics used by
+      ! StomatalDynamics. SP does not run ComputeGPP or accumulate fixed carbon.
+      CanopyGasCO2_pft(NZ,NY,NX)=plt_photo%CanopyGasCO2_pft(NZ)
+      CanopyMinStomaResistH2O_pft(NZ,NY,NX)=plt_photo%CanopyMinStomaResistH2O_pft(NZ)
+      LeafProteinCperm2LA_pft(NZ,NY,NX)=plt_biom%LeafProteinCperm2LA_pft(NZ)
+      LeafRubiscoCperm2LA_pft(NZ,NY,NX)=plt_biom%LeafRubiscoCperm2LA_pft(NZ)
+      LeafPEPCperm2LA_pft(NZ,NY,NX)=plt_biom%LeafPEPCperm2LA_pft(NZ)
+      LeafC3ChlCperm2LA_pft(NZ,NY,NX)=plt_biom%LeafC3ChlCperm2LA_pft(NZ)
+      LeafC4ChlCperm2LA_pft(NZ,NY,NX)=plt_biom%LeafC4ChlCperm2LA_pft(NZ)
+      CanopyVcMaxRubisco25C_pft(NZ,NY,NX)=plt_photo%CanopyVcMaxRubisco25C_pft(NZ)
+      CanopyVoMaxRubisco25C_pft(NZ,NY,NX)=plt_photo%CanopyVoMaxRubisco25C_pft(NZ)
+      CanopyVcMaxPEP25C_pft(NZ,NY,NX)=plt_photo%CanopyVcMaxPEP25C_pft(NZ)
+      ElectronTransptJmax25C_pft(NZ,NY,NX)=plt_photo%ElectronTransptJmax25C_pft(NZ)
+      TFN_Carboxy_pft(NZ,NY,NX)=plt_photo%TFN_Carboxy_pft(NZ)
+      TFN_Oxygen_pft(NZ,NY,NX)=plt_photo%TFN_Oxygen_pft(NZ)
+      TFN_eTranspt_pft(NZ,NY,NX)=plt_photo%TFN_eTranspt_pft(NZ)
+      LeafIntracellularCO2_pft(NZ,NY,NX)=plt_photo%LeafIntracellularCO2_pft(NZ)
+      aquCO2Intraleaf_pft(NZ,NY,NX)=plt_photo%aquCO2Intraleaf_pft(NZ)
+      SpecificLeafArea_pft(NZ,NY,NX)=plt_biom%SpecificLeafArea_pft(NZ)
+      Km4RubiscoCarboxy_pft(NZ,NY,NX)=plt_photo%Km4RubiscoCarboxy_pft(NZ)
+      O2L_pft(NZ,NY,NX)=plt_photo%O2L_pft(NZ)
+    endif
     ! Preserve the solved canopy resistances for history, restart and the next API send.
     RawIsoTCanopy2Atm_pft(NZ,NY,NX) = plt_ew%RawIsoTCanopy2Atm_pft(NZ)
     RawH2OCanopy2Atm_pft(NZ,NY,NX)   = plt_photo%RawH2OCanopy2Atm_pft(NZ)

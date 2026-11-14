@@ -1,4 +1,5 @@
 module EcosimConst
+  ! Description:
   ! Physical constants and unit conversions shared across EcoSIM processes.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use data_const_mod, only: GravAcceleration=>DAT_CONST_G  
@@ -19,6 +20,7 @@ module EcosimConst
   real(r8), parameter :: TC2K                 = 273.15_r8                  !temperature for converting celcius to Kelvin,                               [K]
   real(r8), parameter :: Tref                 = 273.15_r8                  !reference temperature for atmospheric variables,                            [K]
   real(r8), parameter :: VLHeatCapSnoMin      = 2.095E-04_r8               !legacy snow layer/surface-property threshold per unit area, [MJ m-2 K-1]
+  real(r8), parameter :: MinResolvedSnowSWE   = 1.e-10_r8                 !numerical snow-film resolution, [m water equivalent]
   real(r8), parameter :: VLHeatCapLitRMin     = 4.190E-05_r8                !minimum heat capacities for solving surface litter water and heat fluxes,  [MJ/K]
   real(r8), parameter :: VLHeatCapSoiMin      = 4.190E-03_r8                !minimum heat capacities for solving soil water and heat fluxes,            [MJ/K]
   real(r8), parameter :: PICON                = 3.14159265358979323846_r8   !Pi,                                                                        [-]

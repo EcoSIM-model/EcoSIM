@@ -13,6 +13,7 @@ module SoilLayerDynMod
   use DebugToolMod
   USE RedistDataMod      
   use RootDataType
+  use PlantDataRateType, only: trcg_root_vr
   use GridDataType
   USE EcoSIMCtrlDataType
   USE SoilWaterDataType
@@ -61,9 +62,8 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine UpdateSoilGrids(I,J,NY,NX,DORGC_vr,DVLiceMicP_vr)
-  !
-  !Description:
-  !Relayer the soil profiles
+  ! Description:
+  ! Relayer the soil profiles.
   !litter layer maybe mixed into the soil layers
   implicit none
   integer, intent(in) :: I,J  
@@ -98,27 +98,9 @@ implicit none
 
   IF(.not. erosion_model)return
   !soil relayering can occur due to freeze-thaw, soc change, and erosion
-!  if(NX==1.and. (I>=340 .or. I<=1))then
-!    write(932,*)'befXXXNY,NX=',NY,NX,I*1000+J,NU_col(NY,NX),NU_old,'lbot new,old=',CumDepz2LayBottom_vr(0,NY,NX),CumLitRDepzInit_col(NY,NX)  
-!    write(932,*)'thick0-NL',CumSoilThickness_vr(0:NL_col(NY,NX),NY,NX)
-!    write(932,*)'bdnl0-NL ',CumDepz2LayBottom_vr(0:NL_col(NY,NX),NY,NX)
-!    write(932,*)'cdl-.0-NL',CumDepz2LayBottom_vr(0:NL_col(NY,NX),NY,NX)-CumDepz2LayBottom_vr(0,NY,NX)    
-!  endif  
-!  if(NX==1)then
-!  write(935,*)I*1000+J,VHCPNX_col(NY,NX)/cpw,NUM_col(NY,NX),DLYR_3D(3,0:NL_col(NY,NX),NY,NX)
-!  write(934,*)I*1000+J,'bf6-8',CumDepz2LayBottom_vr(6:8,NY,NX),DLYR_3D(3,6:8,NY,NX)
-!  endif
   !set IFLGL(:,[1,4,5,6])
   call UpdateLayerEdges(I,J,NY,NX,DORGC_vr,DVLiceMicP_vr,SoilLayBotEdgeLocOld_vr,SoilLayBotEdgeLocNew_vr,IFLGL)
 
-!  if(NX==1)write(934,*)I*1000+J,'af6-8',CumDepz2LayBottom_vr(6:8,NY,NX),DLYR_3D(3,6:8,NY,NX)
-
-!  if(NX==1.and. (I>=340 .or. I<=1))then
-!    write(932,*)'affXXNY,NX=',NY,NX,I*1000+J,NU_col(NY,NX),NU_old,'lbot new,old=',CumDepz2LayBottom_vr(0,NY,NX),CumLitRDepzInit_col(NY,NX)  
-!    write(932,*)'thick0-NL',CumSoilThickness_vr(0:NL_col(NY,NX),NY,NX)
-!    write(932,*)'bdnl 0-NL',CumDepz2LayBottom_vr(0:NL_col(NY,NX),NY,NX)    
-!    write(932,*)'cdl-.0-NL',CumDepz2LayBottom_vr(0:NL_col(NY,NX),NY,NX)-CumDepz2LayBottom_vr(0,NY,NX)
-!  endif  
 
   !
   !     RECALCULATE SOIL LAYER THICKNESS
@@ -128,13 +110,6 @@ implicit none
     twat=twat+VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)+(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))*DENSICE
   ENDDO
 
-!  if(NX==1.and.I>=340)then
-!    write(931,*)'1NYNXXXX=',NY,NX,I*1000+J,NU_col(NY,NX),NU_old  
-!    write(931,*)'tisck',ZSOI(1:NL_col(NY,NX))
-!    write(931,*)'thick',CumSoilThickness_vr(1:NL_col(NY,NX),NY,NX)
-!    write(931,*)'cdl. ',CumDepz2LayBottom_vr(1:NL_col(NY,NX),NY,NX)
-!    write(931,*)'DL.  ',DLYR_3D(3,1:NL_col(NY,NX),NY,NX)    
-!  endif
 
   ICHKL=0
   D245: DO L=NU_col(NY,NX),NL_col(NY,NX)-1
@@ -220,14 +195,21 @@ implicit none
     ENDDO D230
   ENDDO D245
 
-!  if(NX==1.and.I>=340)then
-!    write(931,*)'2NYNXXXX=',NY,NX,I*1000+J,NU_col(NY,NX),NU_old  
-!    write(931,*)'thick',CumSoilThickness_vr(1:NL_col(NY,NX),NY,NX)
-!    write(931,*)'cdl  ',CumDepz2LayBottom_vr(1:NL_col(NY,NX),NY,NX)
-!    write(931,*)'DL.  ',DLYR_3D(3,1:NL_col(NY,NX),NY,NX)    
-!  endif
 
   call RemoveNullPondLayer(I,J,NY,NX,IFLGL,NU_old)
+
+  if(NU_col(NY,NX)/=NU_old)then
+    ! Every active depth uses the current surface as its origin. Retired slots
+    ! have no thickness; their coincident edges must also follow that surface.
+    CumDepz2LayBottom_vr(1:NU_col(NY,NX)-1,NY,NX)=CumDepz2LayBottom_vr(0,NY,NX)
+    CumSoilThickness_vr(0:NU_col(NY,NX)-1,NY,NX)=0._r8
+    CumSoilThickMidL_vr(1:NU_col(NY,NX)-1,NY,NX)=0._r8
+    DO L=NU_col(NY,NX),NL_col(NY,NX)
+      CumSoilThickness_vr(L,NY,NX)=CumDepz2LayBottom_vr(L,NY,NX)-CumDepz2LayBottom_vr(0,NY,NX)
+      CumSoilThickMidL_vr(L,NY,NX)=0.5_r8*(CumSoilThickness_vr(L-1,NY,NX)+CumSoilThickness_vr(L,NY,NX))
+      SoilDepthMidLay_vr(L,NY,NX)=0.5_r8*(CumDepz2LayBottom_vr(L-1,NY,NX)+CumDepz2LayBottom_vr(L,NY,NX))
+    ENDDO
+  endif
 
   twat=0._r8
   DO L=NU_col(NY,NX),NL_col(NY,NX)
@@ -248,12 +230,16 @@ implicit none
   end subroutine UpdateSoilGrids
 !------------------------------------------------------------------------------------------
   subroutine  RemoveNullPondLayer(I,J,NY,NX,IFLGL,NU_old)
+  ! Description:
+  ! Retire a thin pond layer only after conserving its remaining material pools;
+  ! then shift overlying layers and advance the active surface index.
   implicit none
   integer, intent(in) :: I,J,NY,NX
   integer, intent(in) :: IFLGL(0:JZ,6)                !flag for soil thickness change by different processes  
   integer, intent(in) :: NU_old
   character(len=*), parameter :: subname='RemoveNullPondLayer'
-  integer :: L,L1,NZ,L2,ids  
+  integer :: L,L1,NZ,L2,ids,Ltarget
+  integer :: MoveFlags(0:JZ,6) ! full-layer material transfer flags [-]
   real(r8) :: FX,FY
   
   call PrintInfo('beg '//subname)
@@ -266,15 +252,27 @@ implicit none
     endif
   ENDDO
 
-  !assume there is only one missing layer
+  ! Layer retirement/index shifts move complete inventories, rather than the
+  ! water-only transfer used when the surface pond grows over litter.
   IF(L1>=NU_old)THEN
+    MoveFlags=IFLGL
+    MoveFlags(:,iTopLayGrow)=isl_undef
+    Ltarget=L1+1
+    if(Ltarget>NL_col(NY,NX))Ltarget=L1-1
+    if(Ltarget<NU_old)then
+      write(iulog,*)subname,': no receiving layer for retired pond',NY,NX,L1
+      call endrun('Cannot retire the only remaining pond layer',__LINE__)
+    endif
+    ! Hydrology already moved its residual water/heat. Gas, solute, organic
+    ! and root pools must follow before this layer is excluded from budgets.
+    call UpdateLayerMaterials(L1,L1,Ltarget,NY,NX,1._r8,0._r8,MoveFlags)
     L2=L1-1
     DO L=L1-1,NU_old,-1
        if(DLYR_3D(3,L,NY,NX).LE.ZERO2)CYCLE
 
        FX=1.0_r8;FY=0._r8
        !move one layer down
-       call UpdateLayerMaterials(L2+1,L,L2+1,NY,NX,FX,FY,IFLGL)
+       call UpdateLayerMaterials(L2+1,L,L2+1,NY,NX,FX,FY,MoveFlags)
        
        DLYR_3D(3,L2+1,NY,NX)          = DLYR_3D(3,L2+1,NY,NX)+DLYR_3D(3,L,NY,NX)
        DLYR_3D(3,L,NY,NX)            = 0._r8
@@ -941,9 +939,8 @@ implicit none
   end subroutine DiagInnerLayerThickChange
 !------------------------------------------------------------------------------------------
   subroutine DiagPondTopThickChange(I,J,L,NN,NY,NX,NUX,SoilLayBotEdgeLocNew_vr,IFLGL,DDLYRX,XVOLWP)
-  !
-  !Description:
-  !Diagnose pond top layer thickness change
+  ! Description:
+  ! Diagnose pond surface recession and activate an adjacent layer on regrowth.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NN
@@ -1011,8 +1008,10 @@ implicit none
       !layer L is soil and current top layer is below the initial top layer
       IF(SoilBulkDensity_vr(L,NY,NX).GT.ZERO .AND. NU_col(NY,NX).GT.NUI_col(NY,NX))THEN
         
-        NU_col(NY,NX)  = NUI_col(NY,NX) !reset top pond grid to NUI
-        NUM_col(NY,NX) = NUI_col(NY,NX)
+        ! Reactivate the adjacent retired pond slot. Jumping to NUI leaves
+        ! zero-thickness layers between the new pond and the soil below.
+        NU_col(NY,NX)  = L-1
+        NUM_col(NY,NX) = NU_col(NY,NX)
 
         !assuming litter floats above water, compute the lower edge displacement
         DDLYRX(iTopLayGrow)  = -XVOLWP/AREA_3D(3,0,NY,NX)      !ponding water moving up <0
@@ -1027,9 +1026,6 @@ implicit none
         !update the topsoil/water layer: add water
         DLYR_3D(3,NU_col(NY,NX),NY,NX) = DLYR_3D(3,NU_col(NY,NX),NY,NX)-DDLYRX(iTopLayGrow)
 
-!        if(I==348 .and. NX==1)then
-!        write(932,*)'bfupdate,NUM,NL=',NUM_col(NY,NX),NL_col(NY,NX),CumDepz2LayBottom_vr(0:NL_col(NY,NX),NY,NX)
-!        endif
         !reset edges for inner layers 
         IF(L.GT.2)THEN    !L==NU_col      
           !set to upper edge of layer L. L varies from, for innter layers 
@@ -1038,9 +1034,7 @@ implicit none
             SoilLayBotEdgeLocNew_vr(LL)    = SoilLayBotEdgeLocNew_vr(L-1)
           ENDDO
         ENDIF
-!        if(I==348 .and. NX==1)then
-!          write(932,*)'NU_col',NU_col(NY,NX),'bot_loc_nulay',CumDepz2LayBottom_vr(NU_col(NY,NX),NY,NX),'top lay',DLYR_3D(3,NU_col(NY,NX),NY,NX)
-!        endif
+
         CumDepz2LayBottom_vr(0,NY,NX) = CumDepz2LayBottom_vr(NU_col(NY,NX),NY,NX)-DLYR_3D(3,NU_col(NY,NX),NY,NX)
         SoilLayBotEdgeLocNew_vr(0)    = SoilLayBotEdgeLocNew_vr(NU_col(NY,NX))-DLYR_3D(3,NU_col(NY,NX),NY,NX)
 
@@ -1055,8 +1049,8 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine UpdateLayerMaterials(L,L0,L1,NY,NX,FX,FY,IFLGL)
-  !
-  !move materials from L0 to L1
+  ! Description:
+  ! Move material inventories from source layer L0 to receiving layer L1.
   implicit none
   integer, intent(in) :: L
   integer, intent(in) :: L0  !source layer
@@ -1093,6 +1087,9 @@ implicit none
       DO NTSAB=idsaltb_beg,idsaltb_end
         trcSalt_solml_vr(NTSAB,L1,NY,NX)=trcSalt_solml_vr(NTSAB,L1,NY,NX)+FX*trcSalt_solml_vr(NTSAB,L0,NY,NX)
       ENDDO
+      DO NTSA=idsalt_beg,idsaltb_end
+        trcSalt_soHml_vr(NTSA,L1,NY,NX)=trcSalt_soHml_vr(NTSA,L1,NY,NX)+FX*trcSalt_soHml_vr(NTSA,L0,NY,NX)
+      ENDDO
     ENDIF
 
     DO NTX=idx_beg+1,idx_cation_end
@@ -1109,58 +1106,60 @@ implicit none
 
     DO idg=idg_beg,idg_NH3
       trcg_gasml_vr(idg,L1,NY,NX)=trcg_gasml_vr(idg,L1,NY,NX)+FX*trcg_gasml_vr(idg,L0,NY,NX)
+      trcg_root_vr(idg,L1,NY,NX)=trcg_root_vr(idg,L1,NY,NX)+FX*trcg_root_vr(idg,L0,NY,NX)
     ENDDO
+    do ids=ids_beg,ids_end
+      trcs_soHml_vr(ids,L1,NY,NX)=trcs_soHml_vr(ids,L1,NY,NX)+FX*trcs_soHml_vr(ids,L0,NY,NX)
+    enddo
 
     ! Root and mycorrhizal pools.
     DO  NZ=1,NP0_col(NY,NX)
-      IF(RootMycoActiveBiomC_pvr(ipltroot,L0,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX) &
-        .AND. RootMycoActiveBiomC_pvr(ipltroot,L1,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX))THEN
+      ! Material inventories move independently of source/receiver activity.
+
+      DO  NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
+        DO NE=1,NumPlantChemElms
+          RootMyco1stStrutElms_rpvr(NE,L1,NR,NZ,NY,NX)=RootMyco1stStrutElms_rpvr(NE,L1,NR,NZ,NY,NX) &
+            +FX*RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX)
+        ENDDO
+        Root1stLenPP_rpvr(L1,NR,NZ,NY,NX)  = Root1stLenPP_rpvr(L1,NR,NZ,NY,NX)+FX*Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)
+      ENDDO
+      Root1stXNumL_pvr(L1,NZ,NY,NX)        = Root1stXNumL_pvr(L1,NZ,NY,NX)+FX*Root1stXNumL_pvr(L0,NZ,NY,NX)
+
+      DO N=1,Myco_pft(NZ,NY,NX)
+        DO idg=idg_beg,idg_NH3
+          trcg_rootml_pvr(idg,N,L1,NZ,NY,NX) = trcg_rootml_pvr(idg,N,L1,NZ,NY,NX)+FX*trcg_rootml_pvr(idg,N,L0,NZ,NY,NX)
+          trcs_rootml_pvr(idg,N,L1,NZ,NY,NX) = trcs_rootml_pvr(idg,N,L1,NZ,NY,NX)+FX*trcs_rootml_pvr(idg,N,L0,NZ,NY,NX)
+        ENDDO
 
         DO  NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
           DO NE=1,NumPlantChemElms
-            RootMyco1stStrutElms_rpvr(NE,L1,NR,NZ,NY,NX)=RootMyco1stStrutElms_rpvr(NE,L1,NR,NZ,NY,NX) &
-              +FX*RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX)
+            RootMyco2ndStrutElms_rpvr(NE,N,L1,NR,NZ,NY,NX)=RootMyco2ndStrutElms_rpvr(NE,N,L1,NR,NZ,NY,NX) &
+              +FX*RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX)
           ENDDO
-          Root1stLenPP_rpvr(L1,NR,NZ,NY,NX)  = Root1stLenPP_rpvr(L1,NR,NZ,NY,NX)+FX*Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)
+          Root2ndLen_rpvr(N,L1,NR,NZ,NY,NX)   = Root2ndLen_rpvr(N,L1,NR,NZ,NY,NX)+FX*Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)
+          Root2ndXNum_rpvr(N,L1,NR,NZ,NY,NX) = Root2ndXNum_rpvr(N,L1,NR,NZ,NY,NX)+FX*Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX)
         ENDDO
-        Root1stXNumL_pvr(L1,NZ,NY,NX)        = Root1stXNumL_pvr(L1,NZ,NY,NX)+FX*Root1stXNumL_pvr(L0,NZ,NY,NX)
 
-        DO N=1,Myco_pft(NZ,NY,NX)
-          DO idg=idg_beg,idg_NH3
-            trcg_rootml_pvr(idg,N,L1,NZ,NY,NX) = trcg_rootml_pvr(idg,N,L1,NZ,NY,NX)+FX*trcg_rootml_pvr(idg,N,L0,NZ,NY,NX)
-            trcs_rootml_pvr(idg,N,L1,NZ,NY,NX) = trcs_rootml_pvr(idg,N,L1,NZ,NY,NX)+FX*trcs_rootml_pvr(idg,N,L0,NZ,NY,NX)
-          ENDDO
-
-          DO  NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
-            DO NE=1,NumPlantChemElms
-              RootMyco2ndStrutElms_rpvr(NE,N,L1,NR,NZ,NY,NX)=RootMyco2ndStrutElms_rpvr(NE,N,L1,NR,NZ,NY,NX) &
-                +FX*RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX)
-            ENDDO
-            Root2ndLen_rpvr(N,L1,NR,NZ,NY,NX)   = Root2ndLen_rpvr(N,L1,NR,NZ,NY,NX)+FX*Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)
-            Root2ndXNum_rpvr(N,L1,NR,NZ,NY,NX) = Root2ndXNum_rpvr(N,L1,NR,NZ,NY,NX)+FX*Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX)
-          ENDDO
-
-          DO NE=1,NumPlantChemElms
-             RootMycoNonstElms_rpvr(NE,N,L1,NZ,NY,NX)=RootMycoNonstElms_rpvr(NE,N,L1,NZ,NY,NX)+FX* RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)
-          ENDDO
-          RootMycoActiveBiomC_pvr(N,L1,NZ,NY,NX) = RootMycoActiveBiomC_pvr(N,L1,NZ,NY,NX)+FX*RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX)
-          PopuRootMycoC_pvr(N,L1,NZ,NY,NX)       = PopuRootMycoC_pvr(N,L1,NZ,NY,NX)+FX* PopuRootMycoC_pvr(N,L0,NZ,NY,NX)
-          RootProteinC_pvr(N,L1,NZ,NY,NX)        = RootProteinC_pvr(N,L1,NZ,NY,NX)+FX*RootProteinC_pvr(N,L0,NZ,NY,NX)
-          Root2ndXNumL_rpvr(N,L1,NZ,NY,NX)         = Root2ndXNumL_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)
-          RootTotLenPerPlant_pvr(N,L1,NZ,NY,NX)     = RootTotLenPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)
-          RootLenDensPerPlant_pvr(N,L1,NZ,NY,NX) = RootLenDensPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX)
-          RootPoreVol_pvr(N,L1,NZ,NY,NX)         = RootPoreVol_pvr(N,L1,NZ,NY,NX)+FX*RootPoreVol_pvr(N,L0,NZ,NY,NX)
-          RootVH2O_pvr(N,L1,NZ,NY,NX)            = RootVH2O_pvr(N,L1,NZ,NY,NX)+FX*RootVH2O_pvr(N,L0,NZ,NY,NX)
-          Root1stRadius_pvr(N,L1,NZ,NY,NX)       = Root1stRadius_pvr(N,L1,NZ,NY,NX)+FX*Root1stRadius_pvr(N,L0,NZ,NY,NX)
-          Root2ndRadius_rpvr(N,L1,NZ,NY,NX)       = Root2ndRadius_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndRadius_rpvr(N,L0,NZ,NY,NX)
-          RootSAreaPerPlant_pvr(N,L1,NZ,NY,NX)    = RootSAreaPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)
-          Root2ndEffLen4uptk_rpvr(N,L1,NZ,NY,NX)       = Root2ndEffLen4uptk_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX)
-        ENDDO
         DO NE=1,NumPlantChemElms
-          RootNodulStrutElms_rpvr(NE,L1,NZ,NY,NX) = RootNodulStrutElms_rpvr(NE,L1,NZ,NY,NX)+FX*RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)
-          RootNodulNonstElms_rpvr(NE,L1,NZ,NY,NX) = RootNodulNonstElms_rpvr(NE,L1,NZ,NY,NX)+FX*RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)
+           RootMycoNonstElms_rpvr(NE,N,L1,NZ,NY,NX)=RootMycoNonstElms_rpvr(NE,N,L1,NZ,NY,NX)+FX* RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)
         ENDDO
-      ENDIF
+        RootMycoActiveBiomC_pvr(N,L1,NZ,NY,NX) = RootMycoActiveBiomC_pvr(N,L1,NZ,NY,NX)+FX*RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX)
+        PopuRootMycoC_pvr(N,L1,NZ,NY,NX)       = PopuRootMycoC_pvr(N,L1,NZ,NY,NX)+FX* PopuRootMycoC_pvr(N,L0,NZ,NY,NX)
+        RootProteinC_pvr(N,L1,NZ,NY,NX)        = RootProteinC_pvr(N,L1,NZ,NY,NX)+FX*RootProteinC_pvr(N,L0,NZ,NY,NX)
+        Root2ndXNumL_rpvr(N,L1,NZ,NY,NX)         = Root2ndXNumL_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)
+        RootTotLenPerPlant_pvr(N,L1,NZ,NY,NX)     = RootTotLenPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)
+        RootLenDensPerPlant_pvr(N,L1,NZ,NY,NX) = RootLenDensPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX)
+        RootPoreVol_pvr(N,L1,NZ,NY,NX)         = RootPoreVol_pvr(N,L1,NZ,NY,NX)+FX*RootPoreVol_pvr(N,L0,NZ,NY,NX)
+        RootVH2O_pvr(N,L1,NZ,NY,NX)            = RootVH2O_pvr(N,L1,NZ,NY,NX)+FX*RootVH2O_pvr(N,L0,NZ,NY,NX)
+        Root1stRadius_pvr(N,L1,NZ,NY,NX)       = Root1stRadius_pvr(N,L1,NZ,NY,NX)+FX*Root1stRadius_pvr(N,L0,NZ,NY,NX)
+        Root2ndRadius_rpvr(N,L1,NZ,NY,NX)       = Root2ndRadius_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndRadius_rpvr(N,L0,NZ,NY,NX)
+        RootSAreaPerPlant_pvr(N,L1,NZ,NY,NX)    = RootSAreaPerPlant_pvr(N,L1,NZ,NY,NX)+FX*RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)
+        Root2ndEffLen4uptk_rpvr(N,L1,NZ,NY,NX)       = Root2ndEffLen4uptk_rpvr(N,L1,NZ,NY,NX)+FX*Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX)
+      ENDDO
+      DO NE=1,NumPlantChemElms
+        RootNodulStrutElms_rpvr(NE,L1,NZ,NY,NX) = RootNodulStrutElms_rpvr(NE,L1,NZ,NY,NX)+FX*RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)
+        RootNodulNonstElms_rpvr(NE,L1,NZ,NY,NX) = RootNodulNonstElms_rpvr(NE,L1,NZ,NY,NX)+FX*RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)
+      ENDDO
     ENDDO
   ENDIF
 
@@ -1283,6 +1282,9 @@ implicit none
       DO NTSAB=idsaltb_beg,idsaltb_end
         trcSalt_solml_vr(NTSAB,L0,NY,NX)=FY*trcSalt_solml_vr(NTSAB,L0,NY,NX)
       ENDDO
+      DO NTSA=idsalt_beg,idsaltb_end
+        trcSalt_soHml_vr(NTSA,L0,NY,NX)=FY*trcSalt_soHml_vr(NTSA,L0,NY,NX)
+      ENDDO
     ENDIF
 
     DO NTX=idx_beg+1,idx_cation_end
@@ -1298,53 +1300,55 @@ implicit none
 
     DO idg=idg_beg,idg_NH3
       trcg_gasml_vr(idg,L0,NY,NX)=FY*trcg_gasml_vr(idg,L0,NY,NX)
+      trcg_root_vr(idg,L0,NY,NX)=FY*trcg_root_vr(idg,L0,NY,NX)
     ENDDO
+    do ids=ids_beg,ids_end
+      trcs_soHml_vr(ids,L0,NY,NX)=FY*trcs_soHml_vr(ids,L0,NY,NX)
+    enddo
 
     ! Root and mycorrhizal pools.
     DO  NZ=1,NP0_col(NY,NX)
-      IF(RootMycoActiveBiomC_pvr(ipltroot,L0,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX) &
-        .AND. RootMycoActiveBiomC_pvr(ipltroot,L1,NZ,NY,NX).GT.ZERO4Groth_pft(NZ,NY,NX))THEN
+      ! Material inventories move independently of source/receiver activity.
+      DO NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
+        DO NE=1,NumPlantChemElms
+          RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX) = FY*RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX)
+        ENDDO
+        Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)  = FY*Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)
+      ENDDO
+      Root1stXNumL_pvr(L0,NZ,NY,NX)        = FY*Root1stXNumL_pvr(L0,NZ,NY,NX)
+      DO  N=1,Myco_pft(NZ,NY,NX)
+        DO idg=idg_beg,idg_NH3
+          trcg_rootml_pvr(idg,N,L0,NZ,NY,NX) = FY*trcg_rootml_pvr(idg,N,L0,NZ,NY,NX)
+          trcs_rootml_pvr(idg,N,L0,NZ,NY,NX) = FY*trcs_rootml_pvr(idg,N,L0,NZ,NY,NX)
+        ENDDO
         DO NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
           DO NE=1,NumPlantChemElms
-            RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX) = FY*RootMyco1stStrutElms_rpvr(NE,L0,NR,NZ,NY,NX)
+            RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX) = FY*RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX)
           ENDDO
-          Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)  = FY*Root1stLenPP_rpvr(L0,NR,NZ,NY,NX)
-        ENDDO
-        Root1stXNumL_pvr(L0,NZ,NY,NX)        = FY*Root1stXNumL_pvr(L0,NZ,NY,NX)
-        DO  N=1,Myco_pft(NZ,NY,NX)
-          DO idg=idg_beg,idg_NH3
-            trcg_rootml_pvr(idg,N,L0,NZ,NY,NX) = FY*trcg_rootml_pvr(idg,N,L0,NZ,NY,NX)
-            trcs_rootml_pvr(idg,N,L0,NZ,NY,NX) = FY*trcs_rootml_pvr(idg,N,L0,NZ,NY,NX)
-          ENDDO
-          DO NR=1,NumStructuralRootAxes_pft(NZ,NY,NX)
-            DO NE=1,NumPlantChemElms
-              RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX) = FY*RootMyco2ndStrutElms_rpvr(NE,N,L0,NR,NZ,NY,NX)
-            ENDDO
-            Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)  = FY*Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)
-            Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX) = FY*Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX)
-          ENDDO
-          DO NE=1,NumPlantChemElms
-            RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)=FY* RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)
-          ENDDO
-          RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX) = FY*RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX)
-          PopuRootMycoC_pvr(N,L0,NZ,NY,NX)       = FY* PopuRootMycoC_pvr(N,L0,NZ,NY,NX)
-          RootProteinC_pvr(N,L0,NZ,NY,NX)        = FY*RootProteinC_pvr(N,L0,NZ,NY,NX)
-          Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)       = FY*Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)
-          RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)  = FY*RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)
-          RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX) = FY*RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX)
-          RootPoreVol_pvr(N,L0,NZ,NY,NX)         = FY*RootPoreVol_pvr(N,L0,NZ,NY,NX)
-          RootVH2O_pvr(N,L0,NZ,NY,NX)            = FY*RootVH2O_pvr(N,L0,NZ,NY,NX)
-          Root1stRadius_pvr(N,L0,NZ,NY,NX)       = FY*Root1stRadius_pvr(N,L0,NZ,NY,NX)
-          Root2ndRadius_rpvr(N,L0,NZ,NY,NX)      = FY*Root2ndRadius_rpvr(N,L0,NZ,NY,NX)
-          RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)   = FY*RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)
-          Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX) = FY*Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX)
+          Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)  = FY*Root2ndLen_rpvr(N,L0,NR,NZ,NY,NX)
+          Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX) = FY*Root2ndXNum_rpvr(N,L0,NR,NZ,NY,NX)
         ENDDO
         DO NE=1,NumPlantChemElms
-          RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)=FY*RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)
-
-          RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)=FY*RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)
+          RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)=FY* RootMycoNonstElms_rpvr(NE,N,L0,NZ,NY,NX)
         ENDDO
-      ENDIF
+        RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX) = FY*RootMycoActiveBiomC_pvr(N,L0,NZ,NY,NX)
+        PopuRootMycoC_pvr(N,L0,NZ,NY,NX)       = FY* PopuRootMycoC_pvr(N,L0,NZ,NY,NX)
+        RootProteinC_pvr(N,L0,NZ,NY,NX)        = FY*RootProteinC_pvr(N,L0,NZ,NY,NX)
+        Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)       = FY*Root2ndXNumL_rpvr(N,L0,NZ,NY,NX)
+        RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)  = FY*RootTotLenPerPlant_pvr(N,L0,NZ,NY,NX)
+        RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX) = FY*RootLenDensPerPlant_pvr(N,L0,NZ,NY,NX)
+        RootPoreVol_pvr(N,L0,NZ,NY,NX)         = FY*RootPoreVol_pvr(N,L0,NZ,NY,NX)
+        RootVH2O_pvr(N,L0,NZ,NY,NX)            = FY*RootVH2O_pvr(N,L0,NZ,NY,NX)
+        Root1stRadius_pvr(N,L0,NZ,NY,NX)       = FY*Root1stRadius_pvr(N,L0,NZ,NY,NX)
+        Root2ndRadius_rpvr(N,L0,NZ,NY,NX)      = FY*Root2ndRadius_rpvr(N,L0,NZ,NY,NX)
+        RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)   = FY*RootSAreaPerPlant_pvr(N,L0,NZ,NY,NX)
+        Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX) = FY*Root2ndEffLen4uptk_rpvr(N,L0,NZ,NY,NX)
+      ENDDO
+      DO NE=1,NumPlantChemElms
+        RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)=FY*RootNodulStrutElms_rpvr(NE,L0,NZ,NY,NX)
+
+        RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)=FY*RootNodulNonstElms_rpvr(NE,L0,NZ,NY,NX)
+      ENDDO
     ENDDO
   ENDIF
 

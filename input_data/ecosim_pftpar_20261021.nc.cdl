@@ -421,6 +421,18 @@ variables:
 		CCPOLT:units = "g/gC" ;
 		CCPOLT:valid_min = 0. ;
 		CCPOLT:comment = "Used in prescribed phenology mode. Default 0.1 preserves the former SP canopy osmotic concentration; full plant mode derives the total from C, N and P." ;
+	double RTNSC(npfts) ;
+		RTNSC:_FillValue = -9999. ;
+		RTNSC:long_name = "Prescribed root nonstructural C+N+P concentration per unit active root carbon" ;
+		RTNSC:units = "g/gC" ;
+		RTNSC:valid_min = 0. ;
+		RTNSC:comment = "Used when ldo_sp_mode is true, uniformly across root layers. Default 0.1 replaces the former SP root constants (0.1 in fallback, 0.4 otherwise); full plant mode derives the total from C, N and P." ;
+	double LFPRTC(npfts) ;
+		LFPRTC:_FillValue = -9999. ;
+		LFPRTC:long_name = "Prescribed leaf protein carbon per unit leaf area" ;
+		LFPRTC:units = "gC protein m-2 leaf" ;
+		LFPRTC:valid_min = 0. ;
+		LFPRTC:comment = "Used when ldo_sp_mode is true to supply the existing enzyme and chlorophyll traits with leaf biochemistry for StomatalDynamics. Provisional uniform default of 1.0; calibrate by PFT. This is protein carbon, not protein dry mass or leaf nitrogen." ;
 	float CANHT(npfts) ;
 		CANHT:long_name = "live canopy height" ;
 		CANHT:units = "m" ;
@@ -1742,6 +1754,24 @@ data:
     5, 5, 6, 5, 4, 4, 5, 4, 6, 5, 4, 4, 2, 2, 1, 10, 6, 10, 6, 2, 9, 10, 10, 
     2, 10, 1, 4, 6, 4, 1, 8, 6, 6, 5, 5, 5, 6, 5, 6, 4, 4, 2, 10, 2, 5, 10, 
     2, 10, 10, 10, 9, 4, 9, 6, 6, 6, 6, 6, 6, 5, 10, 10 ;
+
+ RTNSC =
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1,
+    0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 ;
+
+ LFPRTC =
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.,
+    1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1. ;
 
  CANHT = 0.8, 0.8, 2, 0.5, 2, 0.02, 15, 0.8, 3, 1, 0.02, 0.8, 0.8, 2, 0.3, 
     0.02, 20, 0.5, 25, 0.8, 0.3, 20, 20, 0.5, 20, 25, 25, 20, 25, 1, 20, 25, 

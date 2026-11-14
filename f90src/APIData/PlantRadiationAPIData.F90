@@ -1,5 +1,7 @@
 module PlantRadiationAPIData
+  ! Description:
   ! Owns the radiation API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -94,11 +96,36 @@ contains
   end subroutine plt_rad_init
 
   subroutine plt_rad_destroy(this)
-! DESCRIPTION
-! deallocate memory for plant_radiation_type
-  implicit none
-  class(plant_radiation_type) :: this
+  ! Description:
+  ! Release every array owned by this PlantRadiationAPIData workspace.
+  class(plant_radiation_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_rad_destroy'
 
-
+  call PrintInfo('beg '//subname)
+  if(associated(this%iScatteringDiffus))deallocate(this%iScatteringDiffus);nullify(this%iScatteringDiffus)
+  if(associated(this%RadSWLeafAlbedo_pft))deallocate(this%RadSWLeafAlbedo_pft);nullify(this%RadSWLeafAlbedo_pft)
+  if(associated(this%RadPARLeafAlbedo_pft))deallocate(this%RadPARLeafAlbedo_pft);nullify(this%RadPARLeafAlbedo_pft)
+  if(associated(this%TAU_DirectSunLit))deallocate(this%TAU_DirectSunLit);nullify(this%TAU_DirectSunLit)
+  if(associated(this%TAU_DirectSunSha))deallocate(this%TAU_DirectSunSha);nullify(this%TAU_DirectSunSha)
+  if(associated(this%LWRadCanopy_pft))deallocate(this%LWRadCanopy_pft);nullify(this%LWRadCanopy_pft)
+  if(associated(this%RadSWCanopyAbsorption_pft))deallocate(this%RadSWCanopyAbsorption_pft);nullify(this%RadSWCanopyAbsorption_pft)
+  if(associated(this%RadSWCanopyLAbsroption_pft))deallocate(this%RadSWCanopyLAbsroption_pft);nullify(this%RadSWCanopyLAbsroption_pft)
+  if(associated(this%RadPARCanopyLAbsorption_pft))deallocate(this%RadPARCanopyLAbsorption_pft);nullify(this%RadPARCanopyLAbsorption_pft)
+  if(associated(this%OMEGX))deallocate(this%OMEGX);nullify(this%OMEGX)
+  if(associated(this%OMEGA2Ground))deallocate(this%OMEGA2Ground);nullify(this%OMEGA2Ground)
+  if(associated(this%OMEGA2Leaf))deallocate(this%OMEGA2Leaf);nullify(this%OMEGA2Leaf)
+  if(associated(this%SineLeafAngle))deallocate(this%SineLeafAngle);nullify(this%SineLeafAngle)
+  if(associated(this%CosineLeafAngle))deallocate(this%CosineLeafAngle);nullify(this%CosineLeafAngle)
+  if(associated(this%RadNet2Canopy_pft))deallocate(this%RadNet2Canopy_pft);nullify(this%RadNet2Canopy_pft)
+  if(associated(this%LeafSWabsorptivity_pft))deallocate(this%LeafSWabsorptivity_pft);nullify(this%LeafSWabsorptivity_pft)
+  if(associated(this%LeafPARabsorptivity_pft))deallocate(this%LeafPARabsorptivity_pft);nullify(this%LeafPARabsorptivity_pft)
+  if(associated(this%RadSWLeafTransmitance_pft))deallocate(this%RadSWLeafTransmitance_pft);nullify(this%RadSWLeafTransmitance_pft)
+  if(associated(this%RadPARLeafTransmitance_pft))deallocate(this%RadPARLeafTransmitance_pft);nullify(this%RadPARLeafTransmitance_pft)
+  if(associated(this%RadPARCanopyAbsorption_pft))deallocate(this%RadPARCanopyAbsorption_pft);nullify(this%RadPARCanopyAbsorption_pft)
+  if(associated(this%FracPARads2Canopy_pft))deallocate(this%FracPARads2Canopy_pft);nullify(this%FracPARads2Canopy_pft)
+  if(associated(this%FracPARads2LiveCanopy_pft))deallocate(this%FracPARads2LiveCanopy_pft);nullify(this%FracPARads2LiveCanopy_pft)
+  if(associated(this%RadTotPARAbsorption_zsec))deallocate(this%RadTotPARAbsorption_zsec);nullify(this%RadTotPARAbsorption_zsec)
+  if(associated(this%RadDifPARAbsorption_zsec))deallocate(this%RadDifPARAbsorption_zsec);nullify(this%RadDifPARAbsorption_zsec)
+  call PrintInfo('end '//subname)
   end subroutine plt_rad_destroy
 end module PlantRadiationAPIData
