@@ -9,9 +9,6 @@ module ExtractsMod
   use PlantBalMod,   only: SumPlantRootGas
   use EcoSIMCtrlMod, only: lverb, ldo_sp_mode
   use DebugToolMod,  only: PrintInfo
-  use EcosimConst
-  use PlantBGCPars
-  use PlantAPICommonData
   use PlantSiteAPIData, only : plt_site
   use PlantRadiationAPIData, only : plt_rad
   use PlantMorphologyAPIData, only : plt_morph
@@ -20,6 +17,9 @@ module ExtractsMod
   use PlantEnergyWaterAPIData, only : plt_ew
   use PlantBGCRatesAPIData, only : plt_bgcr
   use PlantRootBGCAPIData, only : plt_rbgc
+  use EcosimConst
+  use PlantBGCPars
+  use PlantAPICommonData
   implicit none
 
   private
@@ -27,10 +27,11 @@ module ExtractsMod
   __FILE__
 
   public :: extracts
+  public :: ExtractRootWaterHeat,ExtractCanopyEnergyWater,ExtractCanopyInventory
   contains
   ![header]
 !----------------------------------------------------------------------------------------------------
-  SUBROUTINE extracts(YEARIJ,LiveExchange_pft,PassiveExchange_pft)
+  SUBROUTINE extracts(YEARIJ,LiveExchange_pft,PassiveExchange_pft,HydraulicsApplied)
   ! Description:
   ! Aggregate accepted hourly exchanges even when management removed their living population.
   implicit none
@@ -38,30 +39,40 @@ module ExtractsMod
   TYPE(yearIJ_type), intent(in) :: yearIJ
   logical, intent(in) :: PassiveExchange_pft(JP1) ! accepted passive exchange, recorded before management [-]
   logical, intent(in) :: LiveExchange_pft(JP1) ! PFT live exchanges accepted before management [-]
+  logical, optional, intent(in) :: HydraulicsApplied ! water/energy fluxes already aggregated before soil transport [-]
   integer  :: I, J
   character(len=*), parameter :: subname='extracts'
   integer :: NZ,L
+  logical :: IncludeHydraulics
 
   I=yearIJ%I;J=yearIJ%J
   call PrintInfo('beg '//subname)
+  IncludeHydraulics=.true.
+  if(present(HydraulicsApplied))IncludeHydraulics=.not.HydraulicsApplied
+  if(.not.IncludeHydraulics)then
+    ! Rebuild post-growth inventories, retaining the early hourly energy change.
+    plt_ew%CanopyBiomWater_col=0._r8
+    plt_ew%WatHeldOnCanopy_col=0._r8
+    plt_ew%SnowOnCanopy_col=0._r8
+    plt_ew%CanopyHeatStor_col=0._r8
+  endif
 
   call ExtractLitterfall()
 
   call SumPlantRootGas(I,J)
 
   DO NZ=1,plt_site%NP
-
     IF(LiveExchange_pft(NZ))THEN
-      call ExtractRootWaterHeat(NZ)
+      if(IncludeHydraulics)call ExtractRootWaterHeat(NZ)
       if(.not.ldo_sp_mode)then
         call CalcTotalLeafArea(NZ)
 
         call TotalGasandSoluteUptake(I,J,NZ)
       endif
-      call ExtractCanopyFluxes(I,J,NZ)
+      call ExtractCanopyFluxes(I,J,NZ,IncludeHydraulics)
     elseif(PassiveExchange_pft(NZ))then
       ! Thermal/wet-surface exchange does not require living roots or population.
-      call ExtractCanopyEnergyWater(NZ)
+      if(IncludeHydraulics)call ExtractCanopyEnergyWater(NZ)
     ENDIF
   ENDDO
 
@@ -89,7 +100,7 @@ module ExtractsMod
     LitrfallElms_pvr          => plt_bgcr%LitrfallElms_pvr           ,& !input  :plant LitrFall element, [g d-2 h-1]
     MaxSoilLays4Root_pft      => plt_morph%MaxSoilLays4Root_pft      ,& !input  :maximum soil layer number for all root axes,[-]
     NP0                       => plt_site%NP0                        ,& !input  :intitial number of plant species,[-]
-    StandDeadCompKElms_pft    => plt_biom%StandDeadCompKElms_pft, & !input: current standing-dead kinetic pools [g/cell]
+    StandDeadCompKElms_pft    => plt_biom%StandDeadCompKElms_pft     ,& !input: current standing-dead kinetic pools [g/cell]
     StandDeadStrutElms_pft    => plt_biom%StandDeadStrutElms_pft     ,& !input  :standing dead element, [g d-2]
     PlantElmBalCum_pft        => plt_site%PlantElmBalCum_pft         ,& !input: cumulative PFT C/N/P balance residual [g]
     PlantElemntStoreLandscape => plt_site%PlantElemntStoreLandscape  ,& !inout: sum of retained-PFT residuals [g]
@@ -183,36 +194,40 @@ module ExtractsMod
 
 !------------------------------------------------------------------------------------------
   subroutine ExtractRootWaterHeat(NZ)
-    ! Description:
-    ! Queue accepted root water and donor enthalpy for the next soil step in
-    ! both prescribed phenology and full plant modes, independently of BGC.
-    integer, intent(in) :: NZ ! PFT whose live exchange was accepted [-]
-    character(len=*), parameter :: subname='ExtractRootWaterHeat'
-    integer :: N,L
-    call PrintInfo('beg '//subname)
-    associate( &
-      Flux => plt_ew%RPlantRootH2OUptk_pvr, & ! input: canopy-to-soil water [m3/cell/hour; root type, layer, PFT]
-      Water => plt_ew%TWaterPlantRoot2Soil_vr, & ! inout: queued water [m3/cell/hour; layer]
-      Heat => plt_ew%THeatLossRoot2Soil_vr, & ! inout: queued donor enthalpy [MJ/cell/hour; layer]
-      CanopyTemperature => plt_ew%TKCanopy_pft, & ! input: accepted canopy temperature [K; PFT]
-      SoilTemperature => plt_ew%TKS_vr, & ! input: soil donor temperature [K; layer]
-      RootTypes => plt_morph%Myco_pft, & ! input: number of root/mycorrhizal types [-; PFT]
-      TopLayer => plt_site%NU, & ! input: current upper soil-layer index [-]
-      RootBottom => plt_site%MaxNumRootLays, & ! input: deepest rooted layer index [-]
-      SoilBottom => plt_site%NK) ! input: deepest available soil-layer index [-]
-      ! Match the full-model aggregation's layer range and addition order.
-      do L=TopLayer,MIN(RootBottom+1,SoilBottom)
-        do N=1,RootTypes(NZ)
-          Water(L)=Water(L)+Flux(N,L,NZ)
-          if(Flux(N,L,NZ)>0._r8)then
-            Heat(L)=Heat(L)+Flux(N,L,NZ)*cpw*CanopyTemperature(NZ)
-          else
-            Heat(L)=Heat(L)+Flux(N,L,NZ)*cpw*SoilTemperature(L)
-          endif
-        enddo
-      enddo
-    end associate
-    call PrintInfo('end '//subname)
+  ! Description:
+  ! Aggregate accepted root water and donor enthalpy independently of BGC.
+  ! Standalone plant modes apply them before current soil transport; external
+  ! soil coupling controls when it consumes the accepted transfers.
+  integer, intent(in) :: NZ ! PFT whose live exchange was accepted [-]
+  character(len=*), parameter :: subname='ExtractRootWaterHeat'
+  integer :: N,L
+
+  call PrintInfo('beg '//subname)
+  associate(                                               &
+    Flux              => plt_ew%RPlantRootH2OUptk_pvr    , & ! input: canopy-to-soil water [m3/cell/hour; root type, layer, PFT]
+    Water             => plt_ew%TWaterPlantRoot2Soil_vr  , & ! inout: queued water [m3/cell/hour; layer]
+    Heat              => plt_ew%THeatLossRoot2Soil_vr    , & ! inout: queued donor enthalpy [MJ/cell/hour; layer]
+    CanopyTemperature => plt_ew%TKCanopy_pft             , & ! input: accepted canopy temperature [K; PFT]
+    SoilTemperature   => plt_ew%TKS_vr                   , & ! input: soil donor temperature [K; layer]
+    RootTypes         => plt_morph%Myco_pft              , & ! input: number of root/mycorrhizal types [-; PFT]
+    TopLayer          => plt_site%NU                     , & ! input: current upper soil-layer index [-]
+    RootBottom        => plt_site%MaxNumRootLays         , & ! input: deepest rooted layer index [-]
+    SoilBottom        => plt_site%NK                       & ! input: deepest available soil-layer index [-]
+  )
+
+  ! Match the full-model aggregation's layer range and addition order.
+  do L=TopLayer,MIN(RootBottom+1,SoilBottom)
+    do N=1,RootTypes(NZ)
+      Water(L)=Water(L)+Flux(N,L,NZ)
+      if(Flux(N,L,NZ)>0._r8)then
+        Heat(L)=Heat(L)+Flux(N,L,NZ)*cpw*CanopyTemperature(NZ)
+      else
+        Heat(L)=Heat(L)+Flux(N,L,NZ)*cpw*SoilTemperature(L)
+      endif
+    enddo
+  enddo
+  end associate
+  call PrintInfo('end '//subname)
   end subroutine ExtractRootWaterHeat
 !------------------------------------------------------------------------------------------
   subroutine TotalGasandSoluteUptake(I,J,NZ)
@@ -343,28 +358,31 @@ module ExtractsMod
   end subroutine TotalGasandSoluteUptake
 
 !----------------------------------------------------------------------------------------------------
-  subroutine ExtractCanopyFluxes(I,J,NZ)
+  subroutine ExtractCanopyFluxes(I,J,NZ,IncludeEnergy)
   ! Description:
   ! Accumulate live-plant carbon/nutrient outputs and the shared canopy heat/water ledger.
   implicit none
   integer, intent(in) :: I,J,NZ
+  logical, intent(in) :: IncludeEnergy ! aggregate physical fluxes only when not already exported [-]
   character(len=*), parameter :: subname='ExtractCanopyFluxes'
   integer :: NE,idg
+
   call PrintInfo('beg '//subname)
-  associate( &
-    CO2NetFix_pft => plt_bgcr%CO2NetFix_pft, &
-    CanopyLeafArea_pft => plt_morph%CanopyLeafArea_pft, &
-    CanopyStemSurfArea_pft => plt_morph%CanopyStemSurfArea_pft, &
-    NH3Dep2Can_pft => plt_bgcr%NH3Dep2Can_pft, &
+  associate(                                                       &
+    CO2NetFix_pft            => plt_bgcr%CO2NetFix_pft,            &
+    CanopyLeafArea_pft       => plt_morph%CanopyLeafArea_pft,      &
+    CanopyStemSurfArea_pft   => plt_morph%CanopyStemSurfArea_pft,  &
+    NH3Dep2Can_pft           => plt_bgcr%NH3Dep2Can_pft,           &
     PlantRootSoilElmNetX_pft => plt_rbgc%PlantRootSoilElmNetX_pft, &
-    RootGasLossDisturb_pft => plt_bgcr%RootGasLossDisturb_pft, &
-    CanopyLeafArea_col => plt_morph%CanopyLeafArea_col, &
-    Canopy_NEE_col => plt_bgcr%Canopy_NEE_col, &
-    LitrFallStrutElms_col => plt_bgcr%LitrFallStrutElms_col, &
-    NH3Emis_CumYr_pft => plt_bgcr%NH3Emis_CumYr_pft, &
-    StemArea_col => plt_morph%StemArea_col, &
-    TRootGasLossDisturb_col => plt_rbgc%TRootGasLossDisturb_col)
-    call ExtractCanopyEnergyWater(NZ)
+    RootGasLossDisturb_pft   => plt_bgcr%RootGasLossDisturb_pft,   &
+    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col,      &
+    Canopy_NEE_col           => plt_bgcr%Canopy_NEE_col,           &
+    LitrFallStrutElms_col    => plt_bgcr%LitrFallStrutElms_col,    &
+    NH3Emis_CumYr_pft        => plt_bgcr%NH3Emis_CumYr_pft,        &
+    StemArea_col             => plt_morph%StemArea_col,            &
+    TRootGasLossDisturb_col  => plt_rbgc%TRootGasLossDisturb_col   &
+    )
+    if(IncludeEnergy)call ExtractCanopyEnergyWater(NZ)
     if(.not.ldo_sp_mode)then
       Canopy_NEE_col=Canopy_NEE_col+CO2NetFix_pft(NZ)
       CanopyLeafArea_col=CanopyLeafArea_col+CanopyLeafArea_pft(NZ)
@@ -380,7 +398,7 @@ module ExtractsMod
   end associate
   call PrintInfo('end '//subname)
   end subroutine ExtractCanopyFluxes
-  ![tail]
+
   !------------------------------------------------------------------------------------------
   subroutine ExtractCanopyEnergyWater(NZ)
     ! Description:
@@ -420,48 +438,51 @@ module ExtractsMod
 
 !------------------------------------------------------------------------------------------
   subroutine ExtractCanopyInventory(NZ)
-    ! Description:
-    ! Retain water, snow and sensible energy in every named slot, including PFTs
-    ! removed after exchange. No old exchange rates are accumulated here.
-    integer, intent(in) :: NZ ! retained PFT slot [-]
-    character(len=*), parameter :: subname='ExtractCanopyInventory'
-    real(r8) :: Energy,WetCapacity
-    call PrintInfo('beg '//subname)
-    associate( &
-      Population => plt_site%PlantPopuLive_pft, &
-      Dead => plt_biom%StandDeadStrutElms_pft, &
-      HeatRemoved => plt_ew%CanopyHeatLoss2Dist_col, &
-      Tissue => plt_ew%CanopyBiomWater_pft, &
-      Water => plt_ew%WatHeldOnCanopy_pft, &
-      Snow => plt_ew%SnowOnCanopy_pft, &
-      TissueTotal => plt_ew%CanopyBiomWater_col, &
-      WaterTotal => plt_ew%WatHeldOnCanopy_col, &
-      SnowTotal => plt_ew%SnowOnCanopy_col, &
-      Capacity => plt_ew%VHeatCapCanopy_pft, &
-      Temperature => plt_ew%TKC_pft, &
-      EnergyTotal => plt_ew%CanopyHeatStor_col, &
-      EnergyChange => plt_ew%HeatFlx2Canopy_col, &
-      PreviousEnergy => plt_ew%ENGYX_pft)
-      ! Standing dead can be removed after CutPlant rebuilt capacity. Export only
-      ! the residual dry heat; retained liquid and snow keep their own capacity.
-      if(Population(NZ)<=0._r8.and.Dead(ielmc,NZ)<=0._r8)then
-        WetCapacity=cpw*(Tissue(NZ)+Water(NZ))+cps*Snow(NZ)
-        if(Capacity(NZ)>WetCapacity)then
-          HeatRemoved=HeatRemoved+(Capacity(NZ)-WetCapacity)*Temperature(NZ)
-          Capacity(NZ)=WetCapacity
-        endif
-      endif
-      TissueTotal=TissueTotal+Tissue(NZ)
-      WaterTotal=WaterTotal+Water(NZ)
-      SnowTotal=SnowTotal+Snow(NZ)
-      ! Unused cold-start slots can have a missing temperature and zero capacity.
-      Energy=0._r8
-      if(Capacity(NZ)>0._r8)Energy=Capacity(NZ)*Temperature(NZ)
-      EnergyTotal=EnergyTotal+Energy
-      EnergyChange=EnergyChange+Energy-PreviousEnergy(NZ)
-      PreviousEnergy(NZ)=Energy
-    end associate
-    call PrintInfo('end '//subname)
-  end subroutine ExtractCanopyInventory
+  ! Description:
+  ! Retain water, snow and sensible energy in every named slot, including PFTs
+  ! removed after exchange. No old exchange rates are accumulated here.
+  integer, intent(in) :: NZ ! retained PFT slot [-]
+  character(len=*), parameter :: subname='ExtractCanopyInventory'
+  real(r8) :: Energy,WetCapacity
+  call PrintInfo('beg '//subname)
+  associate( &
+    Population     => plt_site%PlantPopuLive_pft,      &
+    Dead           => plt_biom%StandDeadStrutElms_pft, &
+    HeatRemoved    => plt_ew%CanopyHeatLoss2Dist_col,  &
+    Tissue         => plt_ew%CanopyBiomWater_pft,      &
+    Water          => plt_ew%WatHeldOnCanopy_pft,      &
+    Snow           => plt_ew%SnowOnCanopy_pft,         &
+    TissueTotal    => plt_ew%CanopyBiomWater_col,      &
+    WaterTotal     => plt_ew%WatHeldOnCanopy_col,      &
+    SnowTotal      => plt_ew%SnowOnCanopy_col,         &
+    Capacity       => plt_ew%VHeatCapCanopy_pft,       &
+    Temperature    => plt_ew%TKC_pft,                  &
+    EnergyTotal    => plt_ew%CanopyHeatStor_col,       &
+    EnergyChange   => plt_ew%HeatFlx2Canopy_col,       &
+    PreviousEnergy => plt_ew%ENGYX_pft                 &
+  )
+  ! Standing dead can be removed after CutPlant rebuilt capacity. Export only
+  ! the residual dry heat; retained liquid and snow keep their own capacity.
+  if(Population(NZ)<=0._r8.and.Dead(ielmc,NZ)<=0._r8)then
+    WetCapacity=cpw*(Tissue(NZ)+Water(NZ))+cps*Snow(NZ)
+    if(Capacity(NZ)>WetCapacity)then
+      HeatRemoved  = HeatRemoved+(Capacity(NZ)-WetCapacity)*Temperature(NZ)
+      Capacity(NZ) = WetCapacity
+    endif
+  endif
 
+  TissueTotal = TissueTotal+Tissue(NZ)
+  WaterTotal  = WaterTotal+Water(NZ)
+  SnowTotal   = SnowTotal+Snow(NZ)
+  ! Unused cold-start slots can have a missing temperature and zero capacity.
+  Energy=0._r8
+  if(Capacity(NZ)>0._r8)Energy=Capacity(NZ)*Temperature(NZ)
+
+  EnergyTotal        = EnergyTotal+Energy
+  EnergyChange       = EnergyChange+Energy-PreviousEnergy(NZ)
+  PreviousEnergy(NZ) = Energy
+  end associate
+  call PrintInfo('end '//subname)
+  end subroutine ExtractCanopyInventory
+![tail]
 end module ExtractsMod

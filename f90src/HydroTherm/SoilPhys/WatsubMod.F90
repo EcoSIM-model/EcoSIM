@@ -1,20 +1,20 @@
 module WatsubMod
 !!
 ! Description:
-! Do water and enerby balance calculation.
-! The module diagnoses the mass and energy fluxes associated
-! with soil/snow water (vapor, liquid and ice) and energy, and update
-! them in redistmod.F90
+! Stage surface/soil state, invoke the supplied hourly plant hydraulic solve,
+! and advance snow, litter and soil water/energy exchange through soil substeps.
 
   use SoilFaceMappingMod, only: SoilFaceSlot,SoilFaceIncomingRange, &
     RebuildSoilFaceMap,DestroySoilFaceMap
-  use data_kind_mod,     only: r8 => DAT_KIND_R8
+  use data_kind_mod,     only: r8 => DAT_KIND_R8,yearIJ_type
   use data_const_mod,    only: GravAcceleration=>DAT_CONST_G
-  use abortutils,        only: endrun,                      print_info
+  use abortutils,        only: endrun, print_info, iulog
   use ElmIDMod,          only: iWestEastDirection,          iNorthSouthDirection, iVerticalDirection
   use SurfPhysData,      only: InitSurfPhysData,            DestructSurfPhysData
   use EcosysWarmingMod,  only: check_warming_dates,         is_warming_layerL,    apply_soil_cable_warming
-  use PlantDataRateType, only: TWaterPlantRoot2SoilPrev_vr, THeatPlantRoot2SoilPrev_vr
+  use PlantDataRateType, only: TWaterPlantRoot2SoilPrev_vr,THeatPlantRoot2SoilPrev_vr, &
+    TWaterPlantRoot2Soil_vr,THeatLossRoot2Soil_vr
+  use SoilHydroParaMod, only: GetSoilHydraulicVars
   use MiniFuncMod,       only: gOC_to_m3_OM  
   use DebugToolMod
   use EcoSIMCtrlMod  
@@ -62,6 +62,16 @@ module WatsubMod
   integer :: curday,curhour
   logical :: do_warming
 
+  abstract interface
+    subroutine PlantHydraulicStep(yearIJ,NHW,NHE,NVN,NVS)
+      ! Description:
+      ! Supply accepted hourly root/canopy exchange after soil staging.
+      import :: yearIJ_type
+      type(yearIJ_type), intent(in) :: yearIJ ! model year, day of year and hour [-]
+      integer, intent(in) :: NHW,NHE,NVN,NVS ! active west/east/north/south column bounds [-]
+    end subroutine PlantHydraulicStep
+  end interface
+
   public :: watsub,InitWatsub
   public :: DestroyWatsub
   public :: ExitSoilHydroUpdate
@@ -84,21 +94,22 @@ module WatsubMod
   end subroutine DestroyWatsub
 !------------------------------------------------------------------------------------------
 
-  SUBROUTINE watsub(I,J,NHW,NHE,NVN,NVS)
+  SUBROUTINE watsub(yearIJ,NHW,NHE,NVN,NVS,AdvancePlantHydraulics)
 ! Description:
-!     THIS SUBROUTINE CACULATES ENERGY BALANCES OF SNOW, RESIDUE
-!     AND SOIL SURFACES, FREEZING, THAWING, AND HEAT AND WATER
-!     TRANSFER THROUGH SOIL PROFILES
+! Stage surface/soil state, solve enabled plant hydraulics once, then calculate
+! snow, litter and soil water/energy exchange, freezing/thawing and soil transport.
 !
   implicit none
-  integer, intent(in) :: I, J
-  integer, intent(in) :: NHW,NHE,NVN,NVS
+  type(yearIJ_type), intent(in) :: yearIJ ! model year, day of year and hour [-]
+  integer, intent(in) :: NHW,NHE,NVN,NVS ! active west/east/north/south column bounds [-]
+  procedure(PlantHydraulicStep) :: AdvancePlantHydraulics ! hourly plant exchange routine, called after staging
 
   character(len=*), parameter :: subname='watsub'
+  integer :: I,J ! current model day of year and hour [-]
   integer :: K0,K1
   integer :: KL,L,L2,LL,M,MM,M1,M2,M3,M4,M5,M6,NX,NY
   integer :: N,N1,N2,N3,N4,N5,N6,NN,N4B,N5B,NUX
-  real(r8):: ResistVapThroughLitr(JY,JX),HeatFluxAir2Soi(JY,JX)
+  real(r8):: HeatFluxAir2Soi(JY,JX)
   REAL(R8):: RainEkReducedKsat(JY,JX)
 
   REAL(R8) :: TopLayWatVol_col(JY,JX)
@@ -108,23 +119,24 @@ module WatsubMod
   real(r8) :: dHGrnddTKsoi1(JY,JX)    !step-integrated radiation+sensible heat derivative [MJ/K]
   real(r8) :: twatmass0(JY,JX),twatmasstM(JY,JX)
   integer  :: NUX0(JY,JX)
+  real(r8) :: RootWaterAppliedM_col(JY,JX) ! signed root source this substep [m3/cell]
+  real(r8) :: RootWaterApplied_col(JY,JX)  ! signed root source applied so far this hour [m3/cell]
+  real(r8) :: ResistVapThroughLitr(JY,JX) ! staged litter pore vapor resistance [h/m], row/column
 !  real(r8) :: dtime
 ! begin_execution
 
   call PrintInfo('beg '//subname)
-  if(fixWaterLevel)HeatAdv_scal=0._r8
+  I=yearIJ%I
+  J=yearIJ%J
+  call StageSoilWaterEnergy(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
 
-  do_warming=check_warming_dates(iYearCurrent,I,J)
-
-  if(do_warming)then
-    call apply_soil_cable_warming(I,J,NHW,NHE,NVN,NVS)  
+  if(plant_model .and. .not.ldo_radiation_test .and. .not.ATS_cpl_mode)then
+    call AdvancePlantHydraulics(yearIJ,NHW,NHE,NVN,NVS)
   endif
 
-  ! Shared surface staging retires snow before copying native working states.
-  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
-  !
   call BeginMassCheck(NHW,NHE,NVN,NVS,twatmass0)
   twatmasstM=twatmass0
+  RootWaterApplied_col=0._r8
   ! Hour1 reset infiltration. Staging's snow transfer is already in the copied
   ! soil, but remains part of the cumulative hourly infiltration ledger.
   twatmass0(NVN:NVS,NHW:NHE)=twatmass0(NVN:NVS,NHW:NHE)-Qinflx2Soil_col(NVN:NVS,NHW:NHE)
@@ -153,7 +165,8 @@ module WatsubMod
 
     if(snowRedist_model)call AccumulateSnowRedisFluxM(I,J,M,NHW,NHE,NVN,NVS)
 
-    call UpdateSoilMoistTempM(I,J,M,NHW,NHE,NVN,NVS,dHGrnddTKsoi1)
+    call UpdateSoilMoistTempM(I,J,M,NHW,NHE,NVN,NVS,dHGrnddTKsoi1,RootWaterAppliedM_col)
+    RootWaterApplied_col=RootWaterApplied_col+RootWaterAppliedM_col
 
     call AggregateSurfRunoffFluxM(I,J,M,NHW,NHE,NVN,NVS)
 
@@ -165,7 +178,8 @@ module WatsubMod
       call UpdateFluxAtExit(I,J,NHW,NHE,NVN,NVS)
     ENDIF
 
-    call ExitMassBalanceM(I,J,M,NHW,NHE,NVN,NVS,twatmass0,NUX0,twatmasstM)
+    call ExitMassBalanceM(I,J,M,NHW,NHE,NVN,NVS,twatmass0,NUX0,twatmasstM, &
+      RootWaterAppliedM_col,RootWaterApplied_col)
 
   ENDDO D3320
 
@@ -173,6 +187,38 @@ module WatsubMod
 
   call PrintInfo('end '//subname)
   END subroutine watsub
+!------------------------------------------------------------------------------------------
+  subroutine StageSoilWaterEnergy(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
+
+  ! Description:
+  ! Stage snow/litter/soil once before watsub advances plant hydraulics.
+  ! Refresh soil hydraulic properties before the current-hour plant solve.
+  integer, intent(in) :: I,J ! current day of year and hour [-]
+  integer, intent(in) :: NHW,NHE,NVN,NVS ! active column bounds [-]
+  real(r8), intent(out) :: ResistVapThroughLitr(JY,JX) ! litter pore vapor resistance [h/m], row/column
+  character(len=*), parameter :: subname='StageSoilWaterEnergy'
+  integer :: NX,NY
+
+  call PrintInfo('beg '//subname)
+  if(fixWaterLevel)HeatAdv_scal=0._r8
+
+  do_warming=check_warming_dates(iYearCurrent,I,J)
+  if(do_warming)call apply_soil_cable_warming(I,J,NHW,NHE,NVN,NVS)
+
+  call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistVapThroughLitr)
+
+  if(plant_model.and..not.ldo_radiation_test.and..not.ATS_cpl_mode)then
+    do NX=NHW,NHE
+      do NY=NVN,NVS
+        call GetSoilHydraulicVars(I,J,NY,NX)
+      enddo
+    enddo
+    ! Rebuild hydraulic limits and the initial staged transport state after
+    ! refreshing properties. Root transfers are applied only in soil substeps.
+    call LocalCopySoilVars(I,J,NHW,NHE,NVN,NVS)
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine StageSoilWaterEnergy
 !------------------------------------------------------------------------------------------
 
   subroutine ExitSoilHydroUpdate(NHW,NHE,NVN,NVS)
@@ -240,14 +286,19 @@ module WatsubMod
 
 !------------------------------------------------------------------------------------------  
 
-  subroutine ExitMassBalanceM(I,J,M,NHW,NHE,NVN,NVS,twatmass0,NUX0,twatmasstM)
+  subroutine ExitMassBalanceM(I,J,M,NHW,NHE,NVN,NVS,twatmass0,NUX0,twatmasstM, &
+    RootWaterAppliedM_col,RootWaterApplied_col)
+  ! Description:
+  ! Check substep and cumulative soil water inventories, including applied root sources.
 
   implicit none
   integer, intent(in)    :: I,J,M
   integer, intent(in)    :: NHW,NHE,NVN,NVS
   real(r8),intent(in)    :: twatmass0(JY,JX)
   integer, intent(in)    :: NUX0(JY,JX)
-  real(r8),intent(inout) :: twatmasstM(JY,JX)  
+  real(r8),intent(inout) :: twatmasstM(JY,JX)
+  real(r8),intent(in) :: RootWaterAppliedM_col(JY,JX) ! signed root source this substep [m3/cell]
+  real(r8),intent(in) :: RootWaterApplied_col(JY,JX) ! signed root source so far this hour [m3/cell]
 
   real(r8)  :: twatmass1(JY,JX)
   character(len=*), parameter :: subname='ExitMassBalanceM'
@@ -272,11 +323,13 @@ module WatsubMod
         dwat=twatmass0(NY,NX)-twatmass1(NY,NX)
       else
         dwat=twatmass0(NY,NX)-twatmass1(NY,NX)+Qinflx2Soil_col(NY,NX)+QLaterFlow2Cell_col(NY,NX)-QDischarg2WTBL_col(NY,NX) &
-          + TWaterPlantRoot2SoilX_col(NY,NX)-QDrain_col(NY,NX)
+          -QDrain_col(NY,NX)
       endif
 
+      dwat=dwat+RootWaterApplied_col(NY,NX)
+
       dwat1=twatmasstM(NY,NX)-twatmass1(NY,NX)+Qinflx2SoilM_col(NY,NX)+QLaterFlow2CellM_col(NY,NX)-QDischarM_col(NY,NX) &
-          + TWaterPlantRoot2SoilXM_col(NY,NX)-QDrainM_col(NY,NX)
+          -QDrainM_col(NY,NX)+RootWaterAppliedM_col(NY,NX)
 
       if(abs(dwat1)>1.e-4_r8)then
         write(994,*)('-',L=1,100)
@@ -286,14 +339,13 @@ module WatsubMod
         write(994,*)'laterflow=',QLaterFlow2CellM_col(NY,NX)
         write(994,*)'discharg2=',QDischarM_col(NY,NX)
         write(994,*)'qdrain.  =',QDrainM_col(NY,NX)
-        write(994,*)'root2soi =',TWaterPlantRoot2SoilXM_col(NY,NX)              
+        write(iulog,*)subname,': substep root source=',RootWaterAppliedM_col(NY,NX)
 
         write(996,*)'dwat.    =',dwat1,twatmasstM(NY,NX)-twatmass1(NY,NX)
         write(996,*)'infl.    =',Qinflx2SoilM_col(NY,NX)
         write(996,*)'laterflow=',QLaterFlow2CellM_col(NY,NX)
         write(996,*)'disx2wtbl=',QDischarM_col(NY,NX)
         write(996,*)'qdrain.  =',QDrainM_col(NY,NX)
-        write(996,*)'root2soi =',TWaterPlantRoot2SoilXM_col(NY,NX)              
 
         write(995,*)('-',L=1,100)
         write(995,*)I*1000+J/24.,NY,NX,NUM_col(NY,NX),NU_col(NY,NX)
@@ -310,7 +362,7 @@ module WatsubMod
         write(993,*)'laterflow=',QLaterFlow2Cell_col(NY,NX)
         write(993,*)'disx2wtbl=',QDischarg2WTBL_col(NY,NX)
         write(993,*)'qdrain.  =',QDrain_col(NY,NX)
-        write(993,*)'root2soi =',TWaterPlantRoot2SoilX_col(NY,NX)      
+        write(iulog,*)subname,': cumulative root source=',RootWaterApplied_col(NY,NX)
  
         if(abs(dwat)>1.e-4_r8)call endrun('soil H2O error test failure in '//trim(mod_filename)//' at line',__LINE__)
       endif
@@ -398,7 +450,6 @@ module WatsubMod
     DO NY=NVN,NVS
       !initialize for mass tracer
       twatmass0(NY,NX)                 = 0._r8
-      TWaterPlantRoot2SoilX_col(NY,NX) = 0._r8
       DO L=NUM_col(NY,NX),NL_col(NY,NX)
         twatmass0(NY,NX) = twatmass0(NY,NX)+VLWatMicP1_vr(L,NY,NX)+VLWatMacP1_vr(L,NY,NX)+(VLiceMicP1_vr(L,NY,NX)+VLiceMacP1_vr(L,NY,NX))*DENSICE
       ENDDO
@@ -408,10 +459,9 @@ module WatsubMod
   end subroutine BeginMassCheck
 !------------------------------------------------------------------------------------------  
 
-
-!------------------------------------------------------------------------------------------
-
   subroutine InitSoilHydrauics(NHW,NHE,NVN,NVS)
+  ! Description:
+  ! Prepare soil face conductances after root exchange has been applied.
 
   implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -430,9 +480,6 @@ module WatsubMod
   DO  NX=NHW,NHE
     DO  NY=NVN,NVS
       D35: DO L=NUM_col(NY,NX),NL_col(NY,NX)
-        dWaterPlantRoot2SoilPrev_vr(L,NY,NX)=TWaterPlantRoot2SoilPrev_vr(L,NY,NX)*dts_HeatWatTP
-        dHeatPlantRoot2SoilPrev_vr(L,NY,NX) =THeatPlantRoot2SoilPrev_vr(L,NY,NX)*dts_HeatWatTP
-        THeatPlantRoot2SoilPrev_vr(L,NY,NX)=0._r8
         if(VLSoilPoreMicP_vr(L,NY,NX).LE.ZEROS2(NY,NX))cycle D35
         D40: DO N=FlowDirIndicator_col(NY,NX),3
           N1=NX;N2=NY;N3=L
@@ -1145,41 +1192,64 @@ module WatsubMod
   end subroutine VertBoundaryDrainM
 
 !------------------------------------------------------------------------------------------
-  subroutine UpdateSoilMoistTempM(I,J,M,NHW,NHE,NVN,NVS,dHGrnddTKsoi1)
+  subroutine UpdateSoilMoistTempM(I,J,M,NHW,NHE,NVN,NVS,dHGrnddTKsoi1,RootWaterAppliedM_col)
+  ! Description:
+  ! Update soil water and energy together, distributing the accepted hourly
+  ! root volume and donor enthalpy through the same soil substeps. ATS consumes
+  ! the unchanged hourly exchange arrays through its own soil solver.
   implicit none
   integer, intent(in) :: I,J,M
   integer, intent(in) :: NHW,NHE,NVN,NVS
   ! Step-integrated net surface-heat derivative [MJ/K], at the old topsoil
   ! temperature. Its accepted correction is recorded after the implicit solve.
   real(r8), intent(in):: dHGrnddTKsoi1(JY,JX)
+  real(r8), intent(out) :: RootWaterAppliedM_col(JY,JX) ! signed applied root volume this substep [m3/cell]
   character(len=*), parameter :: subname='UpdateSoilMoistTempM'
   integer :: NY,NX,L
   real(r8) :: tk1pres,tk1l,NetSurfaceHeatCorrection
   real(r8) :: ENGY1,VLTSoiPore,VHXX
   real(r8) :: TKXX,VLWMicPre,VLHeatCapacityPre,dHeat
   integer :: it   !current model step in the simulation year
-  real(r8) :: dwat,dwat1,rootC,dflow_mic,dflow_mac,pscal,VLWatMicP1t_vr
+  real(r8) :: dwat,dwat1,rootC,dflow_mic,dflow_mac
+  real(r8) :: RootFraction,RootWaterM,RootHeatM ! hour fraction [-], signed water [m3/cell] and heat [MJ/cell]
   real(r8),parameter :: tau=100._r8
   it=(I-1)*24+J
 
 ! begin_execution
   call PrintInfo('beg '//subname)
+  RootWaterAppliedM_col=0._r8
+  RootFraction=0._r8
+  if(plant_model.and..not.ldo_radiation_test.and..not.ATS_cpl_mode)then
+    ! Normalize to the full hour: dts_HeatWatTP is 0.99999/NPH for transport,
+    ! whereas all accepted root water and its matching donor heat must be applied.
+    RootFraction=real(M,r8)/real(NPH,r8)-real(M-1,r8)/real(NPH,r8)
+  endif
   D11: DO NX=NHW,NHE
     D12: DO NY=NVN,NVS
-      TWaterPlantRoot2SoilXM_col(NY,NX) = 0._r8
       dwat=0._r8;dwat1=0._r8;dflow_mic=0._r8;dflow_mac=0._r8
       D13: DO L = NUM_col(NY,NX), NL_col(NY,NX)
 
         IF(VGeomLayer_vr(L,NY,NX).GT.ZEROS2(NY,NX))THEN
 
+          RootWaterM = RootFraction*TWaterPlantRoot2Soil_vr(L,NY,NX)
+          RootHeatM  = RootFraction*THeatLossRoot2Soil_vr(L,NY,NX)
           VLWMicPre              = VLWatMicP1_vr(L,NY,NX)
           dwat1=dwat1+VLWatMicP1_vr(L,NY,NX)+VLWatMacP1_vr(L,NY,NX)+(VLiceMicP1_vr(L,NY,NX)+VLiceMacP1_vr(L,NY,NX))*DENSICE
 
           VLWatMicP1_vr(L,NY,NX) = VLWatMicP1_vr(L,NY,NX)+WatNetFlow2MicP_3DM_vr(L,NY,NX)+FWatExMacP2MicPiM_vr(L,NY,NX) &
-            +TMLiceThawedMicP_vr(L,NY,NX)+FWatIrrigate2MicP1_vr(L,NY,NX)
+            +TMLiceThawedMicP_vr(L,NY,NX)+FWatIrrigate2MicP1_vr(L,NY,NX)+RootWaterM
 
           VLWatMicPX1_vr(L,NY,NX) = VLWatMicPX1_vr(L,NY,NX)+WatNetFlow2MicptX_3DM_vr(L,NY,NX)+FWatExMacP2MicPiM_vr(L,NY,NX) &
-             +TMLiceThawedMicP_vr(L,NY,NX)+FWatIrrigate2MicP1_vr(L,NY,NX)
+             +TMLiceThawedMicP_vr(L,NY,NX)+FWatIrrigate2MicP1_vr(L,NY,NX)+RootWaterM
+
+          if(RootWaterM/=0._r8.and.VLWatMicP1_vr(L,NY,NX)<0._r8)then
+            write(iulog,*)subname,': unavailable root transfer I,J,M,NY,NX,L=',I,J,M,NY,NX,L
+            write(iulog,*)'water before, root source, water after=',VLWMicPre,RootWaterM,VLWatMicP1_vr(L,NY,NX)
+            call endrun('root substep transfer exceeds available soil water',__LINE__)
+          endif
+          RootWaterAppliedM_col(NY,NX)=RootWaterAppliedM_col(NY,NX)+RootWaterM
+          TWaterPlantRoot2SoilPrev_vr(L,NY,NX)=TWaterPlantRoot2SoilPrev_vr(L,NY,NX)+RootWaterM
+          THeatPlantRoot2SoilPrev_vr(L,NY,NX)=THeatPlantRoot2SoilPrev_vr(L,NY,NX)+RootHeatM
 
           VLiceMicP1_vr(L,NY,NX)  = VLiceMicP1_vr(L,NY,NX)-TMLiceThawedMicP_vr(L,NY,NX)/DENSICE
           
@@ -1239,51 +1309,24 @@ module WatsubMod
           VLHeatCapacityB_vr(L,NY,NX) = cpw*VLWatMacP1_vr(L,NY,NX)+cpi*VLiceMacP1_vr(L,NY,NX)
           VHeatCapacity1_vr(L,NY,NX)  = VLHeatCapacityA_vr(L,NY,NX)+VLHeatCapacityB_vr(L,NY,NX)
 
+          if(RootHeatM/=0._r8.and.VHeatCapacity1_vr(L,NY,NX)<=ZEROS2(NY,NX))then
+            write(iulog,*)subname,': root heat without soil capacity I,J,M,NY,NX,L=',I,J,M,NY,NX,L
+            call endrun('root substep heat requires positive soil heat capacity',__LINE__)
+          endif
+
          IF(VHeatCapacity1_vr(L,NY,NX).GT.ZEROS2(NY,NX))THEN
 
-            VLWatMicP1t_vr  = VLWatMicP1_vr(L,NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)
-
-            if(VLWatMicP1t_vr<0._r8 .and. VLWatMicP1_vr(L,NY,NX)>0._r8)then
-              pscal=-VLWatMicP1_vr(L,NY,NX)/dWaterPlantRoot2SoilPrev_vr(L,NY,NX)
-              TWaterPlantRoot2SoilPrev_vr(L,NY,NX) = TWaterPlantRoot2SoilPrev_vr(L,NY,NX)-(1._r8-pscal)*dWaterPlantRoot2SoilPrev_vr(L,NY,NX)
-              VLWatMicP1_vr(L,NY,NX)               = VLWatMicP1_vr(L,NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
+            ! Root exchange changes heat capacity through water volume; add its
+            ! matching donor enthalpy in the same solve as all other heat sources.
+            VLWatMicPX1_vr(L,NY,NX)=min(VLWatMicP1_vr(L,NY,NX),VLWatMicPX1_vr(L,NY,NX))
+            if(RootWaterM/=0._r8)VLWatMicPX1_vr(L,NY,NX)=max(0._r8,VLWatMicPX1_vr(L,NY,NX))
+            if(L.EQ.NUM_col(NY,NX))then
+              TKSoil1_vr(L,NY,NX) = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
+                +RootHeatM+TLPhaseChangeHeat2Soi1_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX)*TKSoil1_vr(L,NY,NX)) &
+                /(VHeatCapacity1_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX))
             else
-              pscal=1._r8
-              VLWatMicP1_vr(L,NY,NX)=VLWatMicP1t_vr
-            endif
-
-            VLWatMicPX1_vr(L,NY,NX) = VLWatMicPX1_vr(L,NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
-            VLWatMicPX1_vr(L,NY,NX) = AMIN1(VLWatMicP1_vr(L,NY,NX),VLWatMicPX1_vr(L,NY,NX))
-
-            TWaterPlantRoot2SoilXM_col(NY,NX) = TWaterPlantRoot2SoilXM_col(NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
-            TWaterPlantRoot2SoilX_col(NY,NX) = TWaterPlantRoot2SoilX_col(NY,NX)+dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
-
-            if(dWaterPlantRoot2SoilPrev_vr(L,NY,NX)>0._r8)then
-              ! The previous-hour transfer is applied here. Tally its accepted
-              ! donor enthalpy in both directions for the delayed-transfer ledger.
-              THeatPlantRoot2SoilPrev_vr(L,NY,NX)=THeatPlantRoot2SoilPrev_vr(L,NY,NX) &
-                +dHeatPlantRoot2SoilPrev_vr(L,NY,NX)
-              VHeatCapacity1_vr(L,NY,NX) = VHeatCapacity1_vr(L,NY,NX)+cpw*dWaterPlantRoot2SoilPrev_vr(L,NY,NX)
-              if(L.EQ.NUM_col(NY,NX))then
-                TKSoil1_vr(L,NY,NX)  = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
-                  +TLPhaseChangeHeat2Soi1_vr(L,NY,NX)+dHeatPlantRoot2SoilPrev_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX)*TKSoil1_vr(L,NY,NX)) &
-                  /(VHeatCapacity1_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX))                 
-              else
-                TKSoil1_vr(L,NY,NX)        = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
-                  +TLPhaseChangeHeat2Soi1_vr(L,NY,NX)+dHeatPlantRoot2SoilPrev_vr(L,NY,NX))/VHeatCapacity1_vr(L,NY,NX)   
-              endif
-            else
-              if(L.EQ.NUM_col(NY,NX))then
-                TKSoil1_vr(L,NY,NX)  = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
-                  +TLPhaseChangeHeat2Soi1_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX)*TKSoil1_vr(L,NY,NX)) &
-                  /(VHeatCapacity1_vr(L,NY,NX)-dHGrnddTKsoi1(NY,NX))                              
-              else
-                TKSoil1_vr(L,NY,NX)  = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
-                  +TLPhaseChangeHeat2Soi1_vr(L,NY,NX))/VHeatCapacity1_vr(L,NY,NX)                              
-              endif  
-              VHeatCapacity1_vr(L,NY,NX)          = VHeatCapacity1_vr(L,NY,NX)+cpw*dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
-              THeatPlantRoot2SoilPrev_vr(L,NY,NX) = THeatPlantRoot2SoilPrev_vr(L,NY,NX)+ &
-                cpw*TKSoil1_vr(L,NY,NX)*dWaterPlantRoot2SoilPrev_vr(L,NY,NX)*pscal
+              TKSoil1_vr(L,NY,NX) = (ENGY1+THeatFlow2Soil_3DM_vr(L,NY,NX)+HeatIrrigation1_vr(L,NY,NX)&
+                +RootHeatM+TLPhaseChangeHeat2Soi1_vr(L,NY,NX))/VHeatCapacity1_vr(L,NY,NX)
             endif
 
             ! The stabilizing derivative represents real accepted boundary heat.

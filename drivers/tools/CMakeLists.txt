@@ -160,6 +160,31 @@ target_include_directories(CanopySnowRadiationTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Mesh/)
 add_ecosim_executable(CanopyAccountingTest.x CanopyAccountingTest.F90)
 add_test(NAME canopy_exchange_accounting COMMAND CanopyAccountingTest.x)
+add_ecosim_executable(RootUptakeSplitTest.x RootUptakeSplitTest.F90)
+add_test(NAME root_water_chemical_separation COMMAND RootUptakeSplitTest.x)
+add_ecosim_executable(PlantPhaseWorkTest.x PlantPhaseWorkTest.F90)
+add_test(NAME plant_hydraulic_bgc_handoff COMMAND PlantPhaseWorkTest.x)
+target_include_directories(PlantPhaseWorkTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/APIData/
+  ${CMAKE_BINARY_DIR}/f90src/APIs/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/
+  ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Modelpars/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/)
+target_include_directories(RootUptakeSplitTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/APIData/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/
+  ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Modelpars/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/)
 target_include_directories(CanopyAccountingTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/APIData/

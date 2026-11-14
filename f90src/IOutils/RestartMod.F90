@@ -11,7 +11,8 @@ module RestartMod
   use EcoSIMConfig      , only : case_name,hostname,version,source,username
   use EcoSiMParDataMod  , only : micpar,pltpar
   use TracerIDMod       , only : trc_confs
-  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,use_ecosys_drainage,DefaultSoilHydraulicScheme
+  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,ldo_radiation_test,ATS_cpl_mode, &
+    use_ecosys_drainage,DefaultSoilHydraulicScheme
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicSchemeName,GetSoilHydraulicSchemeRevision
   use ecosim_log_mod   , only : errMsg => shr_log_errMsg
   use abortutils        , only : endrun,destroy,iulog
@@ -5625,10 +5626,10 @@ implicit none
     write(iulog,*) 'Restart lacks root biomass aggregate; exact continuation is not guaranteed'
   endif
   complete=.true.
-  ! HOUR1 stages the completed-hour heat flux for hydrology before resetting it.
-  ! The matching water flux TWaterPlantRoot2Soil_vr is already saved above.
+  ! Retain accepted hourly root heat alongside the saved water diagnostics.
+  ! Native soil substeps have already applied both; HOUR1 resets their ledgers.
   call restart_soil_profile_cache(ncid,flag,'THeatLossRoot2Soil_vr',THeatLossRoot2Soil_vr, &
-    'previous-hour root heat uptake','MJ h-1',complete)
+    'accepted hourly root donor enthalpy','MJ h-1',complete)
   call restart_soil_profile_cache(ncid,flag,'RCH4EcoDmnd_vr',RCH4EcoDmnd_vr, &
     'completed-hour ecosystem methane demand','gC h-1',complete)
   if(flag=='read' .and. .not.complete) &

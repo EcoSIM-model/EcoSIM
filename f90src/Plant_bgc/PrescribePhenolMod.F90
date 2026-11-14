@@ -157,22 +157,22 @@ implicit none
   character(len=*), parameter :: subname='SetCanopyProfile'
 
   call PrintInfo('beg '//subname)
-  associate(                                                        &
-    CanopyStemSurfAreaZ_pft  => plt_morph%CanopyStemSurfAreaZ_pft  ,& !input  :plant canopy layer stem area, [m2 d-2]
-    CanopyLeafAreaZ_pft      => plt_morph%CanopyLeafAreaZ_pft      ,& !inoput :total leaf area, [m2 d-2]
-    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col       ,& !input  :total prescribed leaf area, [m2]
-    StemArea_col             => plt_morph%StemArea_col             ,& !input  :total prescribed stem area, [m2]
-    LeafStalkAreaAct_pft     => plt_morph%LeafStalkAreaAct_pft     ,& !inoput :plant leaf+stem/stalk area, [m2 d-2]
-    LeafStalkAreaAll_col     => plt_morph%LeafStalkAreaAll_col     ,& !inoput :stalk area of combined, each PFT canopy,[m^2 d-2]
-    CanopyHeightLive_pft      => plt_morph%CanopyHeightLive_pft      ,& !input  :live PFT canopy height, [m]
-    DeadHeight               => plt_morph%CanopyHeightDead_pft, & !input: prescribed dead height [m]
-    DeadProfile              => plt_morph%CanopySurfAreaProfDead_pft, & !input: dead area by layer [m2/cell]
-    DeadAreaAct              => plt_morph%StandDeadSurfAreaAct_pft, & !output: exposed dead area [m2/cell]
+  associate(                                                         &
+    CanopyStemSurfAreaZ_pft  => plt_morph%CanopyStemSurfAreaZ_pft   ,& !input  :plant canopy layer stem area, [m2 d-2]
+    CanopyLeafAreaZ_pft      => plt_morph%CanopyLeafAreaZ_pft       ,& !inoput :total leaf area, [m2 d-2]
+    CanopyLeafArea_col       => plt_morph%CanopyLeafArea_col        ,& !input  :total prescribed leaf area, [m2]
+    StemArea_col             => plt_morph%StemArea_col              ,& !input  :total prescribed stem area, [m2]
+    LeafStalkAreaAct_pft     => plt_morph%LeafStalkAreaAct_pft      ,& !inoput :plant leaf+stem/stalk area, [m2 d-2]
+    LeafStalkAreaAll_col     => plt_morph%LeafStalkAreaAll_col      ,& !inoput :stalk area of combined, each PFT canopy,[m^2 d-2]
+    CanopyHeightLive_pft     => plt_morph%CanopyHeightLive_pft      ,& !input  :live PFT canopy height, [m]
+    DeadHeight               => plt_morph%CanopyHeightDead_pft      ,& !input: prescribed dead height [m]
+    DeadProfile              => plt_morph%CanopySurfAreaProfDead_pft,& !input: dead area by layer [m2/cell]
+    DeadAreaAct              => plt_morph%StandDeadSurfAreaAct_pft  ,& !output: exposed dead area [m2/cell]
     SnowDepth                => plt_ew%SnowDepth                    ,& !input  :snow depth at hourly canopy preparation, [m]
-    ZERO                     => plt_site%ZERO                      ,& !input  :height comparison tolerance, [m]
-    LeafAngleClass_pft       => plt_morph%LeafAngleClass_pft       ,& !input  :fractionction of leaves in different angle classes, [-]
-    LeafAreaZsec_brch        => plt_morph%LeafAreaZsec_brch        ,& !input  :leaf surface area, [m2 d-2]
-    NP                       => plt_site%NP                         & !input  :current number of plant species,[-]
+    ZERO                     => plt_site%ZERO                       ,& !input  :height comparison tolerance, [m]
+    LeafAngleClass_pft       => plt_morph%LeafAngleClass_pft        ,& !input  :fractionction of leaves in different angle classes, [-]
+    LeafAreaZsec_brch        => plt_morph%LeafAreaZsec_brch         ,& !input  :leaf surface area, [m2 d-2]
+    NP                       => plt_site%NP                          & !input  :current number of plant species,[-]
   )
 
 
@@ -334,7 +334,7 @@ implicit none
         CanopyStemSurfAreaZ_pft(1:NumCanopyLayers,NZ,NY,NX)=tsai_day_pft(NZ,NY,NX)/real(NumCanopyLayers,kind=r8)
 
         !per-PFT leaf and stem areas, and the canopy carbon they imply. The carbon
-        !sets the plant water storage capacity in ROOTUPTAKES (CanopyMassC4H2OStorage)
+        !sets the plant water storage capacity in RootWaterUptake (CanopyMassC4H2OStorage)
         !  leaf + sheath C = leaf area / specific leaf area SLA1 [m2 gC-1]
         !  sapwood C = stem area x sapwood thickness (2.5 mm, as assumed in
         !             UptakesMod) / specific stalk volume [m3 gC-1]

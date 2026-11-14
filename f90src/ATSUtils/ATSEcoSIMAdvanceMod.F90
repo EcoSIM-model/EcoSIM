@@ -36,6 +36,7 @@ module ATSEcoSIMAdvanceMod
   use ATSUtilsMod
   use EcoSIMHistMod
   use PlantTraitsTransferMod
+  use PlantHydraulicMod, only: PlantHydraulicModel
   !use PlantAPIData
   use EcoSIMConfig,       only: iFlagRaiseZ0GbyVeg
   use ElmIDMod,           only: itrue
@@ -540,7 +541,7 @@ implicit none
 
   !Does energy and water exchange in the plant roots and canopy
   ! Specifically runs the CanopyEnergyH2Oiter_func
-  if(ldo_sp_mode) call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
+  if(ldo_sp_mode)call PlantHydraulicModel(yearIJ,NHW,NHE,NVN,NVS)
 
   !Add surface heat/vapor exchange to canopy air stores (RedistMod:232-233).
   !redist() is not called in ATS mode; without this the canopy air temperature
