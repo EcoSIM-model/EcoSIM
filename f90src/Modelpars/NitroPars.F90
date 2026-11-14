@@ -198,7 +198,7 @@ module NitroPars
     OQKAM         = 1.2E+01_r8
     CCKM          = 0.15_r8
     CCK4          = 1.2E-03_r8
-    ZHKM          = 1.4_r8
+    ZHKM          = 0.014_r8
     ZNKM          = 1.4_r8
     Z3KM          = 1.4_r8
     Z2KM          = 1.4_r8

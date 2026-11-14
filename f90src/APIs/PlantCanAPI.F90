@@ -1,6 +1,6 @@
 module PlantCanAPI
-
-! interface to integrate the plant model
+  ! Description:
+  ! Map column/PFT inputs and canopy radiation outputs across the plant API.
   use data_kind_mod,              only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod,           only: micpar, pltpar
   use SoilPhysDataType,           only: SurfAlbedo_col
@@ -53,6 +53,9 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantAPICanMSend(NY,NX)
+  ! Description:
+  ! Refresh geometry, retained canopy stores, optical traits and snow class for
+  ! the current column before radiation derives its current snow optics.
   implicit none
   integer, intent(in) :: NY,NX
 
@@ -63,6 +66,7 @@ implicit none
   plt_site%NU                     =NU_col(NY,NX)
   plt_morph%StemArea_col         = StemArea_col(NY,NX)
   plt_morph%CanopyLeafArea_col   = CanopyLeafArea_col(NY,NX)
+  if(ldo_sp_mode)plt_morph%StandDeadSurfArea_col=SUM(StandDeadSurfArea_pft(1:NP_col(NY,NX),NY,NX))
   plt_site%ZEROS                 = ZEROS(NY,NX)
   plt_site%ZERO                  = ZERO
   plt_ew%SnowDepth               = SnowDepth_col(NY,NX)
@@ -141,9 +145,11 @@ implicit none
     plt_ew%fSnowCanopy_pft(NZ)              = fSnowCanopy_pft(NZ,NY,NX)
     plt_ew%BulkFactor4Snow_pft(NZ)          = BulkFactor4Snow_pft(NZ,NY,NX)
     plt_pheno%iPlant2ndGrothPattern_pft(NZ) = iPlant2ndGrothPattern_pft(NZ,NY,NX)
+    plt_pheno%iPlantSnowIntercepType_pft(NZ) = iPlantSnowIntercepType_pft(NZ,NY,NX)
     plt_morph%CanopyLeafArea_pft(NZ)        = CanopyLeafArea_pft(NZ,NY,NX)
     plt_morph%CanopyHeightDead_pft(NZ)      = CanopyHeightDead_pft(NZ,NY,NX)
     plt_morph%CanopyHeightLive_pft(NZ)      = CanopyHeightLive_pft(NZ,NY,NX)
+    plt_morph%StandDeadSurfArea_pft(NZ)     = StandDeadSurfArea_pft(NZ,NY,NX)
     plt_morph%ClumpFactorNow_pft(NZ)        = ClumpFactorNow_pft(NZ,NY,NX)
     plt_rad%LeafSWabsorptivity_pft(NZ)      = LeafSWabsorptivity_pft(NZ,NY,NX)
     plt_rad%LeafPARabsorptivity_pft(NZ)     = LeafPARabsorptivity_pft(NZ,NY,NX)
@@ -154,6 +160,7 @@ implicit none
     plt_morph%NumOfBranches_pft(NZ)         = NumOfBranches_pft(NZ,NY,NX)
     plt_morph%ClumpFactor_pft(NZ)           = ClumpFactor_pft(NZ,NY,NX)
 
+    if(ldo_sp_mode)plt_morph%CanopySurfAreaProfDead_pft(:,NZ)=0._r8
     DO  L=1,NumCanopyLayers
       plt_morph%CanopyStemSurfAreaZ_pft(L,NZ) = CanopyStemSurfAreaZ_pft(L,NZ,NY,NX)
       plt_morph%CanopyLeafAreaZ_pft(L,NZ) = CanopyLeafAreaZ_pft(L,NZ,NY,NX)
@@ -205,12 +212,15 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   subroutine PlantAPICanMRecv(NY,NX)
-
+  ! Description:
+  ! Publish canopy radiation, geometry and the hourly exposure diagnostic to
+  ! the column fields used by surface physics.
   implicit none
   integer, intent(in) :: NY,NX
 
   integer :: N,M,NN,L,NZ,K,NB
 
+  canopy_exposed_col(NY,NX)       = plt_ew%canopy_exposed_col
   ZeroPlaneDisplacem_col(NY,NX)  = plt_ew%ZeroPlaneDisplacem_col
   RoughnessLength_col(NY,NX)         = plt_ew%RoughnessLength
   RawIsoTAtm2CanopySinkZ_col(NY,NX) = plt_ew%RawIsoTAtm2CanopySinkZ_col
@@ -244,6 +254,7 @@ implicit none
       RadSWCanopyLAbsroption_pft(L,NZ,NY,NX)=plt_rad%RadSWCanopyLAbsroption_pft(L,NZ)      
     ENDDO
     StandDeadSurfArea_pft(NZ,NY,NX)      = plt_morph%StandDeadSurfArea_pft(NZ)
+    StandDeadSurfAreaAct_pft(NZ,NY,NX)   = plt_morph%StandDeadSurfAreaAct_pft(NZ)
     LeafStalkAreaAct_pft(NZ,NY,NX)       = plt_morph%LeafStalkAreaAct_pft(NZ)
     RadSWCanopyAbsorption_pft(NZ,NY,NX)  = plt_rad%RadSWCanopyAbsorption_pft(NZ)
     RadPARCanopyAbsorption_pft(NZ,NY,NX) = plt_rad%RadPARCanopyAbsorption_pft(NZ)

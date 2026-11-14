@@ -1,5 +1,6 @@
 module PlantDataRateType
-
+  ! Description:
+  ! Store plant exchange rates, accumulated diagnostics and restart transfer state.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
   use ElmIDMod
@@ -8,6 +9,7 @@ module PlantDataRateType
   implicit none
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
+
 
   real(r8),target,allocatable :: CanopyGrosRCO2_pft(:,:,:)                       !canopy autotrophic respiraiton, [gC d-2 h-1]
   real(r8),target,allocatable ::  Eco_NEE_col(:,:)                               !total canopy net CO2 exchange, [g d-2 h-1]
@@ -88,10 +90,12 @@ module PlantDataRateType
   real(r8),target,allocatable ::  RootUptk_Nmin_cumYr_pft(:,:,:)                 !pft cumulative mineral N uptake, [gN d-2]
   real(r8),target,allocatable ::  RootUptk_Pmin_cumYr_pft(:,:,:)                 !pft cumulative mineral P uptake, [gP d-2]
   real(r8),target,allocatable ::  TPlantRootH2OUptake_col(:,:)                   !total root H2O uptake, [m3 d-2 h-1]
-  real(r8),target,allocatable ::  TWaterPlantRoot2Soil_vr(:,:,:)                 !current step vertical root water uptake profile, [m3 H2O d-2 h-1]
-  real(r8),target,allocatable ::  TWaterPlantRoot2SoilPrev_vr(:,:,:)             !previous step vertical root water uptake profile, [m3 H2O d-2 h-1]
-  real(r8),target,allocatable ::  THeatPlantRoot2SoilPrev_vr(:,:,:)              !previous step vertical root heat uptake profile, [MJ d-2 h-1]
-  real(r8),target,allocatable ::  THeatLossRoot2Soil_vr(:,:,:)                      !vertically profile of root heat uptake, [MJ d-2]
+  ! Accepted hourly exchanges, signed positive from plant to soil. ATS reads
+  ! these unchanged; the native soil solver apportions them over its substeps.
+  real(r8),target,allocatable ::  TWaterPlantRoot2Soil_vr(:,:,:)                 !accepted root water profile [m3/cell/h]
+  real(r8),target,allocatable ::  TWaterPlantRoot2SoilPrev_vr(:,:,:)             !root water actually applied to soil this hour [m3/cell/h]
+  real(r8),target,allocatable ::  THeatPlantRoot2SoilPrev_vr(:,:,:)              !matching applied root donor enthalpy [MJ/cell/h]
+  real(r8),target,allocatable ::  THeatLossRoot2Soil_vr(:,:,:)                   !matching accepted donor enthalpy profile [MJ/cell/h]
   real(r8),target,allocatable ::  THeatRootRelease_col(:,:)                      !total root heat relase, [MJ d-2 h-1]
   real(r8),target,allocatable ::  trcg_air2root_flx_vr(:,:,:,:)                  !total internal root gas flux , [g d-2 h-1]
   real(r8),target,allocatable ::  trcg_root_vr(:,:,:,:)                          !total root internal gas flux, [g d-2 h-1]

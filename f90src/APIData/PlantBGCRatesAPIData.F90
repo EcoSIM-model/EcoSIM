@@ -1,5 +1,7 @@
 module PlantBGCRatesAPIData
+  ! Description:
   ! Owns the bgcrates API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -163,10 +165,79 @@ contains
   end subroutine plt_bgcrate_init
 
   subroutine plt_bgcrate_destroy(this)
+  ! Description:
+  ! Release every array owned by this PlantBGCRatesAPIData workspace.
+  class(plant_bgcrate_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_bgcrate_destroy'
 
-  implicit none
-  class(plant_bgcrate_type) :: this
-
-
+  call PrintInfo('beg '//subname)
+  if(associated(this%PTSHTR_pft))deallocate(this%PTSHTR_pft);nullify(this%PTSHTR_pft)
+  if(associated(this%RootShootExch_pvr))deallocate(this%RootShootExch_pvr);nullify(this%RootShootExch_pvr)
+  if(associated(this%Nutruptk_fClim_rpvr))deallocate(this%Nutruptk_fClim_rpvr);nullify(this%Nutruptk_fClim_rpvr)
+  if(associated(this%Nutruptk_fNlim_rpvr))deallocate(this%Nutruptk_fNlim_rpvr);nullify(this%Nutruptk_fNlim_rpvr)
+  if(associated(this%Nutruptk_fPlim_rpvr))deallocate(this%Nutruptk_fPlim_rpvr);nullify(this%Nutruptk_fPlim_rpvr)
+  if(associated(this%Nutruptk_fProtC_rpvr))deallocate(this%Nutruptk_fProtC_rpvr);nullify(this%Nutruptk_fProtC_rpvr)
+  if(associated(this%LitrFallStrutElms_col))deallocate(this%LitrFallStrutElms_col);nullify(this%LitrFallStrutElms_col)
+  if(associated(this%NetPrimProduct_pft))deallocate(this%NetPrimProduct_pft);nullify(this%NetPrimProduct_pft)
+  if(associated(this%NH3Dep2Can_pft))deallocate(this%NH3Dep2Can_pft);nullify(this%NH3Dep2Can_pft)
+  if(associated(this%tRootMycoExud2Soil_vr))deallocate(this%tRootMycoExud2Soil_vr);nullify(this%tRootMycoExud2Soil_vr)
+  if(associated(this%RCO2Nodule_pvr))deallocate(this%RCO2Nodule_pvr);nullify(this%RCO2Nodule_pvr)
+  if(associated(this%RNFixCO2_pft))deallocate(this%RNFixCO2_pft);nullify(this%RNFixCO2_pft)
+  if(associated(this%RootN2Fix_pvr))deallocate(this%RootN2Fix_pvr);nullify(this%RootN2Fix_pvr)
+  if(associated(this%RootO2_TotSink_pvr))deallocate(this%RootO2_TotSink_pvr);nullify(this%RootO2_TotSink_pvr)
+  if(associated(this%RootO2_TotSink_vr))deallocate(this%RootO2_TotSink_vr);nullify(this%RootO2_TotSink_vr)
+  if(associated(this%RCanMaintDef_CO2_pft))deallocate(this%RCanMaintDef_CO2_pft);nullify(this%RCanMaintDef_CO2_pft)
+  if(associated(this%CanopyRespC_CumYr_pft))deallocate(this%CanopyRespC_CumYr_pft);nullify(this%CanopyRespC_CumYr_pft)
+  if(associated(this%CanopyNLimFactor_brch))deallocate(this%CanopyNLimFactor_brch);nullify(this%CanopyNLimFactor_brch)
+  if(associated(this%CanopyPLimFactor_brch))deallocate(this%CanopyPLimFactor_brch);nullify(this%CanopyPLimFactor_brch)
+  if(associated(this%LitrfallElms_pvr))deallocate(this%LitrfallElms_pvr);nullify(this%LitrfallElms_pvr)
+  if(associated(this%SSXferElms_pft))deallocate(this%SSXferElms_pft);nullify(this%SSXferElms_pft)
+  if(associated(this%SSXfer2ShootElms_pft))deallocate(this%SSXfer2ShootElms_pft);nullify(this%SSXfer2ShootElms_pft)
+  if(associated(this%Xfer2RootsC_pft))deallocate(this%Xfer2RootsC_pft);nullify(this%Xfer2RootsC_pft)
+  if(associated(this%LitrFallElms_brch))deallocate(this%LitrFallElms_brch);nullify(this%LitrFallElms_brch)
+  if(associated(this%RootMaintDef_CO2_pvr))deallocate(this%RootMaintDef_CO2_pvr);nullify(this%RootMaintDef_CO2_pvr)
+  if(associated(this%REcoO2DmndResp_vr))deallocate(this%REcoO2DmndResp_vr);nullify(this%REcoO2DmndResp_vr)
+  if(associated(this%REcoNH4DmndBand_vr))deallocate(this%REcoNH4DmndBand_vr);nullify(this%REcoNH4DmndBand_vr)
+  if(associated(this%REcoH1PO4DmndSoil_vr))deallocate(this%REcoH1PO4DmndSoil_vr);nullify(this%REcoH1PO4DmndSoil_vr)
+  if(associated(this%REcoH1PO4DmndBand_vr))deallocate(this%REcoH1PO4DmndBand_vr);nullify(this%REcoH1PO4DmndBand_vr)
+  if(associated(this%REcoNO3DmndSoil_vr))deallocate(this%REcoNO3DmndSoil_vr);nullify(this%REcoNO3DmndSoil_vr)
+  if(associated(this%REcoNH4DmndSoil_vr))deallocate(this%REcoNH4DmndSoil_vr);nullify(this%REcoNH4DmndSoil_vr)
+  if(associated(this%REcoNO3DmndBand_vr))deallocate(this%REcoNO3DmndBand_vr);nullify(this%REcoNO3DmndBand_vr)
+  if(associated(this%REcoH2PO4DmndSoil_vr))deallocate(this%REcoH2PO4DmndSoil_vr);nullify(this%REcoH2PO4DmndSoil_vr)
+  if(associated(this%REcoH2PO4DmndBand_vr))deallocate(this%REcoH2PO4DmndBand_vr);nullify(this%REcoH2PO4DmndBand_vr)
+  if(associated(this%RH2PO4EcoDmndSoilPrev_vr))deallocate(this%RH2PO4EcoDmndSoilPrev_vr);nullify(this%RH2PO4EcoDmndSoilPrev_vr)
+  if(associated(this%RH2PO4EcoDmndBandPrev_vr))deallocate(this%RH2PO4EcoDmndBandPrev_vr);nullify(this%RH2PO4EcoDmndBandPrev_vr)
+  if(associated(this%RH1PO4EcoDmndSoilPrev_vr))deallocate(this%RH1PO4EcoDmndSoilPrev_vr);nullify(this%RH1PO4EcoDmndSoilPrev_vr)
+  if(associated(this%RH1PO4EcoDmndBandPrev_vr))deallocate(this%RH1PO4EcoDmndBandPrev_vr);nullify(this%RH1PO4EcoDmndBandPrev_vr)
+  if(associated(this%RNO3EcoDmndSoilPrev_vr))deallocate(this%RNO3EcoDmndSoilPrev_vr);nullify(this%RNO3EcoDmndSoilPrev_vr)
+  if(associated(this%RNH4EcoDmndSoilPrev_vr))deallocate(this%RNH4EcoDmndSoilPrev_vr);nullify(this%RNH4EcoDmndSoilPrev_vr)
+  if(associated(this%RNH4EcoDmndBandPrev_vr))deallocate(this%RNH4EcoDmndBandPrev_vr);nullify(this%RNH4EcoDmndBandPrev_vr)
+  if(associated(this%RNO3EcoDmndBandPrev_vr))deallocate(this%RNO3EcoDmndBandPrev_vr);nullify(this%RNO3EcoDmndBandPrev_vr)
+  if(associated(this%RGasTranspFlxPrev_vr))deallocate(this%RGasTranspFlxPrev_vr);nullify(this%RGasTranspFlxPrev_vr)
+  if(associated(this%RO2AquaSourcePrev_vr))deallocate(this%RO2AquaSourcePrev_vr);nullify(this%RO2AquaSourcePrev_vr)
+  if(associated(this%RO2EcoDmndPrev_vr))deallocate(this%RO2EcoDmndPrev_vr);nullify(this%RO2EcoDmndPrev_vr)
+  if(associated(this%RootCO2Emis2Root_vr))deallocate(this%RootCO2Emis2Root_vr);nullify(this%RootCO2Emis2Root_vr)
+  if(associated(this%RootCO2Emis2Root_pvr))deallocate(this%RootCO2Emis2Root_pvr);nullify(this%RootCO2Emis2Root_pvr)
+  if(associated(this%RUptkRootO2_vr))deallocate(this%RUptkRootO2_vr);nullify(this%RUptkRootO2_vr)
+  if(associated(this%LitrfalStrutElms_vr))deallocate(this%LitrfalStrutElms_vr);nullify(this%LitrfalStrutElms_vr)
+  if(associated(this%REcoDOMProd_vr))deallocate(this%REcoDOMProd_vr);nullify(this%REcoDOMProd_vr)
+  if(associated(this%CO2NetFix_pft))deallocate(this%CO2NetFix_pft);nullify(this%CO2NetFix_pft)
+  if(associated(this%GrossCO2Fix_pft))deallocate(this%GrossCO2Fix_pft);nullify(this%GrossCO2Fix_pft)
+  if(associated(this%LitrfallElms_pft))deallocate(this%LitrfallElms_pft);nullify(this%LitrfallElms_pft)
+  if(associated(this%LitrfallAbvgElms_pft))deallocate(this%LitrfallAbvgElms_pft);nullify(this%LitrfallAbvgElms_pft)
+  if(associated(this%SurfLitrfallElms_pft))deallocate(this%SurfLitrfallElms_pft);nullify(this%SurfLitrfallElms_pft)
+  if(associated(this%LitrfallBlgrElms_pft))deallocate(this%LitrfallBlgrElms_pft);nullify(this%LitrfallBlgrElms_pft)
+  if(associated(this%RootGasLossDisturb_pft))deallocate(this%RootGasLossDisturb_pft);nullify(this%RootGasLossDisturb_pft)
+  if(associated(this%SurfLitrfalStrutElms_CumYr_pft))deallocate(this%SurfLitrfalStrutElms_CumYr_pft);nullify(this%SurfLitrfalStrutElms_CumYr_pft)
+  if(associated(this%LitrfalStrutElms_CumYr_pft))deallocate(this%LitrfalStrutElms_CumYr_pft);nullify(this%LitrfalStrutElms_CumYr_pft)
+  if(associated(this%GrossResp_pft))deallocate(this%GrossResp_pft);nullify(this%GrossResp_pft)
+  if(associated(this%CanopyGrosRCO2_pft))deallocate(this%CanopyGrosRCO2_pft);nullify(this%CanopyGrosRCO2_pft)
+  if(associated(this%CanopyResp_brch))deallocate(this%CanopyResp_brch);nullify(this%CanopyResp_brch)
+  if(associated(this%RootAutoCO2_pft))deallocate(this%RootAutoCO2_pft);nullify(this%RootAutoCO2_pft)
+  if(associated(this%NodulInfectElms_pft))deallocate(this%NodulInfectElms_pft);nullify(this%NodulInfectElms_pft)
+  if(associated(this%NH3Emis_CumYr_pft))deallocate(this%NH3Emis_CumYr_pft);nullify(this%NH3Emis_CumYr_pft)
+  if(associated(this%PlantN2Fix_CumYr_pft))deallocate(this%PlantN2Fix_CumYr_pft);nullify(this%PlantN2Fix_CumYr_pft)
+  if(associated(this%ShootRootXferElm_pft))deallocate(this%ShootRootXferElm_pft);nullify(this%ShootRootXferElm_pft)
+  call PrintInfo('end '//subname)
   end subroutine plt_bgcrate_destroy
 end module PlantBGCRatesAPIData

@@ -1,6 +1,8 @@
+# PhysData owns this module now; discard an orphan from older configured builds.
+file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/watsubdatamod.mod")
+
 set(SOILPHYS_SOURCES
   SoilHydroParaMod.F90
-  WatsubDataMod.F90
   WatsubMod.F90
 )
 

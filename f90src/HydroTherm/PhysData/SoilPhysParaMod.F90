@@ -150,6 +150,12 @@ implicit none
     SoiBulkDensityt0_vr(L,NY,NX)  = SoiBulkDensityt0_vr(L-1,NY,NX)
     FieldCapacity_vr(L,NY,NX)     = FieldCapacity_vr(L-1,NY,NX)
     WiltPoint_vr(L,NY,NX)         = WiltPoint_vr(L-1,NY,NX)
+    if(allocated(VGThetaR_vr))then
+      VGThetaR_vr(L,NY,NX)=VGThetaR_vr(L-1,NY,NX)
+      VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L-1,NY,NX)
+      VGN_vr(L,NY,NX)=VGN_vr(L-1,NY,NX)
+      VGL_vr(L,NY,NX)=VGL_vr(L-1,NY,NX)
+    endif
     SatHydroCondVert_vr(L,NY,NX)  = SatHydroCondVert_vr(L-1,NY,NX)
     SatHydroCondHrzn_vr(L,NY,NX)  = SatHydroCondHrzn_vr(L-1,NY,NX)
     CSAND_vr(L,NY,NX)             = CSAND_vr(L-1,NY,NX)

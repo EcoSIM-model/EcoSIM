@@ -1,4 +1,5 @@
 module CanopyDataType
+  ! Description:
   ! Own native canopy biomass, geometry, energy-water state and concentrations.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
@@ -114,6 +115,8 @@ module CanopyDataType
   real(r8),target,allocatable ::  QVegET_col(:,:)                            !total canopy evaporation + transpiration, [m3 d-2 h-1]
   real(r8),target,allocatable ::  VapXAir2Canopy_col(:,:)                    !total canopy evaporation, [m3 d-2]
   real(r8),target,allocatable ::  CanopyHeatStor_col(:,:)                    !total canopy heat content, [MJ  d-2]
+  real(r8),target,allocatable :: HeatSensVapAir2Canopy_col(:,:) ! accepted canopy vapor sensible heat [MJ/cell/hour]
+  real(r8),target,allocatable :: HeatPrecAir2Canopy_col(:,:) ! accepted canopy intercepted precipitation heat [MJ/cell/hour]
   real(r8),target,allocatable ::  HeatFlx2Canopy_col(:,:)                    !total canopy heat flux, [MJ  d-2 h-1]
   real(r8),target,allocatable ::  CanopyBiomWater_col(:,:)                         !total canopy water content stored in dry matter, [m3 d-2]
   real(r8),target,allocatable ::  LWRadCanG_col(:,:)                         !total canopy LW emission, [MJ d-2 h-1]
@@ -342,6 +345,8 @@ module CanopyDataType
   allocate(QVegET_col(JY,JX));      QVegET_col=0._r8
   allocate(VapXAir2Canopy_col(JY,JX));      VapXAir2Canopy_col=0._r8
   allocate(CanopyHeatStor_col(JY,JX));      CanopyHeatStor_col=0._r8
+  allocate(HeatSensVapAir2Canopy_col(JY,JX)); HeatSensVapAir2Canopy_col=0._r8
+  allocate(HeatPrecAir2Canopy_col(JY,JX)); HeatPrecAir2Canopy_col=0._r8
   allocate(HeatFlx2Canopy_col(JY,JX));      HeatFlx2Canopy_col=0._r8
   allocate(CanopyBiomWater_col(JY,JX));      CanopyBiomWater_col=0._r8
   allocate(LWRadCanG_col(JY,JX));       LWRadCanG_col=0._r8
@@ -553,6 +558,8 @@ module CanopyDataType
   call destroy(QVegET_col)
   call destroy(VapXAir2Canopy_col)
   call destroy(CanopyHeatStor_col)
+  call destroy(HeatSensVapAir2Canopy_col)
+  call destroy(HeatPrecAir2Canopy_col)
   call destroy(HeatFlx2Canopy_col)
   call destroy(CanopyBiomWater_col)
   call destroy(LWRadCanG_col)

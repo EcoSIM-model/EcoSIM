@@ -11,7 +11,8 @@ module RestartMod
   use EcoSIMConfig      , only : case_name,hostname,version,source,username
   use EcoSiMParDataMod  , only : micpar,pltpar
   use TracerIDMod       , only : trc_confs
-  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,use_ecosys_drainage,DefaultSoilHydraulicScheme
+  use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,ldo_radiation_test,ATS_cpl_mode, &
+    use_ecosys_drainage,DefaultSoilHydraulicScheme
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicSchemeName,GetSoilHydraulicSchemeRevision
   use ecosim_log_mod   , only : errMsg => shr_log_errMsg
   use abortutils        , only : endrun,destroy,iulog
@@ -99,12 +100,8 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   SUBROUTINE restartnc_plant(ncid,flag)  
-!
-!     THIS SUBROUTINE WRITES OUT ALL PLANT VARIABLES TO
-!     CHECKPOINT FILES AT THE FREQUENCY GIVEN IN THE OPTIONS
-!     FILE SO THAT OUTPUTS FROM EARLIER MODEL RUNS CAN BE USED
-!     TO INITIALIZE LATER MODEL RUNS
-!
+  ! Description:
+  ! Read or write plant checkpoint state and rebuild derived plant caches.
   use PlantTraitTableMod, only : RootVesselRadius_tab, AlphaVesselAxialResist_tab
   use PlantBGCPars, only : Rax_ref
   use EcoSimConst, only : BndlResistH2OToHeatRatio
@@ -5208,7 +5205,13 @@ implicit none
     DO NX=NHW,NHE
       DO NY=NVN,NVS
         DO NZ=1,NP0_col(NY,NX)
-          RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+          if(ldo_sp_mode.and..not.ldo_radiation_test)then
+            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=PrescribedRootNonstOMConc_pft(NZ,NY,NX)
+          else
+            ! Radiation-only runs skip plant hydraulics and its RTNSC input.
+            ! Match cold-start concentration using the restored elemental cache.
+            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+          endif
           if(ldo_sp_mode)then
             RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=0._r8
             if(NZ<=NP_col(NY,NX))then
@@ -5502,6 +5505,15 @@ implicit none
   associate(NHW => bounds%NHW, NHE => bounds%NHE, NVN => bounds%NVN, NVS => bounds%NVS)
   call PrintInfo('beg '//subname)
   complete=.true.
+  if(allocated(VGThetaR_vr))then
+    call restart_soil_profile_cache(ncid,flag,'VG_THETA_R',VGThetaR_vr, &
+      'van Genuchten residual liquid content per micropore soil volume','m3 m-3',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_ALPHA',VGAlpha_vr, &
+      'van Genuchten inverse pressure scale','MPa-1',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_N',VGN_vr,'van Genuchten shape exponent','none',complete)
+    call restart_soil_profile_cache(ncid,flag,'VG_L',VGL_vr,'Mualem pore-connectivity exponent','none',complete)
+    if(.not.complete)call endrun('Van Genuchten checkpoint is missing parameter fields')
+  endif
   ! Pending litter-property updates use the previous geometry before HOUR1
   ! rebuilds it. Other columns retain their geometry until a disturbance.
   call restart_soil_profile_cache(ncid,flag,'VGeomLayer_vr',VGeomLayer_vr, &
@@ -5538,6 +5550,12 @@ implicit none
     'solid thermal conductivity denominator','none',complete)
   call restart_soil_profile_cache(ncid,flag,'ThetaSat_vr',ThetaSat_vr, &
     'water content at conductivity threshold','m3 m-3',complete)
+  if(use_ecosys_drainage)then
+    ! This policy derives air-entry pressure from the conductivity table. It
+    ! must travel with ThetaSat/table caches rather than be reset by STARTS.
+    call restart_soil_profile_cache(ncid,flag,'PSISoilAirEntry_vr',PSISoilAirEntry_vr, &
+      'matric pressure at drainage conductivity threshold','MPa',complete)
+  endif
   call restart_soil_profile_cache(ncid,flag,'PathLenMacPore_vr',PathLenMacPore_vr, &
     'distance between macropores','m',complete)
   call restart_soil_profile_cache(ncid,flag,'MacPoreRadius_vr',MacPoreRadius_vr, &
@@ -5609,10 +5627,10 @@ implicit none
     write(iulog,*) 'Restart lacks root biomass aggregate; exact continuation is not guaranteed'
   endif
   complete=.true.
-  ! HOUR1 stages the completed-hour heat flux for hydrology before resetting it.
-  ! The matching water flux TWaterPlantRoot2Soil_vr is already saved above.
+  ! Retain accepted hourly root heat alongside the saved water diagnostics.
+  ! Native soil substeps have already applied both; HOUR1 resets their ledgers.
   call restart_soil_profile_cache(ncid,flag,'THeatLossRoot2Soil_vr',THeatLossRoot2Soil_vr, &
-    'previous-hour root heat uptake','MJ h-1',complete)
+    'accepted hourly root donor enthalpy','MJ h-1',complete)
   call restart_soil_profile_cache(ncid,flag,'RCH4EcoDmnd_vr',RCH4EcoDmnd_vr, &
     'completed-hour ecosystem methane demand','gC h-1',complete)
   if(flag=='read' .and. .not.complete) &

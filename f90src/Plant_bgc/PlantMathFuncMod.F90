@@ -1,7 +1,7 @@
 module PlantMathFuncMod
-!
-!DESCRIPTION
-  ! code for small functions used by plant processes
+  ! Description:
+  ! Provide shared plant process functions, including canopy thermal and radiative geometry.
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use abortutils,    only: endrun, iulog
   use PlantAPICommonData
@@ -12,6 +12,7 @@ module PlantMathFuncMod
   use MiniMathMod
   use MiniFuncMod
   use ElmIDMod
+  use PlantBGCPars, only: CanopySnowCapacityPerArea,CanopySnowAreaCoeff
 implicit none
   character(len=*), parameter, private :: mod_filename=&
   __FILE__
@@ -29,6 +30,119 @@ implicit none
     real(r8) :: SoluteConcMin       
   end type PlantSoluteUptakeConfig_type
 contains
+
+!------------------------------------------------------------------------------------------
+  subroutine CanopySnowOptics(SnowType,PhysicalArea,SnowVolume,SnowFraction,EffectiveArea)
+    ! Description:
+    ! Derive snow cover and radiative area from retained SWE and current exposed
+    ! live/dead area. Buried material retains its snow but has no radiative area.
+    integer, intent(in) :: SnowType ! isnowcept_* interception class [0:4]
+    real(r8), intent(in) :: PhysicalArea ! exposed leaf plus live/dead stem area [m2/cell]
+    real(r8), intent(in) :: SnowVolume ! retained intercepted snow SWE [m3/cell]
+    real(r8), intent(out) :: SnowFraction ! snow-covered fraction of exposed material [-]
+    real(r8), intent(out) :: EffectiveArea ! physical plus snow-added radiative area [m2/cell]
+    character(len=*), parameter :: subname='CanopySnowOptics'
+
+    call PrintInfo('beg '//subname)
+    if(SnowType<LBOUND(CanopySnowAreaCoeff,1).or.SnowType>UBOUND(CanopySnowAreaCoeff,1) &
+      .or.any(.not.ieee_is_finite([PhysicalArea,SnowVolume])).or.MIN(PhysicalArea,SnowVolume)<0._r8)then
+      write(iulog,*)subname,': invalid class, exposed area or snow SWE: ',SnowType,PhysicalArea,SnowVolume
+      call endrun('Invalid canopy snow geometry',__LINE__)
+    endif
+    SnowFraction=0._r8
+    EffectiveArea=0._r8
+    if(PhysicalArea>0._r8)then
+      if(SnowVolume>0._r8)then
+        SnowFraction=1._r8
+        if(SnowVolume<CanopySnowCapacityPerArea(SnowType)*PhysicalArea) &
+          SnowFraction=(SnowVolume/PhysicalArea/CanopySnowCapacityPerArea(SnowType))**0.15_r8
+      endif
+      EffectiveArea=PhysicalArea+CanopySnowAreaCoeff(SnowType)*SnowVolume
+    endif
+    call PrintInfo('end '//subname)
+  end subroutine CanopySnowOptics
+
+!------------------------------------------------------------------------------------------
+  subroutine CanopyRadiationFractions(LiveArea,DeadArea,SnowVolume,SnowType,GroundArea, &
+    CanopyFraction,LiveFraction,GroundFraction)
+    ! Description:
+    ! Partition the column longwave interception using the same PFT snow-added
+    ! areas as shortwave optics. All inputs refer to the current exposed canopy.
+    real(r8), intent(in) :: LiveArea(:),DeadArea(:) ! exposed physical live/dead area [m2/cell, PFT]
+    real(r8), intent(in) :: SnowVolume(:) ! retained canopy snow SWE [m3/cell, PFT]
+    integer, intent(in) :: SnowType(:) ! isnowcept_* interception class [PFT]
+    real(r8), intent(in) :: GroundArea ! column ground area [m2/cell]
+    real(r8), intent(out) :: CanopyFraction(:) ! total interception fraction [PFT]
+    real(r8), intent(out) :: LiveFraction(:) ! live share of total interception [PFT]
+    real(r8), intent(out) :: GroundFraction ! transmitted fraction [-]
+    real(r8) :: EffectiveArea(SIZE(LiveArea)),SnowFraction(SIZE(LiveArea))
+    real(r8) :: TotalArea,MeanSnowFraction,Intercepted,PhysicalArea
+    integer :: NZ
+    character(len=*), parameter :: subname='CanopyRadiationFractions'
+
+    call PrintInfo('beg '//subname)
+    if(.not.ieee_is_finite(GroundArea).or.GroundArea<=0._r8 &
+      .or.SIZE(DeadArea)/=SIZE(LiveArea).or.SIZE(SnowVolume)/=SIZE(LiveArea) &
+      .or.SIZE(SnowType)/=SIZE(LiveArea).or.SIZE(CanopyFraction)/=SIZE(LiveArea) &
+      .or.SIZE(LiveFraction)/=SIZE(LiveArea))then
+      write(iulog,*)subname,': invalid ground area or PFT dimensions: ',GroundArea
+      call endrun('Invalid canopy radiation partition',__LINE__)
+    endif
+    if(any(.not.ieee_is_finite(LiveArea)).or.any(.not.ieee_is_finite(DeadArea)) &
+      .or.any(LiveArea<0._r8).or.any(DeadArea<0._r8))then
+      write(iulog,*)subname,': invalid exposed live or dead areas'
+      call endrun('Invalid physical canopy area',__LINE__)
+    endif
+    CanopyFraction=0._r8
+    LiveFraction=0._r8
+    GroundFraction=1._r8
+    do NZ=1,SIZE(LiveArea)
+      call CanopySnowOptics(SnowType(NZ),LiveArea(NZ)+DeadArea(NZ),SnowVolume(NZ), &
+        SnowFraction(NZ),EffectiveArea(NZ))
+    enddo
+    TotalArea=SUM(EffectiveArea)
+    if(TotalArea>0._r8)then
+      MeanSnowFraction=SUM(SnowFraction*EffectiveArea)/TotalArea
+      Intercepted=1._r8-EXP(-(0.65_r8+0.15_r8*MeanSnowFraction)*TotalArea/GroundArea)
+      CanopyFraction=Intercepted*EffectiveArea/TotalArea
+      GroundFraction=1._r8-Intercepted
+      do NZ=1,SIZE(LiveArea)
+        PhysicalArea=LiveArea(NZ)+DeadArea(NZ)
+        if(PhysicalArea>0._r8)LiveFraction(NZ)=CanopyFraction(NZ)*LiveArea(NZ)/PhysicalArea
+      enddo
+    endif
+    call PrintInfo('end '//subname)
+  end subroutine CanopyRadiationFractions
+
+!------------------------------------------------------------------------------------------
+  function CanopyStemThermalCarbon(Carbon,SurfaceArea,SpecificVolume) result(ActiveCarbon)
+    ! Description:
+    ! Limit live or dead stem C to the same thermally represented outer shell.
+    ! Total material area retains this capacity when snow hides the exchange surface.
+    real(r8), intent(in) :: Carbon ! available sapwood or standing-dead C [gC/cell]
+    real(r8), intent(in) :: SurfaceArea ! total stem surface area, including buried material [m2/cell]
+    real(r8), intent(in) :: SpecificVolume ! stem volume per carbon mass [m3/gC]
+    real(r8) :: ActiveCarbon ! C represented in the canopy thermal store [gC/cell]
+    character(len=*), parameter :: subname='CanopyStemThermalCarbon'
+    real(r8), parameter :: CanopyStemShellDepth=2.5e-3_r8 ! shell thickness [m]
+    call PrintInfo('beg '//subname)
+    if(.not.ieee_is_finite(Carbon))then
+      write(iulog,*)subname,': nonfinite stem carbon: ',Carbon
+      call endrun('Invalid canopy stem carbon',__LINE__)
+    endif
+    ActiveCarbon=0._r8
+    if(Carbon>0._r8)then
+      if(.not.all(ieee_is_finite([Carbon,SurfaceArea,SpecificVolume])) &
+        .or. SurfaceArea<0._r8 .or. SpecificVolume<=0._r8)then
+        write(iulog,*)subname,': invalid stem C, area, specific volume: ',Carbon,SurfaceArea,SpecificVolume
+        call endrun('Invalid canopy stem thermal geometry',__LINE__)
+      endif
+      ActiveCarbon=MIN(Carbon,CanopyStemShellDepth*SurfaceArea/SpecificVolume)
+    endif
+    call PrintInfo('end '//subname)
+  end function CanopyStemThermalCarbon
+
+!------------------------------------------------------------------------------------------
 
   function get_FDM(PSIOrgan,FDMP0)result(FDMP)
   !

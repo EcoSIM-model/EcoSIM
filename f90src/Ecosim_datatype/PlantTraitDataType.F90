@@ -1,4 +1,7 @@
 module PlantTraitDataType
+  ! Description:
+  ! Store plant traits and canopy geometry, including hourly exposed live and
+  ! standing-dead areas used by radiation and atmospheric exchange.
 
 !
 !!
@@ -27,6 +30,7 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  CanopyStemSurfArea_pft(:,:,:)                  !plant stem area, [m2 d-2]
   real(r8),target,allocatable ::  CanopyHeightLive_pft(:,:,:)                !live pft canopy height, [m]
   real(r8),target,allocatable ::  StandDeadSurfArea_pft(:,:,:)               !surface area of standing dead, [m2 d-2]
+  real(r8),target,allocatable :: StandDeadSurfAreaAct_pft(:,:,:) ! hourly snow-exposed dead surface area [PFT,NY,NX], [m2]
   real(r8),target,allocatable ::  CanopyHeightDead_pft(:,:,:)                !standing dead plant canopy height, [m]
   real(r8),target,allocatable ::  StalkHeight_pft(:,:,:)                     !pft stalk height, [m]
   real(r8),target,allocatable ::  StalkAveRadius_pft(:,:,:)               !pft tree ring mean radius, [m]
@@ -140,6 +144,7 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  RateRefLeafAppearance_pft(:,:,:)               !rate of leaf initiation at 25 oC, [h-1]
   real(r8),target,allocatable ::  rLen2WidthLeaf_pft(:,:,:)                  !leaf length:width ratio, [-]
   real(r8),target,allocatable ::  SLA1_pft(:,:,:)                            !leaf area:mass during growth, [m2 g-1]
+  real(r8),target,allocatable :: PrescribedLeafProteinDensity_pft(:,:,:)     !LFPRTC: SP protein C per leaf area [gC protein m-2 leaf]
   real(r8),target,allocatable ::  TC4LeafOut_pft(:,:,:)                      !threshold temperature for spring leafout/dehardening, [oC]
   real(r8),target,allocatable ::  PetolShethLen2Mass_pft(:,:,:)                    !PetolSheth length:mass during growth, [m g-1]
   real(r8),target,allocatable ::  HourReq4LeafOut_brch(:,:,:,:)              !hours above threshold temperature required for spring leafout/dehardening, [h]
@@ -231,6 +236,7 @@ contains
   allocate(CanopyHeightLive_pft(JP,JY,JX));       CanopyHeightLive_pft=0._r8
   allocate(CanopyHeightDead_pft(JP,JY,JX)); CanopyHeightDead_pft=0._r8
   allocate(StandDeadSurfArea_pft(JP,JY,JX)); StandDeadSurfArea_pft=0._r8
+  allocate(StandDeadSurfAreaAct_pft(JP,JY,JX)); StandDeadSurfAreaAct_pft=0._r8
   allocate(StalkHeight_pft(JP,JY,JX)); StalkHeight_pft=0._r8
   allocate(StalkAveRadius_pft(JP,JY,JX)); StalkAveRadius_pft=0._r8
   allocate(CanopyLeafAareZ_col(NumCanopyLayers,JY,JX));    CanopyLeafAareZ_col=0._r8
@@ -344,6 +350,7 @@ contains
   allocate(RateRefLeafAppearance_pft(JP,JY,JX));     RateRefLeafAppearance_pft=0._r8
   allocate(rLen2WidthLeaf_pft(JP,JY,JX));     rLen2WidthLeaf_pft=0._r8
   allocate(SLA1_pft(JP,JY,JX));     SLA1_pft=0._r8
+  allocate(PrescribedLeafProteinDensity_pft(JP,JY,JX));PrescribedLeafProteinDensity_pft=0._r8
   allocate(TC4LeafOut_pft(JP,JY,JX));      TC4LeafOut_pft=0._r8
   allocate(PetolShethLen2Mass_pft(JP,JY,JX));     PetolShethLen2Mass_pft=0._r8
   allocate(HourReq4LeafOut_brch(NumCanopyLayers,JP,JY,JX));  HourReq4LeafOut_brch=0._r8
@@ -435,6 +442,7 @@ contains
   call destroy(enh_cyto_pft)
   call destroy(StalkAxialResist_pft)
   call destroy(StandDeadSurfArea_pft)
+  call destroy(StandDeadSurfAreaAct_pft)
   call destroy(CanopyHeightLive_pft)
   call destroy(StalkHeight_pft)
   call destroy(CanopyLeafAareZ_col)
@@ -546,6 +554,7 @@ contains
   call destroy(RateRefLeafAppearance_pft)
   call destroy(rLen2WidthLeaf_pft)
   call destroy(SLA1_pft)
+  call destroy(PrescribedLeafProteinDensity_pft)
   call destroy(TC4LeafOut_pft)
   call destroy(PetolShethLen2Mass_pft)
   call destroy(HourReq4LeafOut_brch)

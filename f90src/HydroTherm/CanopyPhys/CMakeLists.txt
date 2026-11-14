@@ -5,6 +5,7 @@ include(add_ecosim_library)
 add_ecosim_library(CanopyPhys ${CANOPYPHYS_SOURCES})
 
 target_include_directories(CanopyPhys  PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/Minimath/
   ${CMAKE_BINARY_DIR}/f90src/Mesh/

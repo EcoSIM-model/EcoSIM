@@ -5,7 +5,7 @@ module SoilHydraulicSchemeMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use abortutils, only: endrun,iulog
   use DebugToolMod, only: PrintInfo
-  use EcoSIMCtrlMod, only: soil_hydraulic_scheme,DefaultSoilHydraulicScheme
+  use EcoSIMCtrlMod, only: soil_hydraulic_scheme,DefaultSoilHydraulicScheme,VanGenuchtenSchemeName
   use EcoSimConst, only: PSIHY
   use SoilPhysDataType, only: FieldCapacity_vr,LOGPOROS_vr,LOGFldCapacity_vr,PSD_vr,FCD_vr, &
     LOGPSIAtSat,LOGPSIFLD_col,LOGPSIMXD_col,LOGPSIMND_col,SRP_vr
@@ -13,6 +13,7 @@ module SoilHydraulicSchemeMod
   use SoilWaterDataType, only: PSI_at_Sautration_vr
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
+  use VanGenuchtenSoilHydraulicMod, only: VanGenuchtenSoilHydraulicModel
   implicit none
   private
   class(SoilHydraulicModel), allocatable, target, save :: active_model
@@ -43,8 +44,14 @@ contains
       active_name           = DefaultSoilHydraulicScheme
       active_revision       = 1
       soil_hydraulic_scheme = active_name
+    case(VanGenuchtenSchemeName,'van_genuchten_mualem')
+      call FinalizeSoilHydraulicScheme()
+      allocate(VanGenuchtenSoilHydraulicModel :: active_model)
+      active_name=VanGenuchtenSchemeName
+      active_revision=1
+      soil_hydraulic_scheme=active_name
     case default
-      write(iulog,*) 'Unsupported soil_hydraulic_scheme: ',trim(name),'; available: ecosim'
+      write(iulog,*) 'Unsupported soil_hydraulic_scheme: ',trim(name),'; available: ecosim, van_genuchten'
       call endrun('Unsupported soil hydraulic scheme')
     end select
     call PrintInfo('end '//subname)

@@ -107,6 +107,10 @@ module SoilWaterDataType
   real(r8),target,allocatable ::  PrecipAtm2LandSurf_col(:,:)                !precipiation from atmosphere to land surface ,[m3 d-2 h-1]
   real(r8),target,allocatable ::  RainPrecThrufall_col(:,:)                  !rainfall precipitation through canopy, [m3 H2O d-2 h-1]
   real(r8),target,allocatable ::  SnowPrecThrufall_col(:,:)                  !snowfall through canopy, [m3 H2O d-2 h-1]
+  real(r8),target,allocatable ::  TKRainThrufall_col(:,:) ! mixed rain/drainage temperature [K]
+  real(r8),target,allocatable ::  RainCanopyUnload_col(:,:) ! released canopy liquid [m3/cell/h]
+  real(r8),target,allocatable ::  SnowCanopyUnload_col(:,:) ! released canopy snow [m3 SWE/cell/h]
+  real(r8),target,allocatable ::  HeatCanopyUnload_col(:,:) ! sensible heat returned internally to ground [MJ/cell/h]
   real(r8),target,allocatable ::  TKSnowThrufall_col(:,:)                    !temperature of canopy throughfall snow, [K]
   real(r8),target,allocatable ::  RainPrec2Sno_col(:,:)                      !rainfall to snow, [m3 H2O d-2 h-1]
   real(r8),target,allocatable ::  Rain2ExposedSurf_col(:,:)                  !rainfall to exposed surface, [m3 H2O d-2 h-1]
@@ -137,6 +141,10 @@ module SoilWaterDataType
   allocate(QLaterFlow2Cell_col(JY,JX)); QLaterFlow2Cell_col=0._r8
   allocate(Rain2ExposedSurf_col(JY,JX)); Rain2ExposedSurf_col=0._r8
   allocate(SnowPrecThrufall_col(JY,JX)); SnowPrecThrufall_col=0._r8
+  allocate(TKRainThrufall_col(JY,JX)); TKRainThrufall_col=0._r8
+  allocate(RainCanopyUnload_col(JY,JX)); RainCanopyUnload_col=0._r8
+  allocate(SnowCanopyUnload_col(JY,JX)); SnowCanopyUnload_col=0._r8
+  allocate(HeatCanopyUnload_col(JY,JX)); HeatCanopyUnload_col=0._r8
   allocate(TKSnowThrufall_col(JY,JX)); TKSnowThrufall_col=0._r8
   allocate(RainPrec2Sno_col(JY,JX)); RainPrec2Sno_col = 0._r8
   allocate(RainPrecThrufall_col(JY,JX)); RainPrecThrufall_col=0._r8
@@ -249,6 +257,10 @@ module SoilWaterDataType
   call destroy(QLaterFlow2Cell_col)
   call destroy(Rain2ExposedSurf_col)
   call destroy(SnowPrecThrufall_col)
+  call destroy(TKRainThrufall_col)
+  call destroy(RainCanopyUnload_col)
+  call destroy(SnowCanopyUnload_col)
+  call destroy(HeatCanopyUnload_col)
   call destroy(TKSnowThrufall_col)
   call destroy(RainPrec2Sno_col)
   call destroy(RainPrecThrufall_col)

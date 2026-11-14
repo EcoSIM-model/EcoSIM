@@ -1,4 +1,7 @@
 module Hour1Mod
+  ! Description:
+  ! Prepare hourly forcing, reset transfer/diagnostic accumulators and record
+  ! starting balances. Synchronize prescribed canopy thermal stocks before exchange.
   use AtmosCompositionMod, only: UpdateAtmosGasMassConcentrations
   use data_kind_mod,     only: r8 => DAT_KIND_R8
   use data_const_mod,    only: GravAcceleration=>DAT_CONST_G
@@ -15,6 +18,8 @@ module Hour1Mod
   use BalancesMod,       only: SummarizeTracerMass, BegCheckBalances
   use EcosimConst,       only: mGravAccelerat
   use HydrologyDiagMod , only: UpdateSoilWaterContents, DiagWaterTableDepZi, DiagActiveLayerDepth
+  use BalanceCheckDataType, only: HeatErr_col,CanopyHeatBeg_col
+  use EcoSIMConfig, only: is_cold_run
   use CanopyHydroMod
   use NumericalAuxMod
   use DebugToolMod
@@ -95,6 +100,7 @@ module Hour1Mod
 
   character(len=*), parameter :: subname='hour1'
   integer :: L,NX,NY,idg
+  real(r8) :: CanopyEnergyAdjustment ! material/cold-start canopy stock increment [MJ/cell]
   real(r8) :: DepthSurfWatIce           !water+ice thickness in litter
 
   integer :: NZ,NR,K
@@ -200,6 +206,20 @@ module Hour1Mod
       if(do_instequil)call ForceGasAquaEquil(NY,NX)
 !
       call PlantCanopyRadsModel(I,J,NY,NX,DepthSurfWatIce)
+      if(.not.ldo_radiation_test)then
+        call SyncCanopyThermalInventory(NY,NX,CanopyEnergyAdjustment)
+        if(is_cold_run().and.etimer%is_first_step())then
+          HeatErr_col(NY,NX)=HeatErr_col(NY,NX)+CanopyEnergyAdjustment
+          CanopyHeatBeg_col(NY,NX)=CanopyHeatBeg_col(NY,NX)+CanopyEnergyAdjustment
+        else
+          ! Growth/litterfall and prescribed inputs change represented material.
+          ! Carry its signed sensible enthalpy at the retained canopy temperature.
+          ! This stock term is distinct from atmospheric heat or reaction heat;
+          ! resetting ENGYX here excludes it from the later exchange inventory delta.
+          HeatSource_col(NY,NX)=HeatSource_col(NY,NX)+CanopyEnergyAdjustment
+          HEATIN_lnd=HEATIN_lnd+CanopyEnergyAdjustment
+        endif
+      endif
 !
       if(lverb)write(*,*)'RESET HOURLY INDICATORS'
 !
@@ -761,6 +781,8 @@ module Hour1Mod
   tXPO4_col(NY,NX)                                = 0._r8
   UION_col(NY,NX)                                 = 0._r8
   QDischarg2WTBL_col(NY,NX)                       = 0._r8
+  ! Water-table recharge heat is an hourly flux, like its paired water flux.
+  HeatDischar_col(NY,NX)                          = 0._r8
   PrecHeat_col(NY,NX)                             = 0._r8
   QDrain_col(NY,NX)                               = 0._r8
   QDrainloss_vr(:,NY,NX)                          = 0._r8
@@ -800,6 +822,8 @@ module Hour1Mod
   SnowIntceptByCanopy_col(NY,NX)                   = 0._r8
   QVegET_col(NY,NX)                               = 0._r8
   VapXAir2Canopy_col(NY,NX)                       = 0._r8
+  HeatSensVapAir2Canopy_col(NY,NX)=0._r8
+  HeatPrecAir2Canopy_col(NY,NX)=0._r8
   HeatFlx2Canopy_col(NY,NX)                       = 0._r8
   CanopyHeatStor_col(NY,NX)                       = 0._r8
   VmaxNH4Root_pvr(:,:,:,NY,NX)                    = 0._r8
@@ -836,6 +860,9 @@ module Hour1Mod
 !------------------------------------------------------------------------------------------
 
   subroutine SetArrays4PlantSoilTransfer(NY,NX)
+  ! Description:
+  ! Reset hourly plant/soil exchanges and native applied totals while retaining
+  ! the previous exchange for externally scheduled ATS accounting.
   implicit none
   integer, intent(in) :: NY,NX
   character(len=*), parameter :: subname='SetArrays4PlantSoilTransfer'
@@ -843,6 +870,7 @@ module Hour1Mod
   call PrintInfo('beg '//subname)
   LitrfalStrutElms_vr(1:NumPlantChemElms,1:jsken,1:pltpar%NumOfPlantLitrCmplxs,0:NL_col(NY,NX),NY,NX) = 0._r8
   HeatSource_col(NY,NX)                                                               = 0._r8
+  HeatLateral2Cell_col(NY,NX)                                                         = 0._r8
   REcoDOMProd_vr(idom_beg:idom_end,1:jcplx,0:NL_col(NY,NX),NY,NX)                     = 0._r8
   RProd_Hp_vr(0:NL_col(NY,NX),NY,NX)                                                  = 0._r8
   trcn_RprodChem_soil_vr(ids_nut_beg:ids_nuts_end,0:NL_col(NY,NX),NY,NX)              = 0._r8
@@ -850,8 +878,15 @@ module Hour1Mod
   TProd_gas_NH3_geochem_vr(0:NL_col(NY,NX),NY,NX)                                     = 0._r8
   trcx_TRSoilChem_vr(idx_beg:idx_end,0:NL_col(NY,NX),NY,NX)                           = 0._r8
   trcp_RChem_soil_vr(idsp_psoi_beg:idsp_psoi_end,0:NL_col(NY,NX),NY,NX)               = 0._r8
-  TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)                                  = TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
-  THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)                                   = THeatLossRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+  if(ATS_cpl_mode)then
+    ! Retain externally scheduled accounting for the coupled soil solver.
+    TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+    THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=THeatLossRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+  else
+    ! Native soil substeps already applied the completed-hour transfer.
+    TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=0._r8
+    THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=0._r8
+  endif
   TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)                                      = 0._r8
   THeatLossRoot2Soil_vr(0:NL_col(NY,NX),NY,NX)                                        = 0._r8
   tRootMycoExud2Soil_vr(1:NumPlantChemElms,1:jcplx,NU_col(NY,NX):NL_col(NY,NX),NY,NX) = 0._r8

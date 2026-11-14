@@ -306,6 +306,8 @@ contains
     plt_pheno%Days4FalseBreak_pft(NZ)                            = Days4FalseBreak_pft(NZ,NY,NX)
     plt_biom%ShootElms_pft(1:NumPlantChemElms,NZ)                 = ShootElms_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_biom%StandDeadStrutElms_pft(1:NumPlantChemElms,NZ)        = StandDeadStrutElms_pft(1:NumPlantChemElms,NZ,NY,NX)
+    plt_morph%StandDeadSurfAreaAct_pft(NZ) = StandDeadSurfAreaAct_pft(NZ,NY,NX)
+    plt_morph%StandDeadSurfArea_pft(NZ) = StandDeadSurfArea_pft(NZ,NY,NX)
 
     plt_site%PlantElmBalCum_pft(1:NumPlantChemElms,NZ)              = PlantElmBalCum_pft(1:NumPlantChemElms,NZ,NY,NX)
     plt_bgcr%LitrfallElms_pft(1:NumPlantChemElms,NZ)           = LitrfallElms_pft(1:NumPlantChemElms,NZ,NY,NX)

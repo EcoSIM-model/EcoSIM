@@ -1,4 +1,7 @@
 module TillageMixMod
+  ! Description:
+  ! Mix soil properties and redistribute extensive pools and sensible heat
+  ! within the tillage zone, including incorporation of surface litter.
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use EcoSIMConfig,     only: ndbiomcp => NumDeadMicrbCompts
@@ -35,6 +38,9 @@ module TillageMixMod
 !------------------------------------------------------------------------------------------
 
   subroutine ApplyTillageMixing(I,J,NY,NX)
+  ! Description:
+  ! Apply scheduled tillage using common conservative recipient fractions for
+  ! organic matter, water, nutrients, heat and the mixing diagnostics.
   implicit none
   integer, intent(in) :: I,J,NY,NX
 
@@ -48,9 +54,8 @@ module TillageMixMod
   real(r8) :: TNFNIH,TZNFNI
   real(r8) :: ENGYV(0:JZ),ENGYL,ENGYM(0:JZ)
   real(r8) :: ORGM(1:NumPlantChemElms),litrOM(1:NumPlantChemElms)
-  real(r8) :: HFLXD
   real(r8) :: LitterWaterBeforeMix
-  real(r8) :: TX,TL
+  real(r8) :: TX
   integer  :: NTX,NTP,NTG,NTSA,NTN,idom,MID,NE
   real(r8) :: FI(JZ),TI(JZ),TI1,FI1
   logical :: TillTest,tillTestL
@@ -82,6 +87,7 @@ module TillageMixMod
 !   XCORP0: Fraction of material not being mixed
 
   call DeriveTillageProf(NY,NX,DCORPZ,LL,FI,TI)
+  if(LL<NU_col(NY,NX))return
 
   ! FI weights the tilled thickness in this column. Intensive properties
   ! are blended as properties; actual pools below retain mass redistribution.
@@ -193,7 +199,6 @@ module TillageMixMod
           +cpi*(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX)))*TKS_vr(L,NY,NX)
     ENDIF    
   ENDDO D3000
-  HFLXD=ENGYM(0)+ENGYV(0)
 
   !mix
   LitterWaterBeforeMix=VLWatMicP_vr(0,NY,NX)+DENSICE*VLiceMicP_vr(0,NY,NX)
@@ -230,7 +235,6 @@ module TillageMixMod
   IF(VHeatCapacity_vr(0,NY,NX).GT.0._r8)THEN
     TKS_vr(0,NY,NX) = (ENGYM(0)+ENGYV(0))/VHeatCapacity_vr(0,NY,NX)
   ENDIF
-  HFLXD                     = HFLXD-ENGYM(0)-ENGYV(0)
   DO  L=NU_col(NY,NX),LL
     IF(DLYR_3D(3,L,NY,NX).GT.ZERO)THEN
       VLWatMicPX_vr(L,NY,NX)    = VLWatMicP_vr(L,NY,NX)
@@ -240,8 +244,8 @@ module TillageMixMod
     ENDIF
   ENDDO
 
-  HEATIN_lnd    = HEATIN_lnd-HFLXD
-  HeatStore_lnd = HeatStore_lnd-HFLXD
+  ! Tillage redistributes heat inside this column. Litter and soil are both
+  ! included in the landscape inventory; incorporation is no external loss.
 
   !reset
   EnergyImpact4Erosion_col(NY,NX) = 0.0_r8
@@ -290,9 +294,6 @@ module TillageMixMod
     if(.not.tillTestL)exit
 !     TL: fraction of layer L over the tillage zone
 !     TI: fraction of layer L being tilled
-    TL = AMIN1(DLYR_3D(3,L,NY,NX),DCORPZ-(CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX)))
-    FI1 = TL/DCORPZ
-    TI1 = AMIN1(TL/DLYR_3D(3,L,NY,NX),1._r8)
 
     ZNHUX0 = AMAX1(ZNHUX0,ZNHU0_vr(L,NY,NX))
     ZNHUXI = AMAX1(ZNHUXI,ZNHUI_vr(L,NY,NX))
@@ -312,9 +313,8 @@ module TillageMixMod
       !TI: fraction of current layer being tilled.
       !FI: fraction of current layer over the overall mixing zone
       !TX: fraction of current layer not tilled
-      TL=AMIN1(DLYR_3D(3,L,NY,NX),DCORPZ-(CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX)))
-      FI1=TL/DCORPZ
-      TI1=AMIN1(TL/DLYR_3D(3,L,NY,NX),1._r8)
+      FI1=FI(L)
+      TI1=TI(L)
       TX=AZMAX1(1.0_r8-TI1)
       
 !     SoilFracAsMacP_vr(L,NY,NX)=XTillCorp_col(NY,NX)*SoilFracAsMacP_vr(L,NY,NX)
@@ -527,6 +527,9 @@ module TillageMixMod
 !--------------------------------------------------------------------------------
 
   subroutine MixExtensive3D(xdCorp,TI,FI,NU,LL,mass3d,XCORP0)
+  ! Description:
+  ! Redistribute extensive pools over soil layers, optionally incorporating
+  ! litter. FI uses soil-layer indices; only the retained soil part uses TI.
 
   implicit none
   real(r8), intent(in) :: xdCorp    !fraction of layer not mixed
@@ -567,12 +570,12 @@ module TillageMixMod
       do ii=1,sz(1)
           if(TI(L)<1._r8)then
             TX=1._r8-TI(L)
-            mass3D(ii,jj,L1)=TI(L)*(mass3D(ii,jj,L1)*xdCorp+FI(L)*tmass3D(ii,jj))+TX*mass3D(ii,jj,L1)
+            mass3D(ii,jj,L1)=TI(L)*mass3D(ii,jj,L1)*xdCorp+FI(L)*tmass3D(ii,jj)+TX*mass3D(ii,jj,L1)
           else
             mass3D(ii,jj,L1)=mass3D(ii,jj,L1)*xdCorp+FI(L)*tmass3D(ii,jj)
           endif          
           if(present(XCORP0))then
-            mass3D(ii,jj,L1)=mass3D(ii,jj,L1)+FI(L1)*tmass3DR(ii,jj)
+            mass3D(ii,jj,L1)=mass3D(ii,jj,L1)+FI(L)*tmass3DR(ii,jj)
           endif
       enddo
     enddo
@@ -643,27 +646,40 @@ module TillageMixMod
 
  !--------------------------------------------------------------------------------
   subroutine DeriveTillageProf(NY,NX,DCORPZ,LL,FI,TI)
-  !derive the mass allocation profile for tillage
+  ! Description:
+  ! Derive each layer's tilled fraction and normalized recipient share. Input
+  ! depths and thicknesses may have independent rounding; their recipient
+  ! fractions must still sum to one to conserve every redistributed pool.
   implicit none
-  integer , intent(in) :: NY,NX
-  real(r8), intent(in) :: DCORPZ
-  integer , intent(out) :: LL
-  real(r8), intent(out) :: FI(1:JZ)   !fraction of current layer over the overall mixing zone
-  real(r8), intent(out) :: TI(1:JZ)   !fraction of layer L being tilled
+  integer, intent(in) :: NY,NX ! column grid indices [-]
+  real(r8), intent(in) :: DCORPZ ! tillage depth below soil surface [m]
+  integer, intent(out) :: LL ! last tilled layer; NU-1 when none participate [-]
+  real(r8), intent(out) :: FI(1:JZ) ! normalized recipient shares by soil layer [-]
+  real(r8), intent(out) :: TI(1:JZ) ! fraction of each layer that is tilled [-]
+  character(len=*), parameter :: subname='DeriveTillageProf'
   integer :: L
   logical :: tillTestL
-  real(r8) :: TL  !fraction of layer L over the tillage zone
+  real(r8) :: TL,TotalShare ! intersected thickness [m], sum of raw shares [-]
 
-  LL=NU_col(NY,NX)
-  D100: DO L=NU_col(NY,NX),NL_col(NY,NX)
-    !if current layer is within the tillage depth
-    tillTestL=CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX).LT.DCORPZ .AND. DLYR_3D(3,L,NY,NX).GT.ZERO
-    if(.not.tillTestL)exit
-    TL = AMIN1(DLYR_3D(3,L,NY,NX),DCORPZ-(CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX)))
-    FI(L) = TL/DCORPZ
-    TI(L) = AMIN1(TL/DLYR_3D(3,L,NY,NX),1._r8)
-    LL=L  
-  ENDDO D100
+  call PrintInfo('beg '//subname)
+  FI=0._r8
+  TI=0._r8
+  LL=NU_col(NY,NX)-1
+  if(DCORPZ>0._r8)then
+    D100: DO L=NU_col(NY,NX),NL_col(NY,NX)
+      tillTestL=CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX).LT.DCORPZ .AND. DLYR_3D(3,L,NY,NX).GT.ZERO
+      if(.not.tillTestL)exit
+      TL=AMIN1(DLYR_3D(3,L,NY,NX),DCORPZ-(CumSoilThickness_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX)))
+      FI(L)=TL/DCORPZ
+      TI(L)=AMIN1(TL/DLYR_3D(3,L,NY,NX),1._r8)
+      LL=L
+    ENDDO D100
+    if(LL>=NU_col(NY,NX))then
+      TotalShare=sum(FI(NU_col(NY,NX):LL))
+      FI(NU_col(NY,NX):LL)=FI(NU_col(NY,NX):LL)/TotalShare
+    endif
+  endif
+  call PrintInfo('end '//subname)
   end subroutine DeriveTillageProf
 
 end module TillageMixMod
