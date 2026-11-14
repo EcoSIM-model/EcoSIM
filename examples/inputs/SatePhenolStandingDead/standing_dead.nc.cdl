@@ -1,0 +1,48 @@
+netcdf standing_dead {
+dimensions:
+    ntopou = 1 ;
+    maxpfts = 1 ;
+    nchar1 = 10 ;
+    month = 12 ;
+    year = UNLIMITED ;
+variables:
+    int NH1(ntopou) ;
+    int NV1(ntopou) ;
+    int NH2(ntopou) ;
+    int NV2(ntopou) ;
+    int NZ(ntopou) ;
+        NZ:long_name = "Number of tracked PFT slots" ;
+    int year(year) ;
+        year:long_name = "Forcing year; one record is a repeating climatology" ;
+    char pft_type(year, ntopou, maxpfts, nchar1) ;
+        pft_type:long_name = "EcoSIM trait code; ndlf34 matches the parent SatePhenol case" ;
+    double PlantPopuLive_pft(year, ntopou, maxpfts) ;
+        PlantPopuLive_pft:units = "plants m-2" ;
+        PlantPopuLive_pft:long_name = "Living population density; zero selects standing-dead stems" ;
+    float LAI(year, ntopou, maxpfts, month) ;
+        LAI:units = "m2 m-2" ;
+        LAI:long_name = "Living leaf area index; must be zero for a dead-only slot" ;
+    float SAI(year, ntopou, maxpfts, month) ;
+        SAI:units = "m2 m-2" ;
+        SAI:long_name = "Standing-dead stem surface area per ground area" ;
+    float HTOP(year, ntopou, maxpfts, month) ;
+        HTOP:units = "m" ;
+        HTOP:long_name = "Standing-dead canopy top height" ;
+
+    :title = "Synthetic standing-dead-only prescribed canopy based on SatePhenol" ;
+    :source = "Blodget_sp_phenol_20261103.nc: ndlf34, 17 m height; constant SAI 0.3 approximates its stem area" ;
+    :biomass = "Initial dead carbon uses WTSTDI=5000 gC m-2 in ecosim_pftpar_20261021.nc; N/P use PFT litter composition" ;
+    :comment = "No living population, leaves, tissue carbon, or prescribed live roots; not a mortality event or site calibration" ;
+data:
+    NH1 = 1 ;
+    NV1 = 1 ;
+    NH2 = 1 ;
+    NV2 = 1 ;
+    NZ = 1 ;
+    year = 2013 ;
+    pft_type = "ndlf34    " ;
+    PlantPopuLive_pft = 0 ;
+    LAI = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ;
+    SAI = 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3 ;
+    HTOP = 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17 ;
+}

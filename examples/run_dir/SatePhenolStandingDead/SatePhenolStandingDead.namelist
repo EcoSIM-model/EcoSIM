@@ -1,0 +1,49 @@
+&regression_test
+ cells = 3
+/
+
+&ecosim
+case_name = 'SatePhenolStandingDead'
+do_regression_test = .false.
+pft_file_in = '../../../input_data/ecosim_pftpar_20261021.nc'
+grid_file_in = '../../inputs/blodgett/Blodget_grid_20251115.nc'
+pft_mgmt_in = 'NO'
+clm_hour_file_in = '../../inputs/blodgett/Blodget.clim.2012-2022.nc'
+clm_factor_in = 'NO'
+soil_mgmt_in = 'NO'
+atm_ghg_in = '../../../input_data/fatm_hist_GHGs_1750-2023.nc'
+sp_phenol_in = '../../inputs/SatePhenolStandingDead/standing_dead.nc'
+
+lverbose = .false.
+ldo_sp_mode = .true.
+disp_planttrait = .false.
+plant_model = .false.
+microbial_model = .false.
+soichem_model = .false.
+start_date = '19800101000000'
+grid_mode = 1
+continue_run = .false.
+forc_periods = 2013,2014,1,0,0,0,0,0,0,0,0,0,0,0,0
+
+! Hourly thermal diagnostics also remain visible with zero living population.
+hist_fincl1 = 'CAN_RN_pft','CAN_H_pft','CAN_LE_pft','CAN_G_pft','CAN_TEMPC_pft','STANDING_DEAD_C_pft','STANDING_DEAD_N_pft','STANDING_DEAD_P_pft','QVegTransp_pft','RootC_2nd_pvr','BLYR_RS_H2O_pft'
+hist_mfilt = 8760
+hist_nhtfrq = 1
+NPXS = 30,30,30
+NPYS = 10,10,10
+NCYC_LITR = 30
+NCYC_SNOW = 20
+/
+
+&bbgcforc
+/
+
+&ecosim_time
+rest_opt = 'never'
+rest_frq = 1
+delta_time = 3600.
+stop_n = 2
+stop_option = 'nyears'
+diag_frq = 1
+diag_opt = 'nsteps'
+/
