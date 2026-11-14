@@ -100,12 +100,8 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   SUBROUTINE restartnc_plant(ncid,flag)  
-!
-!     THIS SUBROUTINE WRITES OUT ALL PLANT VARIABLES TO
-!     CHECKPOINT FILES AT THE FREQUENCY GIVEN IN THE OPTIONS
-!     FILE SO THAT OUTPUTS FROM EARLIER MODEL RUNS CAN BE USED
-!     TO INITIALIZE LATER MODEL RUNS
-!
+  ! Description:
+  ! Read or write plant checkpoint state and rebuild derived plant caches.
   use PlantTraitTableMod, only : RootVesselRadius_tab, AlphaVesselAxialResist_tab
   use PlantBGCPars, only : Rax_ref
   use EcoSimConst, only : BndlResistH2OToHeatRatio
@@ -5209,8 +5205,14 @@ implicit none
     DO NX=NHW,NHE
       DO NY=NVN,NVS
         DO NZ=1,NP0_col(NY,NX)
-          if(ldo_sp_mode)then
+          if(ldo_sp_mode.and..not.ldo_radiation_test)then
             RootNonstOMConc_pvr(:,:,NZ,NY,NX)=PrescribedRootNonstOMConc_pft(NZ,NY,NX)
+          else
+            ! Radiation-only runs skip plant hydraulics and its RTNSC input.
+            ! Match cold-start concentration using the restored elemental cache.
+            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
+          endif
+          if(ldo_sp_mode)then
             RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=0._r8
             if(NZ<=NP_col(NY,NX))then
               ! SP PopuRootMycoC stores the prescribed stock per square meter.
@@ -5218,7 +5220,6 @@ implicit none
                 PopuRootMycoC_pvr(ipltroot,:,NZ,NY,NX)*AREA_3D(3,NU_col(NY,NX),NY,NX)
             endif
           else
-            RootNonstOMConc_pvr(:,:,NZ,NY,NX)=sum(RootNonstructElmConc_pvr(:,:,:,NZ,NY,NX),dim=1)
             RootMyco2ndStrutElms_pvr(:,:,:,NZ,NY,NX)=sum( &
               RootMyco2ndStrutElms_rpvr(:,:,:,1:NumStructuralRootAxes_pft(NZ,NY,NX),NZ,NY,NX),dim=4)
           endif
