@@ -1,4 +1,5 @@
 module PlantTraitTableMod
+  ! Description:
   ! Own PFT parameter tables read from the plant-trait NetCDF input.
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use GridConsts,    only: NumLeafInclinationClasses
@@ -54,6 +55,7 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: VRNLI_tab(:)
   real(r8), target, allocatable :: VRNXI_tab(:)
   real(r8), target, allocatable :: rLen2WidthLeaf_tab(:)
+  real(r8), target, allocatable :: HypocotLeafAreaCoeff_tab(:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
   real(r8), target, allocatable :: NonstCMinConc2InitBranch_tab(:)
   real(r8), target, allocatable :: GROUPX_tab(:)
   real(r8), target, allocatable :: ShootNodeNumAtPlanting_tab(:)
@@ -201,6 +203,7 @@ module PlantTraitTableMod
   allocate(VRNLI_tab(npfts));VRNLI_tab=0._r8
   allocate(VRNXI_tab(npfts));VRNXI_tab=0._r8
   allocate(rLen2WidthLeaf_tab(npfts));rLen2WidthLeaf_tab=0._r8
+  allocate(HypocotLeafAreaCoeff_tab(npfts));HypocotLeafAreaCoeff_tab=100._r8
   allocate(NonstCMinConc2InitBranch_tab(npfts));NonstCMinConc2InitBranch_tab=0._r8
   allocate(GROUPX_tab(npfts));GROUPX_tab=0._r8
   allocate(ShootNodeNumAtPlanting_tab(npfts));ShootNodeNumAtPlanting_tab=0._r8
@@ -344,6 +347,7 @@ module PlantTraitTableMod
   call destroy(StalkAxialResist_tab)
   call destroy(enh_cyto_tab)
   call destroy(rLen2WidthLeaf_tab)
+  call destroy(HypocotLeafAreaCoeff_tab)
   call destroy(NonstCMinConc2InitBranch_tab)
   call destroy(GROUPX_tab)
   call destroy(ShootNodeNumAtPlanting_tab)

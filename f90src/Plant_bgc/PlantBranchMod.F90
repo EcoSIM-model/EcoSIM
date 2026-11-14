@@ -47,6 +47,9 @@ module PlantBranchMod
   subroutine GrowOneBranch(yearIJ,NB,NZ,TFN6_vr,CanopyHeight_copy,CNLFW,CPLFW,CNSHW,CPSHW,CNRTW,&
     CPRTW,TFN5,WaterStress4Groth,Stomata_Stress,TurgEff4LeafPetolExpansion,TurgEff4CanopyResp,&
     GrothPART2LeafPetole,BegRemoblize)
+  ! Description:
+  ! Grow and turn over branch organs using the developmental node frontier
+  ! supplied by phenology, then update geometry and nonstructural transfers.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in)  :: NB,NZ
@@ -62,7 +65,7 @@ module PlantBranchMod
   real(r8), intent(out) :: GrothPART2LeafPetole !new growth allocated to leaf and PetolSheth
   integer, intent(out) :: BegRemoblize !phenological eligibility of this branch
   character(len=*), parameter :: subname='GrowOneBranch'
-  integer :: I,J,K
+  integer :: I,J
   real(r8) :: YCO2Gro_brch                     !respiraiton ratio of canopy growth, 1./YCO2Gro_brch, total biomass required to give 1 unit of CO2 respiration
   integer  :: MinNodeID,NE  
   REAL(R8) :: CH2O3(pltpar%MaxNodesPerBranch1),CH2O4(pltpar%MaxNodesPerBranch1)
@@ -95,7 +98,6 @@ module PlantBranchMod
   associate(                                                            &
     LeafPetoNonstElmConc_brch  => plt_biom%LeafPetoNonstElmConc_brch   ,& !input  :branch nonstructural C concentration, [g d-2]
     LeafStrutElms_brch         => plt_biom%LeafStrutElms_brch          ,& !input  :branch leaf structural element mass, [g d-2]
-    LeafElmntNode_brch         => plt_biom%LeafElmntNode_brch          ,& !input :leaf element, [g d-2]    
     PetolShethStrutElms_brch   => plt_biom%PetolShethStrutElms_brch    ,& !input  :branch sheath structural element, [g d-2]
     iPlantPhotosynsType_pft    => plt_photo%iPlantPhotosynsType_pft    ,& !input  :plant photosynthetic type (C3 or C4),[-]
     iPlantRootProfile_pft      => plt_pheno%iPlantRootProfile_pft      ,& !input  :plant growth type (vascular, non-vascular),[-]
@@ -106,7 +108,6 @@ module PlantBranchMod
     MainBranchNum_pft          => plt_morph%MainBranchNum_pft          ,& !input  :number of main branch,[-]
     isPlantBranchAlive_brch    => plt_pheno%isPlantBranchAlive_brch    ,& !inoput :flag to detect branch death, [-]
     canopy_growth_pft          => plt_rbgc%canopy_growth_pft           ,& !inoput :canopy structural C growth rate, [gC d-2 h-1]
-    KHiestGroLeafNode_brch     => plt_pheno%KHiestGroLeafNode_brch     ,& !inoput :leaf growth stage counter, [-]    
     NumOfBranches_pft         => plt_morph%NumOfBranches_pft          ,& !input  :number of branches, [-]
     SapwoodBiomassC_brch       => plt_biom%SapwoodBiomassC_brch        ,& !input  :branch sapwood C, [gC d-2]
     CanopySapwoodC_pft         => plt_biom%CanopySapwoodC_pft          ,& !output :canopy sapwood C, [gC d-2]
@@ -122,14 +123,9 @@ module PlantBranchMod
   GrothPART2LeafPetole = 0._r8
 
   IF(isPlantBranchAlive_brch(NB,NZ).EQ.iTrue)THEN
-    !correct the higest growing leaf node
-    DO K=MaxNodesPerBranch1,0,-1
-      if(LeafElmntNode_brch(ielmc,K,NB,NZ).GT.1.e-6_r8)then
-        KHiestGroLeafNode_brch(NB,NZ)=K
-        exit
-      endif
-    ENDDO
-    KHiestGroLeafNode_brch(NB,NZ)=MAX(KHiestGroLeafNode_brch(NB,NZ),1)
+    ! Phenology owns the absolute growing-node index. An occupied biomass slot
+    ! cannot replace it: new nodes need to receive growth before they contain C,
+    ! and modulo storage slots do not retain the absolute developmental count.
     
     call CalcPartitionCoeff(I,J,NB,NZ,PART, &
       BegRemoblize=BegRemoblize,LRemob_brch=LRemob_brch)
@@ -1729,6 +1725,7 @@ module PlantBranchMod
     KHiestGroLeafNode_brch    => plt_pheno%KHiestGroLeafNode_brch     ,& !input  :leaf growth stage counter, [-]
     iPlantTurnoverPattern_pft => plt_pheno%iPlantTurnoverPattern_pft  ,& !input  :phenologically-driven above-ground turnover: all, foliar only, none,[-]
     rLen2WidthLeaf_pft        => plt_morph%rLen2WidthLeaf_pft         ,& !input  :leaf length:width ratio, [-]
+    HypocotLeafAreaCoeff_pft => plt_morph%HypocotLeafAreaCoeff_pft ,& !input :HYPA allometry coefficient, [-]
     SeedDepth_pft             => plt_morph%SeedDepth_pft              ,& !input  :seeding depth, [m]
     MainBranchNum_pft         => plt_morph%MainBranchNum_pft          ,& !input  :id number of main branch,[-]
     PetoleLength_node         => plt_morph%PetoleLength_node          ,& !input  :sheath height, [m]
@@ -1768,7 +1765,10 @@ module PlantBranchMod
   
   IF(HypocotHeight_pft(NZ).LE.SeedDepth_pft(NZ) .AND. LeafArea_node(0,MainBranchNum_pft(NZ),NZ).GT.0.0_r8)THEN
     !plant not emerged yet
-    LeafLength            = SQRT(1.0E+02_r8*LeafArea_node(0,MainBranchNum_pft(NZ),NZ)/PlantPopuLive_pft(NZ))
+    ! Empirical hypocotyl extension proxy: HYPA is independent of leaf-blade shape (WDLF).
+    ! Node-0 area / live population is m2 per plant; the square root gives metres.
+    LeafLength = SQRT(HypocotLeafAreaCoeff_pft(NZ)* &
+      LeafArea_node(0,MainBranchNum_pft(NZ),NZ)/PlantPopuLive_pft(NZ))
     !pushed upward, 
     HypocotHeight_pft(NZ) = LeafLength+PetoleLength_node(0,MainBranchNum_pft(NZ),NZ)+StalkNodeHeight_brch(0,MainBranchNum_pft(NZ),NZ)
   ENDIF

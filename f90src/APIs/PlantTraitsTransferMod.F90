@@ -1,4 +1,5 @@
 module PlantTraitsTransferMod
+  ! Description:
   ! Ordered traits transfers used by PlantAPISend/PlantAPIRecv.
   use data_kind_mod,              only: r8 => DAT_KIND_R8, yearIJ_type
   use EcoSiMParDataMod,           only: micpar,            pltpar
@@ -88,6 +89,7 @@ contains
     plt_pheno%RateRefLeafAppearance_pft(NZ)      = RateRefLeafAppearance_pft(NZ,NY,NX)
     plt_pheno%TCChill4Seed_pft(NZ)           = TCChill4Seed_pft(NZ,NY,NX)
     plt_morph%rLen2WidthLeaf_pft(NZ)         = rLen2WidthLeaf_pft(NZ,NY,NX)
+    plt_morph%HypocotLeafAreaCoeff_pft(NZ) = HypocotLeafAreaCoeff_pft(NZ,NY,NX)
     plt_pheno%NonstCMinConc2InitBranch_pft(NZ)   = NonstCMinConc2InitBranch_pft(NZ,NY,NX)
     plt_morph%ShootNodeNumAtPlanting_pft(NZ) = ShootNodeNumAtPlanting_pft(NZ,NY,NX)
     plt_pheno%CriticPhotoPeriod_pft(NZ)      = CriticPhotoPeriod_pft(NZ,NY,NX)

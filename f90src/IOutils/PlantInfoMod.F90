@@ -1,6 +1,6 @@
 module PlantInfoMod
 !
-! DESCRIPTION
+! Description:
 ! code to read plant information
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -717,6 +717,7 @@ implicit none
   call ncd_getvar(pft_nfid, 'VRNLI', loc,VRNLI)
   call ncd_getvar(pft_nfid, 'VRNXI', loc,VRNXI)
   call ncd_getvar(pft_nfid, 'WDLF', loc,rLen2WidthLeaf_pft(NZ,NY,NX))
+  call ReadHypocotylLeafAreaCoeff(HypocotLeafAreaCoeff_pft(NZ:NZ,NY,NX),loc)
   call ncd_getvar(pft_nfid, 'PB', loc,NonstCMinConc2InitBranch_pft(NZ,NY,NX))
 
   call ncd_getvar(pft_nfid, 'GROUPX', loc,GROUPX_pft(NZ,NY,NX))
@@ -890,6 +891,7 @@ implicit none
   enh_cyto_pft(NZ,NY,NX)                 = enh_cyto_tab(Loc)
   StalkAxialResist_pft(NZ,NY,NX)         = StalkAxialResist_tab(loc)
   rLen2WidthLeaf_pft(NZ,NY,NX)           = rLen2WidthLeaf_tab(loc)
+  HypocotLeafAreaCoeff_pft(NZ,NY,NX) = HypocotLeafAreaCoeff_tab(loc)
   NonstCMinConc2InitBranch_pft(NZ,NY,NX) = NonstCMinConc2InitBranch_tab(loc)
 
   GROUPX_pft(NZ,NY,NX)                 = GROUPX_tab(loc)
@@ -1396,6 +1398,8 @@ implicit none
   call writefixl(nu_plt,id,'STDENS','Stem dry mass density (including voids) [gC cm-3]',1.e-6_r8/StemSpecVolume_pft(NZ,NY,NX),100)    
   id=addone(id)
   call writefixl(nu_plt,id,'WDLF','Leaf length:width ratio [-]',rLen2WidthLeaf_pft(NZ,NY,NX),100)  
+  id=addone(id)
+  call writefixl(nu_plt,id,'HYPA','Hypocotyl-leaf area allometry coefficient [-]',HypocotLeafAreaCoeff_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CFI','Initial clumping factor seedling [-]',ClumpFactorInit_pft(NZ,NY,NX),100)
   id=addone(id)
@@ -1987,6 +1991,57 @@ implicit none
   end subroutine writeafixl
 !------------------------------------------------------------------------------------------
 
+  subroutine ReadHypocotylLeafAreaCoeff(values,first_pft)
+  ! Description:
+  ! Read optional HYPA on the same PFT axis as WDLF. Missing HYPA retains the
+  ! historical coefficient 100; supplied coefficients must be finite and positive.
+  implicit none
+  real(r8), intent(out) :: values(:) !HYPA coefficients for consecutive PFTs, [-]
+  integer, intent(in) :: first_pft   !first requested PFT record, one-based
+  character(len=*), parameter :: subname='ReadHypocotylLeafAreaCoeff'
+  integer :: status,varid,refid,ndims,dims(nf90_max_var_dims),refdims(nf90_max_var_dims)
+  real(r8) :: missing
+
+  call PrintInfo('beg '//subname)
+  values=100._r8
+  dims=0; refdims=0
+  status=nf90_inq_varid(pft_nfid%fh,'HYPA',varid)
+  if(status==nf90_enotvar)then
+    write(iulog,*) 'HYPA absent: using legacy hypocotyl-leaf area allometry coefficient 100.'
+  else
+    call check_ret(status,subname//'::HYPA')
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,varid,ndims=ndims,dimids=dims),subname//'::dimensions')
+    call check_ret(nf90_inq_varid(pft_nfid%fh,'WDLF',refid),subname//'::WDLF')
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,refid,dimids=refdims),subname//'::PFT axis')
+    if(ndims/=1 .or. dims(1)/=refdims(1))call endrun('HYPA must use the same single PFT dimension as WDLF')
+    call check_ret(nf90_get_var(pft_nfid%fh,varid,values,start=[first_pft],count=[size(values)]),subname//'::read')
+    ! Reject NaN/Inf before comparisons: this build traps invalid arithmetic.
+    if(any(.not.ieee_is_finite(values)))call endrun('HYPA must contain finite, strictly positive coefficients')
+    if(any(values==real(nf90_fill_double,r8)) .or. any(values==real(nf90_fill_float,r8))) &
+      call endrun('HYPA contains unwritten NetCDF fill records')
+    status=nf90_get_att(pft_nfid%fh,varid,'_FillValue',missing)
+    if(status==nf90_noerr)then
+      if(ieee_is_finite(missing))then
+        if(any(values==missing))call endrun('HYPA contains _FillValue records')
+      endif
+    else if(status/=nf90_enotatt)then
+      call check_ret(status,subname//'::_FillValue')
+    endif
+    status=nf90_get_att(pft_nfid%fh,varid,'missing_value',missing)
+    if(status==nf90_noerr)then
+      if(ieee_is_finite(missing))then
+        if(any(values==missing))call endrun('HYPA contains missing_value records')
+      endif
+    else if(status/=nf90_enotatt)then
+      call check_ret(status,subname//'::missing_value')
+    endif
+    if(any(values<=0._r8)) &
+      call endrun('HYPA must contain finite, strictly positive coefficients')
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine ReadHypocotylLeafAreaCoeff
+!------------------------------------------------------------------------------------------
+
   Subroutine ReadPlantTraitTable()
   ! Description:
   ! Read the PFT trait catalog, including prescribed concentrations for SP mode.
@@ -2046,6 +2101,7 @@ implicit none
   call ncd_getvar(pft_nfid,'R95MAT',Radius95pctMature_tab)
   call ncd_getvar(pft_nfid,'PhiMAX',xylemPhi_max_tab)
   call ncd_getvar(pft_nfid, 'WDLF', rLen2WidthLeaf_tab)
+  call ReadHypocotylLeafAreaCoeff(HypocotLeafAreaCoeff_tab,1)
   call ncd_getvar(pft_nfid, 'PB', NonstCMinConc2InitBranch_tab)
   call ncd_getvar(pft_nfid, 'GROUPX', GROUPX_tab)
   call ncd_getvar(pft_nfid, 'XTLI', ShootNodeNumAtPlanting_tab)

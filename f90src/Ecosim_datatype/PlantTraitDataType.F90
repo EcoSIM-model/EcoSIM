@@ -5,6 +5,7 @@ module PlantTraitDataType
 
 !
 !!
+! Description:
 ! data types of plant trait characteristics that cannot be grouped into canopy
 ! or roots
   use data_kind_mod, only : r8 => DAT_KIND_R8
@@ -143,6 +144,7 @@ module PlantTraitDataType
   integer,target,allocatable ::  KHiestGroLeafNode_brch(:,:,:,:)             !leaf growth stage counter, [-]
   real(r8),target,allocatable ::  RateRefLeafAppearance_pft(:,:,:)               !rate of leaf initiation at 25 oC, [h-1]
   real(r8),target,allocatable ::  rLen2WidthLeaf_pft(:,:,:)                  !leaf length:width ratio, [-]
+  real(r8),target,allocatable :: HypocotLeafAreaCoeff_pft(:,:,:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
   real(r8),target,allocatable ::  SLA1_pft(:,:,:)                            !leaf area:mass during growth, [m2 g-1]
   real(r8),target,allocatable :: PrescribedLeafProteinDensity_pft(:,:,:)     !LFPRTC: SP protein C per leaf area [gC protein m-2 leaf]
   real(r8),target,allocatable ::  TC4LeafOut_pft(:,:,:)                      !threshold temperature for spring leafout/dehardening, [oC]
@@ -349,6 +351,7 @@ contains
   allocate(KHiestGroLeafNode_brch(MaxNumBranches,JP,JY,JX)); KHiestGroLeafNode_brch=0
   allocate(RateRefLeafAppearance_pft(JP,JY,JX));     RateRefLeafAppearance_pft=0._r8
   allocate(rLen2WidthLeaf_pft(JP,JY,JX));     rLen2WidthLeaf_pft=0._r8
+  allocate(HypocotLeafAreaCoeff_pft(JP,JY,JX));HypocotLeafAreaCoeff_pft=100._r8
   allocate(SLA1_pft(JP,JY,JX));     SLA1_pft=0._r8
   allocate(PrescribedLeafProteinDensity_pft(JP,JY,JX));PrescribedLeafProteinDensity_pft=0._r8
   allocate(TC4LeafOut_pft(JP,JY,JX));      TC4LeafOut_pft=0._r8
@@ -553,6 +556,7 @@ contains
   call destroy(KHiestGroLeafNode_brch)
   call destroy(RateRefLeafAppearance_pft)
   call destroy(rLen2WidthLeaf_pft)
+  call destroy(HypocotLeafAreaCoeff_pft)
   call destroy(SLA1_pft)
   call destroy(PrescribedLeafProteinDensity_pft)
   call destroy(TC4LeafOut_pft)

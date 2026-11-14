@@ -140,6 +140,7 @@ module PlantMorphologyAPIData
   real(r8), pointer :: GrothStalkMaxSeedSites_pft(:)  => null() !maximum grain node number per branch, [-]
   real(r8), pointer :: MaxSeedNumPerSite_pft(:)       => null() !maximum grain number per node,        [-]
   real(r8), pointer :: rLen2WidthLeaf_pft(:)          => null() !leaf length:width ratio,              [-]
+  real(r8), pointer :: HypocotLeafAreaCoeff_pft(:) => null() !HYPA: hypocotyl-leaf area allometry coefficient, [-]
   real(r8), pointer :: SeedCMassMax_pft(:)            => null() !maximum grain size,                   [g]
   real(r8), pointer :: Root1stRadius_pvr(:,:,:)       => null() !root layer diameter primary axes,     [m]
   real(r8), pointer :: Root1stRadius_rpvr(:,:,:)      => null() !root layer diameter for each primary axes,  [m]
@@ -226,6 +227,7 @@ contains
   allocate(this%HypocotHeight_pft(JP1));this%HypocotHeight_pft=spval
   allocate(this%RootPoreTortu4Gas_pft(jroots,JP1));this%RootPoreTortu4Gas_pft=spval
   allocate(this%rLen2WidthLeaf_pft(JP1));this%rLen2WidthLeaf_pft=spval
+  allocate(this%HypocotLeafAreaCoeff_pft(JP1));this%HypocotLeafAreaCoeff_pft=100._r8
   allocate(this%MaxSeedNumPerSite_pft(JP1));this%MaxSeedNumPerSite_pft=spval
   allocate(this%GrothStalkMaxSeedSites_pft(JP1));this%GrothStalkMaxSeedSites_pft=spval
   allocate(this%SeedCMassMax_pft(JP1));this%SeedCMassMax_pft=spval
@@ -563,6 +565,7 @@ contains
   if(associated(this%RootSAreaPerPlant_pvr))deallocate(this%RootSAreaPerPlant_pvr);nullify(this%RootSAreaPerPlant_pvr)
   if(associated(this%RootArea1stPP_pvr))deallocate(this%RootArea1stPP_pvr);nullify(this%RootArea1stPP_pvr)
   if(associated(this%RootArea2ndPP_pvr))deallocate(this%RootArea2ndPP_pvr);nullify(this%RootArea2ndPP_pvr)
+  if(associated(this%HypocotLeafAreaCoeff_pft))deallocate(this%HypocotLeafAreaCoeff_pft);nullify(this%HypocotLeafAreaCoeff_pft)
   call PrintInfo('end '//subname)
   end subroutine plt_morph_destroy
 end module PlantMorphologyAPIData

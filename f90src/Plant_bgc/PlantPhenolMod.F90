@@ -110,12 +110,15 @@ module PlantPhenolMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine Emerged_plant_Phenology(I,J,NZ)
+  ! Description:
+  ! Advance emerged branches and their developmental node frontier without
+  ! discarding nodes that grew before a reproductive leaf-number cap was set.
   implicit none
   integer, intent(in) :: I,J,NZ
   character(len=*), parameter :: subname='Emerged_plant_Phenology'
   integer :: NB
   REAL(R8) :: TFNP,WFNG,OFNG
-  integer :: LeafNumberGrowing
+  integer :: LeafNumberGrowing,NextLeafNumberGrowing
   associate(                                                               &
     isPlantBranchAlive_brch     => plt_pheno%isPlantBranchAlive_brch      ,& !input  :flag to detect branch death, [-]
     LeafNumberAtFloralInit_brch => plt_pheno%LeafNumberAtFloralInit_brch  ,& !input  :leaf number at floral initiation, [-]
@@ -143,10 +146,15 @@ module PlantPhenolMod
     !
     LeafNumberGrowing=KHiestGroLeafNode_brch(NB,NZ)
     IF(LeafNumberAtFloralInit_brch(NB,NZ).LE.ppmc)THEN
-      KHiestGroLeafNode_brch(NB,NZ)=INT(NumOfLeaves_brch(NB,NZ))+1
+      NextLeafNumberGrowing=INT(NumOfLeaves_brch(NB,NZ))+1
     ELSE
-      KHiestGroLeafNode_brch(NB,NZ)=INT(AMIN1(NumOfLeaves_brch(NB,NZ),LeafNumberAtFloralInit_brch(NB,NZ)))+1
+      NextLeafNumberGrowing=INT(AMIN1(NumOfLeaves_brch(NB,NZ),LeafNumberAtFloralInit_brch(NB,NZ)))+1
     ENDIF
+    ! A cap limits future growing nodes; it cannot erase leaves already grown.
+    ! Retreating here drops their layer representation and loses C/N/P when
+    ! harvest rebuilds node pools from the remaining layer pools. Explicit
+    ! initialization and seasonal resets still establish a new cycle's index.
+    KHiestGroLeafNode_brch(NB,NZ)=MAX(LeafNumberGrowing,NextLeafNumberGrowing)
 
     KLeafNumber_brch(NB,NZ)=MIN(MaxNodesPerBranch1-1,KHiestGroLeafNode_brch(NB,NZ))
     IF(KHiestGroLeafNode_brch(NB,NZ).GT.LeafNumberGrowing)THEN
