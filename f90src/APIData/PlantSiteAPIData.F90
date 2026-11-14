@@ -1,5 +1,7 @@
 module PlantSiteAPIData
+  ! Description:
   ! Owns the site API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -105,10 +107,35 @@ contains
   end subroutine plt_site_Init
 
   subroutine plt_site_destroy(this)
-  implicit none
-  class(plant_siteinfo_type) :: this
+  ! Description:
+  ! Release every array owned by this PlantSiteAPIData workspace.
+  class(plant_siteinfo_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_site_destroy'
 
-
-
+  call PrintInfo('beg '//subname)
+  if(associated(this%DATAP))deallocate(this%DATAP);nullify(this%DATAP)
+  if(associated(this%DATA))deallocate(this%DATA);nullify(this%DATA)
+  if(associated(this%flag_active_pft))deallocate(this%flag_active_pft);nullify(this%flag_active_pft)
+  if(associated(this%PlantElemntStoreLandscape))deallocate(this%PlantElemntStoreLandscape);nullify(this%PlantElemntStoreLandscape)
+  if(associated(this%AtmGasc))deallocate(this%AtmGasc);nullify(this%AtmGasc)
+  if(associated(this%AREA3))deallocate(this%AREA3);nullify(this%AREA3)
+  if(associated(this%PlantElmBalCum_pft))deallocate(this%PlantElmBalCum_pft);nullify(this%PlantElmBalCum_pft)
+  if(associated(this%CumSoilThickness_vr))deallocate(this%CumSoilThickness_vr);nullify(this%CumSoilThickness_vr)
+  if(associated(this%PPI_pft))deallocate(this%PPI_pft);nullify(this%PPI_pft)
+  if(associated(this%PPatSeeding_pft))deallocate(this%PPatSeeding_pft);nullify(this%PPatSeeding_pft)
+  if(associated(this%PPX_pft))deallocate(this%PPX_pft);nullify(this%PPX_pft)
+  if(associated(this%PlantPopuLive_pft))deallocate(this%PlantPopuLive_pft);nullify(this%PlantPopuLive_pft)
+  if(associated(this%PlantPopuDead_pft))deallocate(this%PlantPopuDead_pft);nullify(this%PlantPopuDead_pft)
+  if(associated(this%CumSoilThickMidL_vr))deallocate(this%CumSoilThickMidL_vr);nullify(this%CumSoilThickMidL_vr)
+  if(associated(this%FracSoiAsMicP_vr))deallocate(this%FracSoiAsMicP_vr);nullify(this%FracSoiAsMicP_vr)
+  if(associated(this%DLYR3))deallocate(this%DLYR3);nullify(this%DLYR3)
+  if(associated(this%VLWatMicPM_vr))deallocate(this%VLWatMicPM_vr);nullify(this%VLWatMicPM_vr)
+  if(associated(this%VLsoiAirPM_vr))deallocate(this%VLsoiAirPM_vr);nullify(this%VLsoiAirPM_vr)
+  if(associated(this%TortMicPM_vr))deallocate(this%TortMicPM_vr);nullify(this%TortMicPM_vr)
+  if(associated(this%FILMM_vr))deallocate(this%FILMM_vr);nullify(this%FILMM_vr)
+  if(associated(this%SoilWeightStress_vr))deallocate(this%SoilWeightStress_vr);nullify(this%SoilWeightStress_vr)
+  if(associated(this%SoilSuctStress_vr))deallocate(this%SoilSuctStress_vr);nullify(this%SoilSuctStress_vr)
+  if(associated(this%rSat_vr))deallocate(this%rSat_vr);nullify(this%rSat_vr)
+  call PrintInfo('end '//subname)
   end subroutine plt_site_destroy
 end module PlantSiteAPIData

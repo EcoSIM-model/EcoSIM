@@ -68,8 +68,7 @@ implicit none
   integer, intent(in) :: I,J,NY,NX
   integer :: M,L,NZ,N,NB,K
 
-  ! Current root transfers are accumulated after hydrology and applied next
-  ! hour. Reset the SP workspace per column, including its unused layer slots.
+  ! Reset current root transfers per prescribed column, including unused layers.
   plt_ew%TWaterPlantRoot2Soil_vr=0._r8
   plt_ew%THeatLossRoot2Soil_vr=0._r8
   !sent variables also modified
@@ -228,6 +227,7 @@ implicit none
       DO N=1,Myco_pft(NZ,NY,NX)
         plt_morph%Root2ndXNumL_rpvr(N,L,NZ)   = Root2ndXNumL_rpvr(N,L,NZ,NY,NX)
         plt_biom%RootNonstructElmConc_pvr(:,N,L,NZ)=RootNonstructElmConc_pvr(:,N,L,NZ,NY,NX)
+        plt_biom%PopuRootMycoC_pvr(N,L,NZ)=PopuRootMycoC_pvr(N,L,NZ,NY,NX)
         plt_biom%RootNonstOMConc_pvr(N,L,NZ)=RootNonstOMConc_pvr(N,L,NZ,NY,NX)
         plt_morph%Root1stRadius_pvr(N,L,NZ) = Root1stRadius_pvr(N,L,NZ,NY,NX)
         plt_morph%Root2ndRadius_rpvr(N,L,NZ) = Root2ndRadius_rpvr(N,L,NZ,NY,NX)
@@ -316,6 +316,15 @@ implicit none
   integer, intent(in) :: I,J,NY,NX
   integer :: N,L,NZ
 
+  if(.not.ldo_sp_mode)then
+    ! Publish column changes made by early phenology/inventory preparation so
+    ! the later column refresh retains their accounting contributions.
+    PlantPopu_col(NY,NX)=plt_site%PlantPopu_col
+    NumActivePlants_col(NY,NX)=sum(plt_pheno%IsPlantActive_pft(1:NP0_col(NY,NX)))
+    Eco_NBP_CumYr_col(NY,NX)=plt_bgcr%Eco_NBP_CumYr_col
+    CanopyHeatLoss2Dist_col(NY,NX)=plt_ew%CanopyHeatLoss2Dist_col
+  endif
+
   Air_Heat_Latent_store_col(NY,NX) = plt_ew%Air_Heat_Latent_store_col
   Air_Heat_Sens_store_col(NY,NX)   = plt_ew%Air_Heat_Sens_store_col
   Eco_NetRad_col(NY,NX)            = plt_rad%Eco_NetRad_col
@@ -332,7 +341,8 @@ implicit none
   HeatPrecAir2Canopy_col(NY,NX)        = plt_ew%HeatPrecAir2Canopy_col
   HeatFlx2Canopy_col(NY,NX)        = plt_ew%HeatFlx2Canopy_col
   LWRadCanG_col(NY,NX)             = plt_ew%LWRadCanG
-  ! Preserve the accepted root-transfer queue for the next hydrology step.
+  ! Export accepted root water and donor heat. Standalone modes consume these
+  ! immediately; the external coupling interface controls its own soil update.
   do L=1,NL_col(NY,NX)
     TWaterPlantRoot2Soil_vr(L,NY,NX)=plt_ew%TWaterPlantRoot2Soil_vr(L)
     THeatLossRoot2Soil_vr(L,NY,NX)=plt_ew%THeatLossRoot2Soil_vr(L)
@@ -354,7 +364,7 @@ implicit none
     TKCanopy_pft(NZ,NY,NX)           = plt_ew%TKCanopy_pft(NZ)
     PSICanopy_pft(NZ,NY,NX)          = plt_ew%PSICanopy_pft(NZ)
     !plant tissue water is carried between steps (as PlantAPIRecv does for the
-    !full plant model); ROOTUPTAKES updates it by transpiration - root uptake
+    !full plant model); RootWaterUptake updates it by transpiration - root uptake
     CanopyBiomWater_pft(NZ,NY,NX)    = plt_ew%CanopyBiomWater_pft(NZ)
     WatHeldOnCanopy_pft(NZ,NY,NX)    = plt_ew%WatHeldOnCanopy_pft(NZ)
     SnowOnCanopy_pft(NZ,NY,NX)       = plt_ew%SnowOnCanopy_pft(NZ)

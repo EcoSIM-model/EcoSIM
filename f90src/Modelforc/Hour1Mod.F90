@@ -860,6 +860,9 @@ module Hour1Mod
 !------------------------------------------------------------------------------------------
 
   subroutine SetArrays4PlantSoilTransfer(NY,NX)
+  ! Description:
+  ! Reset hourly plant/soil exchanges and native applied totals while retaining
+  ! the previous exchange for externally scheduled ATS accounting.
   implicit none
   integer, intent(in) :: NY,NX
   character(len=*), parameter :: subname='SetArrays4PlantSoilTransfer'
@@ -875,8 +878,15 @@ module Hour1Mod
   TProd_gas_NH3_geochem_vr(0:NL_col(NY,NX),NY,NX)                                     = 0._r8
   trcx_TRSoilChem_vr(idx_beg:idx_end,0:NL_col(NY,NX),NY,NX)                           = 0._r8
   trcp_RChem_soil_vr(idsp_psoi_beg:idsp_psoi_end,0:NL_col(NY,NX),NY,NX)               = 0._r8
-  TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)                                  = TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
-  THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)                                   = THeatLossRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+  if(ATS_cpl_mode)then
+    ! Retain externally scheduled accounting for the coupled soil solver.
+    TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+    THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=THeatLossRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)
+  else
+    ! Native soil substeps already applied the completed-hour transfer.
+    TWaterPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=0._r8
+    THeatPlantRoot2SoilPrev_vr(1:NL_col(NY,NX),NY,NX)=0._r8
+  endif
   TWaterPlantRoot2Soil_vr(1:NL_col(NY,NX),NY,NX)                                      = 0._r8
   THeatLossRoot2Soil_vr(0:NL_col(NY,NX),NY,NX)                                        = 0._r8
   tRootMycoExud2Soil_vr(1:NumPlantChemElms,1:jcplx,NU_col(NY,NX):NL_col(NY,NX),NY,NX) = 0._r8

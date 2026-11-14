@@ -53,6 +53,7 @@ implicit none
   !surface model
   public :: UpdateSurfaceGasConductancesM
   public :: StageSurfacePhysModel
+  public :: LocalCopySoilVars
   public :: CorrectSoilSurfaceHeatM
   public :: RunSurfacePhysModelM
   public :: AggregateSurfRunoffFluxM

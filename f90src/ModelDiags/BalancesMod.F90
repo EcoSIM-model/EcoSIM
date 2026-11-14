@@ -263,9 +263,9 @@ contains
           -QDrain_col(NY,NX)-QDischarg2WTBL_col(NY,NX)+TPlantRootH2OUptake_col(NY,NX)-QCanopyWatLoss2Dist_col(NY,NX) &
           -sum(TWaterPlantRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX))
       endif
-      ! The plant solver follows hydrology: this hour's canopy-to-soil transfer
-      ! is queued until the next hour. Balance applied old minus queued new
-      ! transfers; treating the new root uptake as already debited loses heat.
+      ! Account for applied minus current plant transfers. In standalone runs
+      ! both describe the same accepted transfer and cancel. External coupling
+      ! controls its own exchange timing.
       HeatErr_test = HeatErr_col(NY,NX)-HeatStore_col(NY,NX)+THeatRootRelease_col(NY,NX) &
         -sum(THeatLossRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX)) &
         +HeatSource_col(NY,NX)+Eco_NetRad_col(NY,NX)+Eco_Heat_Latent_col(NY,NX)+Eco_Heat_Sens_col(NY,NX)&
@@ -460,7 +460,7 @@ contains
         write(iulog,*)'Final Engy=',HeatStore_col(NY,NX)
         write(iulog,*)'Delta Engy=',HeatStore_col(NY,NX)-HeatErr_col(NY,NX)
         write(iulog,*)'Delta snow engy=',SnowEngyEnd_col(NY,NX)-SnowEngyBeg_col(NY,NX)
-        write(iulog,*)'Root heat applied, queued=',THeatRootRelease_col(NY,NX), &
+        write(iulog,*)'Root heat applied, accepted=',THeatRootRelease_col(NY,NX), &
           sum(THeatLossRoot2Soil_vr(NU_col(NY,NX):NL_col(NY,NX),NY,NX))
         write(iulog,*)'Heat source=',HeatSource_col(NY,NX)
         write(iulog,*)'Net Rad=',Eco_NetRad_col(NY,NX)

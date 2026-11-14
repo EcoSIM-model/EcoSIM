@@ -1,5 +1,7 @@
 module PlantDisturbanceAPIData
+  ! Description:
   ! Owns the disturbance API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -85,33 +87,38 @@ contains
   end subroutine plt_disturb_init
 
   subroutine plt_disturb_destroy(this)
-  implicit none
-  class(plant_disturb_type) :: this
+  ! Description:
+  ! Release every array owned by this PlantDisturbanceAPIData workspace.
+  class(plant_disturb_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_disturb_destroy'
 
-
-!  if(allocated(THIN_pft))deallocate(THIN_pft)
-!  if(allocated(EcoHavstElmnt_CumYr_pft))deallocate(EcoHavstElmnt_CumYr_pft)
-!  if(allocated(EcoHavstElmntCum_pft))deallocate(EcoHavstElmntCum_pft)
-!  if(allocated(CH4ByFire_CumYr_pft))deallocate(CH4ByFire_CumYr_pft)
-!  if(allocated(CO2ByFire_CumYr_pft))deallocate(CO2ByFire_CumYr_pft)
-!  if(allocated(N2ObyFire_CumYr_pft))deallocate(N2ObyFire_CumYr_pft)
-!  if(allocated(NH3byFire_CumYr_pft))deallocate(NH3byFire_CumYr_pft)
-!  if(allocated(PO4byFire_CumYr_pft))deallocate(PO4byFire_CumYr_pft)
-
-!  if(allocated(iHarvestDay_pft))deallocate(iHarvestDay_pft)
-!  if(allocated(O2ByFire_CumYr_pft))deallocate(O2ByFire_CumYr_pft)
-!  if(allocated(FracBiomHarvsted))deallocate(FracBiomHarvsted)
-!  if(allocated(HVST))deallocate(HVST)
-!  if(allocated(iYearPlantHarvest_pft))deallocate(iYearPlantHarvest_pft)
-!  if(allocated(iDayPlanting_pft))deallocate(iDayPlanting_pft)
-!  if(allocated(iDayPlantHarvest_pft))deallocate(iDayPlantHarvest_pft)
-!  if(allocated(iHarvestYear_pft))deallocate(iHarvestYear_pft)
-!  if(allocated(iPlantingDay_pft))deallocate(iPlantingDay_pft)
-!  if(allocated(iYearPlanting_pft))deallocate(iYearPlanting_pft)
-!  if(allocated(FERT))deallocate(FERT)
-!  if(allocated(iPlantingYear_pft))deallocate(iPlantingYear_pft)
-!  if(allocated(iHarvstType_pft))deallocate(iHarvstType_pft)
-!  if(allocated(jHarvstType_pft))deallocate(jHarvstType_pft)
-
+  call PrintInfo('beg '//subname)
+  if(associated(this%iHarvestDay_pft))deallocate(this%iHarvestDay_pft);nullify(this%iHarvestDay_pft)
+  if(associated(this%iYearPlanting_pft))deallocate(this%iYearPlanting_pft);nullify(this%iYearPlanting_pft)
+  if(associated(this%iPlantingDay_pft))deallocate(this%iPlantingDay_pft);nullify(this%iPlantingDay_pft)
+  if(associated(this%iPlantingYear_pft))deallocate(this%iPlantingYear_pft);nullify(this%iPlantingYear_pft)
+  if(associated(this%iHarvestYear_pft))deallocate(this%iHarvestYear_pft);nullify(this%iHarvestYear_pft)
+  if(associated(this%iDayPlanting_pft))deallocate(this%iDayPlanting_pft);nullify(this%iDayPlanting_pft)
+  if(associated(this%iDayPlantHarvest_pft))deallocate(this%iDayPlantHarvest_pft);nullify(this%iDayPlantHarvest_pft)
+  if(associated(this%iYearPlantHarvest_pft))deallocate(this%iYearPlantHarvest_pft);nullify(this%iYearPlantHarvest_pft)
+  if(associated(this%iHarvstType_pft))deallocate(this%iHarvstType_pft);nullify(this%iHarvstType_pft)
+  if(associated(this%jHarvstType_pft))deallocate(this%jHarvstType_pft);nullify(this%jHarvstType_pft)
+  if(associated(this%EcoHavstElmnt_CumYr_col))deallocate(this%EcoHavstElmnt_CumYr_col);nullify(this%EcoHavstElmnt_CumYr_col)
+  if(associated(this%O2ByFire_CumYr_pft))deallocate(this%O2ByFire_CumYr_pft);nullify(this%O2ByFire_CumYr_pft)
+  if(associated(this%FERT))deallocate(this%FERT);nullify(this%FERT)
+  if(associated(this%FracBiomHarvsted))deallocate(this%FracBiomHarvsted);nullify(this%FracBiomHarvsted)
+  if(associated(this%CanopyCutProxy_pft))deallocate(this%CanopyCutProxy_pft);nullify(this%CanopyCutProxy_pft)
+  if(associated(this%FireLossE_pft))deallocate(this%FireLossE_pft);nullify(this%FireLossE_pft)
+  if(associated(this%RootLost2Fire_pft))deallocate(this%RootLost2Fire_pft);nullify(this%RootLost2Fire_pft)
+  if(associated(this%THIN_pft))deallocate(this%THIN_pft);nullify(this%THIN_pft)
+  if(associated(this%CH4ByFire_CumYr_pft))deallocate(this%CH4ByFire_CumYr_pft);nullify(this%CH4ByFire_CumYr_pft)
+  if(associated(this%CO2ByFire_CumYr_pft))deallocate(this%CO2ByFire_CumYr_pft);nullify(this%CO2ByFire_CumYr_pft)
+  if(associated(this%N2ObyFire_CumYr_pft))deallocate(this%N2ObyFire_CumYr_pft);nullify(this%N2ObyFire_CumYr_pft)
+  if(associated(this%NH3byFire_CumYr_pft))deallocate(this%NH3byFire_CumYr_pft);nullify(this%NH3byFire_CumYr_pft)
+  if(associated(this%PO4byFire_CumYr_pft))deallocate(this%PO4byFire_CumYr_pft);nullify(this%PO4byFire_CumYr_pft)
+  if(associated(this%EcoHavstElmntCum_pft))deallocate(this%EcoHavstElmntCum_pft);nullify(this%EcoHavstElmntCum_pft)
+  if(associated(this%EcoHavstElmnt_CumYr_pft))deallocate(this%EcoHavstElmnt_CumYr_pft);nullify(this%EcoHavstElmnt_CumYr_pft)
+  if(associated(this%PlantElmDistLoss_pft))deallocate(this%PlantElmDistLoss_pft);nullify(this%PlantElmDistLoss_pft)
+  call PrintInfo('end '//subname)
   end subroutine plt_disturb_destroy
 end module PlantDisturbanceAPIData

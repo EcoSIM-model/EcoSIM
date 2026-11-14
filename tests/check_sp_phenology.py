@@ -54,7 +54,8 @@ def main():
         ("hist_fincl1", "'RootC_2nd_pvr','RootN_2nd_pvr','RootP_2nd_pvr',"
          "'Root2ndBiomC_pft','MycoBiomC_pvr','Root2nd_AxesNumL_pvr','Root2ndMeanLen_pvr',"
          "'RootNonstBConc_pvr','CAN_GPP_pft','LeafProteinN_pft','VcMax25C_RUBISCO_pft',"
-         "'JMax25C_photo_pft','VcMax25C_PEP_pft','STOML_MinRSC_CO2_pft'", "ecosim"),
+         "'JMax25C_photo_pft','VcMax25C_PEP_pft','STOML_MinRSC_CO2_pft',"
+         "'RootH2OUptake_vr','RootH2OUptk_pvr'", "ecosim"),
         ("stop_option", "'ndays'", "ecosim_time"),
         ("stop_n", "2", "ecosim_time"),
     ):
@@ -294,6 +295,13 @@ def main():
             with Dataset(next(folder.glob("*.ecosim.h0.*.nc"))) as hist:
                 np.testing.assert_allclose(hist["ECO_LAI_col"][-1, 0], leaf_index.sum(), rtol=1.e-6)
                 np.testing.assert_allclose(hist["ECO_SAI_col"][-1, 0], stem_index.sum(), rtol=1.e-6)
+                # The soil-applied sink must equal current PFT uptake in the
+                # very same hour. The six-square-meter cell checks units too.
+                applied = hist["RootH2OUptake_vr"][:, :, 0]
+                requested = np.sum(hist["RootH2OUptk_pvr"][:, :, :expected], axis=2)
+                np.testing.assert_allclose(applied, requested, rtol=1.e-6, atol=1.e-12)
+                if name == "high-leaf-protein":
+                    assert np.any(np.abs(applied) > 1.e-6)
 
             for j, name_in in enumerate(records[0][:expected]):
                 # The grid's Koppen code replaces the deliberately different input suffix.

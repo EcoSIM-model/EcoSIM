@@ -1,6 +1,10 @@
 module EcoSIMAPI
+  ! Description:
+  ! Advance standalone EcoSIM physical and biogeochemical processes. Plant
+  ! hydraulics supply current root transfers before soil transport; full plant
+  ! growth and nutrient processes retain their original post-hydrology ordering.
   use timings,          only: start_timer, end_timer, timer_stamp_type
-  use data_kind_mod,    only: yearIJ_type
+  use data_kind_mod,    only: r8 => DAT_KIND_R8,yearIJ_type
   use MicBGCAPI,        only: MicrobeModel,        MicAPI_Init,              MicAPI_cleanup
   use TracerIDMod,      only: ids_NO2B,            ids_NO2,                  idg_O2
   use EcosysWarmingMod, only: check_warming_year, apply_soil_cable_warming, config_soil_warming
@@ -10,9 +14,11 @@ module EcoSIMAPI
   use RedistMod,         only: redist
   use GeochemAPI,        only: soluteModel
   use PlantMod,          only: PlantModel, UpdateDailyGPP
+  use PlantHydraulicMod, only: PlantHydraulicModel
   use TranspNoSaltMod,   only: TranspNoSalt
   use TranspSaltMod,     only: TranspSalt
   use WatsubMod,         only: watsub
+  use GridConsts,        only: JY,JX
   use PlantMgmtDataType, only: NP_col
   use FireMod,           only: config_fire
   use EcoSIMSolverPar,   only: oscal_test
@@ -35,7 +41,8 @@ implicit none
 contains
 
   subroutine Run_EcoSIM_one_step(yearIJ,NHW,NHE,NVN,NVS)
-
+  ! Description:
+  ! Advance one hourly physical step followed by the enabled BGC processes.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -53,7 +60,7 @@ contains
   !   CALCULATE SOIL ENERGY BALANCE, WATER AND HEAT FLUXES IN 'WATSUB'
   !
   if(do_timing)call start_timer(t1)
-  CALL WATSUB(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
+  call WATSUB(yearIJ,NHW,NHE,NVN,NVS,PlantHydraulicModel)
   if(do_timing)call end_timer('WAT',t1)
   !
   !   CALCULATE SOIL BIOLOGICAL TRANSFORMATIONS IN 'NITRO'
@@ -68,7 +75,7 @@ contains
   !
   !   UPDATE PLANT biogeochemistry
   !
-  if(plant_model .and. (.not.ldo_radiation_test))then
+  if(plant_model.and..not.ldo_radiation_test.and..not.ldo_sp_mode)then
     if(do_timing)call start_timer(t1)  
     call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
     if(do_timing)call end_timer('PlantModel',t1)    

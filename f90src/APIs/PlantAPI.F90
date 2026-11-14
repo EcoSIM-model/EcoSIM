@@ -32,6 +32,7 @@ implicit none
   __FILE__
   public :: PlantAPISend
   public :: PlantAPIRecv
+  public :: RefreshPlantColumnForBGC
 
   contains
 
@@ -100,5 +101,30 @@ implicit none
   ENDDO
   call PrintInfo('end '//subname)
   end subroutine PlantAPISend
+
+!------------------------------------------------------------------------------------------
+  subroutine RefreshPlantColumnForBGC(yearIJ,NY,NX)
+    ! Description:
+    ! Refresh column soil, microbial and surface ledgers after transport and
+    ! microbial BGC, retaining the parked plant phenology and hydraulic state.
+    type(yearIJ_type), intent(in) :: yearIJ ! current model year/day/hour [-]
+    integer, intent(in) :: NY,NX ! column row and column indices [-]
+    character(len=*), parameter :: subname='RefreshPlantColumnForBGC'
+    integer :: I1,L,M
+    call PrintInfo('beg '//subname)
+    associate( &
+      RootO2Uptake => plt_rbgc%REcoUptkSoilO2M_vr, & ! output: microbial soil O2 uptake [gO2/cell/substep], substep/layer
+      AirFraction => plt_soilchem%FracAirFilledSoilPoreM_vr) ! output: soil air-filled pore fraction [-], substep/layer
+      call SendPlantColumnInputs(yearIJ%I,NY,NX,I1)
+      call SendPlantColumnState(I1,NY,NX)
+      do L=1,NK_col(NY,NX)
+        do M=1,NPH
+          RootO2Uptake(M,L)=REcoUptkSoilO2M_vr(M,L,NY,NX)
+          AirFraction(M,L)=FracAirFilledSoilPoreM_vr(M,L,NY,NX)
+        enddo
+      enddo
+    end associate
+    call PrintInfo('end '//subname)
+  end subroutine RefreshPlantColumnForBGC
 
 end module PlantAPI

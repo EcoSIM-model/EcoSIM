@@ -1,4 +1,7 @@
 module NutUptakeMod
+  ! Description:
+  ! Compute plant nutrient/O2 uptake and root gas/solute exchange using accepted
+  ! hydraulic fluxes, independently of the canopy water and energy solver.
 
   use data_kind_mod, only: r8 => DAT_KIND_R8,yearIJ_type
   use minimathmod,   only: safe_adb, vapsat, AZMAX1,dssign
@@ -335,75 +338,95 @@ module NutUptakeMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine ZeroNutrientUptake()
-
-  implicit none
-  character(len=*), parameter :: subname='ZeroNutrientUptake'
-  !     begin_execution
-  call PrintInfo('end '//subname)
-  associate(RootSoilCO2Debt_vr => plt_rbgc%RootSoilCO2Debt_vr)
-    ! Transient API output; persistent debt is owned by trcs_solml_drib_vr
-    ! after the paired column handoff, not carried again in the root API.
-    RootSoilCO2Debt_vr=0._r8
-  end associate
-  plt_rbgc%RootCO2Ar2RootX_rpvr       = 0._r8
-  plt_rbgc%RootCO2Ar2Soil_pvr         = 0._r8
-  plt_bgcr%RootO2_TotSink_pvr         = 0._r8
-  plt_rbgc%RootCO2Ar2RootX_pvr        = 0._r8
-  plt_rbgc%RCO2Emis2Root_rpvr         = 0.0_r8
-  plt_rbgc%Soil2RootMycoExudE_pvr      = 0.0_r8
-  plt_rbgc%RAutoRootO2Limter_rpvr     = 0.0_r8
-  plt_rbgc%RootNH4DmndSoil_pvr        = 0.0_r8
-  plt_rbgc%RootNutUptake_pvr          = 0.0_r8
-  ! Clear uptake diagnostics even when nutrient uptake is skipped below.
-  ! Keep previous O2 demand until GetUptakeCapcity computes active-root shares.
-  plt_rbgc%VmaxNH4Root_pvr            = 0._r8
-  plt_rbgc%VmaxNO3Root_pvr            = 0._r8
-  plt_bgcr%Nutruptk_fClim_rpvr        = 0._r8
-  plt_bgcr%Nutruptk_fNlim_rpvr        = 0._r8
-  plt_bgcr%Nutruptk_fPlim_rpvr        = 0._r8
-  plt_bgcr%Nutruptk_fProtC_rpvr       = 0._r8
-  plt_rbgc%RootOUlmNutUptake_pvr      = 0.0_r8
-  plt_rbgc%RootNH4DmndBand_pvr        = 0.0_r8
-  plt_rbgc%RootNO3DmndSoil_pvr        = 0.0_r8
-  plt_rbgc%RootNO3DmndBand_pvr        = 0.0_r8
-  plt_rbgc%RootCUlmNutUptake_pvr      = 0.0_r8
-  plt_rbgc%RootH2PO4DmndSoil_pvr      = 0.0_r8
-  plt_rbgc%RootH2PO4DmndBand_pvr      = 0.0_r8
-  plt_rbgc%RootH1PO4DmndSoil_pvr      = 0.0_r8
-  plt_rbgc%RootH1PO4DmndBand_pvr      = 0.0_r8
-  plt_bgcr%RootN2Fix_pvr              = 0.0_r8
-  plt_bgcr%RootCO2Emis2Root_pvr       = 0._r8
-  plt_bgcr%RootCO2Emis2Root_vr        = 0._r8
-  plt_rbgc%trcs_Soil2plant_uptake_pvr = 0._r8
-
-  plt_rad%RadNet2Canopy_pft     = 0.0_r8
-  plt_rad%LWRadCanopy_pft       = 0.0_r8
-  plt_ew%CanopyEvapTransLHeat_pft     = 0.0_r8
-  plt_ew%HeatXAir2PCan_pft      = 0.0_r8
-  plt_ew%HeatStorCanopy_pft     = 0.0_r8
-  plt_ew%Transpiration_pft      = 0.0_r8
-  plt_ew%VapXAir2Canopy_pft     = 0.0_r8
-  plt_ew%SnoSub2AirCanopy_pft   = 0.0_r8
-  plt_rbgc%Soil2RootMycoExudE_pft = 0.0_r8
-  plt_rbgc%RootNH4Uptake_pft    = 0.0_r8
-  plt_rbgc%RootNO3Uptake_pft    = 0.0_r8
-  plt_rbgc%RootH2PO4Uptake_pft  = 0.0_r8
-  plt_rbgc%RootHPO4Uptake_pft   = 0.0_r8
-  plt_rbgc%RootN2Fix_pft        = 0.0_r8
-  !
-  !     RESET UPTAKE ARRAYS
-  !
-  plt_ew%RootH2OUptkStress_pvr      = 0._r8
-  plt_ew%RPlantRootH2OUptk_pvr      = 0.0_r8
-  plt_rbgc%RCO2Emis2Root_rpvr       = 0.0_r8
-  plt_rbgc%RootO2Uptk_pvr           = 0.0_r8
-  plt_rbgc%RootUptkSoiSol_pvr       = 0.0_r8
-  plt_rbgc%trcg_air2root_flx_pvr    = 0.0_r8
-  plt_rbgc%trcg_Root_gas2aqu_flx_vr = 0.0_r8
-    
-  plt_rbgc%trcs_Soil2plant_uptake_vr  =0._r8      
-  
-  call PrintInfo('end '//subname)
+    ! Description:
+    ! Reset chemical uptake and gas-exchange outputs without changing accepted
+    ! hydraulic or canopy energy fluxes. Retain previous O2 demand until each
+    ! PFT reads its competition share; native handoff owns persistent CO2 debt.
+    character(len=*), parameter :: subname='ZeroNutrientUptake'
+    call PrintInfo('beg '//subname)
+    associate( &
+      RootSoilCO2Debt_vr => plt_rbgc%RootSoilCO2Debt_vr, & ! output: transient root/soil CO2 debt [gC/cell], layer
+      RootCO2Ar2RootX_rpvr => plt_rbgc%RootCO2Ar2RootX_rpvr, & ! output: root/myco respiration released to root/myco, [gC /cell/hour], root type/layer/PFT
+      RootCO2Ar2Soil_pvr => plt_rbgc%RootCO2Ar2Soil_pvr, & ! output: root respiration released to soil, [gC /cell/hour], layer/PFT
+      RootO2_TotSink_pvr => plt_bgcr%RootO2_TotSink_pvr, & ! output: autotrophic respiration O2 sink [gO2/cell/hour], root type/layer/PFT
+      RootCO2Ar2RootX_pvr => plt_rbgc%RootCO2Ar2RootX_pvr, & ! output: root respiration released to root, [gC /cell/hour], layer/PFT
+      RCO2Emis2Root_rpvr => plt_rbgc%RCO2Emis2Root_rpvr, & ! output: aqueous CO2 flux from roots to root water, [g /cell/hour], root type/layer/PFT
+      Soil2RootMycoExudE_pvr => plt_rbgc%Soil2RootMycoExudE_pvr, & ! output: root uptake (+ve) - exudation (-ve) of DOE, [g /cell/hour], element/root type/complex/layer/PFT
+      RAutoRootO2Limter_rpvr => plt_rbgc%RAutoRootO2Limter_rpvr, & ! output: oxygen limitation of respiration [-], root type/layer/PFT
+      RootNH4DmndSoil_pvr => plt_rbgc%RootNH4DmndSoil_pvr, & ! output: root uptake of NH4 non-band unconstrained by NH4, [g /cell/hour], root type/layer/PFT
+      RootNutUptake_pvr => plt_rbgc%RootNutUptake_pvr, & ! output: root uptake of Nutrient band, [g /cell/hour], species/root type/layer/PFT
+      VmaxNH4Root_pvr => plt_rbgc%VmaxNH4Root_pvr, & ! output: NH4 uptake capacity [gN/gC/hour], root type/layer/PFT
+      VmaxNO3Root_pvr => plt_rbgc%VmaxNO3Root_pvr, & ! output: NO3 uptake capacity [gN/gC/hour], root type/layer/PFT
+      Nutruptk_fClim_rpvr => plt_bgcr%Nutruptk_fClim_rpvr, & ! output: climate uptake modifier [-], root type/layer/PFT
+      Nutruptk_fNlim_rpvr => plt_bgcr%Nutruptk_fNlim_rpvr, & ! output: nitrogen uptake modifier [-], root type/layer/PFT
+      Nutruptk_fPlim_rpvr => plt_bgcr%Nutruptk_fPlim_rpvr, & ! output: phosphorus uptake modifier [-], root type/layer/PFT
+      Nutruptk_fProtC_rpvr => plt_bgcr%Nutruptk_fProtC_rpvr, & ! output: protein uptake modifier [-], root type/layer/PFT
+      RootOUlmNutUptake_pvr => plt_rbgc%RootOUlmNutUptake_pvr, & ! output: root uptake of NH4 band unconstrained by O2, [g /cell/hour], species/root type/layer/PFT
+      RootNH4DmndBand_pvr => plt_rbgc%RootNH4DmndBand_pvr, & ! output: band NH4 demand [gN/cell/hour], root type/layer/PFT
+      RootNO3DmndSoil_pvr => plt_rbgc%RootNO3DmndSoil_pvr, & ! output: non-band NO3 demand [gN/cell/hour], root type/layer/PFT
+      RootNO3DmndBand_pvr => plt_rbgc%RootNO3DmndBand_pvr, & ! output: band NO3 demand [gN/cell/hour], root type/layer/PFT
+      RootCUlmNutUptake_pvr => plt_rbgc%RootCUlmNutUptake_pvr, & ! output: root uptake of NH4 band unconstrained by root nonstructural C, [g /cell/hour], species/root type/layer/PFT
+      RootH2PO4DmndSoil_pvr => plt_rbgc%RootH2PO4DmndSoil_pvr, & ! output: root uptake of H2PO4 non-band, [g /cell/hour], root type/layer/PFT
+      RootH2PO4DmndBand_pvr => plt_rbgc%RootH2PO4DmndBand_pvr, & ! output: root uptake of H2PO4 band, [g /cell/hour], root type/layer/PFT
+      RootH1PO4DmndSoil_pvr => plt_rbgc%RootH1PO4DmndSoil_pvr, & ! output: HPO4 demand in non-band by each root population, [g /cell/hour], root type/layer/PFT
+      RootH1PO4DmndBand_pvr => plt_rbgc%RootH1PO4DmndBand_pvr, & ! output: HPO4 demand in band by each root population, [g /cell/hour], root type/layer/PFT
+      RootN2Fix_pvr => plt_bgcr%RootN2Fix_pvr, & ! output: root N2 fixation, [gN /cell/hour], layer/PFT
+      RootCO2Emis2Root_pvr => plt_bgcr%RootCO2Emis2Root_pvr, & ! output: root CO2 flux, [gC /cell/hour], layer/PFT
+      RootCO2Emis2Root_vr => plt_bgcr%RootCO2Emis2Root_vr, & ! output: total root CO2 flux, [gC /cell/hour], layer
+      trcs_Soil2plant_uptake_pvr => plt_rbgc%trcs_Soil2plant_uptake_pvr, & ! output: plant root-soil solute flux non-band, [g /cell/hour], species/layer/PFT
+      Soil2RootMycoExudE_pft => plt_rbgc%Soil2RootMycoExudE_pft, & ! output: root uptake minus exudation [g element/cell/hour], element/PFT
+      RootNH4Uptake_pft => plt_rbgc%RootNH4Uptake_pft, & ! output: total root uptake of NH4, [g /cell/hour], PFT
+      RootNO3Uptake_pft => plt_rbgc%RootNO3Uptake_pft, & ! output: total root uptake of NO3, [g /cell/hour], PFT
+      RootH2PO4Uptake_pft => plt_rbgc%RootH2PO4Uptake_pft, & ! output: total root uptake of PO4, [g /cell/hour], PFT
+      RootHPO4Uptake_pft => plt_rbgc%RootHPO4Uptake_pft, & ! output: total root uptake of HPO4, [g /cell/hour], PFT
+      RootN2Fix_pft => plt_rbgc%RootN2Fix_pft, & ! output: total root N2 fixation, [g /cell/hour], PFT
+      RootO2Uptk_pvr => plt_rbgc%RootO2Uptk_pvr, & ! output: aqueous O2 flux from roots to root water, [g /cell/hour], root type/layer/PFT
+      RootUptkSoiSol_pvr => plt_rbgc%RootUptkSoiSol_pvr, & ! output: aqueous CO2 flux from roots to soil water, [g /cell/hour], species/root type/layer/PFT
+      trcg_air2root_flx_pvr => plt_rbgc%trcg_air2root_flx_pvr, & ! output: gaseous tracer flux through roots, [g /cell/hour], species/root type/layer/PFT
+      trcg_Root_gas2aqu_flx_vr => plt_rbgc%trcg_Root_gas2aqu_flx_vr, & ! output: dissolution (+ve) - volatilization (-ve) gas flux in roots, [g /cell/hour], species/root type/layer/PFT
+      trcs_Soil2plant_uptake_vr => plt_rbgc%trcs_Soil2plant_uptake_vr) ! output: total root-soil solute flux non-band, [g /cell/hour], species/layer
+      RootSoilCO2Debt_vr=0._r8
+      RootCO2Ar2RootX_rpvr=0._r8
+      RootCO2Ar2Soil_pvr=0._r8
+      RootO2_TotSink_pvr=0._r8
+      RootCO2Ar2RootX_pvr=0._r8
+      RCO2Emis2Root_rpvr=0._r8
+      Soil2RootMycoExudE_pvr=0._r8
+      RAutoRootO2Limter_rpvr=0._r8
+      RootNH4DmndSoil_pvr=0._r8
+      RootNutUptake_pvr=0._r8
+      VmaxNH4Root_pvr=0._r8
+      VmaxNO3Root_pvr=0._r8
+      Nutruptk_fClim_rpvr=0._r8
+      Nutruptk_fNlim_rpvr=0._r8
+      Nutruptk_fPlim_rpvr=0._r8
+      Nutruptk_fProtC_rpvr=0._r8
+      RootOUlmNutUptake_pvr=0._r8
+      RootNH4DmndBand_pvr=0._r8
+      RootNO3DmndSoil_pvr=0._r8
+      RootNO3DmndBand_pvr=0._r8
+      RootCUlmNutUptake_pvr=0._r8
+      RootH2PO4DmndSoil_pvr=0._r8
+      RootH2PO4DmndBand_pvr=0._r8
+      RootH1PO4DmndSoil_pvr=0._r8
+      RootH1PO4DmndBand_pvr=0._r8
+      RootN2Fix_pvr=0._r8
+      RootCO2Emis2Root_pvr=0._r8
+      RootCO2Emis2Root_vr=0._r8
+      trcs_Soil2plant_uptake_pvr=0._r8
+      Soil2RootMycoExudE_pft=0._r8
+      RootNH4Uptake_pft=0._r8
+      RootNO3Uptake_pft=0._r8
+      RootH2PO4Uptake_pft=0._r8
+      RootHPO4Uptake_pft=0._r8
+      RootN2Fix_pft=0._r8
+      RootO2Uptk_pvr=0._r8
+      RootUptkSoiSol_pvr=0._r8
+      trcg_air2root_flx_pvr=0._r8
+      trcg_Root_gas2aqu_flx_vr=0._r8
+      trcs_Soil2plant_uptake_vr=0._r8
+    end associate
+    call PrintInfo('end '//subname)
   end subroutine ZeroNutrientUptake
 
 

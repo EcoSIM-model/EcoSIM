@@ -36,6 +36,7 @@ module ATSEcoSIMAdvanceMod
   use ATSUtilsMod
   use EcoSIMHistMod
   use PlantTraitsTransferMod
+  use PlantHydraulicMod, only: PlantHydraulicModel
   !use PlantAPIData
   use EcoSIMCtrlMod,      only: ldo_sp_mode
   use EcosimBGCFluxType,  only: Eco_NetRad_col, Eco_Heat_Latent_col, &
@@ -523,7 +524,7 @@ implicit none
 
   !Does energy and water exchange in the plant roots and canopy
   ! Specifically runs the CanopyEnergyH2Oiter_func
-  if(ldo_sp_mode) call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
+  if(ldo_sp_mode)call PlantHydraulicModel(yearIJ,NHW,NHE,NVN,NVS)
 
   DO NY=1,NYS
     !for every column send the top layer to the transfer var

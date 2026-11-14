@@ -8,6 +8,8 @@ set(APIS_SOURCES
 	PlantAPI.F90
   PlantCanAPI.F90
   PlantMod.F90
+  PlantPhaseWorkMod.F90
+  PlantHydraulicMod.F90
   MicBGCAPI.F90
   PlantAPI4Uptake.F90  
   GeochemAPI.F90

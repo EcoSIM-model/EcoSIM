@@ -1,6 +1,7 @@
 module PlantEnergyWaterAPIData
   ! Description:
   ! Owns the energywater API type, instance and lifecycle procedures.
+  use DebugToolMod, only: PrintInfo
   use PlantAPICommonData
   implicit none
   private
@@ -154,10 +155,55 @@ contains
   end subroutine plt_ew_init
 
   subroutine plt_ew_destroy(this)
-  implicit none
-  class(plant_ew_type) :: this
+  ! Description:
+  ! Release every array owned by this PlantEnergyWaterAPIData workspace.
+  class(plant_ew_type), intent(inout) :: this ! owned API state; component units and dimensions as declared above
+  character(len=*), parameter :: subname='plt_ew_destroy'
 
-
-
+  call PrintInfo('beg '//subname)
+  if(associated(this%CdH2ORootxSoil_pft))deallocate(this%CdH2ORootxSoil_pft);nullify(this%CdH2ORootxSoil_pft)
+  if(associated(this%BulkFactor4Snow_pft))deallocate(this%BulkFactor4Snow_pft);nullify(this%BulkFactor4Snow_pft)
+  if(associated(this%fSnowCanopy_pft))deallocate(this%fSnowCanopy_pft);nullify(this%fSnowCanopy_pft)
+  if(associated(this%Transpiration_pft))deallocate(this%Transpiration_pft);nullify(this%Transpiration_pft)
+  if(associated(this%PSICanopyTurg_pft))deallocate(this%PSICanopyTurg_pft);nullify(this%PSICanopyTurg_pft)
+  if(associated(this%RainIntcptByCanopy_pft))deallocate(this%RainIntcptByCanopy_pft);nullify(this%RainIntcptByCanopy_pft)
+  if(associated(this%SnowIntcptByCanopy_pft))deallocate(this%SnowIntcptByCanopy_pft);nullify(this%SnowIntcptByCanopy_pft)
+  if(associated(this%PSICanopy_pft))deallocate(this%PSICanopy_pft);nullify(this%PSICanopy_pft)
+  if(associated(this%VapXAir2Canopy_pft))deallocate(this%VapXAir2Canopy_pft);nullify(this%VapXAir2Canopy_pft)
+  if(associated(this%VapXAir2CanopyLiq_pft))deallocate(this%VapXAir2CanopyLiq_pft);nullify(this%VapXAir2CanopyLiq_pft)
+  if(associated(this%HeatStorCanopy_pft))deallocate(this%HeatStorCanopy_pft);nullify(this%HeatStorCanopy_pft)
+  if(associated(this%CanopyEvapTransLHeat_pft))deallocate(this%CanopyEvapTransLHeat_pft);nullify(this%CanopyEvapTransLHeat_pft)
+  if(associated(this%RawIsoTCanopy2Atm_pft))deallocate(this%RawIsoTCanopy2Atm_pft);nullify(this%RawIsoTCanopy2Atm_pft)
+  if(associated(this%TKS_vr))deallocate(this%TKS_vr);nullify(this%TKS_vr)
+  if(associated(this%PSICanPDailyMin_pft))deallocate(this%PSICanPDailyMin_pft);nullify(this%PSICanPDailyMin_pft)
+  if(associated(this%TdegCCanopy_pft))deallocate(this%TdegCCanopy_pft);nullify(this%TdegCCanopy_pft)
+  if(associated(this%DeltaTKC_pft))deallocate(this%DeltaTKC_pft);nullify(this%DeltaTKC_pft)
+  if(associated(this%ENGYX_pft))deallocate(this%ENGYX_pft);nullify(this%ENGYX_pft)
+  if(associated(this%TKC_pft))deallocate(this%TKC_pft);nullify(this%TKC_pft)
+  if(associated(this%PSICanopyOsmo_pft))deallocate(this%PSICanopyOsmo_pft);nullify(this%PSICanopyOsmo_pft)
+  if(associated(this%OrganOsmoPsi0pt_pft))deallocate(this%OrganOsmoPsi0pt_pft);nullify(this%OrganOsmoPsi0pt_pft)
+  if(associated(this%HeatXAir2PCan_pft))deallocate(this%HeatXAir2PCan_pft);nullify(this%HeatXAir2PCan_pft)
+  if(associated(this%TKCanopy_pft))deallocate(this%TKCanopy_pft);nullify(this%TKCanopy_pft)
+  if(associated(this%PSIRoot_pvr))deallocate(this%PSIRoot_pvr);nullify(this%PSIRoot_pvr)
+  if(associated(this%PSIRootOSMO_vr))deallocate(this%PSIRootOSMO_vr);nullify(this%PSIRootOSMO_vr)
+  if(associated(this%PSIRootTurg_vr))deallocate(this%PSIRootTurg_vr);nullify(this%PSIRootTurg_vr)
+  if(associated(this%RPlantRootH2OUptk_pvr))deallocate(this%RPlantRootH2OUptk_pvr);nullify(this%RPlantRootH2OUptk_pvr)
+  if(associated(this%SapFlowVlinear_pvr))deallocate(this%SapFlowVlinear_pvr);nullify(this%SapFlowVlinear_pvr)
+  if(associated(this%SapFlowVLinear_rpvr))deallocate(this%SapFlowVLinear_rpvr);nullify(this%SapFlowVLinear_rpvr)
+  if(associated(this%RootH2OUptkStress_pvr))deallocate(this%RootH2OUptkStress_pvr);nullify(this%RootH2OUptkStress_pvr)
+  if(associated(this%THeatLossRoot2Soil_vr))deallocate(this%THeatLossRoot2Soil_vr);nullify(this%THeatLossRoot2Soil_vr)
+  if(associated(this%TWaterPlantRoot2Soil_vr))deallocate(this%TWaterPlantRoot2Soil_vr);nullify(this%TWaterPlantRoot2Soil_vr)
+  if(associated(this%SnowOnCanopy_pft))deallocate(this%SnowOnCanopy_pft);nullify(this%SnowOnCanopy_pft)
+  if(associated(this%SnoSub2AirCanopy_pft))deallocate(this%SnoSub2AirCanopy_pft);nullify(this%SnoSub2AirCanopy_pft)
+  if(associated(this%WatHeldOnCanopy_pft))deallocate(this%WatHeldOnCanopy_pft);nullify(this%WatHeldOnCanopy_pft)
+  if(associated(this%CanopyBiomWater_pft))deallocate(this%CanopyBiomWater_pft);nullify(this%CanopyBiomWater_pft)
+  if(associated(this%VHeatCapCanopy_pft))deallocate(this%VHeatCapCanopy_pft);nullify(this%VHeatCapCanopy_pft)
+  if(associated(this%ElvAdjstedSoilH2OPSIMPa_vr))deallocate(this%ElvAdjstedSoilH2OPSIMPa_vr);nullify(this%ElvAdjstedSoilH2OPSIMPa_vr)
+  if(associated(this%ETCanopy_CumYr_pft))deallocate(this%ETCanopy_CumYr_pft);nullify(this%ETCanopy_CumYr_pft)
+  if(associated(this%QdewCanopy_pft))deallocate(this%QdewCanopy_pft);nullify(this%QdewCanopy_pft)
+  if(associated(this%RootResist4H2O_pvr))deallocate(this%RootResist4H2O_pvr);nullify(this%RootResist4H2O_pvr)
+  if(associated(this%RootRadialKond2H2O_pvr))deallocate(this%RootRadialKond2H2O_pvr);nullify(this%RootRadialKond2H2O_pvr)
+  if(associated(this%RootAxialKond2H2O_pvr))deallocate(this%RootAxialKond2H2O_pvr);nullify(this%RootAxialKond2H2O_pvr)
+  call PrintInfo('end '//subname)
   end subroutine plt_ew_destroy
 end module PlantEnergyWaterAPIData
