@@ -32,6 +32,54 @@ implicit none
 contains
 
 !------------------------------------------------------------------------------------------
+  integer function LeafDevelopmentNode(LeavesAppeared,LeafNumberCap) result(NodeIndex)
+    ! Description:
+    ! Return ECOSYS's current developmental node, independently of retained tissue.
+    real(r8), intent(in) :: LeavesAppeared ! cumulative appeared leaves, [-]
+    real(r8), intent(in) :: LeafNumberCap ! final leaf-number cap; <= ppmc means unset, [-]
+    character(len=*), parameter :: subname='LeafDevelopmentNode'
+
+    call PrintInfo('beg '//subname)
+    if(LeafNumberCap.LE.ppmc)then
+      NodeIndex=INT(LeavesAppeared)+1
+    else
+      NodeIndex=INT(MIN(LeavesAppeared,LeafNumberCap))+1
+    endif
+    call PrintInfo('end '//subname)
+  end function LeafDevelopmentNode
+
+!------------------------------------------------------------------------------------------
+  subroutine LeafNodeGrowthRanges(LeavesAppeared,LeafNumberCap,HighestRetainedNode, &
+    NumCoGrowing,MaxStoredNodes,MinLeafNode,MinStalkNode,LeafFirst,LeafLast,StalkFirst,StalkLast)
+    ! Description:
+    ! Intersect the existing growth windows with the developmental cap. Keep their
+    ! lower bounds anchored to the retained frontier so a retreat cannot reopen
+    ! old leaves or address a circular-storage slot belonging to a younger node.
+    ! An empty interval (last < first) means that organ cannot receive growth.
+    real(r8), intent(in) :: LeavesAppeared ! cumulative appeared leaves, [-]
+    real(r8), intent(in) :: LeafNumberCap ! final leaf-number cap; <= ppmc means unset, [-]
+    integer, intent(in) :: HighestRetainedNode ! absolute tissue frontier in this cycle, [-]
+    integer, intent(in) :: NumCoGrowing ! number of concurrently expanding leaf nodes, [-]
+    integer, intent(in) :: MaxStoredNodes ! number of reused positive node slots, [-]
+    integer, intent(in) :: MinLeafNode ! first leaf node: 0 for pre-emergent main stem, otherwise 1
+    integer, intent(in) :: MinStalkNode ! first stalk node: 0 before branch emergence, otherwise 1
+    integer, intent(out) :: LeafFirst,LeafLast ! inclusive leaf/petiole growth bounds, [-]
+    integer, intent(out) :: StalkFirst,StalkLast ! inclusive internode growth bounds, [-]
+    character(len=*), parameter :: subname='LeafNodeGrowthRanges'
+    integer :: DevelopmentNode
+
+    call PrintInfo('beg '//subname)
+    DevelopmentNode=LeafDevelopmentNode(LeavesAppeared,LeafNumberCap)
+    LeafFirst=MAX(MinLeafNode,HighestRetainedNode-NumCoGrowing+1, &
+      HighestRetainedNode-MaxStoredNodes+1)
+    LeafLast=MIN(HighestRetainedNode,DevelopmentNode)
+    StalkFirst=MAX(MIN(MinStalkNode,MAX(MinStalkNode,HighestRetainedNode-NumCoGrowing)), &
+      HighestRetainedNode-MaxStoredNodes+2)
+    StalkLast=MIN(HighestRetainedNode,DevelopmentNode)
+    call PrintInfo('end '//subname)
+  end subroutine LeafNodeGrowthRanges
+
+!------------------------------------------------------------------------------------------
   subroutine CanopySnowOptics(SnowType,PhysicalArea,SnowVolume,SnowFraction,EffectiveArea)
     ! Description:
     ! Derive snow cover and radiative area from retained SWE and current exposed

@@ -27,6 +27,7 @@ module grosubsMod
   use PlantMathFuncMod
   use LitterFallMod
   use PlantBranchMod
+  use PlantPhenolMod, only : PhenologyUpdate
   use PlantBalMod
   implicit none
 
@@ -59,9 +60,9 @@ module grosubsMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine GrowPlants(yearIJ)
-!
-!     THIS subroutine CALCULATES ALL PLANT BIOLOGICAL TRANSFORMATIONS
-!
+  ! Description:
+  ! Advance prepared cohorts with current uptake conditions, then perform plant
+  ! growth, allocation and turnover while retaining accepted hydraulic fluxes.
   use PlantDisturbsMod, only : RemoveBiomassByDisturbance
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
@@ -73,6 +74,7 @@ module grosubsMod
   real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
 
   ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     IsPlantActive_pft            => plt_pheno%IsPlantActive_pft           ,& !input  :flag for living pft, [-]
     NP                           => plt_site%NP                           ,& !input  :current number of plant species,[-]
@@ -82,9 +84,11 @@ module grosubsMod
     StalkHeight_pft              => plt_morph%StalkHeight_pft             ,& !inoput :stalk height/length, [m]
     CanopyHeightLive_pft         => plt_morph%CanopyHeightLive_pft         & !inoput :canopy height, [m]
   )
-  call PrintInfo('beg '//subname)
-  !     TOTAL AGB FOR GRAZING IN LANDSCAPE SECTION
+  ! RootChemicalUptake has refreshed growth temperature after the water/energy
+  ! solve. Advance development before clearing the retained canopy geometry.
+  call PhenologyUpdate(yearIJ)
   !
+  !     TOTAL AGB FOR GRAZING IN LANDSCAPE SECTION
   !
   !     INITIALIZE SENESCENCE ARRAYS
   DO NZ=1,NP0
@@ -117,8 +121,8 @@ module grosubsMod
   call Live2DeadTransformation(yearIJ)     
   !call CheckPlantBalanceZ(yearIJ,NZ=1,header=subname//'L2DEAD')  
   !
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   END subroutine GrowPlants
 
 !----------------------------------------------------------------------------------------------------

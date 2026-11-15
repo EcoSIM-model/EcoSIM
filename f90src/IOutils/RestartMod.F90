@@ -2313,7 +2313,7 @@ implicit none
   if(flag=='read')then
     dat2pr => datip_2d(1:npfts,1:MaxNumBranches)
     call restartvar(ncid, flag, varname='KVSTG', dim1name='pft',dim2name='nbranches',&
-     long_name='leaf growth stage counter', units='none', &
+     long_name='highest retained absolute node in current cycle', units='none', &
      interpinic_flag='skip', data=dat2pr, missing_value=ispval, fill_value=ispval)
     call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,KHiestGroLeafNode_brch,datip_2d,NumActivePlants=restart_num_plants,&
       IsPlantActive_pft=restart_active_pft)
@@ -2323,7 +2323,7 @@ implicit none
       IsPlantActive_pft=restart_active_pft)
     dat2pr => datip_2d(1:npfts,1:MaxNumBranches)
     call restartvar(ncid, flag, varname='KVSTG', dim1name='pft',dim2name='nbranches',&
-     long_name='leaf growth stage counter', units='none', &
+     long_name='highest retained absolute node in current cycle', units='none', &
      interpinic_flag='skip', data=dat2pr, missing_value=ispval, fill_value=ispval)
   endif  
 

@@ -53,7 +53,7 @@ module PlantPhenologyAPIData
   integer,  pointer :: doSenescence_brch(:,:)            => null()  !branch phenology flag,                            [-]
   integer,  pointer :: Prep4Literfall_brch(:,:)          => null()  !branch phenology flag,                            [-]
   integer,  pointer :: Hours4LiterfalAftMature_brch(:,:) => null()  !branch phenology flag,                            [h]
-  integer,  pointer :: KHiestGroLeafNode_brch(:,:)       => null()  !leaf growth stage counter,                        [-]
+  integer,  pointer :: KHiestGroLeafNode_brch(:,:)       => null()  !highest retained absolute node this cycle; growth cap applied separately, [-]
   integer,  pointer :: iPlantPhenolType_pft(:)           => null()  !climate signal for phenological progress: none,   temperature, water stress,[-]
   integer,  pointer :: Days4FalseBreak_pft(:)            => null()  !accumulated days to singifying false break, [day]
   integer,  pointer :: iPlantTurnoverPattern_pft(:)      => null()  !phenologically-driven above-ground turnover: all, foliar only, none,[-]

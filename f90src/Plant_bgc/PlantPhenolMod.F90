@@ -26,7 +26,6 @@ module PlantPhenolMod
 
   private
 
-
   character(len=*), parameter :: mod_filename = &
   __FILE__
 !
@@ -39,86 +38,98 @@ module PlantPhenolMod
   real(r8), parameter :: PSIMin4LeafOff(0:4)=real((/-200.0,-2.0,-2.0,-2.0,-2.0/),r8)   !minimum leaf water potential of leave off, [h]
   integer , parameter :: BranchNumMax(0:3)=(/5,1,1,1/)                            !maximum branch number
 
-  public :: PhenologyUpdate
+  public :: PreparePlantPhenology,PhenologyUpdate
   contains
   ![header]
 !----------------------------------------------------------------------------------------------------
-  subroutine PhenologyUpdate(yearIJ)
-!
-!     THIS subroutine CALCULATES PLANT PHENOLOGY
-!
-  use PlantBalMod, only : SumPlantBiomStates
+  subroutine PreparePlantPhenology(yearIJ)
+  ! Description:
+  ! Initialize current cohorts and prepare activity, population and emergence
+  ! for hydraulic exchange without advancing developmental clocks or branching.
   implicit none
-  type(yearIJ_type), intent(in) :: yearIJ
+  type(yearIJ_type), intent(in) :: yearIJ ! current model year/day/hour [-]
   integer :: I,J
-  INTEGER :: NB, NZ
-  integer :: NE
-  character(len=*), parameter :: subname='PhenologyUpdate'
-! begin_execution
+  integer :: NZ
+  character(len=*), parameter :: subname='PreparePlantPhenology'
+
+  call PrintInfo('beg '//subname)
   associate(                                                                   &
     dReproNodeNumNormByMatG_brch  => plt_pheno%dReproNodeNumNormByMatG_brch ,& !output :current hourly reproductive development increment, [h-1]
-    doInitPlant_pft               => plt_pheno%doInitPlant_pft                ,& !input  :PFT initialization flag:0=no,1=yes,[-]
     IsPlantActive_pft             => plt_pheno%IsPlantActive_pft              ,& !input  :flag for living pft, [-]
-    iPlantCalendar_brch           => plt_pheno%iPlantCalendar_brch            ,& !input  :plant growth stage, [-]
     DATAP                         => plt_site%DATAP                           ,& !input  :parameter file name,[-]
     NP                            => plt_site%NP                              ,& !input  :current number of plant species,[-]
     PlantPopuLive_pft             => plt_site%PlantPopuLive_pft               ,& !input  :plant population, [d-2]
-    MainBranchNum_pft             => plt_morph%MainBranchNum_pft              ,& !input  :id number of main branch,[-]
+    NumActivePlants               => plt_site%NumActivePlants                 ,& !output :number of active PFTs, [-]
     PlantPopu_col                 => plt_site%PlantPopu_col                    & !inoput :total plant population, [plants d-2]
   )
-  call PrintInfo('beg '//subname)
   I=yearIJ%I; J=yearIJ%J
   ! Clear the hourly increment even when a PFT or branch skips development.
   dReproNodeNumNormByMatG_brch(:,:) = 0._r8
+  PlantPopu_col=0._r8
   D9985: DO NZ=1,NP
 
     IF(DATAP(NZ).NE.'NO')THEN
-      !
-      !     PlantPopu_col=total biome population
-      !
-      PlantPopu_col=PlantPopu_col+PlantPopuLive_pft(NZ)
-      !
-      !         SET CROP FLAG ACCORDINGTopRootLayer_pftTO PLANTING, HARVEST DATES, DEATH,
-      !
       call set_plant_flags(I,J,NZ)
-      !
-      !         INITIALIZE VARIABLES IN ACTIVE PFT
-      !      
+      ! Count the initialized cohort, rather than a replaced population.
+      PlantPopu_col=PlantPopu_col+PlantPopuLive_pft(NZ)
       IF(IsPlantActive_pft(NZ).EQ.iTrue)THEN
-
         call FindMainBranchNumber(NZ)
-
         call StagePlantPhenology(I,J,NZ)
-
         call TestPlantEmergence(I,J,NZ)
+      ENDIF
+    ENDIF
+  ENDDO D9985
+  NumActivePlants=SUM(IsPlantActive_pft(1:NP))
+  end associate
+  call PrintInfo('end '//subname)
+  end subroutine PreparePlantPhenology
 
+!------------------------------------------------------------------------------------------
+  subroutine PhenologyUpdate(yearIJ)
+  ! Description:
+  ! Advance branching and developmental clocks once after hydraulic and chemical
+  ! uptake, before biomass growth consumes the resulting branch stages.
+  implicit none
+  type(yearIJ_type), intent(in) :: yearIJ ! current model year/day/hour [-]
+  integer :: I,J,NZ
+  character(len=*), parameter :: subname='PhenologyUpdate'
+
+  call PrintInfo('beg '//subname)
+  associate(                                                      &
+    doInitPlant_pft       => plt_pheno%doInitPlant_pft           ,& ! input: dormant-seed initialization flag, [-], PFT
+    IsPlantActive_pft     => plt_pheno%IsPlantActive_pft         ,& ! input: cohort activity prepared before hydraulics, [-], PFT
+    iPlantCalendar_brch   => plt_pheno%iPlantCalendar_brch       ,& ! inout: developmental event days, [-], stage/branch/PFT
+    DATAP                 => plt_site%DATAP                      ,& ! input: selected plant parameter code, [-], PFT
+    NP                    => plt_site%NP                         ,& ! input: current number of PFTs, [-]
+    MainBranchNum_pft     => plt_morph%MainBranchNum_pft          & ! input: main branch index, [-], PFT
+  )
+  I=yearIJ%I; J=yearIJ%J
+  DO NZ=1,NP
+    IF(DATAP(NZ).NE.'NO')THEN
+      IF(IsPlantActive_pft(NZ).EQ.iTrue)THEN
         call root_shoot_branching(I,J,NZ)
-        
         IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).NE.0 .OR. doInitPlant_pft(NZ).EQ.itrue)THEN          
           call Emerged_plant_Phenology(I,J,NZ)
         ENDIF        
       ENDIF
-      
     ENDIF
-    
-  ENDDO D9985
-
-  call PrintInfo('end '//subname)
-  RETURN
+  ENDDO
   end associate
+  call PrintInfo('end '//subname)
   END subroutine PhenologyUpdate
 
 !----------------------------------------------------------------------------------------------------
   subroutine Emerged_plant_Phenology(I,J,NZ)
   ! Description:
-  ! Advance emerged branches and their developmental node frontier without
-  ! discarding nodes that grew before a reproductive leaf-number cap was set.
+  ! Advance branch development while retaining the tissue frontier independently
+  ! of a reproductive cap. Growth routines apply the capped developmental index.
   implicit none
   integer, intent(in) :: I,J,NZ
   character(len=*), parameter :: subname='Emerged_plant_Phenology'
   integer :: NB
   REAL(R8) :: TFNP,WFNG,OFNG
   integer :: LeafNumberGrowing,NextLeafNumberGrowing
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     isPlantBranchAlive_brch     => plt_pheno%isPlantBranchAlive_brch      ,& !input  :flag to detect branch death, [-]
     LeafNumberAtFloralInit_brch => plt_pheno%LeafNumberAtFloralInit_brch  ,& !input  :leaf number at floral initiation, [-]
@@ -132,7 +143,6 @@ module PlantPhenolMod
     doRemobilization_brch       => plt_pheno%doRemobilization_brch        ,& !output :branch phenology flag, [-]
     KLeafNumber_brch            => plt_morph%KLeafNumber_brch              & !output :leaf number, [-]
   )
-  call PrintInfo('beg '//subname)
     
   call CalcPhenolEnvfactor(I,J,NZ,TFNP,WFNG,OFNG)
 
@@ -142,18 +152,14 @@ module PlantPhenolMod
       call live_branch_phenology(I,J,NB,NZ,TFNP,WFNG,OFNG)
     ENDIF
     !
-    !  KHiestGroLeafNode_brch=integer of most recent leaf number currently growing
+    ! KHiestGroLeafNode_brch retains the highest node reached in this cycle.
+    ! Its historical name is kept for API and restart compatibility (KVSTG).
     !
     LeafNumberGrowing=KHiestGroLeafNode_brch(NB,NZ)
-    IF(LeafNumberAtFloralInit_brch(NB,NZ).LE.ppmc)THEN
-      NextLeafNumberGrowing=INT(NumOfLeaves_brch(NB,NZ))+1
-    ELSE
-      NextLeafNumberGrowing=INT(AMIN1(NumOfLeaves_brch(NB,NZ),LeafNumberAtFloralInit_brch(NB,NZ)))+1
-    ENDIF
-    ! A cap limits future growing nodes; it cannot erase leaves already grown.
-    ! Retreating here drops their layer representation and loses C/N/P when
-    ! harvest rebuilds node pools from the remaining layer pools. Explicit
-    ! initialization and seasonal resets still establish a new cycle's index.
+    NextLeafNumberGrowing=LeafDevelopmentNode(NumOfLeaves_brch(NB,NZ),LeafNumberAtFloralInit_brch(NB,NZ))
+    ! Retain existing tissue for canopy, turnover and harvest bookkeeping.
+    ! This maximum is NOT the growth limit: LeafNodeGrowthRanges applies the
+    ! cap separately. Explicit initialization/seasonal resets start a new cycle.
     KHiestGroLeafNode_brch(NB,NZ)=MAX(LeafNumberGrowing,NextLeafNumberGrowing)
 
     KLeafNumber_brch(NB,NZ)=MIN(MaxNodesPerBranch1-1,KHiestGroLeafNode_brch(NB,NZ))
@@ -175,8 +181,8 @@ module PlantPhenolMod
   IF(PSICanopy_pft(NZ).LT.PSIMin4LeafOff(iEmbryophyteType_pft(NZ)))THEN
     HoursTooLowPsiCan_pft(NZ)=HoursTooLowPsiCan_pft(NZ)+1.0_r8
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine Emerged_plant_Phenology          
 
 !----------------------------------------------------------------------------------------------------
@@ -453,8 +459,8 @@ module PlantPhenolMod
     LeafPetoNonstElmConc_brch   => plt_biom%LeafPetoNonstElmConc_brch  ,& !output :branch nonstructural C concentration, [g d-2]
     CanopyNonstElmConc_pft      => plt_biom%CanopyNonstElmConc_pft     ,& !output :canopy nonstructural element concentration, [g d-2]
     CanopyNonstOMConc_pft       => plt_biom%CanopyNonstOMConc_pft      ,& !output :canopy nonstructural C+N+P concentration, [g gC-1]
-    RootNonstructElmConc_pvr   => plt_biom%RootNonstructElmConc_pvr  ,& !output :root layer nonstructural C concentration, [g g-1]
-    RootNonstOMConc_pvr        => plt_biom%RootNonstOMConc_pvr       ,& !output :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
+    RootNonstructElmConc_pvr    => plt_biom%RootNonstructElmConc_pvr   ,& !output :root layer nonstructural C concentration, [g g-1]
+    RootNonstOMConc_pvr         => plt_biom%RootNonstOMConc_pvr        ,& !output :root/mycorrhizal nonstructural C+N+P concentration, [g gC-1]
     MaxSoilLays4Root_pft        => plt_morph%MaxSoilLays4Root_pft       & !output :maximum soil layer number for all root axes,[-]
   )
   call PrintInfo('beg '//subname)

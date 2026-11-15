@@ -141,7 +141,7 @@ module PlantTraitDataType
   integer,target,allocatable ::  KLeafNumber_brch(:,:,:,:)                   !leaf number, [-]
   integer,target,allocatable ::  KLowestGroLeafNode_brch(:,:,:,:)            !leaf growth stage counter, [-]
   integer,target,allocatable ::  KMinNumLeaf4GroAlloc_brch(:,:,:,:)          !NUMBER OF MINIMUM LEAFED NODE USED IN GROWTH ALLOCATION,[-]
-  integer,target,allocatable ::  KHiestGroLeafNode_brch(:,:,:,:)             !leaf growth stage counter, [-]
+  integer,target,allocatable ::  KHiestGroLeafNode_brch(:,:,:,:)             !highest retained absolute node this cycle; growth cap applied separately, [-]
   real(r8),target,allocatable ::  RateRefLeafAppearance_pft(:,:,:)               !rate of leaf initiation at 25 oC, [h-1]
   real(r8),target,allocatable ::  rLen2WidthLeaf_pft(:,:,:)                  !leaf length:width ratio, [-]
   real(r8),target,allocatable :: HypocotLeafAreaCoeff_pft(:,:,:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
