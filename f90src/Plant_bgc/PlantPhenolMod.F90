@@ -1176,9 +1176,8 @@ module PlantPhenolMod
 
 !----------------------------------------------------------------------------------------------------
   function CheckBranchNodeState(ipltcal,NB,NZ,I,J)result(NodeNumChk)
-  !
-  !Description:
-  !
+  ! Description:
+  ! Check branch node and leaf thresholds for a phenological transition.
   implicit none
   integer, intent(in) :: ipltcal   !phenological stage
   integer, intent(in) :: NB,NZ,I,J
@@ -1186,8 +1185,7 @@ module PlantPhenolMod
   logical :: NodeNumChk
 
   associate(                                                                        &
-    MatureGroup_pft                 => plt_pheno%MatureGroup_pft                  , & !input  :acclimated plant maturity group, [-]  
-    MatureGroup_brch                => plt_pheno%MatureGroup_brch                 , & !input  :plant maturity group, [-]  
+    MatureGroup_brch                => plt_pheno%MatureGroup_brch                 , & !input  :branch-specific node requirement for floral initiation, [-]
     ShootNodeNum_brch               => plt_morph%ShootNodeNum_brch                , & !input  :shoot node number, [-]  
     NumOfLeaves_brch                => plt_morph%NumOfLeaves_brch                 , & !input  :leaf number, [-]  
     ShootNodeNumAtInitFloral_brch   => plt_morph%ShootNodeNumAtInitFloral_brch    , & !input  :shoot node number at floral initiation, [-]    
@@ -1198,9 +1196,8 @@ module PlantPhenolMod
 
   select case(ipltcal)
     case(ipltcal_InitFloral) !2
-    !ensures the plant is tall enough 
-    !the transition of the shoot apical meristem from vegetative to reproductive growth
-    NodeNumChk  = ShootNodeNum_brch(NB,NZ).GT.MatureGroup_pft(NZ)+ShootNodeNumAtInitFloral_brch(NB,NZ)    
+    ! Match hfunc.f: annual side branches have a reduced node requirement.
+    NodeNumChk  = ShootNodeNum_brch(NB,NZ).GT.MatureGroup_brch(NB,NZ)+ShootNodeNumAtInitFloral_brch(NB,NZ)
 
     case(ipltcal_Jointing) !3
     NodeNumChk = NodeNumNormByMatgrp_brch(NB,NZ).GT.0.25_r8*GrothStageNorm4VegetaPheno

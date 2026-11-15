@@ -62,7 +62,7 @@ module PlantBranchMod
   real(r8), intent(in) :: Stomata_Stress
   real(r8), intent(in) :: TurgEff4LeafPetolExpansion
   real(r8), intent(in) :: TurgEff4CanopyResp
-  real(r8), intent(out) :: GrothPART2LeafPetole !new growth allocated to leaf and PetolSheth
+  real(r8), intent(out) :: GrothPART2LeafPetole !leaf + petiole allocation before remobilization and normalization; exchange modifier, [-]
   integer, intent(out) :: BegRemoblize !phenological eligibility of this branch
   character(len=*), parameter :: subname='GrowOneBranch'
   integer :: I,J
@@ -128,11 +128,7 @@ module PlantBranchMod
     ! and modulo storage slots do not retain the absolute developmental count.
     
     call CalcPartitionCoeff(I,J,NB,NZ,PART, &
-      BegRemoblize=BegRemoblize,LRemob_brch=LRemob_brch)
-
-    IF(NB.EQ.MainBranchNum_pft(NZ))THEN
-      GrothPART2LeafPetole=PART(ibrch_leaf)+PART(ibrch_petole)
-    ENDIF
+      BegRemoblize=BegRemoblize,LRemob_brch=LRemob_brch,GrothPART2LeafPetole=GrothPART2LeafPetole)
     !
     call UpdateBranchAllometry(I,J,NZ,NB,PART,CNLFW,CNRTW,CNSHW,CPLFW,&
       CPRTW,CPSHW,ShootStructE_brch,YCO2Gro_brch,CNLFM,CPLFM,&
@@ -552,11 +548,15 @@ module PlantBranchMod
   end subroutine UpdateBranchAllometry  
 
 !----------------------------------------------------------------------------------------------------
-  subroutine CalcPartitionCoeff(I,J,NB,NZ,PART,BegRemoblize,LRemob_brch)
+  subroutine CalcPartitionCoeff(I,J,NB,NZ,PART,BegRemoblize,LRemob_brch,GrothPART2LeafPetole)
+  ! Description:
+  ! Compute normalized organ growth fractions and a separate leaf + petiole
+  ! modifier for root-shoot exchange, sampled at the PTRT assignment in grosub.f.
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   integer, intent(out) :: BegRemoblize,LRemob_brch
   real(r8), intent(out):: PART(pltpar%NumOfPlantMorphUnits)
+  real(r8), intent(out) :: GrothPART2LeafPetole !leaf + petiole allocation before remobilization and normalization, [-]
 
   character(len=*), parameter :: subname='CalcPartitionCoeff'
   REAL(R8) :: ARLFI
@@ -591,7 +591,6 @@ module PlantBranchMod
     TCChill4Seed_pft                  => plt_pheno%TCChill4Seed_pft                   ,& !input  :temperature below which seed set is adversely affected, [oC]
     NodeLenPergC_pft                  => plt_morph%NodeLenPergC_pft                   ,& !input  :internode length:mass during growth, [m gC-1]
     CanopyLeafArea_pft                => plt_morph%CanopyLeafArea_pft                 ,& !input  :plant canopy leaf area, [m2 d-2]
-    MainBranchNum_pft                 => plt_morph%MainBranchNum_pft                  ,& !input  :id number of main branch,[-]
     HoursDoingRemob_brch              => plt_pheno%HoursDoingRemob_brch               ,& !inoput :counter for mobilizing nonstructural C during autumn leafoff/hardening, [h]
     PARTS_brch                        => plt_morph%PARTS_brch                          & !output :fraction of C allocated to each morph unit, [-]
   )
@@ -733,6 +732,11 @@ module PlantBranchMod
     PART(ibrch_leaf)   = FPARTL*PART(ibrch_leaf)
     PART(ibrch_petole) = FPARTL*PART(ibrch_petole)
   ENDIF
+
+  ! Match PTRT in grosub.f: retain reserve and LAI adjustments, but sample before
+  ! deciduous remobilization, SNL1 suppression, clipping and normalization.
+  ! GrowOnePlant selects the main branch's modifier for root-shoot exchange.
+  GrothPART2LeafPetole = PART(ibrch_leaf)+PART(ibrch_petole)
 
   !
   !     DECIDUOUS LEAF FALL AFTER GRAIN FILL IN DETERMINATES,

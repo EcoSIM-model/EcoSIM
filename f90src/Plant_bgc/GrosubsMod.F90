@@ -283,7 +283,7 @@ module grosubsMod
   integer  :: BegRemoblizePlant  !main-branch eligibility controls root seasonal storage
   real(r8) :: TFN6_vr(JZ1)
   real(r8) :: CNLFW,CPLFW,CNSHW,CPSHW,CNRTW,CPRTW
-  real(r8) :: PTRT    !main branch growth allocated to leaf and PetolSheth
+  real(r8) :: PTRT    !main-branch leaf + petiole allocation before remobilization and normalization; exchange modifier, [-]
   real(r8) :: TFN5
   real(r8) :: WaterStress4Groth
   real(r8) :: Stomata_Stress
