@@ -439,6 +439,13 @@ contains
     FracAirFilledSoilPore_vr(0,NY,NX) = 1.0
   ENDIF
 
+  if(ats_shared_surface_layer)then
+  if(VGeomLayer_vr(0,NY,NX)>0._r8)then
+    FracSoiPAsWat_vr(0,NY,NX)=VLWatMicP1_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
+    FracSoiPAsIce_vr(0,NY,NX)=VLiceMicP1_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
+    FracAirFilledSoilPore_vr(0,NY,NX)=VLairMicP1_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
+  endif
+  endif
   FracAirFilledSoilPoreM_vr(1,0,NY,NX)   = FracAirFilledSoilPore_vr(0,NY,NX)
   PSISM1_vr(0,NY,NX)  = PSISoilMatricP_vr(0,NY,NX)
   TKSoil1_vr(0,NY,NX) = TKS_vr(0,NY,NX)
@@ -1099,6 +1106,13 @@ contains
 !
   call PrintInfo('beg '//subname)
   HeatSoil2LitrM_col(NY,NX) = 0._r8
+  if(ats_shared_surface_layer)then
+    WatFLoLitr2SoilM_col(M,NY,NX)=0._r8
+    WatFLoLitr2MacPM_col(M,NY,NX)=0._r8
+    call PrintInfo('end '//subname)
+    return ! ATS owns liquid infiltration and exfiltration
+  endif
+
   ! Budget accepted surface fluxes before either infiltration pathway. Keep
   ! micropore exchange first; macropores receive only remaining mobile liquid.
   WatFLoLitr2SoilM_col(M,NY,NX)=0._r8
@@ -1258,6 +1272,12 @@ contains
   !     LitrIceHeatFlxFrez,LitrIceFlxThaw=litter water,latent heat flux from freeze-thaw
   ! using Clausius-Clapeyron equation for freezing temeprature calculation
   call PrintInfo('beg '//subname)
+  if(ats_shared_surface_layer)then
+    LitrIceHeatFlxFrez_col(NY,NX)=0._r8
+    LitrIceFlxThaw_col(NY,NX)=0._r8
+    call PrintInfo('end '//subname)
+    return ! ATS owns the common layer-zero liquid/ice partition
+  endif
   !TFREEZ          = -9.0959E+04_r8/(PSISM1_vr(0,NY,NX)-LtHeatIceMelt)
   TFREEZ          = get_Tfrez(PSISM1_vr(0,NY,NX))
   VLWatMicP1X     = AZMAX1(VLWatMicP1_vr(0,NY,NX)+WatFLo2LitrM_col(NY,NX))
@@ -1986,7 +2006,7 @@ contains
 
       call SurfLitrSoilWaterExchangeM(I,J,M,NY,NX,RainEkReducedKsat(NY,NX))
 
-      call EquilibrateThinLitterM(NY,NX)
+      if(.not.ats_shared_surface_layer)call EquilibrateThinLitterM(NY,NX)
 
       call UpdateLitterPhaseChangeM(I,J,M,NY,NX)
 
@@ -1999,6 +2019,15 @@ contains
       if(present(Qinfl2MicP))Qinfl2MicP(NY,NX)=WaterFlow2Micpt_3D(3,NUM_col(NY,NX),NY,NX)
       if(present(Qinfl2MacP))Qinfl2MacP(NY,NX)=WaterFlow2Macpt_3D(3,NUM_col(NY,NX),NY,NX)
       if(present(HeatInfl2Soil))HeatInfl2Soil(NY,NX)=HeatFlow2Soili_3D(3,NUM_col(NY,NX),NY,NX)
+      if(ats_shared_surface_layer)then
+        ! Internal litter/soil exchange cancels; export only the external
+        ! water and heat entering the combined ATS-owned surface layer.
+        if(present(Qinfl2MicP))Qinfl2MicP(NY,NX)=WaterFlow2Micpt_3D(3,NUM_col(NY,NX),NY,NX) &
+          +WaterFlow2Macpt_3D(3,NUM_col(NY,NX),NY,NX)+WatFLo2LitrM_col(NY,NX)
+        if(present(Qinfl2MacP))Qinfl2MacP(NY,NX)=0._r8
+        if(present(HeatInfl2Soil))HeatInfl2Soil(NY,NX)=HeatInfl2Soil(NY,NX)+HeatFLoByWat2LitRM_col(NY,NX)
+      endif
+
       LWRadGrnd_col(NY,NX)   = LWRadBySurf_col(NY,NX)
       
       dHGrnddTKsoi1(NY,NX)=0._r8
@@ -2006,6 +2035,9 @@ contains
       if(FracSurfSnoFree_col(NY,NX)>0._r8)then
         dHGrnddTKsoi1(NY,NX)=-4._r8*LWEmscefSoil_col(NY,NX) &
           *TKSoil1_vr(NUM_col(NY,NX),NY,NX)**3-CdSoiHSens_col(NY,NX)
+        if(ats_shared_surface_layer)dHGrnddTKsoi1(NY,NX)=dHGrnddTKsoi1(NY,NX) &
+          -4._r8*LWEmscefLitR_col(NY,NX)*TKSoil1_vr(0,NY,NX)**3-CdLitRHSens_col(NY,NX)
+
       endif
     ENDDO D9890
   ENDDO D9895

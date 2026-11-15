@@ -327,7 +327,14 @@ implicit none
     SnowDepth_col(NY,NX)=SUM(SnowThickL_snvr(:,NY,NX))
     VcumSnowWE_col(NY,NX)=VcumDrySnoWE_col(NY,NX)+VcumWatSnow_col(NY,NX)+DENSICE*VcumIceSnow_col(NY,NX)
 
-    IF(SoilBulkDensity_vr(NUM_col(NY,NX),NY,NX).GT.ZERO .and. SoilOrgM_vr(ielmc,0,NY,NX)>1.e-2_r8)THEN
+    if(ats_shared_surface_layer)then
+      ! ATS owns the receiving pond/litter pool. Export every constituent once,
+      ! including the fusion deficit of ice, with the coupled cpw*TFice offset.
+      QWatinfl2Mic=FLWW+DENSICE*FLWI+FLWS
+      QHeatInfl2Soil=cpw*TFice*QWatinfl2Mic &
+        +(cpw*FLWW+cps*FLWS+cpi*FLWI)*(TKSnow_snvr(1,NY,NX)-TFice) &
+        -LtHeatIceMelt*(DENSICE*FLWI+FLWS)
+    else IF(SoilBulkDensity_vr(NUM_col(NY,NX),NY,NX).GT.ZERO .and. SoilOrgM_vr(ielmc,0,NY,NX)>1.e-2_r8)THEN
       ENGY                      = TKS_vr(0,NY,NX)*VHeatCapacity_vr(0,NY,NX)
       VLWatMicP_vr(0,NY,NX)     = VLWatMicP_vr(0,NY,NX)+FLWW
       VLiceMicP_vr(0,NY,NX)     = VLiceMicP_vr(0,NY,NX)+FLWI+FLWS/DENSICE
