@@ -15,6 +15,7 @@ add_ecosim_library(ATSUtils_mods ${ATSUTILS_MOD_SOURCES})
 
 target_include_directories(ATSUtils_mods  PRIVATE
    ${CMAKE_BINARY_DIR}/f90src/Utils/
+   ${CMAKE_BINARY_DIR}/f90src/DebugTools/
    ${CMAKE_BINARY_DIR}/f90src/Main/
    ${CMAKE_BINARY_DIR}/f90src/Minimath/
    ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
