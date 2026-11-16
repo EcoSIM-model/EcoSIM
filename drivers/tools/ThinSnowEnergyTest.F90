@@ -8,10 +8,10 @@ program ThinSnowEnergyTest
   use GridConsts, only: JX,JY,JX0,JY0,JZ,JH,JV,JS
   use GridDataType, only: AREA_3D,NUM_col,NU_col
   use EcoSIMCtrlMod, only: lverb,fixWaterLevel,salt_model
-  use EcoSIMCtrlDataType, only: ZERO,ZERO2,ZEROS,ZEROS2
+  use EcoSIMCtrlDataType, only: ZERO,ZERO2,ZEROS,ZEROS2,ats_shared_surface_layer
   use EcoSIMSolverPar, only: NPH
   use EcoSimConst, only: cps,cpw,cpi,cpo,DENSICE,TFice,VLHeatCapSnoMin,LtHeatIceMelt,MinResolvedSnowSWE
-  use HydroThermData, only: TKSnow0_snvr
+  use HydroThermData, only: TKSnow0_snvr,TKSoil1_vr,VHeatCapacity1_vr,VLWatMicP1_vr,VLiceMicP1_vr
   use ElmIDMod, only: ielmc
   use MiniFuncMod, only: gOC_to_m3_OM
   use SnowDataType
@@ -22,12 +22,12 @@ program ThinSnowEnergyTest
   use SoilBGCDataType, only: trcs_solml_vr
   use AqueChemDatatype, only: trcSalt_solml_vr
   use ClimForcDataType, only: TairK_col,TCA_col
-  use SoilHeatDataType, only: InitSoilHeatData,TKS_vr,VHeatCapacity_vr,XPhaseChangeHeatL_snvr
+  use SoilHeatDataType, only: InitSoilHeatData,TKS_vr,VHeatCapacity_vr,XPhaseChangeHeatL_snvr,HeatFlx2Grnd_col
   use SoilWaterDataType, only: VLWatMicP_vr,VLWatMacP_vr,VLiceMicP_vr,VLiceMacP_vr,Qinflx2Soil_col
   use SoilPhysDataType, only: VHeatCapSolidSoil_vr
   use SoilPropertyDataType, only: SoilBulkDensity_vr
   use SOMDataType, only: SoilOrgM_vr
-  use SurfLitterDataType, only: WatFLo2LitR_col
+  use SurfLitterDataType, only: WatFLo2LitR_col,HeatFLoByWat2LitR_col
   use EcoSimSumDataType, only: HEATIN_lnd
   implicit none
   real(r8), parameter :: SnowAmounts(3)=[1.e-11_r8,0.999e-4_r8,1.001e-4_r8]
@@ -44,6 +44,9 @@ program ThinSnowEnergyTest
   call InitSnowPhysData()
   call InitSoilHeatData()
   allocate(TKSnow0_snvr(JS,1,1))
+  allocate(TKSoil1_vr(0:JS,1,1),VHeatCapacity1_vr(0:JS,1,1))
+  allocate(VLWatMicP1_vr(0:JS,1,1),VLiceMicP1_vr(0:JS,1,1))
+  allocate(HeatFLoByWat2LitR_col(1,1))
   allocate(ZEROS(1,1),ZEROS2(1,1),AREA_3D(3,0:JS,1,1),NUM_col(1,1),NU_col(1,1))
   allocate(TairK_col(1,1),TCA_col(1,1),SoilBulkDensity_vr(0:JS,1,1),SoilOrgM_vr(3,0:JS,1,1))
   allocate(VLWatMicP_vr(0:JS,1,1),VLWatMacP_vr(0:JS,1,1),VLiceMicP_vr(0:JS,1,1),VLiceMacP_vr(0:JS,1,1))
@@ -174,6 +177,60 @@ program ThinSnowEnergyTest
     call check_close('no reset heat before removal',HEATIN_lnd,12._r8)
   enddo
 
+  ! Shared ATS receiver: return water and phase energy once; leave the native
+  ! litter/pond mirror unchanged, including when an organic litter stock exists.
+  do Receiver=0,1
+    call reset_state()
+    ats_shared_surface_layer=.true.
+    call set_layer(1,5.e-5_r8,260._r8)
+    VLWatSnow_snvr(1,1,1)=2.e-6_r8
+    VLIceSnow_snvr(1,1,1)=1.e-6_r8/DENSICE
+    VLHeatCapSnow_snvr(1,1,1)=cps*VLDrySnoWE_snvr(1,1,1) &
+      +cpw*VLWatSnow_snvr(1,1,1)+cpi*VLIceSnow_snvr(1,1,1)
+    TairK_col=280._r8
+    if(Receiver==0)SoilOrgM_vr(ielmc,0,1,1)=100._r8
+    BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+DENSICE*sum(VLIceSnow_snvr)
+    BeforeIce=sum(VLDrySnoWE_snvr)+DENSICE*sum(VLIceSnow_snvr)
+    BeforeEnergy=sum(VLHeatCapSnow_snvr*(TKSnow_snvr-TFice))-LtHeatIceMelt*BeforeIce
+    call SnowMassUpdate(1,1,1,1,ReturnedWater,ReturnedHeat)
+    call check_close('shared snow returned mass',ReturnedWater,BeforeWater)
+    call check_close('shared snow phase energy',ReturnedHeat-cpw*TFice*ReturnedWater,BeforeEnergy)
+    call check_close('shared snow removed',sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+sum(VLIceSnow_snvr),0._r8)
+    call check_close('shared mirror liquid unchanged',VLWatMicP_vr(0,1,1),1.e-3_r8)
+    call check_close('shared mirror ice unchanged',VLiceMicP_vr(0,1,1),1.e-4_r8)
+    call check_close('shared mirror temperature unchanged',TKS_vr(0,1,1),270._r8)
+    ats_shared_surface_layer=.false.
+  enddo
+
+  ! The substep snow-retirement path must obey the same flux-only ownership,
+  ! with and without litter. Its component exports must equal the total export.
+  do Receiver=0,1
+    call reset_state()
+    ats_shared_surface_layer=.true.
+    call set_layer(1,5.e-5_r8,260._r8)
+    VLWatSnow_snvr(1,1,1)=2.e-6_r8; VLIceSnow_snvr(1,1,1)=1.e-6_r8/DENSICE
+    VLHeatCapSnow_snvr(1,1,1)=cps*VLDrySnoWE_snvr(1,1,1) &
+      +cpw*VLWatSnow_snvr(1,1,1)+cpi*VLIceSnow_snvr(1,1,1)
+    VLDrySnoWE0_snvr=VLDrySnoWE_snvr; VLWatSnow0_snvr=VLWatSnow_snvr; VLIceSnow0_snvr=VLIceSnow_snvr
+    TKSnow0_snvr=TKSnow_snvr; VLSnowHeatCapM_snvr(1,:,:,:)=VLHeatCapSnow_snvr
+    TKSoil1_vr=270._r8; VHeatCapacity1_vr=VHeatCapacity_vr
+    VLWatMicP1_vr=VLWatMicP_vr; VLiceMicP1_vr=VLiceMicP_vr
+    TairK_col=280._r8
+    if(Receiver==0)SoilOrgM_vr(ielmc,0,1,1)=100._r8
+    BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+DENSICE*sum(VLIceSnow_snvr)
+    BeforeIce=sum(VLDrySnoWE_snvr)+DENSICE*sum(VLIceSnow_snvr)
+    BeforeEnergy=sum(VLHeatCapSnow_snvr*(TKSnow_snvr-TFice))-LtHeatIceMelt*BeforeIce
+    call UpdateSnowAtM(1,1,1,1,1)
+    call check_close('substep layer-zero water flux',WatFLo2LitR_col(1,1),BeforeWater)
+    call check_close('substep layer-zero phase heat',HeatFLoByWat2LitR_col(1,1)-cpw*TFice*BeforeWater,BeforeEnergy)
+    call check_close('substep total water equals component',Qinflx2Soil_col(1,1),WatFLo2LitR_col(1,1))
+    call check_close('substep total energy equals component',HeatFlx2Grnd_col(1,1),HeatFLoByWat2LitR_col(1,1))
+    call check_close('substep layer-zero liquid unchanged',VLWatMicP1_vr(0,1,1),1.e-3_r8)
+    call check_close('substep layer-zero ice unchanged',VLiceMicP1_vr(0,1,1),1.e-4_r8)
+    call check_close('substep layer-zero temperature unchanged',TKSoil1_vr(0,1,1),270._r8)
+    ats_shared_surface_layer=.false.
+  enddo
+
   ! Layer merging conserves the temperatures' energy weights and water mass.
   call reset_state()
   call set_layer(1,1.5e-4_r8,260._r8)
@@ -227,6 +284,7 @@ contains
   cumIceSnoByRedistM_col=0._r8; cumHeatSnoByRedistM_col=0._r8
   VLDrySnoWE0_snvr=0._r8; VLIceSnow0_snvr=0._r8; VLWatSnow0_snvr=0._r8
   THeatSnowThaw_col=0._r8; XPhaseChangeHeatL_snvr=0._r8; HEATIN_lnd=12._r8
+  HeatFLoByWat2LitR_col=0._r8; HeatFlx2Grnd_col=0._r8
   QSnowH2Oloss_col=0._r8; QSnowHeatLoss_col=0._r8; Qinflx2Soil_col=0._r8; WatFLo2LitR_col=0._r8
   TairK_col=240._r8; TCA_col=TairK_col-TFice
   SoilBulkDensity_vr=1._r8; SoilOrgM_vr=0._r8; VHeatCapSolidSoil_vr=1._r8

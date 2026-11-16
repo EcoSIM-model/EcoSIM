@@ -4,6 +4,8 @@ module EcoSIMCtrlDataType
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
   implicit none
+  logical :: ats_shared_surface_layer=.false. ! ATS owns combined pond/litter inventories
+
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
   public

@@ -1264,7 +1264,18 @@ contains
     ENGY1          = TKSoil1_vr(0,NY,NX)*VHeatCapacity1_vr(0,NY,NX)
 
     !it is not a pond
-    IF(SoilBulkDensity_vr(NUM_col(NY,NX),NY,NX).GT.ZERO .and. SoilOrgM_vr(ielmc,0,NY,NX)>1.e-2_r8)THEN
+    if(ats_shared_surface_layer)then
+      ! Return the transfer as layer-zero flux, never change its ATS-owned mirror.
+      HFLWS=cpw*TFice*(FLWW+DENSICE*FLWI+FLWS) &
+        +(cpw*FLWW+cpi*FLWI+cps*FLWS)*(TKSnow0_snvr(1,NY,NX)-TFice) &
+        -LtHeatIceMelt*(DENSICE*FLWI+FLWS)
+      Qinflx2Soil_col(NY,NX)=Qinflx2Soil_col(NY,NX)+FLWW+DENSICE*FLWI+FLWS
+      HeatFlx2Grnd_col(NY,NX)=HeatFlx2Grnd_col(NY,NX)+HFLWS
+      WatFLo2LitR_col(NY,NX)=WatFLo2LitR_col(NY,NX)+FLWW+DENSICE*FLWI+FLWS
+      HeatFLoByWat2LitR_col(NY,NX)=HeatFLoByWat2LitR_col(NY,NX)+HFLWS
+      QSnowH2Oloss_col(NY,NX)=QSnowH2Oloss_col(NY,NX)+FLWW+DENSICE*FLWI+FLWS
+      QSnowHeatLoss_col(NY,NX)=QSnowHeatLoss_col(NY,NX)+HFLWS
+    else IF(SoilBulkDensity_vr(NUM_col(NY,NX),NY,NX).GT.ZERO .and. SoilOrgM_vr(ielmc,0,NY,NX)>1.e-2_r8)THEN
       VLWatMicP1_vr(0,NY,NX)     = VLWatMicP1_vr(0,NY,NX)+FLWW
       VLiceMicP1_vr(0,NY,NX)     = VLiceMicP1_vr(0,NY,NX)+FLWI+FLWS/DENSICE
       VHeatCapacity1_vr(0,NY,NX) = cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,0,NY,NX))+cpw*VLWatMicP1_vr(0,NY,NX)+cpi*VLiceMicP1_vr(0,NY,NX)  !update heat capacity
@@ -1642,6 +1653,7 @@ contains
     ! HeatCndFlxSno2Litr=snow-litter heat flux
     ! VLSnowHeatCapMM= volumetric heat capacity in snow layer
     TKY           = (TK0X*VLHeatCapSnowM1_snvr(L,NY,NX)+TKXR*VHeatCapacityLitR)/(VLHeatCapSnowM1_snvr(L,NY,NX)+VHeatCapacityLitR)
+    if(ats_shared_surface_layer)TKY=TKXR ! fixed ATS lower boundary
     HeatCnductMax = (TK0X-TKY)*VLHeatCapSnowM1_snvr(L,NY,NX)*dt_watvap
     HeatCnduct    = AvgThermCondctSnoLitR*(TK0X-TKXR)*AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfSnowCovered_col(NY,NX)*FracSurfByLitR_col(NY,NX)*dts_litrvapht
     IF(HeatCnduct.GE.0.0_r8)THEN
@@ -1663,6 +1675,11 @@ contains
     !     HeatConvFlxLitr2Soi=convective heat of litter-soil vapor flux
     !     TKXR,TK1X=interim calculation of litter,soil temperatures
     !
+    if(ats_shared_surface_layer)then
+      VapConvFlxLitr2Soi=0._r8; HeatConvFlxLitr2Soi=0._r8; HeatCndFlxLitr2Soi=0._r8
+      ! A temporary donor budget only; no independent surface temperature solve.
+      VLWatLitR=max(0._r8,VLWatLitR+VapFlxSno2Litr)
+    else
     !both litter layer and topsoil are not-saturated
     IF(VLsoiAirPM_vr(M,0,NY,NX).GT.ZEROS(NY,NX) .AND. VLsoiAirPM_vr(M,NUM_col(NY,NX),NY,NX).GT.ZEROS(NY,NX))THEN
       VP1       = vapsat(TK1X)*EXP(18.0_r8*PSISV1/(RGASC*TK1X))
@@ -1715,6 +1732,7 @@ contains
       !sensible heat flux from soil to litter
       HeatCndFlxLitr2Soi=AZMIN1(AMAX1(HeatCnductMax,HeatCnduct))
     ENDIF
+    endif
 !
 !     ACCUMULATE SNOW-LITTER, LITTER-SOIL HEAT FLUXES
 !     WITHIN LONGER TIME STEP FOR SNOWPACK FLUX CALCULATIONS
@@ -1728,8 +1746,10 @@ contains
     cumHeatCndFlxLitr2Soi   = cumHeatCndFlxLitr2Soi+HeatCndFlxLitr2Soi
 
     TK0X = TK0X-HeatConvFlxSno2Litr/VLHeatCapSnowM1_snvr(L,NY,NX)
+    if(.not.ats_shared_surface_layer)then
     TKXR = (TKXR*VHeatCapacityLitR-dLWRaddTLitR*TKXR-HeatCndFlxLitr2Soi)/(VHeatCapacityLitR-dLWRaddTLitR)
     TK1X = (TK1X*VHeatCapacitySoil-dLWRaddTSoil*TK1X+HeatCndFlxLitr2Soi)/(VHeatCapacitySoil-dLWRaddTSoil)
+    endif
 
     if(TKXR<0._r8)then
       write(*,*)'unphysical litter temeprature'
