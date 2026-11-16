@@ -98,6 +98,7 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  rProteinC2RootP_pft(:,:,:)                 !Protein C to root P ratio in remobilizable nonstructural biomass, [-]
   real(r8),target,allocatable ::  rProteinC2LeafN_pft(:,:,:)                 !Protein C to leaf N ratio in remobilizable nonstructural biomass, [-]
   real(r8),target,allocatable ::  rProteinC2LeafP_pft(:,:,:)                 !Protein C to leaf P ratio in remobilizable nonstructural biomass, [-]
+  real(r8),target,allocatable ::  rNPRatio_pft(:,:,:)                        !leaf protein-equivalent N:P ratio [gN gP-1], (PFT,NY,NX)
   real(r8),target,allocatable ::  OrganOsmoPsi0pt_pft(:,:,:)                   !Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
   real(r8),target,allocatable ::  TC4LeafOff_pft(:,:,:)                      !threshold temperature for autumn leafoff/hardening, [oC]
   real(r8),target,allocatable ::  PlantInitThermoAdaptZone_pft(:,:,:)            !initial plant thermal adaptation zone, [-]
@@ -311,6 +312,7 @@ contains
   allocate(rProteinC2RootP_pft(JP,JY,JX)); rProteinC2RootP_pft=0._r8  
   allocate(rProteinC2LeafN_pft(JP,JY,JX));     rProteinC2LeafN_pft=0._r8
   allocate(rProteinC2LeafP_pft(JP,JY,JX));     rProteinC2LeafP_pft=0._r8
+  allocate(rNPRatio_pft(JP,JY,JX));           rNPRatio_pft=0._r8
   allocate(OrganOsmoPsi0pt_pft(JP,JY,JX));     OrganOsmoPsi0pt_pft=0._r8
   allocate(TC4LeafOff_pft(JP,JY,JX));      TC4LeafOff_pft=0._r8
   allocate(PlantInitThermoAdaptZone_pft(JP,JY,JX));    PlantInitThermoAdaptZone_pft=0._r8
@@ -522,6 +524,7 @@ contains
   call destroy(rProteinC2RootN_pft)
   call destroy(rProteinC2LeafN_pft)
   call destroy(rProteinC2LeafP_pft)
+  call destroy(rNPRatio_pft)
   call destroy(OrganOsmoPsi0pt_pft)
   call destroy(TC4LeafOff_pft)
   call destroy(PlantInitThermoAdaptZone_pft)

@@ -615,6 +615,9 @@ implicit none
 
     call SetPlantTraits(nu_plt,pft_changed,NZ,NY,NX,VRNLI,VRNXI)
 
+    ! Initialize the derived exchange ratio whenever this PFT's traits are loaded.
+    rNPRatio_pft(NZ,NY,NX) = rProteinC2LeafP_pft(NZ,NY,NX)/rProteinC2LeafN_pft(NZ,NY,NX)
+
     ! Drought leaf-out uses PSIMin4LeafOut(2:4) in PlantPhenolMod.
     IF ((iPlantPhenolType_pft(NZ,NY,NX).EQ.iphenotyp_drouhtdecidu .OR. &
          iPlantPhenolType_pft(NZ,NY,NX).EQ.4 .OR. &
@@ -1169,7 +1172,7 @@ implicit none
   case (in2fixtyp_canopy_slow)
     strval='Slow canopy N-fixation'
   case default
-    strval='Not defined'
+    strval='No N-fixation'
   end select
   id=addone(id)
   call writefixsl(nu_plt,'INTYP: N-fixation symbiosis',strval,60,id)

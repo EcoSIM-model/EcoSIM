@@ -288,6 +288,7 @@ module PlantBranchMod
     KHiestGroLeafNode_brch => plt_pheno%KHiestGroLeafNode_brch  ,& !input :retained tissue frontier, [-], (branch,PFT)
     rProteinC2LeafN_pft    => plt_allom%rProteinC2LeafN_pft     ,& !input  :Plant leaf protein C to N ratio [g protein C (g leaf N)-1]
     rProteinC2LeafP_pft    => plt_allom%rProteinC2LeafP_pft     ,& !input  :Plant leaf protein C to P ratio [g protein C (g leaf P)-1]
+    rNPRatio_pft           => plt_allom%rNPRatio_pft            ,& !input :protein-equivalent N:P exchange ratio [gN gP-1], (PFT)
     LeafElmntNode_brch     => plt_biom%LeafElmntNode_brch       ,& !inoput :leaf element, [g d-2]
     LeafStrutElms_brch     => plt_biom%LeafStrutElms_brch       ,& !inoput :branch leaf structural element mass, [g d-2]
     LeafProteinC_node      => plt_biom%LeafProteinC_node        ,& !inoput :layer leaf protein C, [g d-2]
@@ -319,9 +320,9 @@ module PlantBranchMod
           -ZPLFM*CNLFB*LeafElmntNode_brch(ielmc,K,NB,NZ)))            
         XFRP1=AZMAX1(AMIN1(1.0E-03_r8*PPOOLD/CPOOLT_div,LeafElmntNode_brch(ielmp,K,NB,NZ) &
           -ZPLFM*CPLFB*LeafElmntNode_brch(ielmc,K,NB,NZ)))
-          
-        XFRE(ielmn)=AMAX1(XFRN1,10.0_r8*XFRP1)
-        XFRE(ielmp)=AMAX1(XFRP1,0.10_r8*XFRN1)
+        ! Couple requested N/P withdrawal using the same leaf protein equivalents.
+        XFRE(ielmn)=AMAX1(XFRN1,rNPRatio_pft(NZ)*XFRP1)
+        XFRE(ielmp)=AMAX1(XFRP1,XFRN1/rNPRatio_pft(NZ))
         DO NE=2,NumPlantChemElms
           call ExchFluxLimiter(LeafElmntNode_brch(NE,K,NB,NZ) ,CanopyNonstElms_brch(NE,NB,NZ),XFRE(NE))
           LeafElmntNode_brch(NE,K,NB,NZ) = LeafElmntNode_brch(NE,K,NB,NZ)-XFRE(NE)
