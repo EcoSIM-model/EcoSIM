@@ -24,7 +24,7 @@ module ATSEcoSIMInitMod
   use MicBGCMod,        only : initNitro1Layer
   use ATSTracerMapMod,  only : InitSpeciesMap, UnpackMoleFracToEcoSIM
   use MicrobialDataType, only : mBiomeHeter_vr, mBiomeAutor_vr
-  use ElmIDMod,          only : ielmc
+  use ElmIDMod,          only : ielmc, ielmn, ielmp
 implicit none
   character(len=*), private, parameter :: mod_filename=&
   __FILE__
@@ -161,7 +161,28 @@ implicit none
 
   PSIAtFldCapacity_col = pressure_at_field_capacity
   PSIAtWiltPoint_col = pressure_at_wilting_point
-  
+
+  ! Seed litter complexes with a fraction of bulk SOM so that
+  ! decomposition of woody, fine litter, and manure pools is active.
+  ! RSC/N/P_vr units: g m-2 (same as CSoilOrgM_vr in ATS coupling).
+  ! InitLitterProfile in startsim converts these to per-complex
+  ! concentrations (CORGCX) which then populate SolidOM_vr.
+  do NY=1,NYS
+    do L=NU_col(NY,NX),NL_col(NY,NX)
+      RSC_vr(micpar%k_woody_comp, L, NY, NX) = 0.05_r8 * CSoilOrgM_vr(ielmc, L, NY, NX)
+      RSN_vr(micpar%k_woody_comp, L, NY, NX) = 0.05_r8 * CSoilOrgM_vr(ielmn, L, NY, NX)
+      RSP_vr(micpar%k_woody_comp, L, NY, NX) = 0.05_r8 * CSoilOrgM_vr(ielmp, L, NY, NX)
+
+      RSC_vr(micpar%k_fine_comp, L, NY, NX)  = 0.10_r8 * CSoilOrgM_vr(ielmc, L, NY, NX)
+      RSN_vr(micpar%k_fine_comp, L, NY, NX)  = 0.10_r8 * CSoilOrgM_vr(ielmn, L, NY, NX)
+      RSP_vr(micpar%k_fine_comp, L, NY, NX)  = 0.10_r8 * CSoilOrgM_vr(ielmp, L, NY, NX)
+
+      RSC_vr(micpar%k_manure, L, NY, NX)     = 0.02_r8 * CSoilOrgM_vr(ielmc, L, NY, NX)
+      RSN_vr(micpar%k_manure, L, NY, NX)     = 0.02_r8 * CSoilOrgM_vr(ielmn, L, NY, NX)
+      RSP_vr(micpar%k_manure, L, NY, NX)     = 0.02_r8 * CSoilOrgM_vr(ielmp, L, NY, NX)
+    enddo
+  enddo
+
   call startsim(NHW,NHE,NVN,NVS)
 
   if (microbial_model) then
@@ -178,6 +199,13 @@ implicit none
           SUM(mBiomeHeter_vr(ielmc,:,:,L,NY,1)), &
           SUM(mBiomeAutor_vr(ielmc,:,L,NY,1)), &
           SUM(SolidOM_vr(ielmc,:,:,L,NY,1))
+        write(*,'(A,2I4,5E12.4)') '   SolidOM per complex (woody,fine,manure,POM,humus):', &
+          L, NY, &
+          SUM(SolidOM_vr(ielmc,:,micpar%k_woody_comp,L,NY,1)), &
+          SUM(SolidOM_vr(ielmc,:,micpar%k_fine_comp,L,NY,1)), &
+          SUM(SolidOM_vr(ielmc,:,micpar%k_manure,L,NY,1)), &
+          SUM(SolidOM_vr(ielmc,:,micpar%k_POM,L,NY,1)), &
+          SUM(SolidOM_vr(ielmc,:,micpar%k_humus,L,NY,1))
       enddo
     enddo
     write(*,*) '=== END MICROBE INIT DIAGNOSTICS ==='

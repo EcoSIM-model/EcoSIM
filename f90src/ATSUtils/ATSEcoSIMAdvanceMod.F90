@@ -37,6 +37,8 @@ module ATSEcoSIMAdvanceMod
   use EcoSIMHistMod
   !use PlantAPIData
   use EcoSIMCtrlMod,      only: ldo_sp_mode, microbial_model
+  use ElmIDMod,           only: ielmc, ielmn, ielmp, ipltroot
+  use EcoSiMParDataMod,   only: micpar
   use EcosimBGCFluxType,  only: Eco_NetRad_col, Eco_Heat_Latent_col, &
     Eco_Heat_Sens_col, Eco_Heat_GrndSurf_col
   use MicBGCAPI,          only : MicrobeModel
@@ -479,6 +481,85 @@ implicit none
   !Does energy and water exchange in the plant roots and canopy
   ! Specifically runs the CanopyEnergyH2Oiter_func
   if(ldo_sp_mode) call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
+
+  ! --- Root-turnover litter recharge ---
+  ! Prescribed phenology sets PopuRootMycoC_pvr (root C per layer, g d-2)
+  ! but does not generate litterfall. Add root-turnover litter directly to
+  ! SolidOM_vr, weighted by the rooting profile, so the litter complexes
+  ! do not drain to zero between init and whenever vegetation is coupled.
+  !
+  ! Turnover rates (yr-1 → hr-1): fine roots ~0.5 yr-1, coarse ~0.05 yr-1
+  ! Kinetic fractions for subsurface roots (from InitSOMBGCMod):
+  !   woody (coarse): protein=0.00, carbohydrate=0.00, cellulose=0.20, lignin=0.80
+  !   fine:           protein=0.02, carbohydrate=0.06, cellulose=0.34, lignin=0.58
+  if (ldo_sp_mode .and. microbial_model) then
+    block
+      real(r8), parameter :: k_fine_yr  = 0.5_r8   ! fine root turnover (yr-1)
+      real(r8), parameter :: k_coarse_yr = 0.05_r8 ! coarse root turnover (yr-1)
+      real(r8), parameter :: hrs_per_yr = 8760.0_r8
+      real(r8), parameter :: k_fine_hr  = k_fine_yr  / hrs_per_yr
+      real(r8), parameter :: k_coarse_hr = k_coarse_yr / hrs_per_yr
+      ! Kinetic fractions: (protein, carbohydrate, cellulose, lignin)
+      real(r8), parameter :: frac_fine(4)  = (/0.02_r8, 0.06_r8, 0.34_r8, 0.58_r8/)
+      real(r8), parameter :: frac_woody(4) = (/0.00_r8, 0.00_r8, 0.20_r8, 0.80_r8/)
+      real(r8) :: rootC_fine, rootC_coarse, dC, dN, dP, cnrat, cprat
+      integer  :: K
+
+      do NY = 1, NYS
+        do L = NU_col(NY,NX), NL_col(NY,NX)
+          ! PopuRootMycoC_pvr(ipltroot, L, NZ, NY, NX) is root C per layer [g d-2]
+          ! Sum over PFTs for total root C in this layer
+          rootC_fine   = 0.0_r8
+          rootC_coarse = 0.0_r8
+          do NZ = 1, num_pfts
+            rootC_fine = rootC_fine + real(PopuRootMycoC_pvr(ipltroot, L, NZ, NY, NX), r8)
+          enddo
+          ! Coarse roots: assume 20% of fine root C mass
+          rootC_coarse = 0.20_r8 * rootC_fine
+
+          ! --- Fine litter complex (k_fine_comp) ---
+          dC = rootC_fine * k_fine_hr
+          if (dC > 0.0_r8) then
+            K = micpar%k_fine_comp
+            ! Use existing N:C and P:C ratios from this complex/layer
+            cnrat = 0.0_r8; cprat = 0.0_r8
+            do M = 1, micpar%jsken
+              cnrat = cnrat + frac_fine(M) * CNOSC_vr(M, K, L, NY, NX)
+              cprat = cprat + frac_fine(M) * CPOSC_vr(M, K, L, NY, NX)
+            enddo
+            dN = dC * cnrat
+            dP = dC * cprat
+            do M = 1, micpar%jsken
+              SolidOM_vr(ielmc, M, K, L, NY, NX) = SolidOM_vr(ielmc, M, K, L, NY, NX) + frac_fine(M) * dC
+              SolidOM_vr(ielmn, M, K, L, NY, NX) = SolidOM_vr(ielmn, M, K, L, NY, NX) + frac_fine(M) * dN
+              SolidOM_vr(ielmp, M, K, L, NY, NX) = SolidOM_vr(ielmp, M, K, L, NY, NX) + frac_fine(M) * dP
+              SolidOMAct_vr(M, K, L, NY, NX) = SolidOM_vr(ielmc, M, K, L, NY, NX)
+            enddo
+          endif
+
+          ! --- Woody litter complex (k_woody_comp) ---
+          dC = rootC_coarse * k_coarse_hr
+          if (dC > 0.0_r8) then
+            K = micpar%k_woody_comp
+            cnrat = 0.0_r8; cprat = 0.0_r8
+            do M = 1, micpar%jsken
+              cnrat = cnrat + frac_woody(M) * CNOSC_vr(M, K, L, NY, NX)
+              cprat = cprat + frac_woody(M) * CPOSC_vr(M, K, L, NY, NX)
+            enddo
+            dN = dC * cnrat
+            dP = dC * cprat
+            do M = 1, micpar%jsken
+              SolidOM_vr(ielmc, M, K, L, NY, NX) = SolidOM_vr(ielmc, M, K, L, NY, NX) + frac_woody(M) * dC
+              SolidOM_vr(ielmn, M, K, L, NY, NX) = SolidOM_vr(ielmn, M, K, L, NY, NX) + frac_woody(M) * dN
+              SolidOM_vr(ielmp, M, K, L, NY, NX) = SolidOM_vr(ielmp, M, K, L, NY, NX) + frac_woody(M) * dP
+              ! Woody uses OMCI(1,K) scaling for active fraction; approximate as full
+              SolidOMAct_vr(M, K, L, NY, NX) = SolidOM_vr(ielmc, M, K, L, NY, NX)
+            enddo
+          endif
+        enddo
+      enddo
+    end block
+  endif
 
   if (microbial_model) then
     call UnpackMoleFracToEcoSIM(NYS)
