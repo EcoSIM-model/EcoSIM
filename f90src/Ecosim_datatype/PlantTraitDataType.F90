@@ -145,6 +145,12 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  RateRefLeafAppearance_pft(:,:,:)               !rate of leaf initiation at 25 oC, [h-1]
   real(r8),target,allocatable ::  rLen2WidthLeaf_pft(:,:,:)                  !leaf length:width ratio, [-]
   real(r8),target,allocatable :: HypocotLeafAreaCoeff_pft(:,:,:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
+  real(r8), target, allocatable :: RootGrowEnergyLow_pft(:,:,:) !RG_ELOW: low-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: RootGrowEnergyHigh_pft(:,:,:) !RG_EHIGH: high-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyLow_pft(:,:,:) !CG_ELOW: low-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyHigh_pft(:,:,:) !CG_EHIGH: high-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyLow_pft(:,:,:) !LG_ELOW: low-temperature inactivation, leaf/node phenology, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyHigh_pft(:,:,:) !LG_EHIGH: high-temperature inactivation, leaf/node phenology, [J mol-1]
   real(r8),target,allocatable ::  SLA1_pft(:,:,:)                            !leaf area:mass during growth, [m2 g-1]
   real(r8),target,allocatable :: PrescribedLeafProteinDensity_pft(:,:,:)     !LFPRTC: SP protein C per leaf area [gC protein m-2 leaf]
   real(r8),target,allocatable ::  TC4LeafOut_pft(:,:,:)                      !threshold temperature for spring leafout/dehardening, [oC]
@@ -352,6 +358,12 @@ contains
   allocate(RateRefLeafAppearance_pft(JP,JY,JX));     RateRefLeafAppearance_pft=0._r8
   allocate(rLen2WidthLeaf_pft(JP,JY,JX));     rLen2WidthLeaf_pft=0._r8
   allocate(HypocotLeafAreaCoeff_pft(JP,JY,JX));HypocotLeafAreaCoeff_pft=100._r8
+  allocate(RootGrowEnergyLow_pft(JP,JY,JX));RootGrowEnergyLow_pft=197500._r8
+  allocate(RootGrowEnergyHigh_pft(JP,JY,JX));RootGrowEnergyHigh_pft=222500._r8
+  allocate(CanopyGrowEnergyLow_pft(JP,JY,JX));CanopyGrowEnergyLow_pft=197500._r8
+  allocate(CanopyGrowEnergyHigh_pft(JP,JY,JX));CanopyGrowEnergyHigh_pft=222500._r8
+  allocate(LeafGrowEnergyLow_pft(JP,JY,JX));LeafGrowEnergyLow_pft=197500._r8
+  allocate(LeafGrowEnergyHigh_pft(JP,JY,JX));LeafGrowEnergyHigh_pft=218500._r8
   allocate(SLA1_pft(JP,JY,JX));     SLA1_pft=0._r8
   allocate(PrescribedLeafProteinDensity_pft(JP,JY,JX));PrescribedLeafProteinDensity_pft=0._r8
   allocate(TC4LeafOut_pft(JP,JY,JX));      TC4LeafOut_pft=0._r8
@@ -557,6 +569,12 @@ contains
   call destroy(RateRefLeafAppearance_pft)
   call destroy(rLen2WidthLeaf_pft)
   call destroy(HypocotLeafAreaCoeff_pft)
+  call destroy(RootGrowEnergyLow_pft)
+  call destroy(RootGrowEnergyHigh_pft)
+  call destroy(CanopyGrowEnergyLow_pft)
+  call destroy(CanopyGrowEnergyHigh_pft)
+  call destroy(LeafGrowEnergyLow_pft)
+  call destroy(LeafGrowEnergyHigh_pft)
   call destroy(SLA1_pft)
   call destroy(PrescribedLeafProteinDensity_pft)
   call destroy(TC4LeafOut_pft)

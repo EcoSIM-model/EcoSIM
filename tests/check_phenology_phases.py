@@ -125,6 +125,8 @@ plt_pheno%RateRefLeafAppearance_pft=.010_r8
 plt_pheno%MatureGroup_pft=8._r8
 plt_pheno%TKGroth_pft=283.15_r8
 plt_pheno%TempOffset_pft=1.3335_r8
+plt_pheno%LeafGrowEnergyLow_pft=197500._r8
+plt_pheno%LeafGrowEnergyHigh_pft=218500._r8
 plt_pheno%PlantO2Stress_pft=.25_r8
 plt_ew%PSICanopy_pft=-1._r8
 call PreparePlantPhenology(hour)
@@ -137,7 +139,7 @@ if(branch_calls/=0.or.advance_calls/=0)error stop 'early branching or clock upda
 ! Represent the intervening hydraulic/chemical solve with changed conditions.
 plt_pheno%TKGroth_pft=298.15_r8
 plt_ew%PSICanopy_pft=-2._r8
-expected=calc_leave_grow_tempf(299.4835_r8)*exp(-.05_r8)*.5_r8
+expected=calc_leave_grow_tempf(299.4835_r8,197500._r8,218500._r8)*exp(-.05_r8)*.5_r8
 call PhenologyUpdate(hour)
 if(branch_calls/=1.or.advance_calls/=1)error stop 'wrong advancement count'
 if(abs(plt_morph%NumOfLeaves_brch(1,1)-.010_r8*expected)>1.e-12_r8)error stop 'leaf clock used old environment'

@@ -1052,6 +1052,9 @@ module PlantPhenolMod
   end subroutine live_branch_phenology
 !----------------------------------------------------------------------------------------------------
   subroutine CalcPhenolEnvfactor(I,J,NZ,TFNP,WFNG,OFNG)
+  ! Description:
+  ! Compute phenology temperature, water and oxygen modifiers using the PFT's
+  ! independent leaf/node inactivation energies and thermal adaptation offset.
   implicit none
   integer, intent(in) :: I,J,NZ
   real(r8),intent(out) :: TFNP              !temperature function for phenology (25 oC =1 )
@@ -1062,6 +1065,7 @@ module PlantPhenolMod
   real(r8) :: RTK
   real(r8) :: STK,TKCO
 
+  call PrintInfo('beg '//subname)
   associate(                                                                           &
     iPlantPhenolPattern_pft           => plt_pheno%iPlantPhenolPattern_pft            ,& !input  :plant growth habit: annual or perennial,[-]  
     TKGroth_pft                       => plt_pheno%TKGroth_pft                        ,& !input  :canopy growth temperature, [K]
@@ -1069,12 +1073,13 @@ module PlantPhenolMod
     PlantO2Stress_pft                 => plt_pheno%PlantO2Stress_pft                  ,& !input  :plant O2 stress indicator, [-]       
     CanPhenoMoistStress_pft           => plt_pheno%CanPhenoMoistStress_pft            ,& !output :moisture stress for plant phenology development,[-]
     CanPhenoTempStress_pft            => plt_pheno%CanPhenoTempStress_pft             ,& !output :temperature stress for plant phenology development,[-]
+    LeafGrowEnergyLow_pft => plt_pheno%LeafGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
+    LeafGrowEnergyHigh_pft => plt_pheno%LeafGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
     TempOffset_pft                    => plt_pheno%TempOffset_pft                      & !input  :adjustment of Arhhenius curves for plant thermal acclimation, [oC]    
   )
-  call PrintInfo('beg '//subname)
   !
   TKCO = TKGroth_pft(NZ)+TempOffset_pft(NZ)
-  TFNP = calc_leave_grow_tempf(TKCO)
+  TFNP = calc_leave_grow_tempf(TKCO,LeafGrowEnergyLow_pft(NZ),LeafGrowEnergyHigh_pft(NZ))
   IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual)THEN
     WFNG = EXP(0.025_r8*AMAX1(PSICanopy_pft(NZ),-1000._r8))
     OFNG = SQRT(PlantO2Stress_pft(NZ))
@@ -1084,8 +1089,8 @@ module PlantPhenolMod
   ENDIF
   CanPhenoMoistStress_pft(NZ) = WFNG*OFNG
   CanPhenoTempStress_pft(NZ)  = TFNP
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CalcPhenolEnvfactor
 
 !----------------------------------------------------------------------------------------------------

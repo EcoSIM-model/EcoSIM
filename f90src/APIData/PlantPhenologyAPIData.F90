@@ -13,6 +13,12 @@ module PlantPhenologyAPIData
   real(r8), pointer :: ShootRootNonstElmConduts_pft(:)   => null()     !shoot-root rate constant for nonstructural C exchange,               [h-1]
   real(r8), pointer :: GrainFillRate25C_pft(:)            => null()     !maximum rate of fill per grain,                                      [g h-1]
   real(r8), pointer :: TempOffset_pft(:)                  => null()     !adjustment of Arhhenius curves for plant thermal acclimation,        [oC]
+  real(r8), pointer :: RootGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, root growth, [J mol-1], PFT
+  real(r8), pointer :: RootGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, root growth, [J mol-1], PFT
+  real(r8), pointer :: CanopyGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, canopy growth, [J mol-1], PFT
+  real(r8), pointer :: CanopyGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, canopy growth, [J mol-1], PFT
+  real(r8), pointer :: LeafGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, leaf/node phenology, [J mol-1], PFT
+  real(r8), pointer :: LeafGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, leaf/node phenology, [J mol-1], PFT
   real(r8), pointer :: CanPhenoMoistStress_pft(:)         => null()     !moisture stress for plant phenology development,[-]
   real(r8), pointer :: CanPhenoTempStress_pft(:)          => null()     !temperature stress for plant phenology development,[-]
   real(r8), pointer :: PlantO2Stress_pft(:)               => null()     !plant O2 stress indicator,                                           [-]
@@ -112,6 +118,12 @@ contains
 
   allocate(this%TCChill4Seed_pft(JP1));this%TCChill4Seed_pft=spval
   allocate(this%TempOffset_pft(JP1));this%TempOffset_pft=spval
+  allocate(this%RootGrowEnergyLow_pft(JP1));this%RootGrowEnergyLow_pft=197500._r8
+  allocate(this%RootGrowEnergyHigh_pft(JP1));this%RootGrowEnergyHigh_pft=222500._r8
+  allocate(this%CanopyGrowEnergyLow_pft(JP1));this%CanopyGrowEnergyLow_pft=197500._r8
+  allocate(this%CanopyGrowEnergyHigh_pft(JP1));this%CanopyGrowEnergyHigh_pft=222500._r8
+  allocate(this%LeafGrowEnergyLow_pft(JP1));this%LeafGrowEnergyLow_pft=197500._r8
+  allocate(this%LeafGrowEnergyHigh_pft(JP1));this%LeafGrowEnergyHigh_pft=218500._r8
   allocate(this%MatureGroup_pft(JP1));this%MatureGroup_pft=spval
   allocate(this%CanPhenoMoistStress_pft(JP1));this%CanPhenoMoistStress_pft=1._r8
   allocate(this%CanPhenoTempStress_pft(JP1));this%CanPhenoTempStress_pft=1._r8
@@ -206,6 +218,12 @@ contains
   if(associated(this%ShootRootNonstElmConduts_pft))deallocate(this%ShootRootNonstElmConduts_pft);nullify(this%ShootRootNonstElmConduts_pft)
   if(associated(this%GrainFillRate25C_pft))deallocate(this%GrainFillRate25C_pft);nullify(this%GrainFillRate25C_pft)
   if(associated(this%TempOffset_pft))deallocate(this%TempOffset_pft);nullify(this%TempOffset_pft)
+  if(associated(this%RootGrowEnergyLow_pft))deallocate(this%RootGrowEnergyLow_pft);nullify(this%RootGrowEnergyLow_pft)
+  if(associated(this%RootGrowEnergyHigh_pft))deallocate(this%RootGrowEnergyHigh_pft);nullify(this%RootGrowEnergyHigh_pft)
+  if(associated(this%CanopyGrowEnergyLow_pft))deallocate(this%CanopyGrowEnergyLow_pft);nullify(this%CanopyGrowEnergyLow_pft)
+  if(associated(this%CanopyGrowEnergyHigh_pft))deallocate(this%CanopyGrowEnergyHigh_pft);nullify(this%CanopyGrowEnergyHigh_pft)
+  if(associated(this%LeafGrowEnergyLow_pft))deallocate(this%LeafGrowEnergyLow_pft);nullify(this%LeafGrowEnergyLow_pft)
+  if(associated(this%LeafGrowEnergyHigh_pft))deallocate(this%LeafGrowEnergyHigh_pft);nullify(this%LeafGrowEnergyHigh_pft)
   if(associated(this%CanPhenoMoistStress_pft))deallocate(this%CanPhenoMoistStress_pft);nullify(this%CanPhenoMoistStress_pft)
   if(associated(this%CanPhenoTempStress_pft))deallocate(this%CanPhenoTempStress_pft);nullify(this%CanPhenoTempStress_pft)
   if(associated(this%PlantO2Stress_pft))deallocate(this%PlantO2Stress_pft);nullify(this%PlantO2Stress_pft)

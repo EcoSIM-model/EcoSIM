@@ -718,6 +718,12 @@ implicit none
   call ncd_getvar(pft_nfid, 'VRNXI', loc,VRNXI)
   call ncd_getvar(pft_nfid, 'WDLF', loc,rLen2WidthLeaf_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'HYPA', loc,HypocotLeafAreaCoeff_pft(NZ,NY,NX))
+  call ReadThermalTrait('RG_ELOW',RootGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('RG_EHIGH',RootGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,222500._r8)
+  call ReadThermalTrait('CG_ELOW',CanopyGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('CG_EHIGH',CanopyGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,222500._r8)
+  call ReadThermalTrait('LG_ELOW',LeafGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('LG_EHIGH',LeafGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,218500._r8)
   call ncd_getvar(pft_nfid, 'PB', loc,NonstCMinConc2InitBranch_pft(NZ,NY,NX))
 
   call ncd_getvar(pft_nfid, 'GROUPX', loc,GROUPX_pft(NZ,NY,NX))
@@ -808,6 +814,7 @@ implicit none
 
   if(disp_planttrait)then
     call pft_display(nu_plt,NZ,NY,NX,pft_lname,koppen_climl,koppen_clims)
+    call thermal_trait_disp(nu_plt,NZ,NY,NX)
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
@@ -892,6 +899,12 @@ implicit none
   StalkAxialResist_pft(NZ,NY,NX)         = StalkAxialResist_tab(loc)
   rLen2WidthLeaf_pft(NZ,NY,NX)           = rLen2WidthLeaf_tab(loc)
   HypocotLeafAreaCoeff_pft(NZ,NY,NX) = HypocotLeafAreaCoeff_tab(loc)
+  RootGrowEnergyLow_pft(NZ,NY,NX) = RootGrowEnergyLow_tab(loc)
+  RootGrowEnergyHigh_pft(NZ,NY,NX) = RootGrowEnergyHigh_tab(loc)
+  CanopyGrowEnergyLow_pft(NZ,NY,NX) = CanopyGrowEnergyLow_tab(loc)
+  CanopyGrowEnergyHigh_pft(NZ,NY,NX) = CanopyGrowEnergyHigh_tab(loc)
+  LeafGrowEnergyLow_pft(NZ,NY,NX) = LeafGrowEnergyLow_tab(loc)
+  LeafGrowEnergyHigh_pft(NZ,NY,NX) = LeafGrowEnergyHigh_tab(loc)
   NonstCMinConc2InitBranch_pft(NZ,NY,NX) = NonstCMinConc2InitBranch_tab(loc)
 
   GROUPX_pft(NZ,NY,NX)                 = GROUPX_tab(loc)
@@ -1027,6 +1040,7 @@ implicit none
   ENDIF
   if(disp_planttrait.and.pft_changed)then
     call pft_display(nu_plt,NZ,NY,NX,pft_lname,koppen_climl,koppen_clims)
+    call thermal_trait_disp(nu_plt,NZ,NY,NX)
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
@@ -1280,6 +1294,85 @@ implicit none
   end subroutine pft_display
 
 !------------------------------------------------------------------------------------------
+  subroutine ReadThermalTrait(varname,values,first_pft,default_value)
+  ! Description:
+  ! Read an optional thermal trait on the WDLF PFT axis. Older parameter files
+  ! retain the legacy energy; supplied records must be finite positive values.
+  implicit none
+  character(len=*), intent(in) :: varname !NetCDF thermal trait name, [-]
+  real(r8), intent(out) :: values(:) !consecutive PFT inactivation energies, [J mol-1]
+  integer, intent(in) :: first_pft !first PFT record, one-based, [-]
+  real(r8), intent(in) :: default_value !legacy energy when the variable is absent, [J mol-1]
+  character(len=*), parameter :: subname='ReadThermalTrait'
+  integer :: status,varid,refid,ndims,dims(nf90_max_var_dims),refdims(nf90_max_var_dims),i
+  real(r8) :: missing
+  character(len=13), parameter :: missing_atts(2)=[character(len=13) :: '_FillValue','missing_value']
+
+  call PrintInfo('beg '//subname)
+  values=default_value
+  status=nf90_inq_varid(pft_nfid%fh,varname,varid)
+  if(status/=nf90_enotvar)then
+    call check_ret(status,subname//'::'//varname)
+    dims=0; refdims=0
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,varid,ndims=ndims,dimids=dims),subname//'::dimensions')
+    call check_ret(nf90_inq_varid(pft_nfid%fh,'WDLF',refid),subname//'::WDLF')
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,refid,dimids=refdims),subname//'::PFT axis')
+    if(ndims/=1.or.dims(1)/=refdims(1))call endrun(varname//' must use the same single PFT dimension as WDLF')
+    call check_ret(nf90_get_var(pft_nfid%fh,varid,values,start=[first_pft],count=[size(values)]),subname//'::read')
+    if(any(.not.ieee_is_finite(values)))call endrun(varname//' must contain finite positive energies [J mol-1]')
+    if(any(values<=0._r8).or.any(values==real(nf90_fill_double,r8)).or.any(values==real(nf90_fill_float,r8))) &
+      call endrun(varname//' contains invalid or unwritten energies [J mol-1]')
+    do i=1,size(missing_atts)
+      status=nf90_get_att(pft_nfid%fh,varid,trim(missing_atts(i)),missing)
+      if(status==nf90_noerr)then
+        if(ieee_is_finite(missing))then
+          if(any(values==missing))call endrun(varname//' contains '//trim(missing_atts(i))//' records')
+        endif
+      else if(status/=nf90_enotatt)then
+        call check_ret(status,subname//'::'//trim(missing_atts(i)))
+      endif
+    enddo
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine ReadThermalTrait
+!------------------------------------------------------------------------------------------
+
+  subroutine thermal_trait_disp(nu_plt,NZ,NY,NX)
+  ! Description:
+  ! Write resolved independent growth/phenology inactivation energies per PFT.
+  implicit none
+  integer, intent(in) :: nu_plt !open plant_trait.desc output unit, [-]
+  integer, intent(in) :: NZ,NY,NX !PFT slot and column row/column indices, [-]
+  character(len=*), parameter :: subname='thermal_trait_disp'
+  integer :: j,id
+
+  call PrintInfo('beg '//subname)
+  write(nu_plt,*)('-',j=1,110)
+  write(nu_plt,*)'THERMAL PROPERTIES'
+  id=0
+  id=addone(id)
+  call writefixl(nu_plt,id,'RG_ELOW','Root growth low-temperature inactivation energy [J mol-1]', &
+    RootGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'RG_EHIGH','Root growth high-temperature inactivation energy [J mol-1]', &
+    RootGrowEnergyHigh_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'CG_ELOW','Canopy growth low-temperature inactivation energy [J mol-1]', &
+    CanopyGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'CG_EHIGH','Canopy growth high-temperature inactivation energy [J mol-1]', &
+    CanopyGrowEnergyHigh_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'LG_ELOW','Leaf/node phenology low-temperature inactivation energy [J mol-1]', &
+    LeafGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'LG_EHIGH','Leaf/node phenology high-temperature inactivation energy [J mol-1]', &
+    LeafGrowEnergyHigh_pft(NZ,NY,NX),100)
+  call PrintInfo('end '//subname)
+  end subroutine thermal_trait_disp
+
+!------------------------------------------------------------------------------------------
+
   subroutine photosyns_trait_disp(nu_plt,NZ,NY,NX)
   ! Description:
   ! Write the active PFT photosynthetic traits and SP prescribed protein density.
@@ -2051,6 +2144,12 @@ implicit none
   call ncd_getvar(pft_nfid,'PhiMAX',xylemPhi_max_tab)
   call ncd_getvar(pft_nfid, 'WDLF', rLen2WidthLeaf_tab)
   call ncd_getvar(pft_nfid, 'HYPA', HypocotLeafAreaCoeff_tab)
+  call ReadThermalTrait('RG_ELOW',RootGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('RG_EHIGH',RootGrowEnergyHigh_tab,1,222500._r8)
+  call ReadThermalTrait('CG_ELOW',CanopyGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('CG_EHIGH',CanopyGrowEnergyHigh_tab,1,222500._r8)
+  call ReadThermalTrait('LG_ELOW',LeafGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('LG_EHIGH',LeafGrowEnergyHigh_tab,1,218500._r8)
   call ncd_getvar(pft_nfid, 'PB', NonstCMinConc2InitBranch_tab)
   call ncd_getvar(pft_nfid, 'GROUPX', GROUPX_tab)
   call ncd_getvar(pft_nfid, 'XTLI', ShootNodeNumAtPlanting_tab)

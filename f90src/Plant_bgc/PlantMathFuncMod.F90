@@ -277,51 +277,50 @@ contains
   
   end subroutine calc_seed_geometry
 !--------------------------------------------------------------------------------
-  pure function calc_root_grow_tempf(TKSO)result(fT_root)
-  !
-  !DESCRIPTION
-  !compute the temperature dependence for plant root growth
+  pure function calc_root_grow_tempf(TKSO,EnergyLow,EnergyHigh)result(fT_root)
+  ! Description:
+  ! Compute the root temperature factor with independent PFT inactivation energies.
   implicit none
-  real(r8), intent(in) :: TKSO   !apparent temperature felt by the root
+  real(r8), intent(in) :: TKSO !effective temperature including thermal adaptation offset, [K]
+  real(r8), intent(in) :: EnergyLow,EnergyHigh !low/high-temperature inactivation energies, [J mol-1]
   real(r8) :: fT_root
   real(r8) :: RTK,STK,ACTV
 
   RTK=RGASC*TKSO
-  STK=710.0_r8*TKSO
-  ACTV=1+EXP((197500._r8-STK)/RTK)+EXP((STK-222500._r8)/RTK)
-  FT_ROOT=EXP(25.229_r8-62500._r8/RTK)/ACTV
-
+  STK=710._r8*TKSO
+  ACTV=1._r8+EXP((EnergyLow-STK)/RTK)+EXP((STK-EnergyHigh)/RTK)
+  fT_root=EXP(25.229_r8-62500._r8/RTK)/ACTV
   end function calc_root_grow_tempf
 !--------------------------------------------------------------------------------
-  pure function calc_canopy_grow_tempf(TKGO)result(fT_canp)
-  !
-  !DESCRIPTION
-  !compute the temperature dependence for plant canopy growth
+  pure function calc_canopy_grow_tempf(TKGO,EnergyLow,EnergyHigh)result(fT_canp)
+  ! Description:
+  ! Compute the canopy temperature factor with independent PFT inactivation energies.
   implicit none
-  real(r8), intent(in) :: TKGO   !apparent temperature felt by the canopy
+  real(r8), intent(in) :: TKGO !effective temperature including thermal adaptation offset, [K]
+  real(r8), intent(in) :: EnergyLow,EnergyHigh !low/high-temperature inactivation energies, [J mol-1]
   real(r8) :: fT_canp
   real(r8) :: RTK,STK,ACTV
 
-  RTK     = RGASC*TKGO
-  STK     = 710.0_r8*TKGO
-  ACTV    = 1+EXP((197500._r8-STK)/RTK)+EXP((STK-222500._r8)/RTK)
-  FT_canp = EXP(25.229_r8-62500._r8/RTK)/ACTV
-
+  RTK=RGASC*TKGO
+  STK=710._r8*TKGO
+  ACTV=1._r8+EXP((EnergyLow-STK)/RTK)+EXP((STK-EnergyHigh)/RTK)
+  fT_canp=EXP(25.229_r8-62500._r8/RTK)/ACTV
   end function calc_canopy_grow_tempf
 
 !--------------------------------------------------------------------------------
-  pure function calc_leave_grow_tempf(TKCO)result(TFNP)
-  !DESCRIPTION
-  !compute the temperature dependence for leave growth
+  pure function calc_leave_grow_tempf(TKCO,EnergyLow,EnergyHigh)result(TFNP)
+  ! Description:
+  ! Compute the leaf/node phenology temperature factor with independent PFT inactivation energies.
   implicit none
-  real(r8), intent(in) :: TKCO   !apparent temperature felt by the leave
+  real(r8), intent(in) :: TKCO !effective temperature including thermal adaptation offset, [K]
+  real(r8), intent(in) :: EnergyLow,EnergyHigh !low/high-temperature inactivation energies, [J mol-1]
   real(r8) :: TFNP
   real(r8) :: RTK,STK,ACTV
-  
-  RTK  = RGASC*TKCO
-  STK  = 710.0_r8*TKCO
-  ACTV = 1+EXP((197500_r8-STK)/RTK)+EXP((STK-218500._r8)/RTK)
-  TFNP = EXP(24.269_r8-60000._r8/RTK)/ACTV
+
+  RTK=RGASC*TKCO
+  STK=710._r8*TKCO
+  ACTV=1._r8+EXP((EnergyLow-STK)/RTK)+EXP((STK-EnergyHigh)/RTK)
+  TFNP=EXP(24.269_r8-60000._r8/RTK)/ACTV
   end function calc_leave_grow_tempf
 
 !--------------------------------------------------------------------------------

@@ -2086,7 +2086,9 @@ module UptakesMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine SetCanopyGrowthFuncs(yearIJ,NZ)
-
+  ! Description:
+  ! Update growth temperature and root/canopy response factors using each PFT's
+  ! thermal adaptation offset and independent inactivation energies.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
@@ -2094,6 +2096,7 @@ module UptakesMod
   character(len=*), parameter :: subname='SetCanopyGrowthFuncs'
   real(r8) :: ACTV,RTK,STK,TKGO,TKSO
   integer :: L
+  call PrintInfo('beg '//subname)
   associate(                                               &
     MainBranchNum_pft   => plt_morph%MainBranchNum_pft    ,& !input  :number of main branch,[-]
     MaxNumRootLays      => plt_site%MaxNumRootLays        ,& !input  :maximum root layer number,[-]
@@ -2103,6 +2106,10 @@ module UptakesMod
     TKC_pft             => plt_ew%TKC_pft                 ,& !input  :canopy temperature, [K]
     TKS_vr              => plt_ew%TKS_vr                  ,& !input  :mean annual soil temperature, [K]
     TdegCCanopy_pft     => plt_ew%TdegCCanopy_pft         ,& !input  :canopy temperature, [oC]
+    RootGrowEnergyLow_pft => plt_pheno%RootGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
+    RootGrowEnergyHigh_pft => plt_pheno%RootGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
+    CanopyGrowEnergyLow_pft => plt_pheno%CanopyGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
+    CanopyGrowEnergyHigh_pft => plt_pheno%CanopyGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
     TempOffset_pft      => plt_pheno%TempOffset_pft       ,& !input  :adjustment of Arhhenius curves for plant thermal acclimation, [oC]
     iPlantCalendar_brch => plt_pheno%iPlantCalendar_brch  ,& !input  :plant growth stage, [-]
     ChillHours_pft      => plt_photo%ChillHours_pft       ,& !inoput :chilling effect on CO2 fixation, [-]
@@ -2116,7 +2123,6 @@ module UptakesMod
   !     SET CANOPY GROWTH TEMPERATURE FROM SOIL SURFACE
   !     OR CANOPY TEMPERATURE DEPENDING ON GROWTH STAGE
   !
-  call PrintInfo('beg '//subname)
   IF(iPlantCalendar_brch(ipltcal_Emerge,MainBranchNum_pft(NZ),NZ).EQ.0)THEN
     !before seed emergence
     TKGroth_pft(NZ)=TKS_vr(NU)
@@ -2133,16 +2139,16 @@ module UptakesMod
   !     TKS_vr,TKSO=soil temperature,soil temp used in Arrhenius eqn
   !     TempOffset_pft=shift in Arrhenius curve for thermal adaptation
   !     fTCanopyGroth_pft,fTgrowRootP_vr=temperature function for canopy,root growth (25 oC =1)
-  !     RGAS,710.0=gas constant,enthalpy
-  !     62500,197500,222500=energy of activn,high,low temp inactivn(KJ mol-1)
+  !     RGASC,710.0=gas constant and entropy coefficient [J mol-1 K-1]
+  !     62500=activation energy [J mol-1]; low/high inactivation energies are PFT traits
   !     PSICanPDailyMin=minimum daily canopy water potential
   !
   TKGO                  = real_truncate(TKGroth_pft(NZ)+TempOffset_pft(NZ),1.e-3_r8)
-  fTCanopyGroth_pft(NZ) = calc_canopy_grow_tempf(TKGO)
+  fTCanopyGroth_pft(NZ) = calc_canopy_grow_tempf(TKGO,CanopyGrowEnergyLow_pft(NZ),CanopyGrowEnergyHigh_pft(NZ))
 
   D100: DO L=NU,MaxNumRootLays
     TKSO                 = real_truncate(TKS_vr(L)+TempOffset_pft(NZ),1.e-3_r8)
-    fTgrowRootP_vr(L,NZ) = calc_root_grow_tempf(TKSO)
+    fTgrowRootP_vr(L,NZ) = calc_root_grow_tempf(TKSO,RootGrowEnergyLow_pft(NZ),RootGrowEnergyHigh_pft(NZ))
   ENDDO D100
 
   PSICanPDailyMin_pft(NZ)=AMIN1(PSICanPDailyMin_pft(NZ),PSICanopy_pft(NZ))
@@ -2159,8 +2165,8 @@ module UptakesMod
     ChillHours_pft(NZ)=AZMAX1(ChillHours_pft(NZ)-1.0_r8)
   ENDIF
 
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine SetCanopyGrowthFuncs
   ![tail]
 end module UptakesMod

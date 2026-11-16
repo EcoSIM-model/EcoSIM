@@ -137,7 +137,10 @@ module grosubsMod
   real(r8) :: StandingDeadKd
 !     begin_execution
 
+  call PrintInfo('beg '//subname)
   associate(                                                                    &
+    CanopyGrowEnergyLow_pft => plt_pheno%CanopyGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
+    CanopyGrowEnergyHigh_pft => plt_pheno%CanopyGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
     CH4ByFire_CumYr_pft            => plt_distb%CH4ByFire_CumYr_pft            ,& !input  :plant CH4 emission from fire, [g d-2 ]
     CO2ByFire_CumYr_pft            => plt_distb%CO2ByFire_CumYr_pft            ,& !input  :plant CO2 emission from fire, [g d-2 ]
     CumSoilThickness_vr            => plt_site%CumSoilThickness_vr             ,& !input  :depth to bottom of soil layer from surface of grid cell, [m]
@@ -184,12 +187,12 @@ module grosubsMod
     iDayPlanting_pft               => plt_distb%iDayPlanting_pft               ,& !output :day of planting,[-]
     iYearPlanting_pft              => plt_distb%iYearPlanting_pft               & !output :year of planting,[-]
   )
-  call PrintInfo('beg '//subname)
   D9975: DO NZ=1,NP0
     if(NZ.GT.NP)then
       !fallow slot: residue only, so the canopy temperature function is not
       !updated by the uptake model; use the soil surface temperature instead
-      fTCanopyGroth_pft(NZ)=calc_canopy_grow_tempf(real_truncate(TKS_vr(NU)+TempOffset_pft(NZ),1.e-3_r8))
+      fTCanopyGroth_pft(NZ)=calc_canopy_grow_tempf(real_truncate(TKS_vr(NU)+TempOffset_pft(NZ),1.e-3_r8), &
+        CanopyGrowEnergyLow_pft(NZ),CanopyGrowEnergyHigh_pft(NZ))
     endif
     if(iPlantTurnoverPattern_pft(NZ).EQ.0 .OR. .NOT.is_plant_woody_vascular(iPlantRootProfile_pft(NZ),iPlant2ndGrothPattern_pft(NZ)))then
       StandingDeadKd=StandingDeadKd_decid
@@ -266,8 +269,8 @@ module grosubsMod
     NetPrimProduct_pft(NZ) = GrossCO2Fix_pft(NZ)+GrossResp_pft(NZ)
 
   ENDDO D9975
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine Live2DeadTransformation
 
 !----------------------------------------------------------------------------------------------------

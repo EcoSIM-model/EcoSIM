@@ -19,6 +19,8 @@ def main():
     parser.add_argument('--start',required=True)
     parser.add_argument('--end',required=True,help='Exclusive interval end')
     parser.add_argument('--offset',type=float,required=True)
+    parser.add_argument('--energy-low',type=float,default=197500.,help='LG_ELOW [J mol-1]')
+    parser.add_argument('--energy-high',type=float,default=218500.,help='LG_EHIGH [J mol-1]')
     parser.add_argument('--xrni',type=float,required=True)
     parser.add_argument('--xrla',type=float,required=True)
     parser.add_argument('--pft',type=int,default=0)
@@ -40,7 +42,7 @@ def main():
     assert np.max(abs(z.MainBranchNodeNumber_pft-z.ShootNodeNumber_pft))<1e-6,'Require single-branch window'
     def response(tc):
         tk=tc+273.15+args.offset;rt=8.3143*tk;st=710*tk
-        return np.exp(24.269-60000/rt)/(1+np.exp((197500-st)/rt)+np.exp((st-218500)/rt))
+        return np.exp(24.269-60000/rt)/(1+np.exp((args.energy_low-st)/rt)+np.exp((st-args.energy_high)/rt))
     error=z.CanPhenol_TSTRESS_pft-response(z.TC_Groth_pft)
     old_error=z.CanPhenol_TSTRESS_pft-response(h.TC_Groth_pft.shift().loc[keep])
     # Growth temperature is truncated to .001 C and multipliers are float32.
@@ -60,7 +62,8 @@ def main():
     assert np.max(abs(z.RNodeAppear_pft/24-expected_node))<1e-7
     assert np.max(abs(z.RLeafAppear_pft/24-expected_leaf))<1e-7
     report=dict(status='passed',hours=len(z),origin=args.origin,start=args.start,end_exclusive=args.end,
-                offset_C=args.offset,current_temperature_max_abs_error=float(error.abs().max()),
+                offset_C=args.offset,energy_low_J_per_mol=args.energy_low,energy_high_J_per_mol=args.energy_high,
+                current_temperature_max_abs_error=float(error.abs().max()),
                 previous_temperature_mean_abs_error=float(old_error.abs().mean()),
                 node_increment_max_abs_error=float(node_error),leaf_increment_max_abs_error=float(leaf_error),
                 same_hour_temperature=True,single_hourly_node_and_leaf_increment=True)

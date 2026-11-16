@@ -56,6 +56,12 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: VRNXI_tab(:)
   real(r8), target, allocatable :: rLen2WidthLeaf_tab(:)
   real(r8), target, allocatable :: HypocotLeafAreaCoeff_tab(:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
+  real(r8), target, allocatable :: RootGrowEnergyLow_tab(:) !RG_ELOW: low-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: RootGrowEnergyHigh_tab(:) !RG_EHIGH: high-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyLow_tab(:) !CG_ELOW: low-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyHigh_tab(:) !CG_EHIGH: high-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyLow_tab(:) !LG_ELOW: low-temperature inactivation, leaf/node phenology, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyHigh_tab(:) !LG_EHIGH: high-temperature inactivation, leaf/node phenology, [J mol-1]
   real(r8), target, allocatable :: NonstCMinConc2InitBranch_tab(:)
   real(r8), target, allocatable :: GROUPX_tab(:)
   real(r8), target, allocatable :: ShootNodeNumAtPlanting_tab(:)
@@ -204,6 +210,12 @@ module PlantTraitTableMod
   allocate(VRNXI_tab(npfts));VRNXI_tab=0._r8
   allocate(rLen2WidthLeaf_tab(npfts));rLen2WidthLeaf_tab=0._r8
   allocate(HypocotLeafAreaCoeff_tab(npfts));HypocotLeafAreaCoeff_tab=100._r8
+  allocate(RootGrowEnergyLow_tab(npfts));RootGrowEnergyLow_tab=197500._r8
+  allocate(RootGrowEnergyHigh_tab(npfts));RootGrowEnergyHigh_tab=222500._r8
+  allocate(CanopyGrowEnergyLow_tab(npfts));CanopyGrowEnergyLow_tab=197500._r8
+  allocate(CanopyGrowEnergyHigh_tab(npfts));CanopyGrowEnergyHigh_tab=222500._r8
+  allocate(LeafGrowEnergyLow_tab(npfts));LeafGrowEnergyLow_tab=197500._r8
+  allocate(LeafGrowEnergyHigh_tab(npfts));LeafGrowEnergyHigh_tab=218500._r8
   allocate(NonstCMinConc2InitBranch_tab(npfts));NonstCMinConc2InitBranch_tab=0._r8
   allocate(GROUPX_tab(npfts));GROUPX_tab=0._r8
   allocate(ShootNodeNumAtPlanting_tab(npfts));ShootNodeNumAtPlanting_tab=0._r8
@@ -348,6 +360,12 @@ module PlantTraitTableMod
   call destroy(enh_cyto_tab)
   call destroy(rLen2WidthLeaf_tab)
   call destroy(HypocotLeafAreaCoeff_tab)
+  call destroy(RootGrowEnergyLow_tab)
+  call destroy(RootGrowEnergyHigh_tab)
+  call destroy(CanopyGrowEnergyLow_tab)
+  call destroy(CanopyGrowEnergyHigh_tab)
+  call destroy(LeafGrowEnergyLow_tab)
+  call destroy(LeafGrowEnergyHigh_tab)
   call destroy(NonstCMinConc2InitBranch_tab)
   call destroy(GROUPX_tab)
   call destroy(ShootNodeNumAtPlanting_tab)
