@@ -1,6 +1,10 @@
 module ATSCPLMod
+  ! Description:
+  ! Transfer the ATS environment and EcoSIM flux/reference pairs through the C ABI.
   use data_kind_mod, only : r8 => DAT_KIND_R8
+  use EcoSIMCtrlDataType, only: ats_shared_surface_layer
   use SharedDataMod
+  use ATSLayer0Mod, only: InstallSharedLayer0State
   use ATSEcoSIMInitMod
   use ATSEcoSIMAdvanceMod
   use EcoContainers_module
@@ -50,6 +54,7 @@ contains
   call c_f_string_ptr(config%pft_file, f_string_buffer)
   ecosim_pft_file_path = trim(f_string_buffer)
 
+  ats_shared_surface_layer=config%shared_surface_layer
   heat_capacity = config%heat_capacity
   pressure_at_field_capacity = config%field_capacity
   pressure_at_wilting_point = config%wilting_point
@@ -181,6 +186,14 @@ contains
   call c_f_pointer(env%snow_albedo%data, data, (/num_cols/))
   a_SALB = data(:)
 
+  call c_f_pointer(env%surface_water_liquid%data, data, (/num_cols/))
+  a_WAT0 = data(:)
+  call c_f_pointer(env%surface_water_ice%data, data, (/num_cols/))
+  a_ICE0 = data(:)
+  call c_f_pointer(env%ponded_depth%data, data, (/num_cols/))
+  a_POND0 = data(:)
+  call c_f_pointer(env%surface_gauge_pressure%data, data, (/num_cols/))
+  a_PRES0 = data(:)
   call c_f_pointer(env%surface_temperature%data, data, (/num_cols/))
   a_TSURF = data(:)
 
@@ -215,7 +228,8 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine CopyFeedbackFromATS(feedback, sizes)
-  ! snow depth is EcoSIM's snow state, kept by ATS between advances. The
+  ! Description:
+  ! Snow depth is EcoSIM's snow state, kept by ATS between advances. The
   ! sources are recomputed by EcoSIM before use; they are copied so that the
   ! SharedDataMod arrays are allocated (allocation on assignment).
   implicit none
@@ -241,6 +255,33 @@ contains
   call c_f_pointer(feedback%surface_energy_source%data, data, (/num_cols/))
   surf_e_source = data(:)
 
+  call c_f_pointer(feedback%surface_energy_source_dtemperature%data, data, (/num_cols/))
+  surf_e_source_dtemperature = data(:)
+
+  call c_f_pointer(feedback%surface_energy_reference_temperature%data, data, (/num_cols/))
+  surf_e_source_temperature_ref = data(:)
+
+  call c_f_pointer(feedback%layer0_water_source%data, data, (/num_cols/))
+  surf_layer0_w_source = data(:)
+
+  call c_f_pointer(feedback%layer0_energy_source%data, data, (/num_cols/))
+  surf_layer0_e_source = data(:)
+
+  call c_f_pointer(feedback%ground_water_source%data, data, (/num_cols/))
+  surf_ground_w_source = data(:)
+
+  call c_f_pointer(feedback%ground_energy_source%data, data, (/num_cols/))
+  surf_ground_e_source = data(:)
+
+  call c_f_pointer(feedback%ground_energy_source_dtemperature%data, data, (/num_cols/))
+  surf_ground_e_dtemperature = data(:)
+
+  call c_f_pointer(feedback%ground_energy_reference_temperature%data, data, (/num_cols/))
+  surf_ground_temperature_ref = data(:)
+
+  call c_f_pointer(feedback%layer0_fraction%data, data, (/num_cols/))
+  surf_layer0_fraction = data(:)
+
   call c_f_pointer(feedback%snow_depth%data, data, (/num_cols/))
   surf_snow_depth = data(:)
 
@@ -251,7 +292,9 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine CopyFeedbackToATS(feedback, sizes)
-  ! sources and snow depth computed by this advance. The container is
+  ! Description:
+  ! Transfer sources, their surface-temperature linearization, and snow depth.
+  ! The container is
   ! intent(in): only the arrays it points to are written.
   implicit none
   type (EcoFeedback), intent(in) :: feedback
@@ -275,6 +318,33 @@ contains
 
   call c_f_pointer(feedback%surface_energy_source%data, data, (/num_cols/))
   data(:) = surf_e_source
+
+  call c_f_pointer(feedback%surface_energy_source_dtemperature%data, data, (/num_cols/))
+  data(:) = surf_e_source_dtemperature
+
+  call c_f_pointer(feedback%surface_energy_reference_temperature%data, data, (/num_cols/))
+  data(:) = surf_e_source_temperature_ref
+
+  call c_f_pointer(feedback%layer0_water_source%data, data, (/num_cols/))
+  data(:) = surf_layer0_w_source
+
+  call c_f_pointer(feedback%layer0_energy_source%data, data, (/num_cols/))
+  data(:) = surf_layer0_e_source
+
+  call c_f_pointer(feedback%ground_water_source%data, data, (/num_cols/))
+  data(:) = surf_ground_w_source
+
+  call c_f_pointer(feedback%ground_energy_source%data, data, (/num_cols/))
+  data(:) = surf_ground_e_source
+
+  call c_f_pointer(feedback%ground_energy_source_dtemperature%data, data, (/num_cols/))
+  data(:) = surf_ground_e_dtemperature
+
+  call c_f_pointer(feedback%ground_energy_reference_temperature%data, data, (/num_cols/))
+  data(:) = surf_ground_temperature_ref
+
+  call c_f_pointer(feedback%layer0_fraction%data, data, (/num_cols/))
+  data(:) = surf_layer0_fraction
 
   call c_f_pointer(feedback%snow_depth%data, data, (/num_cols/))
   data(:) = surf_snow_depth
@@ -313,6 +383,7 @@ contains
   call InitSharedData(size_col,num_cols)
 
   call Init_EcoSIM_Soil(num_cols)
+  if(ats_shared_surface_layer)call InstallSharedLayer0State(num_cols)
   end subroutine Init_EcoSIM
 !------------------------------------------------------------------------------------------
 

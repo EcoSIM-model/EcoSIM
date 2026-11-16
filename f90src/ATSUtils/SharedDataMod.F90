@@ -1,4 +1,6 @@
 Module SharedDataMod
+  ! Description:
+  ! Hold the ATS environment, coupled fluxes, and EcoSIM surface exchange state.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use abortutils, only : destroy
@@ -43,6 +45,7 @@ Module SharedDataMod
   real(r8), allocatable :: a_SAI(:,:)       !Stem Area Index
   real(r8), allocatable :: a_VEG(:)       !Vegetation type
   real(r8), allocatable :: a_SALB(:)      !Snow Albedo
+  real(r8), allocatable :: a_WAT0(:),a_ICE0(:),a_POND0(:),a_PRES0(:) ! shared layer-zero state
   real(r8), allocatable :: a_TSURF(:)     !ATS surface temperature [K]
   real(r8), allocatable :: a_TCOND(:,:)   !ATS thermal conductivity [MW m-1 K-1]
   real(r8), allocatable :: a_ATKA(:)
@@ -76,8 +79,17 @@ Module SharedDataMod
   real(r8), allocatable :: swrad(:)       !shortwave radiation,
   real(r8), allocatable :: column_area(:)       !column area
   real(r8), allocatable :: vpair(:)       !vapor pressure deficit
-  real(r8), allocatable :: surf_e_source(:) !surface energy source
+  real(r8), allocatable :: surf_e_source(:) !surface energy source [MJ m-2 per hour]
+  real(r8), allocatable :: surf_e_source_dtemperature(:) !radiation+sensible slope [MJ m-2 K-1 per hour]
+  real(r8), allocatable :: surf_e_source_temperature_ref(:) !surface temperature used for the source [K]
   real(r8), allocatable :: surf_w_source(:) !surface water source
+  real(r8), allocatable :: surf_layer0_w_source(:)
+  real(r8), allocatable :: surf_layer0_e_source(:)
+  real(r8), allocatable :: surf_ground_w_source(:)
+  real(r8), allocatable :: surf_ground_e_source(:)
+  real(r8), allocatable :: surf_ground_e_dtemperature(:)
+  real(r8), allocatable :: surf_ground_temperature_ref(:)
+  real(r8), allocatable :: surf_layer0_fraction(:)
   real(r8), allocatable :: surf_snow_depth(:) !snow depth source
   real(r8), allocatable :: a_CanSnow(:,:)    !canopy snow per PFT (num_pfts x num_columns)
   !real(r8), allocatable :: a_AREA3(:)
@@ -131,6 +143,8 @@ Module SharedDataMod
     allocate(a_EvapSnow(ncol))
     allocate(a_Sublim(ncol))
     allocate(a_PlantInit(ncol,1)); a_PlantInit=0._r8
+    a_Transpiration=0._r8; a_EvapCan=0._r8; a_EvapGrnd=0._r8
+    a_EvapLitr=0._r8; a_EvapSnow=0._r8; a_Sublim=0._r8
     allocate(a_NU(ncol))
     allocate(a_NL(ncol))
     !allocate(a_ASP(ncells_per_col_))

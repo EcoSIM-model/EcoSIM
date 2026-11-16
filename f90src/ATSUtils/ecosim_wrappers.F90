@@ -98,6 +98,8 @@ subroutine EcoSIM_Advance( &
   use EcoContainers_module
   use ATSCPLMod, only : Run_EcoSIM_one_step, ATS2EcoSIMData, EcoSIM2ATSData
   use ATSStateRegistryMod, only : PackInternalState, UnpackInternalState
+  use ATSLayer0Mod, only: InstallSharedLayer0State
+  use EcoSIMCtrlDataType, only: ats_shared_surface_layer
 
   implicit none
 
@@ -114,6 +116,8 @@ subroutine EcoSIM_Advance( &
 
   ! restore carried state from ATS (identical unless ATS restarted)
   call UnpackInternalState(istate, sizes)
+  ! Install the current boundary before weather/canopy preparation reads layer 0.
+  if(ats_shared_surface_layer)call InstallSharedLayer0State(sizes%num_columns)
 
   call Run_EcoSIM_one_step(sizes)
 
@@ -242,3 +246,23 @@ subroutine EcoSIM_Container_Sizes(n, sizes) bind(C, name="ecosim_container_sizes
   n = num_types
 
 end subroutine EcoSIM_Container_Sizes
+
+subroutine ecosim_sync_layer0(env, sizes, istate) bind(C)
+  ! Description:
+  ! Resynchronize native mirrors after ATS installs the initialized litter material.
+  use EcoContainers_module
+  use ATSCPLMod, only: CopyEnvironmentFromATS
+  use ATSLayer0Mod, only: InstallSharedLayer0State
+  use ATSStateRegistryMod, only: PackInternalState
+  use DebugToolMod, only: PrintInfo
+  implicit none
+  type(EcoEnvironment), intent(in) :: env ! current ATS surface and soil environment
+  type(EcoSizes), intent(in) :: sizes ! local column layout
+  type(EcoInternalState), intent(inout) :: istate ! returned diagnostic mirror state
+  character(len=*), parameter :: subname='ecosim_sync_layer0'
+  call PrintInfo('beg '//subname)
+  call CopyEnvironmentFromATS(env,sizes)
+  call InstallSharedLayer0State(sizes%num_columns)
+  call PackInternalState(istate,sizes,.true.)
+  call PrintInfo('end '//subname)
+end subroutine ecosim_sync_layer0

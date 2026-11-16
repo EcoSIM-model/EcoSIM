@@ -15,6 +15,7 @@ module ATSEcoSIMInitMod
       VPA_col, WindSpeedAtm_col, RainH, VPK_col
   use SoilPropertyDataType
   use SurfLitterDataType
+  use SurfSoilDataType, only: VLWatHeldCapSurf_col
   use EcoSIMConfig
   use MiniMathMod
   use SnowDataType
@@ -38,7 +39,7 @@ implicit none
   !use Hour1Mod,         only: InitHour1
   use PlantBGCPars
   use PlantInfoMod
-  use StartsMod, only : startsim, set_ecosim_solver
+  use StartsMod, only : startsim, set_ecosim_solver, InitControlParms
   implicit none
   integer :: NY,NX,L,NHW,NHE,NVN,NVS
   integer, intent(in) :: NYS
@@ -145,7 +146,16 @@ implicit none
   PSIAtFldCapacity_col = pressure_at_field_capacity
   PSIAtWiltPoint_col = pressure_at_wilting_point
   
+  ! Coupled startup also needs native litter densities and numerical constants.
+  ! Without this, the litter-free volume calculation divides zero by zero.
+  call InitControlParms
   call startsim(NHW,NHE,NVN,NVS)
+  do NY=1,NYS
+    ! Native depression-storage geometry (Hour1Mod:ResetSurfResidualProperty).
+    ! Its 0.02 m hydrological roughness is distinct from aerodynamic roughness.
+    VLWatHeldCapSurf_col(NY,1)=max(0.001_r8,0.112_r8*0.020_r8 &
+      +3.10_r8*0.020_r8**2-0.012_r8*0.020_r8*SLOPE_col(0,NY,1))*column_area(NY)
+  enddo
 
   end subroutine Init_EcoSIM_Soil
 

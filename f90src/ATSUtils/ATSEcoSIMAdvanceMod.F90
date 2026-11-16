@@ -1,6 +1,7 @@
 module ATSEcoSIMAdvanceMod
-  !
-  !Description
+  use ATSLayer0Mod, only: InstallSharedLayer0State
+  ! Description:
+  ! Advance coupled surface processes and return hourly boundary exchanges.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8, yearIJ_type
   use StartqMod,     only : InitPlantPhenoMorphoBio, InitDimensionsandUptake
@@ -23,6 +24,8 @@ module ATSEcoSIMAdvanceMod
   use SoilPropertyDataType
   use HydroThermData
   use SurfPhysData
+  use SurfLitterDataType
+  use SurfSoilDataType, only: FracSurfSnoFree_col
   use SnowPhysData
   use CanopyHydroMod
   use EcoSIMSolverPar, only : NPH, dts_HeatWatTP
@@ -336,7 +339,7 @@ implicit none
     !the ATS surface temperature there instead of the top subsurface cell
     !temperature, which can be much deeper than the surface and does not see the
     !cooling or warming applied to the surface by surf_e_source.
-    if(a_TSURF(NY) > 0._r8)then
+    if(.not.ats_shared_surface_layer.and.a_TSURF(NY) > 0._r8)then
       TKSoil1_vr(NU_col(NY,NX),NY,NX) = a_TSURF(NY)
       TKS_vr(NU_col(NY,NX),NY,NX)     = a_TSURF(NY)
     endif
@@ -479,6 +482,9 @@ implicit none
     HeatInfl2Soil(NY,NX)=0.0_r8
     Qinflx2Soil_col(NY,NX)=0.0_r8
     HeatFlx2Grnd_col(NY,NX)=0.0_r8
+    surf_e_source_dtemperature(NY)=0._r8
+    surf_e_source_temperature_ref(NY)=TKSoil1_vr(NU_col(NY,NX),NY,NX)
+    if(ats_shared_surface_layer)surf_e_source_temperature_ref(NY)=a_TSURF(NY)
     a_EvapSnow(NY)=0.0_r8
     a_Sublim(NY)=0.0_r8
     
@@ -497,9 +503,12 @@ implicit none
   !This does the surface energy and water balance. In the case of plants
   ! it processes the precipitation and radiation already separated out in
   ! PlantCanopyRadsModel
+  surf_ground_e_dtemperature=0._r8
+  surf_layer0_fraction=0._r8
+  if(ats_shared_surface_layer)call InstallSharedLayer0State(NYS)
   call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistanceLitRLay)
 
-  VHeatCapacity1_vr(0,1,1) = 0.0
+  if(.not.ats_shared_surface_layer)VHeatCapacity1_vr(0,1,1) = 0.0
 
   !Runs the main subcycling for the surface energy and water balance in
   !addition to snow.
@@ -522,6 +531,17 @@ implicit none
     !sum fluxes over iterations in each column
     do NY=1, NYS
       HeatFlx2Grnd_col(NY,NX) = HeatFlx2Grnd_col(NY,NX)+HeatInfl2Soil(NY,NX)
+      ! Native EcoSIM linearizes exposed-soil longwave and sensible exchange.
+      ! Accumulate its step-integrated slope using the same area as the heat.
+      ! Water/latent, snow, and litter transfers remain in the reference flux.
+      surf_e_source_dtemperature(NY)=surf_e_source_dtemperature(NY) &
+        +dLWRaddTKsoi1(NY,NX)/column_area(NY)
+      if(ats_shared_surface_layer.and.FracSurfSnoFree_col(NY,NX)>0._r8)then
+        surf_ground_e_dtemperature(NY)=surf_ground_e_dtemperature(NY) &
+          +(-4._r8*LWEmscefSoil_col(NY,NX)*TKSoil1_vr(NUM_col(NY,NX),NY,NX)**3 &
+            -CdSoiHSens_col(NY,NX))/column_area(NY)
+      endif
+      surf_layer0_fraction(NY)=surf_layer0_fraction(NY)+FracSurfByLitR_col(NY,NX)/real(NPH,r8)
       Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)
       !EVAPW_col/EVAPS_col are reset at every substep (InitSnowAccumsM), so
       !add them over the substeps to get the hourly snow evaporation/sublimation
@@ -537,7 +557,28 @@ implicit none
   !Does final update of the snow masses after the surface model is run
   do NY=1,NYS
     call SnowMassUpdate(I,J,NY,NX,Qinfl2MicPM(NY,NX),Hinfl2SoilM(NY,NX))
+    if(ats_shared_surface_layer)then
+      ! Retired snow is an external transfer into the ATS-owned surface store.
+      Qinflx2Soil_col(NY,NX)=Qinflx2Soil_col(NY,NX)+Qinfl2MicPM(NY,NX)
+      HeatFlx2Grnd_col(NY,NX)=HeatFlx2Grnd_col(NY,NX)+Hinfl2SoilM(NY,NX)
+      WatFLo2LitR_col(NY,NX)=WatFLo2LitR_col(NY,NX)+Qinfl2MicPM(NY,NX)
+      HeatFLoByWat2LitR_col(NY,NX)=HeatFLoByWat2LitR_col(NY,NX)+Hinfl2SoilM(NY,NX)
+    endif
   ENDDO
+
+  ! Surface work arrays used the skin boundary; restore bulk soil temperature
+  ! before biological processes. Layer zero remains a read-only view of ATS.
+  if(ats_shared_surface_layer)then
+    do NY=1,NYS
+      TKSoil1_vr(NU_col(NY,1),NY,1)=a_TEMP(NU_col(NY,1),NY)
+      TKS_vr(NU_col(NY,1),NY,1)=a_TEMP(NU_col(NY,1),NY)
+      VLWatMicP_vr(0,NY,1)=a_WAT0(NY)
+      VLiceMicP_vr(0,NY,1)=a_ICE0(NY)
+      TKS_vr(0,NY,1)=a_TSURF(NY)
+      TKSoil1_vr(0,NY,1)=a_TSURF(NY)
+    enddo
+    call InstallSharedLayer0State(NYS)
+  endif
 
   !Does energy and water exchange in the plant roots and canopy
   ! Specifically runs the CanopyEnergyH2Oiter_func
@@ -569,12 +610,31 @@ implicit none
     flux_per_area = (HeatFlx2Grnd_col(NY,1) - cpw*TFice*Qinflx2Soil_col(NY,1)) / column_area(NY)
 
     surf_e_source(NY) = flux_per_area
+    surf_layer0_w_source(NY)=0._r8
+    surf_layer0_e_source(NY)=0._r8
+    if(ats_shared_surface_layer)then
+      surf_layer0_w_source(NY)=WatFLo2LitR_col(NY,NX)/column_area(NY)
+      surf_layer0_e_source(NY)=(HeatFLoByWat2LitR_col(NY,NX) &
+        -cpw*TFice*WatFLo2LitR_col(NY,NX))/column_area(NY)
+      ! The existing surface slope now belongs to the ATS layer-zero source.
+      surf_e_source_dtemperature(NY)=surf_e_source_dtemperature(NY)-surf_ground_e_dtemperature(NY)
+    endif
+    surf_ground_w_source(NY)=Qinflx2Soil_col(NY,NX)/column_area(NY)-surf_layer0_w_source(NY)
+    surf_ground_e_source(NY)=surf_e_source(NY)-surf_layer0_e_source(NY)
+    surf_ground_temperature_ref(NY)=a_TEMP(NU_col(NY,NX),NY)
+
     
     dTexp = surf_e_source(NY)/heat_capacity
     Tfinal = TKsoil1_vr(1,NY,NX) + dTexp 
     
     !per grid cell [m3 d-2 h-1] to per area [m h-1]; ATS converts h-1 to s-1
     surf_w_source(NY) = Qinflx2Soil_col(NY,1) / column_area(NY)
+    if(ats_shared_surface_layer)then
+      ! Keep surface heat, derivative and reference paired with layer zero.
+      ! The separately exported ground fields are applied to soil by ATS.
+      surf_w_source(NY)=surf_layer0_w_source(NY)
+      surf_e_source(NY)=surf_layer0_e_source(NY)
+    endif
     surf_snow_depth(NY) = SnowDepth_col(NY,1)
     !Now update subsurface flux from roots
     LWRadCanGPrev_col(NY,NX) = LWRadCanG_col(NY,NX)

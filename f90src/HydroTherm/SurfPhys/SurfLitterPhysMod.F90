@@ -35,6 +35,7 @@ implicit none
   __FILE__
   real(r8), parameter :: tiny_wat=1.e-13_r8
 
+  public :: CalcLitRThermConductivity
   public :: SurfLitREnergyBalanceM
   public :: UpdateLitRPhys
   public :: XGridsSurfRunoffM
@@ -66,6 +67,12 @@ implicit none
     FracSurfBareSoil_col(NY,NX)=1.0_r8
   ENDIF
 
+  if(ats_shared_surface_layer.and.XVLMobileWaterLitR_col(NY,NX)>0._r8)then
+    ! Preserve native litter cover while adding occupied pond area using the
+    ! existing surface-retention scale. No extra pond reservoir is created.
+    FracSurfBareSoil_col(NY,NX)=exp(-0.8E-02_r8*SoilOrgM_vr(ielmc,0,NY,NX)/AREA_3D(3,0,NY,NX)) &
+      *(1._r8-min(1._r8,XVLMobileWaterLitR_col(NY,NX)/max(VLWatHeldCapSurf_col(NY,NX),tiny_wat)))
+  endif
   FracSurfByLitR_col(NY,NX)=1.0_r8-FracSurfBareSoil_col(NY,NX)
   call PrintInfo('end '//subname)
   end subroutine PartLitSoilFractionM
@@ -127,7 +134,7 @@ implicit none
 
   ! Disabling litter exchange does not remove a positive thermal inventory.
   ! Only an empty store may take an arbitrary soil-temperature placeholder.
-  IF(VHeatCapacity1_vr(0,NY,NX).EQ.0._r8)THEN
+  IF(VHeatCapacity1_vr(0,NY,NX).EQ.0._r8.and..not.ats_shared_surface_layer)THEN
     TKSoil1_vr(0,NY,NX)=TKSoil1_vr(NUM_col(NY,NX),NY,NX)
   ENDIF  
 !
@@ -151,7 +158,8 @@ implicit none
     Radt2LitR            = RadSWByLitR+LWRad2LitR_col(NY,NX)
     Eco_RadSW_col(NY,NX) = Eco_RadSW_col(NY,NX) + RadSWByLitR
     
-    CNVR = VaporDiffusivityLitR_col(NY,NX)*FracAirFilledSoilPoreM_vr(M,0,NY,NX)**2*POROQ/POROS_vr(0,NY,NX)
+    CNVR = safe_adb(VaporDiffusivityLitR_col(NY,NX)*FracAirFilledSoilPoreM_vr(M,0,NY,NX)**2*POROQ, &
+      POROS_vr(0,NY,NX))
     CNV1 = WVapDifusvitySoil_vr(NUM_col(NY,NX),NY,NX)*FracAirFilledSoilPoreM_vr(M,NUM_col(NY,NX),NY,NX)**2 &
       *POROQ/POROS_vr(NUM_col(NY,NX),NY,NX)
     !there is litter layer
@@ -328,6 +336,7 @@ implicit none
     write(*,*)subname,': invalid initial litter capacity/energy',I,J,M,NY,NX,VLHeatCapcityLitR2,ENGYR
     call endrun(mod_filename,__LINE__)
   ENDIF
+  if(ats_shared_surface_layer)TKR1=TKSoil1_vr(0,NY,NX)
   TKR0 = TKR1
   VLHeatCapacitySoil2 = VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)
   VLWatMicP12         = AZMAX1(TopLayWatVol+CumWatFlx2SoiMicP)
@@ -439,6 +448,12 @@ implicit none
       ! THETPM: air-filled porosity
 
       ! Water flux by evaporation
+      if(ats_shared_surface_layer)then
+        EvapLitR2Soi2=0._r8
+        HeatSensVapLitR2Soi2=0._r8
+        HeatSensLitR2Soi2=0._r8
+        tHeatLitR2Soil2=0._r8
+      else
       IF(FracAirFilledSoilPoreM_vr(M,0,NY,NX).GT.AirFillPore_Min .AND. FracAirFilledSoilPoreM_vr(M,NUM_col(NY,NX),NY,NX).GT.AirFillPore_Min)THEN
         !
         !vapor flux from litter to soil
@@ -484,6 +499,7 @@ implicit none
       ENDIF
       !
       tHeatLitR2Soil2=HeatSensLitR2Soi2+HeatSensVapLitR2Soi2
+      endif
       !
       !     SOLVE FOR RESIDUE LATENT, SENSIBLE AND STORAGE HEAT FLUXES
       !
@@ -530,7 +546,9 @@ implicit none
     TKR1Pre = TKR1
     LitREnergyNew = ENGYR+HeatFluxAir2LitR2+RainHeat2LitR2-tHeatLitR2Soil2+(-dLWRaddTKR2+CdLitRHSens)*TKR1Pre
     LitRTempDenom = VLHeatCapcityLitR2+(-dLWRaddTKR2+CdLitRHSens)
-    IF(VLHeatCapcityLitR2.GE.0._r8 .AND. LitRTempDenom.GT.0._r8)THEN
+    if(ats_shared_surface_layer)then
+      TKR1=TKSoil1_vr(0,NY,NX) ! flux evaluation at the prescribed ATS temperature
+    elseif(VLHeatCapcityLitR2.GE.0._r8 .AND. LitRTempDenom.GT.0._r8)then
       TKR1 = LitREnergyNew/LitRTempDenom
     ELSEIF(VLHeatCapcityLitR2.EQ.0._r8 .AND. LitRTempDenom.EQ.0._r8 .AND. LitREnergyNew.EQ.0._r8)THEN
       ! An empty layer carries no energy; its reference temperature is immaterial.
@@ -563,7 +581,7 @@ implicit none
 
     ! This predictor receives litter heat only; soil boundary stabilization is
     ! applied once in UpdateSoilMoistTempM, with matching surface flux records.
-    TKS1=(ENGYS+tHeatLitR2Soil2)/VLHeatCapacitySoil2
+    if(.not.ats_shared_surface_layer)TKS1=(ENGYS+tHeatLitR2Soil2)/VLHeatCapacitySoil2
 
   ENDDO D5000
   
@@ -692,11 +710,24 @@ implicit none
     FracAirFilledSoilPore_vr(0,NY,NX) = 1.0_r8
   ENDIF
 
+  if(ats_shared_surface_layer)then
+  if(VGeomLayer_vr(0,NY,NX)>0._r8)then
+    ! Prescribed ATS phase fractions, including litter-free pond/ice columns.
+    FracSoiPAsWat_vr(0,NY,NX)=VLWatMicP_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
+    FracSoiPAsIce_vr(0,NY,NX)=VLiceMicP_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
+    FracAirFilledSoilPore_vr(0,NY,NX)=max(0._r8,1._r8-FracSoiPAsWat_vr(0,NY,NX)-FracSoiPAsIce_vr(0,NY,NX))
+  endif
+  endif
   FracAirFilledSoilPoreM_vr(M+1,0,NY,NX) = FracAirFilledSoilPore_vr(0,NY,NX)
   VLHeatCapLitRPre                       = VHeatCapacity1_vr(0,NY,NX)                      !heat capacity
   TK0Prev                                = TKSoil1_vr(0,NY,NX)                             !residual temperature
   ENGYR                                  = VHeatCapacity1_vr(0,NY,NX)*TKSoil1_vr(0,NY,NX)  !initial energy content
   VHeatCapacity1_vr(0,NY,NX)             = cpo*m3OM_col(NY,NX)+cpw*VLWatMicP1_vr(0,NY,NX)+cpi*VLiceMicP1_vr(0,NY,NX)  !update heat capacity
+  if(ats_shared_surface_layer)then
+    call PrintInfo('end '//subname)
+    return ! only the working donor budget changes; ATS solves actual temperature
+  endif
+
 
   IF(VHeatCapacity1_vr(0,NY,NX).GT.VHeatCapLitRMin_col(NY,NX) .and. FracSurfByLitR_col(NY,NX)>1.e-3_r8)THEN
     ! Retain the historical full-step stabilizer in addition to the inner
@@ -769,6 +800,7 @@ implicit none
 
   ! SURFACE RESIDUE WATER AND TEMPERATURE
 
+  if(ats_shared_surface_layer)return ! no independent runoff or state commit
   VLWatMicP10 = VLWatMicP1_vr(0,NY,NX)
   VLiceMicP10 = VLiceMicP1_vr(0,NY,NX)
 
