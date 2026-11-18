@@ -94,6 +94,8 @@ program SoilHydraulicTest
     call check_close('air-entry policy',PSISoilAirEntry_vr(1,1,1),expected_entry(mode))
     call check_close('ThetaSat policy',ThetaSat_vr(1,1,1),expected_theta_sat(mode))
     parameters=GetSoilHydraulicParameters(1,1,1,1.e-6_r8)
+    call check_retention_derivative(model,parameters)
+    call check_soil_resistance(model,parameters)
     do j=1,11
       theta=.1_r8+.034_r8*(j-1)
       psi=model%matric_potential(parameters,theta)
@@ -186,6 +188,104 @@ program SoilHydraulicTest
   call FinalizeSoilHydraulicScheme()
   write(*,*) 'SoilHydraulicTest passed'
 contains
+!------------------------------------------------------------------------------------------
+  subroutine check_soil_resistance(scheme,context)
+    ! Description:
+    ! Verify the paper's parallel transport against an analytic retention slope,
+    ! including the half-cell length, native units, blocked paths and numeric limits.
+    class(SoilHydraulicModel), intent(in) :: scheme      ! selected constitutive implementation [-]
+    type(SoilHydraulicParameters), intent(in) :: context ! layer retention parameters
+    real(r8), parameter :: dz=.02_r8,k=1.e-6_r8,dgas=.004_r8,bunsen=60000._r8
+    real(r8) :: theta,work,pressure,slope,combined,rg,rw,expected,dry
+    character(len=*), parameter :: subname='check_soil_resistance'
+
+    call PrintInfo('beg '//subname)
+    theta=.20_r8;work=theta
+    pressure=scheme%matric_potential(context,work)
+    slope=-pressure*context%log_dry_potential_ratio/(context%log_dry_content_ratio*theta)
+    expected=dz/(2._r8*(dgas+bunsen*theta*k*slope))
+    combined=scheme%soil_resistance(context,theta,dz,k,dgas,bunsen)
+    call require('paper soil resistance with analytic slope',ieee_is_finite(combined).and. &
+      ABS(combined-expected)<2.e-7_r8*expected)
+    call require('soil resistance preserves liquid content',theta==.20_r8)
+    rg=scheme%soil_resistance(context,theta,dz,0._r8,dgas,bunsen)
+    rw=scheme%soil_resistance(context,theta,dz,k,0._r8,bunsen)
+    call check_close('vapor-only half-cell resistance',rg,dz/(2._r8*dgas))
+    call check_close('parallel liquid and vapor paths',combined,1._r8/(1._r8/rg+1._r8/rw))
+    call require('parallel resistance below either path',combined<MIN(rg,rw))
+    call check_close('soil resistance thickness scaling', &
+      scheme%soil_resistance(context,theta,2._r8*dz,k,dgas,bunsen),2._r8*combined)
+    call check_close('liquid resistance conductivity scaling', &
+      scheme%soil_resistance(context,theta,dz,2._r8*k,0._r8,bunsen),.5_r8*rw)
+    call check_close('liquid resistance partition scaling', &
+      scheme%soil_resistance(context,theta,dz,k,0._r8,2._r8*bunsen),.5_r8*rw)
+    call check_close('zero B leaves vapor path',scheme%soil_resistance(context,theta,dz,k,dgas,0._r8),rg)
+    call check_close('zero liquid leaves vapor path',scheme%soil_resistance(context,0._r8,dz,k,dgas,bunsen),rg)
+    call require('zero thickness has no internal resistance', &
+      scheme%soil_resistance(context,theta,0._r8,k,dgas,bunsen)==0._r8)
+    call require('blocked soil transport', &
+      scheme%soil_resistance(context,theta,dz,0._r8,0._r8,bunsen)==huge(1._r8))
+    dry=.5_r8*scheme%dry_content(context)
+    call check_close('clipped dry slope leaves vapor path',scheme%soil_resistance(context,dry,dz,k,dgas,bunsen),rg)
+    call require('large parallel conductance avoids product overflow', &
+      scheme%soil_resistance(context,theta,dz,huge(1._r8)/4._r8,dgas,huge(1._r8)/4._r8)==0._r8)
+    expected=scheme%soil_resistance(context,theta,huge(1._r8)/8._r8,0._r8,tiny(1._r8),bunsen)
+    call require('large soil resistance remains finite',ieee_is_finite(expected).and.expected==huge(1._r8))
+    call PrintInfo('end '//subname)
+  end subroutine check_soil_resistance
+!------------------------------------------------------------------------------------------
+  subroutine check_retention_derivative(scheme,context)
+    ! Description:
+    ! Compare numerical slopes with analytic branch derivatives and exercise
+    ! dry/wet endpoints, pressure clipping and the inout saturation adjustment.
+    class(SoilHydraulicModel), intent(in) :: scheme          ! selected retention implementation [-]
+    type(SoilHydraulicParameters), intent(in) :: context     ! current layer's retention parameters
+    real(r8), parameter :: samples(6)=[.10_r8,.20_r8,.29_r8,.31_r8,.37_r8,.44_r8]
+    type(SoilHydraulicParameters) :: snapped_context
+    real(r8) :: sample,work,pressure,slope,expected,x,dry
+    integer :: i
+    character(len=*), parameter :: subname='check_retention_derivative'
+
+    call PrintInfo('beg '//subname)
+    do i=1,size(samples)
+      sample=samples(i)
+      slope=scheme%matric_potential_derivative(context,sample)
+      call require('derivative leaves water content unchanged',sample==samples(i))
+      work=sample
+      pressure=scheme%matric_potential(context,work)
+      if(sample<context%field_capacity)then
+        expected=-pressure*context%log_dry_potential_ratio/(context%log_dry_content_ratio*sample)
+      else
+        x=LOG(context%porosity/sample)/context%log_wet_content_ratio
+        expected=-pressure*context%curvature*context%log_wet_potential_ratio &
+          *x**(context%curvature-1._r8)/(context%log_wet_content_ratio*sample)
+      endif
+      call require('analytic EcoSIM retention slope',ieee_is_finite(slope).and. &
+        ABS(slope-expected)<2.e-7_r8*ABS(expected))
+      call check_close('derivative preserves pressure evaluation',scheme%matric_potential(context,work),pressure)
+    enddo
+    dry=scheme%dry_content(context)
+    call require('dry plateau slope',scheme%matric_potential_derivative(context,.5_r8*dry)==0._r8)
+    call require('zero-water slope',scheme%matric_potential_derivative(context,0._r8)==0._r8)
+    call require('oversaturated plateau slope', &
+      scheme%matric_potential_derivative(context,1.1_r8*context%porosity)==0._r8)
+    slope=scheme%matric_potential_derivative(context,dry)
+    call require('finite one-sided dry endpoint',ieee_is_finite(slope).and.slope>0._r8)
+    sample=context%porosity
+    slope=scheme%matric_potential_derivative(context,sample)
+    call require('finite one-sided saturated endpoint',ieee_is_finite(slope).and.slope>0._r8)
+    call require('saturated derivative preserves content',sample==context%porosity)
+
+    ! Both samples snap to porosity. A denominator made from the modified
+    ! arguments would be zero even though the requested stencil has width.
+    snapped_context=context
+    snapped_context%saturation_tolerance=.01_r8
+    sample=context%porosity-.005_r8
+    slope=scheme%matric_potential_derivative(snapped_context,sample)
+    call require('snapped plateau has finite zero slope',ieee_is_finite(slope).and.slope==0._r8)
+    call require('snapped derivative preserves content',sample==context%porosity-.005_r8)
+    call PrintInfo('end '//subname)
+  end subroutine check_retention_derivative
 !------------------------------------------------------------------------------------------
   subroutine initialize_state()
   ! Description:

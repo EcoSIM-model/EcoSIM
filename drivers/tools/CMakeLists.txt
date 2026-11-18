@@ -337,3 +337,11 @@ target_include_directories(ThinLitterEnergyTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SurfPhys/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/)
+
+add_ecosim_executable(SurfaceVaporTest.x SurfaceVaporTest.F90)
+add_test(NAME surface_vapor_phase_partition COMMAND SurfaceVaporTest.x)
+target_include_directories(SurfaceVaporTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Minimath/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/)

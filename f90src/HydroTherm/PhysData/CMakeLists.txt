@@ -2,6 +2,7 @@ set(PHYSDATA_SOURCES
  PhysPars.F90
  WatsubDataMod.F90
  SurfaceAirExchangeMod.F90
+ SurfaceVaporExchangeMod.F90
  AtmosCompositionMod.F90
  HydroThermData.F90
  SoilPhysParaMod.F90

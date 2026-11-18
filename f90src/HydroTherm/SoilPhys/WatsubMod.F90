@@ -10,7 +10,7 @@ module WatsubMod
   use data_const_mod,    only: GravAcceleration=>DAT_CONST_G
   use abortutils,        only: endrun, print_info, iulog
   use ElmIDMod,          only: iWestEastDirection,          iNorthSouthDirection, iVerticalDirection
-  use SurfPhysData,      only: InitSurfPhysData,            DestructSurfPhysData
+  use SurfPhysData,      only: InitSurfPhysData,DestructSurfPhysData,IceVaporMicPM_vr
   use EcosysWarmingMod,  only: check_warming_dates,         is_warming_layerL,    apply_soil_cable_warming
   use PlantDataRateType, only: TWaterPlantRoot2SoilPrev_vr,THeatPlantRoot2SoilPrev_vr, &
     TWaterPlantRoot2Soil_vr,THeatLossRoot2Soil_vr
@@ -996,8 +996,11 @@ module WatsubMod
   D95951: DO NX=NHW,NHE                !from west to east
     D95901: DO NY=NVN,NVS              !from north to south
       HeatFlx2Grnd_col(NY,NX) = HeatFlx2Grnd_col(NY,NX)+HeatInfl2Soil(NY,NX)
-      Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX)
-      Qinflx2SoilM_col(NY,NX) = Qinflx2SoilM_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX)
+      ! The mass ledger includes direct ice exchange; hydraulic faces remain liquid-only.
+      Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX) &
+        +IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)
+      Qinflx2SoilM_col(NY,NX) = Qinflx2SoilM_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX) &
+        +IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)
 
       D95851: DO L=NUM_col(NY,NX),NL_col(NY,NX) !from top to bottom
 
@@ -1251,7 +1254,7 @@ module WatsubMod
           TWaterPlantRoot2SoilPrev_vr(L,NY,NX)=TWaterPlantRoot2SoilPrev_vr(L,NY,NX)+RootWaterM
           THeatPlantRoot2SoilPrev_vr(L,NY,NX)=THeatPlantRoot2SoilPrev_vr(L,NY,NX)+RootHeatM
 
-          VLiceMicP1_vr(L,NY,NX)  = VLiceMicP1_vr(L,NY,NX)-TMLiceThawedMicP_vr(L,NY,NX)/DENSICE
+          VLiceMicP1_vr(L,NY,NX)  = VLiceMicP1_vr(L,NY,NX)+(IceVaporMicPM_vr(L,NY,NX)-TMLiceThawedMicP_vr(L,NY,NX))/DENSICE
           
           VLWatMacP1_vr(L,NY,NX) = VLWatMacP1_vr(L,NY,NX)+WatNetFlow2Macpt_3DM_vr(L,NY,NX)-FWatExMacP2MicPiM_vr(L,NY,NX) &
             +TMLiceThawedMacP_vr(L,NY,NX)
@@ -2545,6 +2548,7 @@ module WatsubMod
   real(r8) :: VLHeatCapacityAX !
   real(r8) :: TK1App           !apparent temperature before freeze/thaw
   real(r8) :: MacPIceHeatFlxFrezPt,MacPIceHeatFlxFrez
+  real(r8) :: IceVolumePending ! ice after accepted atmospheric vapor, before freeze/thaw [m3/cell]
   real(r8) :: ENGY1
   real(r8) :: MicPIceHeatFlxFrez   !actual latent heat from micropore freeze-thaw
   real(r8) :: MicPIceHeatFlxFrezPt !potential heat flux supporting micropore freeze-thaw
@@ -2578,12 +2582,13 @@ module WatsubMod
   endif
   PSISMX          = PSISoilMatricPtmp_vr(N3,N2,N1)+PSISoilOsmotic_vr(N3,N2,N1)
   
+  IceVolumePending=MAX(0._r8,VLiceMicP1_vr(N3,N2,N1)+IceVaporMicPM_vr(N3,N2,N1)/DENSICE)
   TFREEZ=get_Tfrez(PSISMX)  
   !obtain the potential water
   VLWatMicP1X     = VLWatMicP1_vr(N3,N2,N1)+WatNetFlow2MicP_3DM_vr(N3,N2,N1)+FWatExMacP2MicPiM_vr(N3,N2,N1)+FWatIrrigate2MicP1_vr(N3,N2,N1)
   VLWatMacP1X     = VLWatMacP1_vr(N3,N2,N1)+WatNetFlow2Macpt_3DM_vr(N3,N2,N1)-FWatExMacP2MicPiM_vr(N3,N2,N1)
   ENGY1           = VHeatCapacity1_vr(N3,N2,N1)*TKSoil1_vr(N3,N2,N1)
-  VLHeatCapacityX = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*(VLWatMicP1X+VLWatMacP1X)+cpi*(VLiceMicP1_vr(N3,N2,N1)+VLiceMacP1_vr(N3,N2,N1))
+  VLHeatCapacityX = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*(VLWatMicP1X+VLWatMacP1X)+cpi*(IceVolumePending+VLiceMacP1_vr(N3,N2,N1))
 
   IF(VLHeatCapacityX.GT.ZEROS(NY,NX))THEN
     VLHeatCapacityX=VLHeatCapacityX+dcpo
@@ -2618,15 +2623,15 @@ module WatsubMod
 
     !freeze-thaw in micropore
     IF((TK1App.LT.TFREEZ .AND. VLWatMicP1_vr(N3,N2,N1).GT.ZERO*VGeomLayer_vr(N3,N2,N1)) &
-      .OR.(TK1App.GT.TFREEZ .AND. VLiceMicP1_vr(N3,N2,N1).GT.ZERO*VGeomLayer_vr(N3,N2,N1)))THEN
+      .OR.(TK1App.GT.TFREEZ .AND. IceVolumePending.GT.ZERO*VGeomLayer_vr(N3,N2,N1)))THEN
       
-      VLHeatCapacityAX     = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*VLWatMicP1X+cpi*VLiceMicP1_vr(N3,N2,N1)
+      VLHeatCapacityAX     = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*VLWatMicP1X+cpi*IceVolumePending
       if(VLHeatCapacityAX>0._r8)VLHeatCapacityAX=VLHeatCapacityAX+dcpo
       MicPIceHeatFlxFrezPt = VLHeatCapacityAX*(TFREEZ-TK1App)/((1.0_r8+6.2913E-03_r8*(TFREEZ-TFice)))*dts_wat
 
       !fusion energy absorb (<0) in thaw
       IF(MicPIceHeatFlxFrezPt.LT.0.0_r8)THEN
-        MicPIceHeatFlxFrez=AMAX1(-LtHeatIceMelt*DENSICE*VLiceMicP1_vr(N3,N2,N1)*dts_wat,MicPIceHeatFlxFrezPt)
+        MicPIceHeatFlxFrez=AMAX1(-LtHeatIceMelt*DENSICE*IceVolumePending*dts_wat,MicPIceHeatFlxFrezPt)
       !fusion energy release (>0) in freeze
       ELSE
         MicPIceHeatFlxFrez=AMIN1(LtHeatIceMelt*VLWatMicP1X*dts_wat,MicPIceHeatFlxFrezPt)

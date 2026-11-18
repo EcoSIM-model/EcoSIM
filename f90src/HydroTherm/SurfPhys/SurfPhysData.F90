@@ -1,4 +1,5 @@
 module SurfPhysData
+  ! Description:
   ! Own surface-exchange work arrays, local resistances and area/time prefactors.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
@@ -56,6 +57,9 @@ implicit none
   real(r8),allocatable :: HeatSnow2LitrM_col(:,:) !heat flux from snow to litter [MJ/d-2]
   real(r8),allocatable :: HeatAir2LitrM_col(:,:)  !heat flux from air to litter [MJ/d-2]
   real(r8),allocatable :: HeatSoil2LitrM_col(:,:) !heat flux from soil to litter [MJ/d-2]
+  ! Accepted direct atmospheric ice transfer, separate from liquid and freeze/thaw.
+  ! Work array only: reset each soil substep, committed before the next substep.
+  real(r8),allocatable :: IceVaporMicPM_vr(:,:,:) ! [m3 water equivalent/cell/step], layer 0=litter
   public :: InitSurfPhysData,DestructSurfPhysData
 
   contains
@@ -65,6 +69,7 @@ implicit none
   ! Allocate and initialize surface-exchange work arrays.
   implicit none
 
+  allocate(IceVaporMicPM_vr(0:JZ,JY,JX)); IceVaporMicPM_vr=0._r8
   allocate(HeatSoil2LitrM_col(JY,JX)); HeatSoil2LitrM_col=0._r8
   allocate(watflw(JY, JX))
   allocate(waticefl(JY,JX))
@@ -113,6 +118,7 @@ implicit none
   use abortutils, only : destroy
   implicit none
 
+  call destroy(IceVaporMicPM_vr)
   call destroy(HeatSoil2LitrM_col)
   call destroy(HeatAir2LitrM_col)
   call destroy(HeatSnow2LitrM_col)

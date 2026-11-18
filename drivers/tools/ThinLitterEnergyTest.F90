@@ -10,7 +10,8 @@ program ThinLitterEnergyTest
   use GridDataType, only: NUM_col
   use EcoSIMCtrlDataType, only: ZERO,ZEROS,ZEROS2
   use EcoSIMSolverPar, only: NPH,dts_HeatWatTP
-  use EcoSimConst, only: cpo,cpw
+  use EcoSimConst, only: cpo,cpw,cpi,DENSICE,EvapLHTC,SublmHTC
+  use SurfaceVaporExchangeMod, only: PartitionSurfaceVapor
   use MiniFuncMod, only: gOC_to_m3_OM
   use HydroThermData
   use SurfLitterDataType
@@ -29,6 +30,7 @@ program ThinLitterEnergyTest
   real(r8), parameter :: Capacities(2)=[1.e-4_r8,1.e-8_r8]
   real(r8), parameter :: RainWater=2.e-8_r8,RunoffWater=1.e-8_r8
   real(r8) :: ExpectedHeat,LandscapeHeat
+  real(r8) :: LiquidVapor,IceVapor,LatentDerivative,MassBefore,HeatBefore
   real(r8) :: SurfaceFluxes(5) ! litter-soil and atmospheric transfers [MJ/cell or m3/cell]
   integer :: ic,iv
 
@@ -102,6 +104,29 @@ program ThinLitterEnergyTest
   call UpdateLitRPhys(1,1,1,1,0._r8,0._r8,LandscapeHeat)
   call check_close('hidden litter phase heat is tallied',THeatSoiThaw_col(1,1),1.e-5_r8)
   call check_close('accepted phase heat in landscape ledger',LandscapeHeat,7._r8+1.e-5_r8)
+
+  ! Exercise the actual litter inventory/temperature commit with separate ice
+  ! vapor transfers: neither liquid flow nor later freeze/thaw may debit it twice.
+  do ic=1,2
+    call reset_state(0.5_r8,1.e-8_r8)
+    VLiceMicP1_vr(0,1,1)=3.e-7_r8
+    VHeatCapacity1_vr(0,1,1)=VHeatCapacity1_vr(0,1,1)+cpi*VLiceMicP1_vr(0,1,1)
+    MassBefore=VLWatMicP1_vr(0,1,1)+DENSICE*VLiceMicP1_vr(0,1,1)
+    HeatBefore=VHeatCapacity1_vr(0,1,1)*TKSoil1_vr(0,1,1)
+    call PartitionSurfaceVapor(real(2*ic-3,r8)*4.e-10_r8,VLWatMicP1_vr(0,1,1), &
+      VLiceMicP1_vr(0,1,1),270._r8,1._r8,LiquidVapor,IceVapor,LatentDerivative)
+    WatFLo2LitrM_col=LiquidVapor
+    IceVaporMicPM_vr(0,1,1)=IceVapor
+    HeatFLoByWat2LitRM_col=LiquidVapor*EvapLHTC+IceVapor*SublmHTC &
+      +(cpw*LiquidVapor+cpi*IceVapor/DENSICE)*270._r8
+    ExpectedHeat=HeatBefore+HeatFLoByWat2LitRM_col(1,1)
+    call UpdateLitRBe4RunoffM(1,1,1,1,1)
+    call check_close('phase-resolved litter mass commit', &
+      VLWatMicP1_vr(0,1,1)+DENSICE*VLiceMicP1_vr(0,1,1),MassBefore+LiquidVapor+IceVapor)
+    call check_close('ice vapor does not enter liquid store',VLWatMicP1_vr(0,1,1),1.e-7_r8+LiquidVapor)
+    call check_close('ice vapor committed once',VLiceMicP1_vr(0,1,1),3.e-7_r8+IceVapor/DENSICE)
+    call check_close('accepted sublimation/frost heat',VHeatCapacity1_vr(0,1,1)*TKSoil1_vr(0,1,1),ExpectedHeat)
+  enddo
   write(iulog,*)'PASS: thin/hidden litter conserves accepted water and heat'
 contains
 !------------------------------------------------------------------------------------------
@@ -121,6 +146,7 @@ contains
     VLPoreLitR_col=1.e-5_r8;VLitR_col=1.e-5_r8;VLWatHeldCapSurf_col=1.e-5_r8;VWatLitRHoldCapcity_col=1.e-5_r8
     VHeatCapLitRMin_col=CapacityThreshold;FracSurfByLitR_col=Cover
     WatFLo2LitrM_col=0._r8;HeatFLoByWat2LitRM_col=0._r8;HeatFLoByWat2LitR_col=0._r8
+    IceVaporMicPM_vr=0._r8
     LitrIceFlxThaw_col=0._r8;LitrIceHeatFlxFrez_col=0._r8;TLitrIceHeatFlxFrez_col=0._r8
     cumWatFlx2LitRByRunoff_col=0._r8;cumHeatFlx2LitRByRunoff_col=0._r8
     CdLitRHSens_col=0._r8;LWEmscefLitR_col=0._r8

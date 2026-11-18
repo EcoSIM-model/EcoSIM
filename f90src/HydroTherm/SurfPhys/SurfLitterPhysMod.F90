@@ -3,8 +3,9 @@ module SurfLitterPhysMod
   ! Evolve litter water, temperature and surface exchange, including internal
   ! litter-soil transfers and conservative surface runoff updates.
   use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
+  use SurfaceVaporExchangeMod, only: SurfaceVaporDensity,PartitionSurfaceVapor
   use data_kind_mod, only : r8 => DAT_KIND_R8
-  use EcoSIMCtrlMod, only : etimer  
+  use EcoSIMCtrlMod, only : etimer,ats_cpl_mode
   use MiniFuncMod,   only : gOC_to_m3_OM
   use DebugToolMod
   use MiniMathMod
@@ -211,7 +212,7 @@ implicit none
   call PrintInfo('beg '//subname)
   SoilCapacity=VHeatCapacity1_vr(NUM_col(NY,NX),NY,NX)
   LitterCapacity=cpo*m3OM_col(NY,NX)+cpw*AZMAX1(VLWatMicP1_vr(0,NY,NX) &
-    +WatFLo2LitrM_col(NY,NX))+cpi*VLiceMicP1_vr(0,NY,NX)
+    +WatFLo2LitrM_col(NY,NX))+cpi*MAX(0._r8,VLiceMicP1_vr(0,NY,NX)+IceVaporMicPM_vr(0,NY,NX)/DENSICE)
   if(LitterCapacity>0._r8 .and. SoilCapacity>0._r8 .and. &
      (LitterCapacity<=VHeatCapLitRMin_col(NY,NX) .or. FracSurfByLitR_col(NY,NX)<=ZEROL))then
     LitterEnergy=VHeatCapacity1_vr(0,NY,NX)*TKSoil1_vr(0,NY,NX)+HeatFLoByWat2LitRM_col(NY,NX)
@@ -321,12 +322,15 @@ implicit none
   real(r8) :: CdLitRHSens,RadHeatCorrection,SensHeatCorrection
   real(r8) :: tHeatLitR2Soil2,TKR1Pre
   real(r8) :: LitREnergyNew,LitRTempDenom
+  real(r8) :: IceLitter,VaporDemand,LiquidVapor,IceVapor,LatentDerivative,IceSoil
 
 ! begin_execution
   call PrintInfo('beg '//subname)
 
+  IceLitter=MAX(0._r8,VLiceMicP1_vr(0,NY,NX)+IceVaporMicPM_vr(0,NY,NX)/DENSICE)
   VWatLitr2          = VLWatMicP1_vr(0,NY,NX)+CumNetWatFlow2LitR
-  VLHeatCapcityLitR2 = VHeatCapacity1_vr(0,NY,NX)+cpw*CumNetWatFlow2LitR
+  VLHeatCapcityLitR2 = VHeatCapacity1_vr(0,NY,NX)+cpw*CumNetWatFlow2LitR &
+    +cpi*IceVaporMicPM_vr(0,NY,NX)/DENSICE
   ENGYR = TKSoil1_vr(0,NY,NX)*VHeatCapacity1_vr(0,NY,NX)+CumNetHeatFlow2LitR
   IF(VLHeatCapcityLitR2.GT.0._r8)THEN
     TKR1 = ENGYR/VLHeatCapcityLitR2
@@ -412,8 +416,15 @@ implicit none
       ENDIF
       !
       !vapor pressure in litter and top soil
-      VapLitR   = vapsat(TKR1)*EXP(18.0_r8*PSISM1_vr(0,NY,NX)/(RGASC*TKR1))
-      VaporSoi1 = vapsat(TKS1)*EXP(18.0_r8*PSISV1/(RGASC*TKS1))    !vapor pressure in soil, ton H2O/m3
+      if(.not.ats_cpl_mode)then
+        VapLitR=SurfaceVaporDensity(TKR1,PSISM1_vr(0,NY,NX),IceLitter)
+        IceSoil=MAX(0._r8,VLiceMicP1_vr(NUM_col(NY,NX),NY,NX) &
+          +IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)/DENSICE)
+        VaporSoi1=SurfaceVaporDensity(TKS1,PSISV1,IceSoil)
+      else
+        VapLitR=vapsat(TKR1)*EXP(18._r8*PSISM1_vr(0,NY,NX)/(RGASC*TKR1))
+        VaporSoi1=vapsat(TKS1)*EXP(18._r8*PSISV1/(RGASC*TKS1))
+      endif
       !
       !     VapLitR,VaporSoi1,VPQ_col=vapor pressure in litter,soil,canopy air, m3/m-3
       !     TKS1=soil temperature
@@ -424,14 +435,25 @@ implicit none
       !
       !     VAPOR FLUX AT RESIDUE SURFACE against atmosphere
       !
-      EvapAtm2LitR2         = AMAX1(-AZMAX1(VWatLitr2)*dts_wat,CdLitREvap*(VPQ_col(NY,NX)-VapLitR)) ![ton H2O]
-      ! Accumulate only the active atmospheric exchange branch; the inactive
-      ! litter branch contributes zero. Area and inner timestep are in Cd.
-      if(CdLitREvap*(VPQ_col(NY,NX)-VapLitR)>-AZMAX1(VWatLitr2)*dts_wat)then
-        SurfLatHeatVapDeriv_col(NY,NX)=SurfLatHeatVapDeriv_col(NY,NX)+EvapLHTC*CdLitREvap
+      VaporDemand=CdLitREvap*(VPQ_col(NY,NX)-VapLitR)
+      if(.not.ats_cpl_mode)then
+        call PartitionSurfaceVapor(VaporDemand,VWatLitr2,IceLitter,TKR1,dts_wat, &
+          LiquidVapor,IceVapor,LatentDerivative, &
+          CdLitREvap*(VPQ_col(NY,NX)-SurfaceVaporDensity(TKR1,PSISM1_vr(0,NY,NX),1._r8)))
+      else
+        LiquidVapor=MAX(-MAX(0._r8,VWatLitr2)*dts_wat,VaporDemand)
+        IceVapor=0._r8
+        LatentDerivative=0._r8
+        if(VaporDemand>-MAX(0._r8,VWatLitr2)*dts_wat)LatentDerivative=EvapLHTC
       endif
-      LatentHeatAir2LitR2   = EvapAtm2LitR2*EvapLHTC          !latent energy flux, MJ/ton H2O * ton H2O = MJ
-      HeatSensEvapAir2LitR2 = EvapAtm2LitR2*cpw*TKR1          !mass energy flux due to move of liquid water
+      EvapAtm2LitR2=LiquidVapor+IceVapor
+      IceVaporMicPM_vr(0,NY,NX)=IceVaporMicPM_vr(0,NY,NX)+IceVapor
+      IceLitter=MAX(0._r8,IceLitter+IceVapor/DENSICE)
+      SurfLatHeatVapDeriv_col(NY,NX)=SurfLatHeatVapDeriv_col(NY,NX)+LatentDerivative*CdLitREvap
+      LatentHeatAir2LitR2=LiquidVapor*EvapLHTC+IceVapor*SublmHTC
+      HeatSensEvapAir2LitR2=(LiquidVapor*cpw+IceVapor*cpi/DENSICE)*TKR1
+      if(EvapAtm2LitR2>=0._r8.and..not.ats_cpl_mode) &
+        HeatSensEvapAir2LitR2=(LiquidVapor*cpw+IceVapor*cpi/DENSICE)*TKQ_col(NY,NX)
       !
       ! SOLVE FOR RESIDUE TO SOIL SURFACE HEAT FLUXES
       !
@@ -467,7 +489,7 @@ implicit none
         IF(FLVC.GE.0.0_r8)THEN
           !from litter to soil
           ! Atmospheric loss has first claim on this subcycle's liquid.
-          EvapLitR2Soi2=AZMAX1(AMIN1(FLVC,FLVX,AZMAX1(VWatLitr2+EvapAtm2LitR2)))
+          EvapLitR2Soi2=AZMAX1(AMIN1(FLVC,FLVX,AZMAX1(VWatLitr2+LiquidVapor)))
           HeatSensVapLitR2Soi2 = (cpw*TKR1*HeatAdv_scal+EvapLHTC)*EvapLitR2Soi2
         ELSE
           !from soil to litter
@@ -516,6 +538,8 @@ implicit none
       !litter does not have significant water  
     ELSE
       !not significant litter layer heat capacity
+      LiquidVapor=0._r8
+      IceVapor=0._r8
       EvapAtm2LitR2                = 0.0_r8
       Radnet2LitR2          = 0.0_r8
       LatentHeatAir2LitR2   = 0.0_r8
@@ -532,7 +556,7 @@ implicit none
     ENDIF
 
     !VWatLitr2,VLWatMicP12=water in litter, topsoil layer 
-    dWLitR      = Prec2LitR2+EvapAtm2LitR2
+    dWLitR      = Prec2LitR2+LiquidVapor
     ! Vapor transfer is already included in the heat-capacity update above.
     ! Debit its water here so subsequent subcycles cannot reuse the donor.
     VWatLitr2   = VWatLitr2+dWLitR-EvapLitR2Soi2
@@ -541,7 +565,7 @@ implicit none
     VHCPRXX     = VLHeatCapcityLitR2
 
     !update litter heat capacity, kJ/kg/Kelvin
-    VLHeatCapcityLitR2 = VLHeatCapcityLitR2+cpw*dWLitR        
+    VLHeatCapcityLitR2 = VLHeatCapcityLitR2+cpw*dWLitR+cpi*IceVapor/DENSICE
     !
     TKR1Pre = TKR1
     LitREnergyNew = ENGYR+HeatFluxAir2LitR2+RainHeat2LitR2-tHeatLitR2Soil2+(-dLWRaddTKR2+CdLitRHSens)*TKR1Pre
@@ -674,7 +698,7 @@ implicit none
   VLiceMicP10                   = VLiceMicP1_vr(0,NY,NX)
 
   VLWatMicP1_vr(0,NY,NX)        = (VLWatMicP1_vr(0,NY,NX)+WatFLo2LitrM_col(NY,NX)+LitrIceFlxThaw_col(NY,NX))
-  VLiceMicP1_vr(0,NY,NX)        = (VLiceMicP1_vr(0,NY,NX)-LitrIceFlxThaw_col(NY,NX)/DENSICE)
+  VLiceMicP1_vr(0,NY,NX)        = (VLiceMicP1_vr(0,NY,NX)+(IceVaporMicPM_vr(0,NY,NX)-LitrIceFlxThaw_col(NY,NX))/DENSICE)
 
   VLairMicP1_vr(0,NY,NX)     = AZMAX1(VLPoreLitR_col(NY,NX)-VLWatMicP1_vr(0,NY,NX)-VLiceMicP1_vr(0,NY,NX))
 
