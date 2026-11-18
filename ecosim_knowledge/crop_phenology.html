@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crop phenology in EcoSIM</title>
+<style>
+:root{--ink:#193b33;--muted:#536a62;--green:#17664e;--paper:#f7f8f2;--line:#cddbd0;--pale:#e7f0e6;--gold:#f7ecd2;--white:#fff;--blue:#176c80;--veg:#4f9a6b;--rep:#c9942e;--fill:#a8562f}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}
+header{background:#193f35;color:#fff;padding:56px max(24px,calc((100vw - 1080px)/2)) 44px}header p{color:#d5e7db;max-width:850px}
+.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#acd2bb}
+h1{font-size:clamp(34px,5vw,54px);line-height:1.08;max-width:950px;margin:18px 0 24px;text-wrap:balance}
+h2{font-size:29px;line-height:1.25;margin:0 0 20px;text-wrap:balance}h3{font-size:21px;line-height:1.35;margin:25px 0 10px}p{margin:12px 0;max-width:78ch}
+main{max-width:1128px;margin:auto;padding:0 24px 60px}section{padding-top:46px;scroll-margin-top:20px}
+a{color:var(--green);text-underline-offset:3px}
+nav{display:flex;flex-wrap:wrap;gap:8px 20px;padding:23px 0;border-bottom:1px solid var(--line);font-size:15px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.panel{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:23px;min-width:0}.panel h3{margin-top:0}
+.note{padding:18px 22px;background:var(--pale);border-left:4px solid var(--green);border-radius:0 10px 10px 0;margin:22px 0}
+.note.gold{background:var(--gold);border-color:#a87923}.note p{max-width:none}
+.small,.source{font-size:14px;color:var(--muted)}
+code{font:.86em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
+.equation{padding:16px 22px;background:var(--white);border:1px solid var(--line);border-radius:10px;overflow-x:auto;margin:18px 0;font:15px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--white);margin:20px 0}
+table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:left;vertical-align:top;padding:12px 16px;border-bottom:1px solid var(--line)}
+th{background:#e3ede2;font-size:12px;letter-spacing:.05em;text-transform:uppercase}tr:last-child td{border-bottom:0}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+ol,ul{padding-left:23px;max-width:78ch}li{margin:7px 0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px}
+.fig{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:16px;overflow-x:auto;margin:20px 0}
+.fig svg{display:block;min-width:820px;width:100%;height:auto}
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 18px}
+label{display:block;font-weight:600;font-size:14px;margin-bottom:5px}
+input[type=number]{font:inherit;color:var(--ink);background:var(--white);border:1px solid #8faa99;border-radius:7px;padding:8px 10px;width:100%;font-variant-numeric:tabular-nums}
+.bar{position:relative;height:34px;border-radius:6px;overflow:hidden;display:flex;margin:18px 0 6px;background:var(--pale)}
+.bar div{height:100%;min-width:0}
+.result{background:#edf4ed;padding:18px 20px;border-radius:10px;margin-top:18px}
+footer{margin-top:45px;border-top:1px solid var(--line);padding-top:24px;font-size:14px;color:var(--muted)}
+:focus-visible{outline:3px solid #c68b23;outline-offset:3px}
+@media(max-width:760px){body{font-size:16px}header{padding:38px 18px}main{padding:0 16px 40px}h2{font-size:25px}.two{grid-template-columns:1fr}.controls{grid-template-columns:1fr 1fr}.table-wrap table{min-width:680px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{body{background:#fff;font-size:10pt}header{background:#fff;color:var(--ink);padding:15px 0}header p,.eyebrow{color:var(--muted)}nav{display:none}.note,.panel,.fig{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">EcoSIM knowledge · plant biogeochemistry · crops</div>
+<h1>Crop phenology: a node clock from planting to maturity</h1>
+<p>How EcoSIM moves an annual crop through emergence, floral initiation, anthesis, grain fill and physiological maturity, which traits set the timing, and what each stage changes in growth and yield formation.</p>
+<p class="small" style="color:#bcd7c6">Source snapshot: branch <strong>codex/fix-crop-allocation</strong> at d1170356 · read 16 November 2026 · companion to <a style="color:#d5e7db" href="plant_phenology.html">plant_phenology.html</a>, which covers all plant types</p>
+</header>
+<main>
+<nav aria-label="Contents"><a href="#core">Core idea</a><a href="#calendar">Stage calendar</a><a href="#clock">The clock</a><a href="#floral">Floral initiation</a><a href="#thresholds">Stage thresholds</a><a href="#calc">Timing calculator</a><a href="#uses">What stages control</a><a href="#maturity">Maturity &amp; harvest</a><a href="#traits">Trait checklist</a><a href="#cautions">Cautions</a><a href="#sources">Sources</a></nav>
+
+<section id="core">
+<h2>Stages are dated by counting nodes, not degree-days</h2>
+<p>EcoSIM has no growing-degree-day sums for crops. Each live branch carries a real-valued node number that grows every hour at a temperature-dependent rate. A stage is reached when the node number passes a threshold expressed as a multiple of the maturity group. The model then writes the day of year into a per-branch calendar, <code>iPlantCalendar_brch(stage, NB, NZ)</code>. A zero entry means the stage has not happened yet.</p>
+<p>Three things sit outside the node clock: planting and harvest dates come from management input, emergence is a structural test on the seedling, and physiological maturity is declared when grain filling has stopped for a week.</p>
+<div class="note"><p><strong>What counts as a crop here.</strong> An annual (<code>ISTYP = 0</code>) whose seasonal type is evergreen (<code>IWTYP = 0</code>). The code comment in <code>InitiateBranchFloral</code> states that human-seeded annuals are set as evergreen; the season is bounded by planting and harvest instead of leaf-out and leaf-off rules. With this setting, stages 3 to 9 depend only on the node clock.</p></div>
+</section>
+
+<section id="calendar">
+<h2>The eleven calendar entries</h2>
+<div class="fig" role="img" aria-label="Timeline of crop stages 0 to 10 with the node thresholds that separate them">
+<svg viewBox="0 0 1040 250" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">
+<rect x="20" y="92" width="110" height="26" fill="#cddbd0"/>
+<rect x="130" y="92" width="150" height="26" fill="#4f9a6b"/>
+<rect x="280" y="92" width="300" height="26" fill="#c9942e"/>
+<rect x="580" y="92" width="190" height="26" fill="#a8562f"/>
+<rect x="770" y="92" width="250" height="26" fill="#cddbd0"/>
+<g font-size="12" fill="#193b33" text-anchor="middle">
+<text x="75" y="109">seed</text><text x="205" y="109" fill="#fff">vegetative</text><text x="430" y="109" fill="#fff">floral development</text><text x="675" y="109" fill="#fff">seed set &amp; fill</text><text x="895" y="109">fill until it stalls</text>
+</g>
+<g stroke="#193b33" stroke-width="1.5">
+<line x1="20" y1="82" x2="20" y2="128"/><line x1="130" y1="82" x2="130" y2="128"/><line x1="280" y1="82" x2="280" y2="128"/><line x1="355" y1="82" x2="355" y2="128"/><line x1="430" y1="82" x2="430" y2="128"/><line x1="575" y1="82" x2="575" y2="128"/><line x1="585" y1="82" x2="585" y2="128"/><line x1="647" y1="82" x2="647" y2="128"/><line x1="709" y1="82" x2="709" y2="128"/><line x1="770" y1="82" x2="770" y2="128"/><line x1="1020" y1="82" x2="1020" y2="128"/>
+</g>
+<g font-size="13" font-weight="700" fill="#17664e" text-anchor="middle">
+<text x="20" y="72">0</text><text x="130" y="72">1</text><text x="280" y="72">2</text><text x="355" y="72">3</text><text x="430" y="72">4</text><text x="568" y="72">5</text><text x="592" y="72">6</text><text x="647" y="72">7</text><text x="709" y="72">8</text><text x="770" y="72">9</text><text x="1012" y="72">10</text>
+</g>
+<g font-size="11.5" fill="#193b33" text-anchor="middle">
+<text x="34" y="48">planting</text><text x="130" y="48">emergence</text><text x="280" y="48">floral init.</text><text x="355" y="48">jointing</text><text x="430" y="48">elongation</text><text x="552" y="32">heading</text><text x="600" y="48">anthesis</text><text x="647" y="32">begin fill</text><text x="709" y="48">seed no. set</text><text x="776" y="32">seed mass set</text><text x="990" y="48">maturity</text>
+</g>
+<g font-size="11.5" fill="#536a62" text-anchor="middle">
+<text x="75" y="148">management</text><text x="205" y="148">G nodes</text>
+<text x="317" y="148">+0.5 G</text><text x="392" y="148">+0.5 G</text><text x="502" y="148">+1.0 G</text>
+<text x="616" y="148">+⅓ G</text><text x="678" y="148">+⅓ G</text><text x="740" y="148">+⅓ G</text><text x="895" y="148">168 h without fill</text>
+</g>
+<g font-size="12" fill="#193b33">
+<text x="20" y="190">G = GROUPX − XTLI, the node count the crop must add after planting to become competent to flower.</text>
+<text x="20" y="210">Nodes after floral initiation are counted from the node number stored on that day; nodes after anthesis from the number stored at anthesis.</text>
+<text x="20" y="230">Segment widths show node counts, not days. Days depend on temperature (see the calculator).</text>
+</g>
+</svg>
+</div>
+<p class="small">Indices are defined in <a href="../f90src/Modelconfig/ElmIDMod.F90#L130">ElmIDMod.F90:130–140</a>. The history variable <code>Growth_Stage_pft</code> reports the same 0–10 integer.</p>
+</section>
+
+<section id="clock">
+<h2>The clock: hourly node initiation and leaf appearance</h2>
+<p>Once the main branch has emerged, <code>UpdateBranchNodeNumber</code> adds to two counters each hour:</p>
+<div class="equation">nodes  += XRNI · f(T) · stress
+leaves += XRLA · f(T) · stress</div>
+<p><code>XRNI</code> and <code>XRLA</code> are the rates at 25 °C in h⁻¹. Nodes drive the stage thresholds. Leaves decide which leaf is expanding and, as shown below, gate anthesis.</p>
+<h3>Temperature function</h3>
+<div class="equation">T' = T_canopy_growth + 2.667 · (2.5 − ZTYPI)             [K]
+f(T) = exp(24.269 − 60000 / (R·T')) / (1 + exp((LG_ELOW − 710·T') / (R·T')) + exp((710·T' − LG_EHIGH) / (R·T')))</div>
+<p>This is an Arrhenius response with low- and high-temperature inactivation. It equals 1 at 25 °C for a PFT with thermal zone 2.5, and uses the phenology-specific energies <code>LG_ELOW</code> and <code>LG_EHIGH</code> from the trait file. A cooler zone number shifts the whole curve toward lower temperatures.</p>
+<h3>Stress modifiers apply to annuals only</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Modifier</th><th>Form</th><th>Active until</th><th>Strength</th></tr></thead>
+<tbody>
+<tr><td>Water</td><td><code>exp(0.025 · ψ_canopy)</code>, ψ in MPa</td><td>anthesis</td><td>Weak: −2 MPa slows the clock by about 5%</td></tr>
+<tr><td>Oxygen</td><td><code>sqrt(PlantO2Stress)</code></td><td>floral initiation</td><td>Can be large in waterlogged soil</td></tr>
+</tbody></table></div>
+<p>After anthesis the node rate of an annual responds to temperature alone, so the length of the reproductive phase in days is set by temperature and <code>XRNI</code>.</p>
+<p class="source">Code: <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L1054">CalcPhenolEnvfactor</a>, <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L1097">UpdateBranchNodeNumber</a>, <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90#L311">calc_leave_grow_tempf</a>.</p>
+</section>
+
+<section id="floral">
+<h2>Floral initiation has three gates and one bypass</h2>
+<div class="two">
+<div class="panel">
+<h3>Normal route</h3>
+<ol>
+<li><strong>Node competence.</strong> Node number exceeds <code>GROUPX</code> on the main branch. Each later branch of an annual needs one node fewer than the branch before it.</li>
+<li><strong>Season started.</strong> Either the branch has logged <code>VRNLI</code> hours of lengthening days, or it is the planting year, on or after the planting day, with days lengthening.</li>
+<li><strong>Photoperiod.</strong> With <code>PPD = max(0, XDL − daylength)</code>:
+<ul><li>day-neutral: always passes;</li><li>short-day: passes when days are shortening and <code>PPD &gt; XPPD</code>;</li><li>long-day: passes when <code>PPD &lt; XPPD</code>.</li></ul></li>
+</ol>
+</div>
+<div class="panel">
+<h3>Bypass on shortening days</h3>
+<p>If the plant is an annual with evergreen seasonal type, its canopy is at least as tall as the snowpack, and today's daylength is shorter than yesterday's, floral initiation is set that day. Node competence and the photoperiod threshold are both skipped.</p>
+<p>For a spring-sown crop that has not yet initiated, this pins floral initiation to the first day after the summer solstice. The same logic exists in the original ECOSYS <code>hfunc.f</code>; see the local note <code>ecosys_ecosim_soybean_floral_gate_comparison_20261116.md</code>.</p>
+</div>
+</div>
+<p>On the day of floral initiation the model stores the node number. For a determinate annual this also becomes the final leaf number. For an indeterminate annual the leaf cap is set later, at stage 4, so leaves keep being added between stages 2 and 4.</p>
+<div class="note gold">
+<p><strong>Two consequences to check in a crop run.</strong></p>
+<p>1. Before floral initiation all shoot growth goes to leaf (72.5%) and petiole or sheath (27.5%), with nothing to stalk. A crop that waits for the solstice bypass therefore has no stalk growth until late June in the northern hemisphere, whatever its node number.</p>
+<p>2. The bypass tests only for shortening days. A fall-sown annual configured as evergreen would initiate on its first hour of phenology after emergence. I did not check how the winter-crop PFTs in the parameter file are classed; if one uses <code>IWTYP = 0</code>, its floral date deserves a look.</p>
+</div>
+<p class="source">Code: <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L1468">InitiateBranchFloral</a>, threshold in <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L1209">CheckBranchNodeState</a>.</p>
+</section>
+
+<section id="thresholds">
+<h2>Thresholds for every stage</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Stage</th><th>Condition for an annual crop</th><th>Set in</th></tr></thead>
+<tbody>
+<tr><td class="n">0</td><td>Planting</td><td>Planting day and year from management input. <code>StartPlants</code> initializes the seed; nodes start at <code>XTLI</code>, leaves at 0.</td><td><code>set_plant_flags</code></td></tr>
+<tr><td class="n">1</td><td>Emergence</td><td>Hypocotyl height exceeds seeding depth, shoot area is non-zero, and the primary root is deeper than the seed.</td><td><code>TestPlantEmergence</code></td></tr>
+<tr><td class="n">2</td><td>Floral initiation</td><td>Nodes &gt; <code>GROUPX</code>, plus the season and photoperiod gates; or the shortening-day bypass.</td><td><code>InitiateBranchFloral</code></td></tr>
+<tr><td class="n">3</td><td>Jointing</td><td>Nodes since stage 2 &gt; 0.5 G</td><td><code>BranchStemJointing</code></td></tr>
+<tr><td class="n">4</td><td>Elongation</td><td>Nodes since stage 2 &gt; 1.0 G</td><td><code>BranchStemElongation</code></td></tr>
+<tr><td class="n">5</td><td>Heading</td><td>Nodes since stage 2 &gt; 2.0 G</td><td><code>BranchFlowerHeading</code></td></tr>
+<tr><td class="n">6</td><td>Anthesis</td><td>Leaves appeared &gt; node number stored at stage 2. A side branch waits for the main branch.</td><td><code>BranchAnthesis</code></td></tr>
+<tr><td class="n">7</td><td>Begin seed fill</td><td>Nodes since anthesis &gt; 0.333 G</td><td><code>BeginBranchSeedFill</code></td></tr>
+<tr><td class="n">8</td><td>Seed number set</td><td>Nodes since anthesis &gt; 0.667 G</td><td><code>live_branch_phenology</code></td></tr>
+<tr><td class="n">9</td><td>Seed mass set</td><td>Nodes since anthesis &gt; 1.0 G</td><td><code>live_branch_phenology</code></td></tr>
+<tr><td class="n">10</td><td>End seed fill</td><td>After stage 8, reserve-to-grain transfer has been below 10⁻⁹ gC per plant per hour for 168 consecutive hours.</td><td><code>GrainFillOnBranch</code></td></tr>
+</tbody></table></div>
+<p>The numbers come from the normalized counter <code>(nodes − nodes at stage) / G</code> compared against 0.25, 0.5 and 1.0 times 2.0 for the vegetative stages, and 0.5, 1.0 and 1.5 times 0.667 for the reproductive stages.</p>
+<p>Stages are tested in an <code>ELSE IF</code> chain, one per hour, so anthesis is only tested after heading. Anthesis therefore falls at the later of two times: heading, or the hour when leaf appearance catches up with the floral node number. With <code>XRLA</code> close to <code>XRNI</code>, heading is the later one and anthesis follows it by an hour.</p>
+<p>For annual drought-deciduous plants and for perennials there are extra leaf-off shortcuts through stages 3 to 7. They do not apply to an annual evergreen crop.</p>
+</section>
+
+<section id="calc">
+<h2>Timing at constant temperature</h2>
+<p>This calculator applies the thresholds above with a constant canopy temperature. It leaves out water and oxygen stress, the photoperiod gate and the shortening-day bypass, so it gives the node-clock timing only. Defaults are the <code>soyb41</code> values in the Ne2 2016 trait description file.</p>
+<div class="panel">
+<div class="controls">
+<div><label for="c-xrni">XRNI, node rate at 25 °C (h⁻¹)</label><input id="c-xrni" type="number" step="0.001" min="0.0005" value="0.013"></div>
+<div><label for="c-xrla">XRLA, leaf rate at 25 °C (h⁻¹)</label><input id="c-xrla" type="number" step="0.001" min="0.0005" value="0.010"></div>
+<div><label for="c-t">Canopy temperature (°C)</label><input id="c-t" type="number" step="0.5" min="0" max="45" value="22"></div>
+<div><label for="c-grp">GROUPX (nodes)</label><input id="c-grp" type="number" step="0.5" min="1" value="12"></div>
+<div><label for="c-xtli">XTLI, nodes at planting</label><input id="c-xtli" type="number" step="0.5" min="0" value="4"></div>
+<div><label for="c-zone">ZTYPI, thermal zone</label><input id="c-zone" type="number" step="0.5" min="1" max="5" value="2"></div>
+</div>
+<div class="bar" id="c-bar" aria-hidden="true"></div>
+<p class="small"><span class="dot" style="background:var(--veg)"></span>emergence to floral initiation <span class="dot" style="background:var(--rep);margin-left:14px"></span>floral initiation to anthesis <span class="dot" style="background:var(--fill);margin-left:14px"></span>anthesis to seed mass set</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Stage</th><th>Days after emergence</th><th>Node number</th></tr></thead>
+<tbody id="c-rows"></tbody></table></div>
+<div class="result" id="c-msg"></div>
+</div>
+</section>
+
+<section id="uses">
+<h2>What the stages control</h2>
+<h3>Where new shoot carbon goes</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Period</th><th>Leaf</th><th>Petiole / sheath</th><th>Remainder</th></tr></thead>
+<tbody>
+<tr><td>Before stage 2</td><td class="n">0.725</td><td class="n">0.275</td><td>None</td></tr>
+<tr><td>Stage 2 to 6</td><td>0.725 − p, floor 0.05</td><td>0.275 − 0.4 p, floor 0.02</td><td>60% stalk, 30% stalk reserve, 5% husk, 5% ear. p rises from 0 at floral initiation to 1 at heading.</td></tr>
+<tr><td>Stage 6 to 7</td><td colspan="2">Determinate: zero. Indeterminate: declines as the reproductive counter q rises.</td><td>Stalk and reserve shares scale with (1 − q); husk and ear take what is left.</td></tr>
+<tr><td>After stage 7</td><td colspan="2">Determinate: zero. Indeterminate: 0.05 and 0.02.</td><td>Determinate: all to grain. Indeterminate annual: 62.5% grain, 12.5% each stalk, husk, ear.</td></tr>
+<tr><td>After stage 10</td><td colspan="3">Annual with full above-ground turnover: stalk, reserve and grain shares set to zero.</td></tr>
+</tbody></table></div>
+<h3>Yield components</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Window</th><th>What is decided</th><th>Traits</th></tr></thead>
+<tbody>
+<tr><td>Stage 3 to 6</td><td>Potential seed sites accumulate in proportion to stalk growth.</td><td><code>STMX</code></td></tr>
+<tr><td>Stage 6 to 8</td><td>Seed number is set from non-structural C, N and P status. Canopy temperature below <code>CTC</code> or above the heat limit removes seeds.</td><td><code>SDMX</code>, <code>CTC</code></td></tr>
+<tr><td>Stage 7 to 9</td><td>Maximum individual seed size is set.</td><td><code>GRMX</code></td></tr>
+<tr><td>Stage 7 onward</td><td>Grain fills from stalk reserves until the sink (seed number × seed size) is full or reserves run out.</td><td><code>GFILL</code>, <code>CNGR</code>, <code>CPGR</code></td></tr>
+<tr><td>Stage 8 onward</td><td>Remobilization from leaves is switched on for annuals.</td><td></td></tr>
+</tbody></table></div>
+<p>Seed number and seed size both advance with the hourly increment of the reproductive node counter, so a faster clock after anthesis shortens the windows without changing the potential totals.</p>
+<h3>Branching</h3>
+<p>An annual adds shoot branches (tillers) only before floral initiation of the main branch, when root turgor is adequate and canopy non-structural C exceeds <code>PB</code>. The check runs once a day.</p>
+<p class="source">Code: <a href="../f90src/Plant_bgc/PlantBranchMod.F90#L651">partitioning</a>, <a href="../f90src/Plant_bgc/PlantBranchMod.F90#L2156">seed sites, seed set and grain fill</a>, <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L289">root_shoot_branching</a>.</p>
+</section>
+
+<section id="maturity">
+<h2>Maturity and the end of the season</h2>
+<p>Stage 10 is not a node threshold. Once seed number is set, the model counts consecutive hours in which reserve-to-grain transfer is effectively zero. At 168 hours it writes the maturity date. Grain filling can stop because the sink is full, because reserves are exhausted, or because grain N or P falls below the minimum ratio.</p>
+<p>The automatic termination that follows maturity applies to annuals whose seasonal type is not evergreen. An annual evergreen crop stays active after stage 10 until the harvest date in the management input makes the PFT inactive.</p>
+<p class="source">Code: <a href="../f90src/Plant_bgc/PlantBranchMod.F90#L2322">GrainFillOnBranch</a>, <a href="../f90src/Plant_bgc/PlantPhenolMod.F90#L189">set_plant_flags</a>.</p>
+</section>
+
+<section id="traits">
+<h2>Trait checklist for crop timing</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Trait</th><th>Role</th><th>Effect of a larger value</th></tr></thead>
+<tbody>
+<tr><td><code>XRNI</code></td><td>Node rate at 25 °C</td><td>Every node-clock stage arrives sooner.</td></tr>
+<tr><td><code>XRLA</code></td><td>Leaf appearance rate at 25 °C</td><td>More leaves by a given date; can advance anthesis only when leaves, not heading, are limiting.</td></tr>
+<tr><td><code>GROUPX</code></td><td>Node number for floral competence</td><td>Later floral initiation and, through G, longer spacing between all later stages.</td></tr>
+<tr><td><code>XTLI</code></td><td>Nodes present in the seed</td><td>Does not move floral initiation in node terms, since the threshold is GROUPX in total; it shrinks G and so shortens every later stage.</td></tr>
+<tr><td><code>XDL</code>, <code>XPPD</code>, <code>IPTYP</code></td><td>Critical photoperiod, sensitivity, response type</td><td>Depends on type. A negative <code>XDL</code> is replaced by the site's maximum daylength.</td></tr>
+<tr><td><code>VRNLI</code></td><td>Hours of lengthening days before the season gate opens</td><td>Matters after the planting year or when days are not lengthening.</td></tr>
+<tr><td><code>ZTYPI</code>, <code>LG_ELOW</code>, <code>LG_EHIGH</code></td><td>Temperature response of the clock</td><td>Warmer zone shifts the response toward higher temperatures.</td></tr>
+<tr><td><code>IDTYP</code></td><td>Determinate or indeterminate</td><td>Sets when the leaf cap is fixed and whether leaves grow after anthesis.</td></tr>
+</tbody></table></div>
+<p>In a climate-change run (<code>ICLM = 2</code>) the maturity group is shifted by 0.30 per degree of imposed warming, so stage spacing changes with the scenario.</p>
+</section>
+
+<section id="cautions">
+<h2>Points where labels and behavior differ</h2>
+<div class="note gold">
+<p><strong>GROUPX is a total, not an increment.</strong> The trait description prints it as node number “on top of XTLI”. The code sets <code>G = GROUPX − XTLI</code> and tests <code>nodes &gt; G + XTLI</code>, which is <code>nodes &gt; GROUPX</code>. The label and the equation disagree; the equation is what runs.</p>
+<p><strong>Stage names are cereal names.</strong> Jointing, elongation and heading are node-count milestones applied to every crop. For soybean they are best read as fractions of the interval between floral initiation and flowering, not as observable events.</p>
+<p><strong>The soybean file opened here is long-day.</strong> <code>Ne2_z014_spin33_2013-2023.plant_trait.desc.2016</code> lists <code>IPTYP = Long day</code>, <code>XDL = 15.56 h</code> and <code>XPPD = 0.25 h</code>. Under the long-day rule the photoperiod gate opens only when daylength exceeds 15.31 h. Soybean is a short-day plant, and the floral-gate note of 16 November assumed <code>IPTYP = 1</code>. One of the two does not describe this run.</p>
+<p><strong>Water stress barely moves the clock.</strong> The exponent 0.025 per MPa means drought changes stage dates by a few percent at most. Drought effects on a simulated crop come through growth and seed set, not through development rate.</p>
+</div>
+</section>
+
+<section id="sources">
+<h2>Source map</h2>
+<ul>
+<li><a href="../f90src/Plant_bgc/PlantPhenolMod.F90">f90src/Plant_bgc/PlantPhenolMod.F90</a>: activity flags, emergence, node clock, stage transitions.</li>
+<li><a href="../f90src/Plant_bgc/PlantBranchMod.F90">f90src/Plant_bgc/PlantBranchMod.F90</a>: partitioning by stage, seed number and size, grain fill, maturity date.</li>
+<li><a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">f90src/Plant_bgc/PlantMathFuncMod.F90</a>: temperature function and leaf-node index.</li>
+<li><a href="../f90src/IOutils/PlantInfoMod.F90#L640">f90src/IOutils/PlantInfoMod.F90</a>: maturity group from <code>GROUPX</code> and <code>XTLI</code>, critical photoperiod default.</li>
+<li><a href="../f90src/Modelconfig/ElmIDMod.F90#L118">f90src/Modelconfig/ElmIDMod.F90</a>: stage, photoperiod and phenology-type identifiers.</li>
+<li><a href="../f90src/Modelpars/PlantBGCPars.F90#L220">f90src/Modelpars/PlantBGCPars.F90</a>: minimum leaf and petiole shares, hours to maturity.</li>
+</ul>
+<footer>This page describes source behavior. It was not checked against a model run, and it makes no claim that the timing rules are biologically correct for any cultivar.</footer>
+</section>
+</main>
+<script>
+(function(){
+  var R=8.3143,EL=197500,EH=218500;
+  function f(tc,zone){var tk=tc+273.15+2.667*(2.5-zone),rt=R*tk,s=710*tk;
+    return Math.exp(24.269-60000/rt)/(1+Math.exp((EL-s)/rt)+Math.exp((s-EH)/rt));}
+  function v(id){return parseFloat(document.getElementById(id).value);}
+  function run(){
+    var xrni=v('c-xrni'),xrla=v('c-xrla'),t=v('c-t'),grp=v('c-grp'),xtli=v('c-xtli'),zone=v('c-zone');
+    var rows=document.getElementById('c-rows'),msg=document.getElementById('c-msg'),bar=document.getElementById('c-bar');
+    var G=grp-xtli,ft=f(t,zone);
+    if(!(xrni>0&&xrla>0&&G>0&&ft>0)){rows.innerHTML='';bar.innerHTML='';
+      msg.textContent='Enter positive rates and a GROUPX larger than XTLI.';return;}
+    var r=xrni*ft,l=xrla*ft,tFI=G/r,tH=tFI+2*G/r,tLeaf=grp/l,tA=Math.max(tH,tLeaf);
+    var nA=xtli+r*tA;
+    var st=[['2 Floral initiation',tFI,grp],['3 Jointing',tFI+0.5*G/r,grp+0.5*G],['4 Elongation',tFI+G/r,grp+G],
+      ['5 Heading',tH,grp+2*G],['6 Anthesis',tA,nA],['7 Begin seed fill',tA+G/(3*r),nA+G/3],
+      ['8 Seed number set',tA+2*G/(3*r),nA+2*G/3],['9 Seed mass set',tA+G/r,nA+G]];
+    rows.innerHTML=st.map(function(s){return '<tr><td>'+s[0]+'</td><td class="n">'+(s[1]/24).toFixed(1)+'</td><td class="n">'+s[2].toFixed(1)+'</td></tr>';}).join('');
+    var tot=st[7][1],w=[tFI,tA-tFI,tot-tA],c=['var(--veg)','var(--rep)','var(--fill)'];
+    bar.innerHTML=w.map(function(x,i){return '<div style="width:'+(100*x/tot).toFixed(2)+'%;background:'+c[i]+'"></div>';}).join('');
+    msg.innerHTML='Temperature factor f(T) = <strong>'+ft.toFixed(2)+'</strong>; one node every <strong>'+(1/r/24).toFixed(1)+'</strong> days. '+
+      'Anthesis is limited by <strong>'+(tLeaf>tH?'leaf appearance':'the heading threshold')+'</strong>. '+
+      'Maturity (stage 10) comes at least 7 days after grain filling stops and cannot be predicted from the clock.';
+  }
+  ['c-xrni','c-xrla','c-t','c-grp','c-xtli','c-zone'].forEach(function(id){document.getElementById(id).addEventListener('input',run);});
+  run();
+})();
+</script>
+</body>
+</html>
