@@ -104,6 +104,7 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  PlantInitThermoAdaptZone_pft(:,:,:)            !initial plant thermal adaptation zone, [-]
   real(r8),target,allocatable ::  rPlantThermoAdaptZone_pft(:,:,:)           !plant thermal adaptation zone, [-]
   real(r8),target,allocatable ::  MatureGroup_brch(:,:,:,:)                  !plant maturity group, [-]
+  real(r8),target,allocatable :: FloralDevNodes_brch(:,:,:,:) !floral development, [node equivalents], branch/PFT/y/x
   real(r8),target,allocatable ::  MatureGroup_pft(:,:,:)                     !acclimated plant maturity group, [-]
   real(r8),target,allocatable ::  GROUPX_pft(:,:,:)                          !initial plant maturity group, [-]
   real(r8),target,allocatable ::  PPI_pft(:,:,:)                             !initial plant population, [# m-2]
@@ -203,6 +204,8 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  SeedTempSens_pft(:,:,:)                    !sensitivity to canopy temperature, [oC-1]
   real(r8),target,allocatable ::  CriticPhotoPeriod_pft(:,:,:)               !critical daylength for phenological progress, [h]
   real(r8),target,allocatable ::  PhotoPeriodSens_pft(:,:,:)                 !difference between current and critical daylengths used to calculate  phenological progress, [h]
+  real(r8),target,allocatable :: FloralPhotoSens_pft(:,:,:) !exponential floral photoperiod sensitivity, [h-1]; PFT/y/x
+  real(r8),target,allocatable :: FloralPhotoOpt_pft(:,:,:) !fully inductive floral photoperiod; -1 uses resolved XDL, [h]; PFT/y/x
   real(r8),target,allocatable ::  ClumpFactorInit_pft(:,:,:)                 !initial clumping factor for self-shading in canopy layer, [-]
   real(r8),target,allocatable ::  HourReq4LeafOff_brch(:,:,:,:)              !number of hours below set temperature required for autumn leafoff/hardening, [-]
   real(r8),target,allocatable ::  StemSpecVolume_pft(:,:,:)                  !stalk specific volume, [m3 gC-1]
@@ -318,6 +321,7 @@ contains
   allocate(PlantInitThermoAdaptZone_pft(JP,JY,JX));    PlantInitThermoAdaptZone_pft=0._r8
   allocate(rPlantThermoAdaptZone_pft(JP,JY,JX));     rPlantThermoAdaptZone_pft=0._r8
   allocate(MatureGroup_brch(MaxNumBranches,JP,JY,JX)); MatureGroup_brch=0._r8
+  allocate(FloralDevNodes_brch(MaxNumBranches,JP,JY,JX));FloralDevNodes_brch=0._r8
   allocate(MatureGroup_pft(JP,JY,JX));   MatureGroup_pft=0._r8
   allocate(GROUPX_pft(JP,JY,JX));   GROUPX_pft=0._r8
   allocate(PPI_pft(JP,JY,JX));      PPI_pft=0._r8
@@ -417,6 +421,8 @@ contains
   allocate(SeedTempSens_pft(JP,JY,JX));     SeedTempSens_pft=0._r8
   allocate(CriticPhotoPeriod_pft(JP,JY,JX));      CriticPhotoPeriod_pft=0._r8
   allocate(PhotoPeriodSens_pft(JP,JY,JX));     PhotoPeriodSens_pft=0._r8
+  allocate(FloralPhotoSens_pft(JP,JY,JX));FloralPhotoSens_pft=0.0_r8
+  allocate(FloralPhotoOpt_pft(JP,JY,JX));FloralPhotoOpt_pft=-1.0_r8
   allocate(ClumpFactorInit_pft(JP,JY,JX));      ClumpFactorInit_pft=0._r8
   allocate(HourReq4LeafOff_brch(NumCanopyLayers,JP,JY,JX));  HourReq4LeafOff_brch=0._r8
   allocate(TempOffset_pft(JP,JY,JX));    TempOffset_pft=0._r8
@@ -530,6 +536,7 @@ contains
   call destroy(PlantInitThermoAdaptZone_pft)
   call destroy(rPlantThermoAdaptZone_pft)
   call destroy(MatureGroup_brch)
+  call destroy(FloralDevNodes_brch)
   call destroy(MatureGroup_pft)
   call destroy(GROUPX_pft)
   call destroy(PPI_pft)
@@ -629,6 +636,8 @@ contains
   call destroy(SeedTempSens_pft)
   call destroy(CriticPhotoPeriod_pft)
   call destroy(PhotoPeriodSens_pft)
+  call destroy(FloralPhotoSens_pft)
+  call destroy(FloralPhotoOpt_pft)
   call destroy(ClumpFactorInit_pft)
   call destroy(HourReq4LeafOff_brch)
   call destroy(TempOffset_pft)

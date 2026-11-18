@@ -366,6 +366,7 @@ module HistDataType
   real(r8),pointer   :: h1D_RootAct1stC_ptc(:)
   real(r8),pointer   :: h1D_PLANT_BALANCE_C_ptc(:) 
   real(r8),pointer   :: h1D_MainBranchNodeNumber_ptc(:)
+  real(r8),pointer :: h1D_FloralDevProgress_ptc(:) !main-branch induction / requirement, [-]
   real(r8),pointer   :: h1D_ShootNodeNumber_ptc(:)
   real(r8),pointer   :: h1D_STANDING_DEAD_C_ptc(:) 
   real(r8),pointer   :: h1D_FIREp_CO2_FLX_ptc(:)   

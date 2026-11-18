@@ -67,6 +67,8 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: ShootNodeNumAtPlanting_tab(:)
   real(r8), target, allocatable :: CriticPhotoPeriod_tab(:)
   real(r8), target, allocatable :: PhotoPeriodSens_tab(:)
+  real(r8), target, allocatable :: FloralPhotoSens_tab(:) !exponential floral photoperiod sensitivity, [h-1]
+  real(r8), target, allocatable :: FloralPhotoOpt_tab(:) !fully inductive floral photoperiod; -1 uses resolved XDL, [h]
   real(r8), target, allocatable :: SLA1_tab(:)
   real(r8), target, allocatable :: PetolShethLen2Mass_tab(:)
   real(r8), target, allocatable :: NodeLenPergC_tab(:)
@@ -221,6 +223,8 @@ module PlantTraitTableMod
   allocate(ShootNodeNumAtPlanting_tab(npfts));ShootNodeNumAtPlanting_tab=0._r8
   allocate(CriticPhotoPeriod_tab(npfts));CriticPhotoPeriod_tab=0._r8
   allocate(PhotoPeriodSens_tab(npfts));PhotoPeriodSens_tab=0._r8
+  allocate(FloralPhotoSens_tab(npfts));FloralPhotoSens_tab=0.0_r8
+  allocate(FloralPhotoOpt_tab(npfts));FloralPhotoOpt_tab=-1.0_r8
   allocate(SLA1_tab(npfts));SLA1_tab=0._r8
   allocate(PetolShethLen2Mass_tab(npfts));PetolShethLen2Mass_tab=0._r8
   allocate(NodeLenPergC_tab(npfts));NodeLenPergC_tab=0._r8
@@ -371,6 +375,8 @@ module PlantTraitTableMod
   call destroy(ShootNodeNumAtPlanting_tab)
   call destroy(CriticPhotoPeriod_tab)
   call destroy(PhotoPeriodSens_tab)
+  call destroy(FloralPhotoSens_tab)
+  call destroy(FloralPhotoOpt_tab)
   call destroy(SLA1_tab)
   call destroy(PetolShethLen2Mass_tab)
   call destroy(NodeLenPergC_tab)

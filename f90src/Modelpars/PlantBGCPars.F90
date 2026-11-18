@@ -21,8 +21,8 @@ module PlantBGCPars
   real(r8) :: Aphol_ref                           !reference area for phloem transport, [m2]
   real(r8) :: L0_phol                             !effective distance for phloem transport when PTSHTR is defined [m]
   real(r8) :: FracHour4LeafoffRemob(0:5)          !allocation parameter, [-]
-  real(r8) :: PART2LEAF_MIN                       !minimum fraction of growth allocated to leaf, [-]
-  real(r8) :: PART2PETOL_MIN                      !minimum fraction of growth allocated to PetolSheth, [-]
+  real(r8) :: PART2LEAF_MIN(0:1)                  !minimum leaf growth fraction by IDTYP (determinate, indeterminate), [-]
+  real(r8) :: PART2PETOL_MIN(0:1)                 !minimum petiole/sheath growth fraction by IDTYP, [-]
 !
   real(r8) :: VMXC                                !rate constant for nonstructural C oxidation in respiration, [h-1]
   real(r8) :: RSpecLiterFall                      !rate constant for LitrFall at end of growing season, [h-1]
@@ -217,8 +217,8 @@ module PlantBGCPars
   pltpar%jroots     = jroots
 
   FracHour4LeafoffRemob =real((/0.75,0.5,0.5,0.5,0.5,0.5/),r8)
-  PART2LEAF_MIN               = 0.05_r8
-  PART2PETOL_MIN              = 0.02_r8
+  PART2LEAF_MIN               = [0.0200_r8,0.0500_r8]
+  PART2PETOL_MIN              = [0.0067_r8,0.0167_r8]
   VMXC                        = 0.015_r8
   RSpecLiterFall              = 2.884E-03_r8
   Hours4PhyslMature           = 168.0_r8

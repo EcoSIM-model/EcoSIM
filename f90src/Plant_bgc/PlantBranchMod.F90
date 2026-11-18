@@ -584,6 +584,8 @@ module PlantBranchMod
   ! Description:
   ! Compute normalized organ growth fractions and a separate leaf + petiole
   ! modifier for root-shoot exchange, sampled at the PTRT assignment in grosub.f.
+  ! Reduce leaf/petiole allocation by IBTYP and retain IDTYP-specific minima,
+  ! following the 2026-11-03 ECOSYS allocation scheme.
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   integer, intent(out) :: BegRemoblize,LRemob_brch
@@ -599,9 +601,14 @@ module PlantBranchMod
   real(r8) :: TOTAL
   logical :: check_perennial,check_annual,check_cold_deciduous,check_drought_deciduous
   real(r8) :: PSILY(0:3)
-  real(r8), parameter :: FPART1=1.00_r8
-  real(r8), parameter :: FPART2=0.40_r8
+  real(r8), parameter :: PART1=0.75_r8, PART2=0.25_r8 !initial leaf/petiole growth fractions, [-]
+  ! IBTYP order: fully deciduous (0,1), needleleaf evergreen (2), broadleaf
+  ! evergreen (3), semi-deciduous (4), semi-evergreen (5). These are reduction
+  ! slopes per unit normalized developmental progress, not organ fractions.
+  real(r8), parameter :: FPART1(0:5)=[0.75_r8,1.50_r8,2.00_r8,2.00_r8,1.75_r8,1.50_r8]
+  real(r8), parameter :: FPART2(0:5)=[0.25_r8,0.50_r8,0.67_r8,0.67_r8,0.58_r8,0.50_r8]
 
+  call PrintInfo('beg '//subname)
   associate(                                                                           &
     TdegCCanopy_pft                   => plt_ew%TdegCCanopy_pft                       ,& !input  :canopy temperature, [oC]
     PSICanopy_pft                     => plt_ew%PSICanopy_pft                         ,& !input  :canopy total water potential, [Mpa]
@@ -614,8 +621,8 @@ module PlantBranchMod
     iPlantCalendar_brch               => plt_pheno%iPlantCalendar_brch                ,& !input  :plant growth stage, [-]
     iPlantRootProfile_pft             => plt_pheno%iPlantRootProfile_pft              ,& !input  :plant growth type (vascular, non-vascular),[-]
     TotReproNodeNumNormByMatrgrp_brch => plt_pheno%TotReproNodeNumNormByMatrgrp_brch  ,& !input  :normalized node number during reproductive growth stages, [-]
-    iPlantDevelopPattern_pft          => plt_pheno%iPlantDevelopPattern_pft           ,& !input  :plant growth habit (determinate or indeterminate),[-]
-    iPlantTurnoverPattern_pft         => plt_pheno%iPlantTurnoverPattern_pft          ,& !input  :phenologically-driven above-ground turnover: all, foliar only, none,[-]
+    iPlantDevelopPattern_pft          => plt_pheno%iPlantDevelopPattern_pft           ,& !input  :growth habit by PFT: 0=determinate,1=indeterminate, [-]
+    iPlantTurnoverPattern_pft         => plt_pheno%iPlantTurnoverPattern_pft          ,& !input  :aboveground turnover class by PFT, IBTYP=0:5, [-]
     Hours4LeafOff_brch                => plt_pheno%Hours4LeafOff_brch                 ,& !input  :cold requirement for autumn leafoff/hardening, [h]
     TotalNodeNumNormByMatgrp_brch     => plt_pheno%TotalNodeNumNormByMatgrp_brch      ,& !input  :normalized node number during vegetative growth stages, [-]
     iPlantPhenolPattern_pft           => plt_pheno%iPlantPhenolPattern_pft            ,& !input  :plant growth habit: annual or perennial,[-]
@@ -649,19 +656,27 @@ module PlantBranchMod
   !  planting, emergence, init floral, jointing, elongation, heading, anthesis, begin seed fill, set seed number, set seed mass, end seed fill.
   !
   IF(iPlantCalendar_brch(ipltcal_InitFloral,NB,NZ).EQ.0)THEN
-    PART(ibrch_leaf)   = 0.725_r8
-    PART(ibrch_petole) = 0.275_r8
+    PART(ibrch_leaf)   = PART1
+    PART(ibrch_petole) = PART2
     !
     !     IF BEFORE ANTHESIS
     !
     !  iPlantCalendar_brch(ipltcal_Anthesis,=start of anthesis and setting final seed number
     !  greater maturity group, lower TotalNodeNumNormByMatgrp_brch, more allocation to leaf, later grain-filling
   ELSEIF(iPlantCalendar_brch(ipltcal_Anthesis,NB,NZ).EQ.0)THEN
-    PART(ibrch_leaf)   = AMAX1(PART2LEAF_MIN,0.725_r8-FPART1*TotalNodeNumNormByMatgrp_brch(NB,NZ))
-    PART(ibrch_petole) = AMAX1(PART2PETOL_MIN,0.275_r8-FPART2*TotalNodeNumNormByMatgrp_brch(NB,NZ))
+    PART(ibrch_leaf) = AMAX1(PART2LEAF_MIN(iPlantDevelopPattern_pft(NZ)), &
+      PART1-FPART1(iPlantTurnoverPattern_pft(NZ))*TotalNodeNumNormByMatgrp_brch(NB,NZ))
+
+    PART(ibrch_petole) = AMAX1(PART2PETOL_MIN(iPlantDevelopPattern_pft(NZ)), &
+      PART2-FPART2(iPlantTurnoverPattern_pft(NZ))*TotalNodeNumNormByMatgrp_brch(NB,NZ))
     PARTS              = 1.0_r8-PART(ibrch_leaf)-PART(ibrch_petole)
-    PART(ibrch_stalk)  = 0.60_r8*PARTS
-    PART(ibrch_resrv)  = 0.30_r8*PARTS
+    IF(NodeLenPergC_pft(NZ).GT.0._r8)THEN
+      PART(ibrch_stalk) = 0.60_r8*PARTS
+      PART(ibrch_resrv) = 0.30_r8*PARTS
+    ELSE
+      PART(ibrch_stalk) = 0._r8
+      PART(ibrch_resrv) = 0.90_r8*PARTS
+    ENDIF
     PARTX              = PARTS-PART(ibrch_stalk)-PART(ibrch_resrv)
     PART(ibrch_husk)   = 0.5_r8*PARTX
     PART(ibrch_ear)    = 0.5_r8*PARTX
@@ -677,12 +692,19 @@ module PlantBranchMod
       PART(ibrch_leaf)   = 0._r8
       PART(ibrch_petole) = 0._r8
     ELSE
-      PART(ibrch_leaf)   = AMAX1(PART2LEAF_MIN,(0.725_r8-FPART1)*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
-      PART(ibrch_petole) = AMAX1(PART2PETOL_MIN,(0.275_r8-FPART2)*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+      PART(ibrch_leaf) = AMAX1(PART2LEAF_MIN(iPlantDevelopPattern_pft(NZ)), &
+        (PART1-FPART1(iPlantTurnoverPattern_pft(NZ)))*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+      PART(ibrch_petole) = AMAX1(PART2PETOL_MIN(iPlantDevelopPattern_pft(NZ)), &
+        (PART2-FPART2(iPlantTurnoverPattern_pft(NZ)))*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
     ENDIF
     PARTS             = 1.0_r8-PART(ibrch_leaf)-PART(ibrch_petole)
-    PART(ibrch_stalk) = 0.60_r8*AZMAX1(PARTS*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
-    PART(ibrch_resrv) = 0.30_r8*AZMAX1(PARTS*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+    IF(NodeLenPergC_pft(NZ).GT.0._r8)THEN
+      PART(ibrch_stalk) = 0.60_r8*AZMAX1(PARTS*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+      PART(ibrch_resrv) = 0.30_r8*AZMAX1(PARTS*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+    ELSE
+      PART(ibrch_stalk) = 0._r8
+      PART(ibrch_resrv) = 0.90_r8*AZMAX1(PARTS*(1.0_r8-TotReproNodeNumNormByMatrgrp_brch(NB,NZ)))
+    ENDIF
     PARTX             = PARTS-PART(ibrch_stalk)-PART(ibrch_resrv)
     PART(ibrch_husk)  = 0.5_r8*PARTX
     PART(ibrch_ear)   = 0.5_r8*PARTX
@@ -697,18 +719,28 @@ module PlantBranchMod
     IF(iPlantDevelopPattern_pft(NZ).EQ.ideterminate)THEN
       PART(ibrch_grain)=1.0_r8
     ELSE
-      PART(ibrch_leaf)   = PART2LEAF_MIN
-      PART(ibrch_petole) = PART2PETOL_MIN
+      PART(ibrch_leaf)   = PART2LEAF_MIN(iPlantDevelopPattern_pft(NZ))
+      PART(ibrch_petole) = PART2PETOL_MIN(iPlantDevelopPattern_pft(NZ))
       PARTS              = 1.0_r8-PART(ibrch_leaf)-PART(ibrch_petole)
 
       IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual)THEN
-        PART(ibrch_stalk) = 0.125_r8*PARTS
         PART(ibrch_husk)  = 0.125_r8*PARTS
         PART(ibrch_ear)   = 0.125_r8*PARTS
-        PART(ibrch_grain) = 0.625_r8*PARTS
+        IF(NodeLenPergC_pft(NZ).GT.0._r8)THEN
+          PART(ibrch_stalk) = 0.125_r8*PARTS
+          PART(ibrch_grain) = 0.625_r8*PARTS
+        ELSE
+          PART(ibrch_stalk) = 0._r8
+          PART(ibrch_grain) = 0.750_r8*PARTS
+        ENDIF
       ELSE
-        PART(ibrch_stalk) = 0.75_r8*PARTS
-        PART(ibrch_grain) = 0.25_r8*PARTS
+        IF(NodeLenPergC_pft(NZ).GT.0._r8)THEN
+          PART(ibrch_stalk) = 0.75_r8*PARTS
+          PART(ibrch_grain) = 0.25_r8*PARTS
+        ELSE
+          PART(ibrch_stalk) = 0._r8
+          PART(ibrch_grain) = PARTS
+        ENDIF
       ENDIF
     ENDIF
   ENDIF
@@ -841,8 +873,8 @@ module PlantBranchMod
   ENDIF
 
   PARTS_brch(:,NB,NZ)=PART  
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CalcPartitionCoeff
 
 !----------------------------------------------------------------------------------------------------

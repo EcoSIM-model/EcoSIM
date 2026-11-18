@@ -100,6 +100,8 @@ contains
     plt_morph%ShootNodeNumAtPlanting_pft(NZ) = ShootNodeNumAtPlanting_pft(NZ,NY,NX)
     plt_pheno%CriticPhotoPeriod_pft(NZ)      = CriticPhotoPeriod_pft(NZ,NY,NX)
     plt_pheno%PhotoPeriodSens_pft(NZ)        = PhotoPeriodSens_pft(NZ,NY,NX)
+    plt_pheno%FloralPhotoSens_pft(NZ) = FloralPhotoSens_pft(NZ,NY,NX)
+    plt_pheno%FloralPhotoOpt_pft(NZ) = FloralPhotoOpt_pft(NZ,NY,NX)
     plt_morph%SLA1_pft(NZ)                   = SLA1_pft(NZ,NY,NX)
     plt_morph%PetolShethLen2Mass_pft(NZ)           = PetolShethLen2Mass_pft(NZ,NY,NX)
     plt_morph%NodeLenPergC_pft(NZ)               = NodeLenPergC_pft(NZ,NY,NX)

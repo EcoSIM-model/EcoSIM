@@ -295,6 +295,7 @@ module PlantPhenolMod
   integer :: BranchNumber_new
   logical :: checkRootInitializer,shootCheck
 ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                                 &
     CanopyNonstElmConc_pft       => plt_biom%CanopyNonstElmConc_pft         ,& !input  :canopy nonstructural element concentration, [g d-2]
     SeasonalNonstElms_pft        => plt_biom%SeasonalNonstElms_pft          ,& !input  :plant stored nonstructural element at current step, [g d-2]
@@ -318,12 +319,12 @@ module PlantPhenolMod
     NumOfBranches_pft            => plt_morph%NumOfBranches_pft             ,& !inoput :number of branches,[-]
     BranchNumber_pft             => plt_morph%BranchNumber_pft              ,& !inoput :main branch numeric id,[-]
     MatureGroup_brch             => plt_pheno%MatureGroup_brch              ,& !output :branch level plant maturity group, [-]
+    FloralDevNodes_brch => plt_pheno%FloralDevNodes_brch,& !output: new branch floral development, [node equivalents], branch/PFT
     isPlantRootAlive_pft         => plt_pheno%isPlantRootAlive_pft          ,& !output :flag to detect root system death,[-]
     isPlantShootAlive_pft        => plt_pheno%isPlantShootAlive_pft         ,& !output :flag to detect canopy death,[-]
     Hours4Leafout_brch           => plt_pheno%Hours4Leafout_brch            ,& !output :heat requirement for spring leafout/dehardening, [h]
     BranchNumerID_brch           => plt_morph%BranchNumerID_brch             & !output :branch meric id, [-]
   )
-  call PrintInfo('beg '//subname)
   !
   ! ADD BRANCH TO SHOOT IF PLANT GROWTH STAGE, SHOOT NON-STRUCTURAL
   ! CONCENTRATION PERMIT
@@ -355,6 +356,7 @@ module PlantPhenolMod
                   isPlantShootAlive_pft(NZ)      = iTrue
                   isPlantBranchAlive_brch(NB,NZ) = iTrue
                   Hours4Leafout_brch(NB,NZ)     = 0.0_r8
+                  FloralDevNodes_brch(NB,NZ) = 0._r8
 
                   IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual)THEN
                     MatureGroup_brch(NB,NZ)=AZMAX1(MatureGroup_pft(NZ)-BranchNumerID_brch(NB,NZ))
@@ -397,8 +399,8 @@ module PlantPhenolMod
     ENDIF
 
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine root_shoot_branching
 
 !----------------------------------------------------------------------------------------------------
@@ -1073,8 +1075,8 @@ module PlantPhenolMod
     PlantO2Stress_pft                 => plt_pheno%PlantO2Stress_pft                  ,& !input  :plant O2 stress indicator, [-]       
     CanPhenoMoistStress_pft           => plt_pheno%CanPhenoMoistStress_pft            ,& !output :moisture stress for plant phenology development,[-]
     CanPhenoTempStress_pft            => plt_pheno%CanPhenoTempStress_pft             ,& !output :temperature stress for plant phenology development,[-]
-    LeafGrowEnergyLow_pft => plt_pheno%LeafGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
-    LeafGrowEnergyHigh_pft => plt_pheno%LeafGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
+    LeafGrowEnergyLow_pft             => plt_pheno%LeafGrowEnergyLow_pft              ,& !input: low-temperature inactivation, [J mol-1], PFT
+    LeafGrowEnergyHigh_pft            => plt_pheno%LeafGrowEnergyHigh_pft             ,& !input: high-temperature inactivation, [J mol-1], PFT
     TempOffset_pft                    => plt_pheno%TempOffset_pft                      & !input  :adjustment of Arhhenius curves for plant thermal acclimation, [oC]    
   )
   !
@@ -1095,18 +1097,28 @@ module PlantPhenolMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine UpdateBranchNodeNumber(I,J,NB,NZ,TFNP,WFNG,OFNG)
+  ! Description:
+  ! Advance physical node/leaf clocks and integrate annual crop floral induction.
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   real(r8),intent(in) :: TFNP              !temperature function for phenology (25 oC =1 )
   real(r8),intent(in) :: WFNG              !water stress effect on phenology
   real(r8),intent(in) :: OFNG              !oxygen stress
   character(len=*), parameter :: subname='UpdateBranchNodeNumber'  
+  real(r8) :: PhotoFactor,AdversePhotoHours
   real(r8) :: NodeInitRate      !rates of node initiation
   real(r8) :: LeafAppearRate    !leaf appearance
 
   real(r8) :: HourlyNodeNumNormByMatgrp_brch
 
+  call PrintInfo('beg '//subname)
   associate(                                                                           &
+    FloralDevNodes_brch               => plt_pheno%FloralDevNodes_brch                ,& !inout: floral development, [node equivalents], branch/PFT
+    FloralPhotoOpt_pft                => plt_pheno%FloralPhotoOpt_pft                 ,& !input: fully inductive daylength boundary, [h], PFT
+    FloralPhotoSens_pft               => plt_pheno%FloralPhotoSens_pft                ,& !input: photoperiod sensitivity, [h-1], PFT
+    DayLenthCurrent                   => plt_site%DayLenthCurrent                     ,& !input: current absolute photoperiod, [h], scalar
+    iPlantPhenolType_pft              => plt_pheno%iPlantPhenolType_pft               ,& !input: seasonal type, [-], PFT
+    iPlantPhotoperiodType_pft         => plt_pheno%iPlantPhotoperiodType_pft          ,& !input: photoperiod response type, [-], PFT
     MatureGroup_pft                   => plt_pheno%MatureGroup_pft                    ,& !input  :acclimated plant maturity group, [-]    
     NumOfLeaves_brch                  => plt_morph%NumOfLeaves_brch                   ,& !inoput :leaf number, [-]    
     ShootNodeNumAtAnthesis_brch       => plt_morph%ShootNodeNumAtAnthesis_brch        ,& !input  :shoot node number at anthesis, [-]    
@@ -1124,7 +1136,6 @@ module PlantPhenolMod
     dReproNodeNumNormByMatG_brch      => plt_pheno%dReproNodeNumNormByMatG_brch       ,& !output :gain in normalized node number during reproductive growth stages, [h-1]
     ReprodNodeNumNormByMatrgrp_brch   => plt_pheno%ReprodNodeNumNormByMatrgrp_brch     & !output :normalized node number during reproductive growth stages, [-]    
   )
-  call PrintInfo('beg '//subname)
 
   NodeInitRate   = AZMAX1(RefNodeInitRate_pft(NZ)*TFNP)
   LeafAppearRate = AZMAX1(RateRefLeafAppearance_pft(NZ)*TFNP)
@@ -1162,6 +1173,23 @@ module PlantPhenolMod
   ShootNodeNum_brch(NB,NZ) = ShootNodeNum_brch(NB,NZ)+NodeInitRate
   NumOfLeaves_brch(NB,NZ)  = NumOfLeaves_brch(NB,NZ)+LeafAppearRate
   !
+  ! Integrate the same stressed node increment without modifying physical nodes/leaves.
+  ! Photoperiod history starts at branch establishment; no universal juvenile delay is assumed.
+  IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual .AND. iPlantPhenolType_pft(NZ).EQ.iphenotyp_evgreen &
+    .AND. iPlantCalendar_brch(ipltcal_InitFloral,NB,NZ).EQ.0)THEN
+    AdversePhotoHours=0._r8
+    SELECT CASE(iPlantPhotoperiodType_pft(NZ))
+    CASE(iphotop_short)
+      AdversePhotoHours=MAX(0._r8,DayLenthCurrent-FloralPhotoOpt_pft(NZ))
+    CASE(iphotop_long)
+      AdversePhotoHours=MAX(0._r8,FloralPhotoOpt_pft(NZ)-DayLenthCurrent)
+    END SELECT
+
+    ! An effectively zero response is floored above subnormal arithmetic.
+    PhotoFactor                = EXP(-MIN(50._r8,FloralPhotoSens_pft(NZ)*AdversePhotoHours))
+    FloralDevNodes_brch(NB,NZ) = FloralDevNodes_brch(NB,NZ)+NodeInitRate*PhotoFactor
+  ENDIF
+  !
   !   USE TOTAL NUMBER OF NODES TO CALCULATE PROGRESSION THROUGH
   !   VEGETATIVE AND REPRODUCTIVE GROWTH STAGES. THIS PROGRESSION
   !   IS USED TO SET START AND END DATES FOR GROWTH STAGES BELOW
@@ -1181,8 +1209,8 @@ module PlantPhenolMod
     dReproNodeNumNormByMatG_brch(NB,NZ)      = NodeInitRate/(MatureGroup_pft(NZ)*GrothStageNorm4ReprodPheno)
     TotReproNodeNumNormByMatrgrp_brch(NB,NZ) = TotReproNodeNumNormByMatrgrp_brch(NB,NZ)+dReproNodeNumNormByMatG_brch(NB,NZ)
   ENDIF    
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   END SUBROUTINE UpdateBranchNodeNumber
 
 !----------------------------------------------------------------------------------------------------
@@ -1466,8 +1494,9 @@ module PlantPhenolMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine InitiateBranchFloral(I,J,NB,NZ,DayLensShortenChk)
-  !
-  !Description:
+  ! Description:
+  ! Set floral initiation from cumulative induction for annual-evergreen crops,
+  ! retaining legacy season/photoperiod logic for other plant types.
   implicit none
   integer, intent(in) :: I
   integer, intent(in) :: J
@@ -1479,7 +1508,10 @@ module PlantPhenolMod
   logical :: CropPhenoChk,PhotoPrdChk,PhenolCheck,PhotoLongCheck,PhotoShortCheck,AnnualFloralCheck
   real(r8) :: PPD
 
+  call PrintInfo('beg '//subname)
   associate(                                                                     &
+    FloralDevNodes_brch => plt_pheno%FloralDevNodes_brch,& !input: cumulative induction, [node equivalents], branch/PFT
+    MatureGroup_brch => plt_pheno%MatureGroup_brch,& !input: branch induction requirement, [nodes], branch/PFT
     ShootNodeNum_brch               => plt_morph%ShootNodeNum_brch              ,& !input  :shoot node number, [-]
     ZERO                            => plt_site%ZERO                            ,& !input  :threshold zero for numerical stability, [-]
     iPlantPhenolPattern_pft         => plt_pheno%iPlantPhenolPattern_pft        ,& !input  :plant growth habit: annual or perennial,[-]
@@ -1502,7 +1534,6 @@ module PlantPhenolMod
     iPlantCalendar_brch             => plt_pheno%iPlantCalendar_brch             & !output :plant growth stage, [-]
   )
 
-  call PrintInfo('beg '//subname)
   
   LeafOutChk      = Hours4Leafout_brch(NB,NZ).GE.HourReq4LeafOut_brch(NB,NZ)
   PlantDayChk     = I.GE.iDayPlanting_pft(NZ) .AND. iYearCurrent.EQ.iYearPlanting_pft(NZ) .AND. DayLenthCurrent.GT.DayLenthPrev
@@ -1513,8 +1544,13 @@ module PlantPhenolMod
   !iPlantPhenolType_pft should be set according to koppen climate zone.  
 
   CropPhenoChk      = iPlantPhenolPattern_pft(NZ).EQ.iplt_annual .AND. iPlantPhenolType_pft(NZ).EQ.iphenotyp_evgreen
-  PhenolCheck       = ((PerennialPhenoDecidChk .OR. CropPhenoChk) .AND. CanopyHeightChk .AND. DayLensShortenChk)
+  PhenolCheck       = (PerennialPhenoDecidChk .AND. CanopyHeightChk .AND. DayLensShortenChk)
+  IF(CropPhenoChk)THEN
+    AnnualFloralCheck = CheckBranchNodeState(ipltcal_InitFloral,NB,NZ,I,J) .AND. &
+      FloralDevNodes_brch(NB,NZ).GT.MatureGroup_brch(NB,NZ)
+  ELSE
   AnnualFloralCheck = (CheckBranchNodeState(ipltcal_InitFloral,NB,NZ,I,J) .AND. (LeafOutChk .OR. PlantDayChk))
+  ENDIF
   !
   IF( AnnualFloralCheck .OR. PhenolCheck)THEN
     !
@@ -1528,18 +1564,24 @@ module PlantPhenolMod
     !     iPlantCalendar_brch(ipltcal_InitFloral,=date of floral initiation
     !     VSTGX=node number on date of floral initiation
     !
-    IF(iPlantPhotoperiodType_pft(NZ).EQ.iphotop_neutral)THEN
-      PPD=0.0_r8
+    IF(CropPhenoChk)THEN
+      ! Absolute photoperiod has already weighted the accumulated induction state.
+      PhotoPrdChk=.true.
     ELSE
-      PPD=AZMAX1(CriticPhotoPeriod_pft(NZ)-DayLenthCurrent)
-      IF(iPlantPhotoperiodType_pft(NZ).EQ.iphotop_short .AND. DayLenthCurrent.GE.DayLenthPrev)PPD=0.0_r8
+      IF(iPlantPhotoperiodType_pft(NZ).EQ.iphotop_neutral)THEN
+        PPD=0.0_r8
+      ELSE
+        PPD=AZMAX1(CriticPhotoPeriod_pft(NZ)-DayLenthCurrent)
+        IF(iPlantPhotoperiodType_pft(NZ).EQ.iphotop_short .AND. DayLenthCurrent.GE.DayLenthPrev)PPD=0.0_r8
+      ENDIF
+
+      PhotoShortCheck = (iPlantPhotoperiodType_pft(NZ).EQ.iphotop_short.AND. PPD.GT.PhotoPeriodSens_pft(NZ))
+      PhotoLongCheck  = (iPlantPhotoperiodType_pft(NZ).EQ.iphotop_long .AND. PPD.LT.PhotoPeriodSens_pft(NZ))
+      PhotoPrdChk     = iPlantPhotoperiodType_pft(NZ).EQ.iphotop_neutral .OR. PhotoShortCheck .OR. PHotoLongCheck
+
     ENDIF
 
-    PhotoShortCheck = (iPlantPhotoperiodType_pft(NZ).EQ.iphotop_short.AND. PPD.GT.PhotoPeriodSens_pft(NZ))
-    PhotoLongCheck  = (iPlantPhotoperiodType_pft(NZ).EQ.iphotop_long .AND. PPD.LT.PhotoPeriodSens_pft(NZ))
-    PhotoPrdChk     = iPlantPhotoperiodType_pft(NZ).EQ.iphotop_neutral .OR. PhotoShortCheck .OR. PHotoLongCheck
-    
-    IF( PhotoPrdChk .OR. PhenolCheck)THEN
+    IF(CropPhenoChk .OR. PhotoPrdChk .OR. PhenolCheck)THEN
       iPlantCalendar_brch(ipltcal_InitFloral,NB,NZ) = I
       ShootNodeNumAtInitFloral_brch(NB,NZ)          = ShootNodeNum_brch(NB,NZ)
 
@@ -1548,8 +1590,8 @@ module PlantPhenolMod
       ENDIF
     ENDIF
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine InitiateBranchFloral
   ![tail]
 end module PlantPhenolMod
