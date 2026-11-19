@@ -297,6 +297,9 @@ add_test(NAME van_genuchten_invalid_l COMMAND VanGenuchtenTest.x invalid_l)
 set_tests_properties(van_genuchten_invalid_l PROPERTIES PASS_REGULAR_EXPRESSION "Van Genuchten l must exceed -2/m")
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+  add_test(NAME planting_thermal_inventory
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_planting_thermal_inventory.py
+      --fc ${CMAKE_Fortran_COMPILER})
   add_test(NAME boundary_drainage_shared_donor
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_boundary_drainage_budget.py
       --fc ${CMAKE_Fortran_COMPILER})
