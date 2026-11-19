@@ -324,6 +324,20 @@ target_include_directories(TillageWeightsTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
   ${CMAKE_BINARY_DIR}/f90src/Balances/)
 
+add_ecosim_executable(PondCoverTest.x PondCoverTest.F90)
+add_test(NAME pond_cover_fraction COMMAND PondCoverTest.x)
+target_include_directories(PondCoverTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Minimath/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Modelpars/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SurfPhys/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/)
+
 add_ecosim_executable(ThinLitterEnergyTest.x ThinLitterEnergyTest.F90)
 add_test(NAME thin_litter_energy_conservation COMMAND ThinLitterEnergyTest.x)
 target_include_directories(ThinLitterEnergyTest.x PRIVATE

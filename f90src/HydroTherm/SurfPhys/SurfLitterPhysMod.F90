@@ -73,6 +73,16 @@ implicit none
     FracSurfBareSoil_col(NY,NX)=exp(-0.8E-02_r8*SoilOrgM_vr(ielmc,0,NY,NX)/AREA_3D(3,0,NY,NX)) &
       *(1._r8-min(1._r8,XVLMobileWaterLitR_col(NY,NX)/max(VLWatHeldCapSurf_col(NY,NX),tiny_wat)))
   endif
+  if(ats_pond_aware .and. XVLPondATS_col(NY,NX)>0._r8 .and. &
+     VHeatCapacity1_vr(0,NY,NX).GT.VHeatCapLitRMin_col(NY,NX))then
+    ! ATS-owned pond (legacy layer): the covered area leaves the exposed soil
+    ! fraction, using the same surface-retention scale as the shared layer.
+    ! Continuous with the no-pond result as the pond volume goes to zero.
+    ! Only where litter is heat-wise significant: the covered area is handled
+    ! by the litter pathway, which needs litter mass (albedo, conductances).
+    FracSurfBareSoil_col(NY,NX)=FracSurfBareSoil_col(NY,NX) &
+      *(1._r8-min(1._r8,XVLPondATS_col(NY,NX)/max(VLWatHeldCapSurf_col(NY,NX),tiny_wat)))
+  endif
   FracSurfByLitR_col(NY,NX)=1.0_r8-FracSurfBareSoil_col(NY,NX)
   call PrintInfo('end '//subname)
   end subroutine PartLitSoilFractionM

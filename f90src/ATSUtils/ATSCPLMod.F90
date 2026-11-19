@@ -3,6 +3,7 @@ module ATSCPLMod
   ! Transfer the ATS environment and EcoSIM flux/reference pairs through the C ABI.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use EcoSIMCtrlDataType, only: ats_shared_surface_layer
+  use SurfPhysData, only: ats_pond_aware
   use SharedDataMod
   use ATSLayer0Mod, only: InstallSharedLayer0State
   use ATSEcoSIMInitMod
@@ -55,6 +56,7 @@ contains
   ecosim_pft_file_path = trim(f_string_buffer)
 
   ats_shared_surface_layer=config%shared_surface_layer
+  ats_pond_aware=config%ponded_aware
   heat_capacity = config%heat_capacity
   pressure_at_field_capacity = config%field_capacity
   pressure_at_wilting_point = config%wilting_point

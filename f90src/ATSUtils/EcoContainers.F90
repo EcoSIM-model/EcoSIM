@@ -137,6 +137,7 @@ module EcoContainers_module
      real (c_double) :: wind_speed_ref_height
      real (c_double) :: soil_surface_roughness
      logical(c_bool) :: shared_surface_layer
+     logical(c_bool) :: ponded_aware
      type (c_ptr) :: pft_file
   end type EcoConfig
 

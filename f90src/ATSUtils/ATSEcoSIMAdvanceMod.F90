@@ -470,6 +470,9 @@ implicit none
       SnowPrecThrufall_col(NY,NX) = SnoFalPrec_col(NY,NX)
       RainPrecThrufall_col(NY,NX) = RainFalPrec_col(NY,NX)
       TKSnowThrufall_col(NY,NX) = TairK_col(NY,NX)
+      ! No canopy interception: rain reaches the ground at air temperature.
+      ! Without this the rain heat is cpw*0 K (the array is only set in CanopyInterceptprecip).
+      TKRainThrufall_col(NY,NX) = TairK_col(NY,NX)
     endif
   enddo
 
@@ -482,6 +485,11 @@ implicit none
     HeatInfl2Soil(NY,NX)=0.0_r8
     Qinflx2Soil_col(NY,NX)=0.0_r8
     HeatFlx2Grnd_col(NY,NX)=0.0_r8
+    ! The ATS pond only reduces the exposed-soil cover (SurfLitterPhysMod,
+    ! PartLitSoilFractionM). Its depth is held fixed for this EcoSIM step.
+    XVLPondATS_col(NY,NX)=0._r8
+    if(ats_pond_aware .and. .not.ats_shared_surface_layer) &
+      XVLPondATS_col(NY,NX)=AZMAX1(a_POND0(NY))*column_area(NY)
     surf_e_source_dtemperature(NY)=0._r8
     surf_e_source_temperature_ref(NY)=TKSoil1_vr(NU_col(NY,NX),NY,NX)
     if(ats_shared_surface_layer)surf_e_source_temperature_ref(NY)=a_TSURF(NY)
@@ -557,6 +565,11 @@ implicit none
   !Does final update of the snow masses after the surface model is run
   do NY=1,NYS
     call SnowMassUpdate(I,J,NY,NX,Qinfl2MicPM(NY,NX),Hinfl2SoilM(NY,NX))
+    !Relayer the snowpack every hour, as standalone EcoSIM does in redist()
+    !(RedistMod), which is not called in ATS mode. Without it all snow stays in
+    !layer 1 (grown far beyond its 0.05 m reference thickness), which changes
+    !snow compaction and the snow heat budget relative to standalone EcoSIM.
+    call SnowpackLayering(I,J,NY,NX)
     if(ats_shared_surface_layer)then
       ! Retired snow is an external transfer into the ATS-owned surface store.
       Qinflx2Soil_col(NY,NX)=Qinflx2Soil_col(NY,NX)+Qinfl2MicPM(NY,NX)
