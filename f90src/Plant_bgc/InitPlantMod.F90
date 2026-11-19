@@ -642,6 +642,7 @@ module InitPlantMod
 
   integer :: K,L,M,N,NB
   real(r8) :: NumVessels
+  call PrintInfo('beg '//subname)
   associate(                                                                           &
     CanopyNonstOMConc_pft             => plt_biom%CanopyNonstOMConc_pft                 ,& !output :canopy nonstructural C+N+P concentration, [g gC-1]
     AREA3                             => plt_site%AREA3                               ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
@@ -695,6 +696,7 @@ module InitPlantMod
     LeafNumberAtFloralInit_brch       => plt_pheno%LeafNumberAtFloralInit_brch        ,& !output :leaf number at floral initiation, [-]
     StalkNodeHeight_brch              => plt_morph%StalkNodeHeight_brch               ,& !output :internode height, [m]
     MatureGroup_brch                  => plt_pheno%MatureGroup_brch                   ,& !output :plant maturity group, [-]
+    FloralDevNodes_brch => plt_pheno%FloralDevNodes_brch,& !output: floral development, [node equivalents], branch/PFT
     ShootNodeNumAtInitFloral_brch     => plt_morph%ShootNodeNumAtInitFloral_brch      ,& !output :shoot node number at floral initiation, [-]
     NodeNumNormByMatgrp_brch          => plt_pheno%NodeNumNormByMatgrp_brch           ,& !output :normalized node number during vegetative growth stages, [-]
     ShootNodeNumAtAnthesis_brch       => plt_morph%ShootNodeNumAtAnthesis_brch        ,& !output :shoot node number at anthesis, [-]
@@ -717,7 +719,6 @@ module InitPlantMod
   !
   !     PP=population (grid cell-1)
   !
-  call PrintInfo('beg '//subname)
   CanopyLeafAreaMAX_pft(NZ) = 0._R8
   plt_pheno%Days4FalseBreak_pft(NZ)  = 0
   plt_pheno%doInitPlant_pft(NZ)      = ifalse
@@ -740,6 +741,7 @@ module InitPlantMod
     plt_pheno%Prep4Literfall_brch(NB,NZ)          = ifalse
     plt_pheno%Hours4LiterfalAftMature_brch(NB,NZ) = 0
     MatureGroup_brch(NB,NZ)                       = MatureGroup_pft(NZ)
+    FloralDevNodes_brch(NB,NZ) = 0._r8
     ShootNodeNum_brch(NB,NZ)                      = ShootNodeNumAtPlanting_pft(NZ)
     ShootNodeNumAtInitFloral_brch(NB,NZ)          = ShootNodeNum_brch(NB,NZ)
     ShootNodeNumAtAnthesis_brch(NB,NZ)              = 0._r8
@@ -867,8 +869,8 @@ module InitPlantMod
   CanopyLeafArea_pft(NZ)                                  = 0._r8
   plt_biom%RootBiomCPerPlant_pft(NZ)                      = 0._r8
   CanopyStemSurfArea_pft(NZ)                              = 0._r8
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine InitPlantPhenoMorphoBio
 
 !----------------------------------------------------------------------------------------------------

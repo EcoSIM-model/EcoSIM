@@ -503,8 +503,8 @@ implicit none
   !This does the surface energy and water balance. In the case of plants
   ! it processes the precipitation and radiation already separated out in
   ! PlantCanopyRadsModel
-  surf_ground_e_dtemperature=0._r8
-  surf_layer0_fraction=0._r8
+  surf_ground_e_dtemperature = 0._r8
+  surf_layer0_fraction       = 0._r8
   if(ats_shared_surface_layer)call InstallSharedLayer0State(NYS)
   call StageSurfacePhysModel(I,J,NHW,NHE,NVN,NVS,ResistanceLitRLay)
 
@@ -515,19 +515,10 @@ implicit none
   !
   DO M=1,NPH
 
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,&
-    !  KSatReductByRainKineticEnergy,TopLayWatVol,HeatFluxAir2Soi,Qinfl2MicPM,Hinfl2SoilM)
-
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay, &
-    !KSatReductByRainKineticEnergy,TopLayWatVol_col,HeatFluxAir2Soi, &
-    !Qinfl2MicP_col,HeatInfl2Soil)
 
     call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
       TopLayWatVol_col,HeatFluxAir2Soi,dLWRaddTKsoi1,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
     
-    !call subroutine RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
-    !  TopLayWatVol_col,HeatFluxAir2Soi,Qinfl2MicP,HeatInfl2Soil,Qinfl2MacP)
-
     !sum fluxes over iterations in each column
     do NY=1, NYS
       HeatFlx2Grnd_col(NY,NX) = HeatFlx2Grnd_col(NY,NX)+HeatInfl2Soil(NY,NX)
@@ -570,12 +561,12 @@ implicit none
   ! before biological processes. Layer zero remains a read-only view of ATS.
   if(ats_shared_surface_layer)then
     do NY=1,NYS
-      TKSoil1_vr(NU_col(NY,1),NY,1)=a_TEMP(NU_col(NY,1),NY)
-      TKS_vr(NU_col(NY,1),NY,1)=a_TEMP(NU_col(NY,1),NY)
-      VLWatMicP_vr(0,NY,1)=a_WAT0(NY)
-      VLiceMicP_vr(0,NY,1)=a_ICE0(NY)
-      TKS_vr(0,NY,1)=a_TSURF(NY)
-      TKSoil1_vr(0,NY,1)=a_TSURF(NY)
+      TKSoil1_vr(NU_col(NY,1),NY,1) = a_TEMP(NU_col(NY,1),NY)
+      TKS_vr(NU_col(NY,1),NY,1)     = a_TEMP(NU_col(NY,1),NY)
+      VLWatMicP_vr(0,NY,1)          = a_WAT0(NY)
+      VLiceMicP_vr(0,NY,1)          = a_ICE0(NY)
+      TKS_vr(0,NY,1)                = a_TSURF(NY)
+      TKSoil1_vr(0,NY,1)            = a_TSURF(NY)
     enddo
     call InstallSharedLayer0State(NYS)
   endif

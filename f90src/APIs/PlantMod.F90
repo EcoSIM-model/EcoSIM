@@ -3,7 +3,7 @@ module PlantMod
   ! Coordinate canopy radiation and plant processes, preserving hourly exchanges through management.
   use data_kind_mod,     only: r8 => DAT_KIND_R8,yearIJ_type
   use grosubsMod,        only: GrowPlants
-  use PlantPhenolMod,    only: PhenologyUpdate
+  use PlantPhenolMod,    only: PreparePlantPhenology
   use UptakesMod,        only: RootWaterUptake,RootChemicalUptake
   use PlantDisturbMod,   only: PrepLandscapeGrazing
   use PlantMgmtDataType, only: NP_col, NP0_col
@@ -71,25 +71,28 @@ implicit none
 !------------------------------------------------------------------------------------------
   subroutine PreparePlantColumn(yearIJ,NY,NX)
     ! Description:
-    ! Prepare hourly plant balances, seed deposition and phenology once before
-    ! hydraulics. Supply beginning-of-hour soil water for the availability bound.
+    ! Prepare hourly balances, seed deposition and cohort eligibility before
+    ! hydraulics. Developmental progression is deferred to GrowPlants.
+    ! Supply beginning-of-hour soil water for the availability bound.
     type(yearIJ_type), intent(in) :: yearIJ ! current model year/day/hour [-]
     integer, intent(in) :: NY,NX ! column row and column indices [-]
     character(len=*), parameter :: subname='PreparePlantColumn'
     real(r8) :: SeedCDeposition_1d(JP1),PPmax_1d(JP1)
     integer :: L
+
     call PrintInfo('beg '//subname)
-    associate( &
-      WaterHistory => plt_site%VLWatMicPM_vr, & ! output: hydraulic available water [m3/cell], substep/layer
-      SoilWater => plt_soilchem%VLWatMicP_vr) ! input: staged native liquid water [m3/cell], layer
+    associate(                                    &
+      WaterHistory => plt_site%VLWatMicPM_vr    , & ! output: hydraulic available water [m3/cell], substep/layer
+      SoilWater    => plt_soilchem%VLWatMicP_vr   & ! input: staged native liquid water [m3/cell], layer
+    ) 
       call PlantAPISend(yearIJ,NY,NX)
       call EnterPlantBalance(yearIJ,NP0_col(NY,NX))
       if(yearIJ%J==1)then
-        SeedCDeposition_1d=SeedCDeposition_pft(:,NY,NX)
-        PPmax_1d=PPmax_pft(:,NY,NX)
+        SeedCDeposition_1d = SeedCDeposition_pft(:,NY,NX)
+        PPmax_1d           = PPmax_pft(:,NY,NX)
         call SeedDeposition(yearIJ%I,SeedCDeposition_1d,PPmax_1d,NP_col(NY,NX))
       endif
-      call PhenologyUpdate(yearIJ)
+      call PreparePlantPhenology(yearIJ)
       do L=1,NK_col(NY,NX)
         WaterHistory(:,L)=SoilWater(L)
       enddo

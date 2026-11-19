@@ -1,11 +1,12 @@
 module SoilHydroParaMod
   ! Description:
   ! Initialize and refresh hydraulic limits, conductivity tables and thresholds.
-  ! Ordinary-soil and litter property setup retain their separate domain rules.
+  ! Litter constitutive properties are owned separately by LitterHydraulicMod.
 
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
+  use LitterHydraulicMod, only: LitterHydroproperty
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use abortutils, only: endrun,iulog
   use EcoSiMParDataMod, only: micpar
@@ -41,7 +42,6 @@ implicit none
   ! Set false to recover upstream behavior. Not a universal soil calibration.
   public :: GetSoilHydraulicVars
   public :: SoilHydroProperty
-  public :: LitterHydroproperty
   PUBLIC :: ComputeSoilHydroPars
 
   public :: SetColdRunSoilStates
@@ -148,6 +148,11 @@ contains
   real(r8) :: VISCWL
 
   call PrintInfo('beg '//subname)
+  IF(L.EQ.0)THEN
+    call LitterHydroproperty(NY,NX,use_ecosys_drainage)
+    call PrintInfo('end '//subname)
+    return
+  ENDIF
   !gC/Mg soil
   IF(CSoilOrgM_vr(ielmc,L,NY,NX).GT.FORGC)THEN
     !organic soil
@@ -252,7 +257,7 @@ contains
   subroutine BuildSoilConductivityTable(L,NY,NX)
   ! Description:
   ! Build the 100-class conductivity cache with the selected ordinary-soil scheme.
-  ! Pond tables retain the current curve; litter has its own builder below.
+  ! Pond tables retain the current curve; layer zero is dispatched before entry.
   ! Threshold policy is applied separately after the complete table is available.
   implicit none
   integer, intent(in) :: L       ! ordinary-soil or pond layer index [-]
@@ -265,7 +270,7 @@ contains
 
   call PrintInfo('beg '//subname)
   parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
-  IF(L.EQ.0 .OR. SoilBulkDensity_vr(L,NY,NX).LE.ZERO)THEN
+  IF(SoilBulkDensity_vr(L,NY,NX).LE.ZERO)THEN
     call pond_model%conductivity_table(parameters,SatHydroCondVert_vr(L,NY,NX),SatHydroCondHrzn_vr(L,NY,NX), &
       H2OSOIK,PSISK,HydroCond_3D(:,:,L,NY,NX))
   ELSE
@@ -451,53 +456,6 @@ contains
     +AZMAX1(VLMacroPores_vr(L,NY,NX)-VLWatMacP_vr(L,NY,NX)-VLiceMacP_vr(L,NY,NX))
   call PrintInfo('end '//subname)
   end subroutine SetColdRunSoilStates
-!------------------------------------------------------------------------------------------
-  subroutine LitterHydroproperty(NY,NX)
-  ! Description:
-  ! Build litter vertical conductivity with its own porosity and zero horizontal
-  ! transport, then apply the shared threshold policy. Preserve its retention rule.
-  implicit none
-  integer, intent(in) :: NY,NX
-
-  integer  :: K,M
-  real(r8) :: XK,YK
-  real(r8) :: SUM1,SUM2
-  integer, parameter :: n100=100
-  real(r8) :: H2OSOIK(n100),PSISK(n100)
-  character(len=*), parameter :: subname='LitterHydroproperty'
-
-  call PrintInfo('beg '//subname)
-
-  IF(VGeomLayer_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
-    SoilBulkDensity_vr(0,NY,NX)=VLSoilMicPMass_vr(0,NY,NX)/VGeomLayer_vr(0,NY,NX)
-  ELSE
-    SoilBulkDensity_vr(0,NY,NX)=BulkDensLitR(micpar%k_fine_comp)
-  ENDIF
-  call ComputeSoilAirDryContent(0,NY,NX,SoilWatAirDry_vr(0,NY,NX))
-  SUM2             =0.0_r8
-  D1220: DO  K=1,n100
-    XK         = (K-1._r8)/n100
-    H2OSOIK(K) = POROS0_col(NY,NX)*(1._r8-XK)
-    call ComputePsiMCM(0,NY,NX,H2OSOIK(K),PSISK(K))
-    SUM2=SUM2+(2*K-1)/(PSISK(K)**2)
-  ENDDO D1220
-
-  D1235: DO  K=1,n100
-    SUM1  = 0.0_r8
-    XK    = (K-1._r8)/N100
-    !air-filled pore
-    YK    = (1._r8-XK)**1.33_r8
-    D1230: DO M = K, n100
-      SUM1=SUM1+(2*M+1-2*K)/(PSISK(M)**2)
-    ENDDO D1230
-    HydroCond_3D(3,K,0,NY,NX) = SatHydroCondVert_vr(0,NY,NX)*YK*SUM1/SUM2
-    HydroCond_3D(1,K,0,NY,NX) = 0.0_r8
-    HydroCond_3D(2,K,0,NY,NX) = 0.0_r8
-  ENDDO D1235
-  call UpdateHydraulicThresholds(0,NY,NX,H2OSOIK,PSISK)
-  call PrintInfo('end '//subname)
-  end subroutine LitterHydroproperty
-
 !------------------------------------------------------------------------------------------
 
   subroutine ComputeSoilHydroPars(NY,NX,NU,NM)

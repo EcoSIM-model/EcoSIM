@@ -25,6 +25,7 @@ contains
 
   module procedure ZeroPlantHistVars
   implicit none
+  this%h1D_FloralDevProgress_ptc(nptc) = 0._r8
   this%h1D_PTSHTR_ptc(nptc) = 0._r8
   this%h1D_fSnowCan_ptc(nptc) = 0._r8
   this%h1D_RootAct1stC_ptc(nptc) = 0._r8

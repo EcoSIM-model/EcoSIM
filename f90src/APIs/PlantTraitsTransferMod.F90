@@ -1,4 +1,5 @@
 module PlantTraitsTransferMod
+  ! Description:
   ! Ordered traits transfers used by PlantAPISend/PlantAPIRecv.
   use data_kind_mod,              only: r8 => DAT_KIND_R8, yearIJ_type
   use EcoSiMParDataMod,           only: micpar,            pltpar
@@ -88,10 +89,19 @@ contains
     plt_pheno%RateRefLeafAppearance_pft(NZ)      = RateRefLeafAppearance_pft(NZ,NY,NX)
     plt_pheno%TCChill4Seed_pft(NZ)           = TCChill4Seed_pft(NZ,NY,NX)
     plt_morph%rLen2WidthLeaf_pft(NZ)         = rLen2WidthLeaf_pft(NZ,NY,NX)
+    plt_morph%HypocotLeafAreaCoeff_pft(NZ) = HypocotLeafAreaCoeff_pft(NZ,NY,NX)
+    plt_pheno%RootGrowEnergyLow_pft(NZ) = RootGrowEnergyLow_pft(NZ,NY,NX)
+    plt_pheno%RootGrowEnergyHigh_pft(NZ) = RootGrowEnergyHigh_pft(NZ,NY,NX)
+    plt_pheno%CanopyGrowEnergyLow_pft(NZ) = CanopyGrowEnergyLow_pft(NZ,NY,NX)
+    plt_pheno%CanopyGrowEnergyHigh_pft(NZ) = CanopyGrowEnergyHigh_pft(NZ,NY,NX)
+    plt_pheno%LeafGrowEnergyLow_pft(NZ) = LeafGrowEnergyLow_pft(NZ,NY,NX)
+    plt_pheno%LeafGrowEnergyHigh_pft(NZ) = LeafGrowEnergyHigh_pft(NZ,NY,NX)
     plt_pheno%NonstCMinConc2InitBranch_pft(NZ)   = NonstCMinConc2InitBranch_pft(NZ,NY,NX)
     plt_morph%ShootNodeNumAtPlanting_pft(NZ) = ShootNodeNumAtPlanting_pft(NZ,NY,NX)
     plt_pheno%CriticPhotoPeriod_pft(NZ)      = CriticPhotoPeriod_pft(NZ,NY,NX)
     plt_pheno%PhotoPeriodSens_pft(NZ)        = PhotoPeriodSens_pft(NZ,NY,NX)
+    plt_pheno%FloralPhotoSens_pft(NZ) = FloralPhotoSens_pft(NZ,NY,NX)
+    plt_pheno%FloralPhotoOpt_pft(NZ) = FloralPhotoOpt_pft(NZ,NY,NX)
     plt_morph%SLA1_pft(NZ)                   = SLA1_pft(NZ,NY,NX)
     plt_morph%PetolShethLen2Mass_pft(NZ)           = PetolShethLen2Mass_pft(NZ,NY,NX)
     plt_morph%NodeLenPergC_pft(NZ)               = NodeLenPergC_pft(NZ,NY,NX)

@@ -389,7 +389,9 @@ module MicrobialDiagMod
   real(r8), intent(out) :: SOMHeterKC(1:micpar%NumOfLitrCmplxs)  !total organic C in each litter complex
   real(r8), intent(out) :: SOMAutorC
   integer :: K,N,NGL,M,MID,NE,L
+  character(len=*), parameter :: subname='sumSurfOMCK'
 
+  call PrintInfo('beg '//subname)
   SOMHeterKC = 0._r8
   SOMAutorC  = 0._r8
 
@@ -404,6 +406,9 @@ module MicrobialDiagMod
       ENDDO
     ENDDO
   enddo
+  !add autotrohpic complex to fine litter complex
+  SOMHeterKC(micpar%k_fine_comp)=SOMAutorC
+
   !live microbes
   DO K=1,micpar%NumOfLitrCmplxs
     DO  N=1,NumMicbHFunGrupsPerCmplx
@@ -431,7 +436,7 @@ module MicrobialDiagMod
       SOMHeterKC(K)=SOMHeterKC(K)+SolidOM_vr(NE,M,K,L,NY,NX)      
     ENDDO  
   ENDDO
-  
+  call PrintInfo('end '//subname)
   end subroutine sumSurfOMCK
 !------------------------------------------------------------------------------------------
 

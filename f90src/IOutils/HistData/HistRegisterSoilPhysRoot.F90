@@ -220,16 +220,16 @@ contains
     long_name='Decomposition O2 uptake in litter layer ',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_TSolidOMActC_litr_col(beg_col:end_col)
-  call hist_addfld1d(fname='SoildOM_Act_litr',units='gC/m2',avgflag='M',&
+  call hist_addfld1d(fname='SoildOM_Act_litr',units='gC/m2',avgflag='A',&
     long_name='Active solid OM in litter',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_tOMActCDens_litr_col(beg_col:end_col)
-  call hist_addfld1d(fname='tOMActC_Dens_litr',units='gC/gC',avgflag='M',&
+  call hist_addfld1d(fname='tOMActC_Dens_litr',units='gC/gC',avgflag='A',&
     long_name='Active heterotrophic microbial C density in litter',ptr_col=data1d_ptr,&
     default='inactive')
 
   data1d_ptr => this%h1D_TSolidOMActCDens_litr_col(beg_col:end_col)
-  call hist_addfld1d(fname='SoildOM_Act_Dens_litr',units='gC/gC',avgflag='M',&
+  call hist_addfld1d(fname='SoildOM_Act_Dens_litr',units='gC/gC',avgflag='A',&
     long_name='Active solid OM density in litter',ptr_col=data1d_ptr,default='inactive')
 
   data2d_ptr => this%h2D_ElectricConductivity_vr(beg_col:end_col,1:JZ)
@@ -289,7 +289,7 @@ contains
     long_name='Plant root maintenance deficit each pft (<0 deficit)',ptr_patch=data2d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_RootAbsorbAreaPP_pft(beg_ptc:end_ptc)
-  call hist_addfld1d(fname='RootAbsorbAreaPP_pft',units='m2/plant',avgflag='M',&
+  call hist_addfld1d(fname='RootAbsorbAreaPP_pft',units='m2/plant',avgflag='A',&
     long_name='Root surface area per plant for nutrient and water absorption',ptr_col=data1d_ptr)
 
   data2d_ptr => this%h2D_RootAbsorbAreaPP_pvr(beg_ptc:end_ptc,1:JZ)

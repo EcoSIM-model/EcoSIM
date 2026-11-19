@@ -328,7 +328,7 @@ module PlantNonstElmDynMod
   use PlantMathFuncMod, only : get_zero_turg_ccpolt,update_osmo_turg_pressure
   implicit none
   integer, intent(in) :: I,J,NZ
-  real(r8), intent(in):: GrothPART2LeafPetole
+  real(r8), intent(in):: GrothPART2LeafPetole !main-branch leaf + petiole allocation before remobilization and normalization, [-]
   real(r8), INTENT(IN) :: RootSinkC_vr(pltpar%jroots,JZ1)
   real(r8), intent(in) :: RootSinkC(pltpar%jroots)
   character(len=*), parameter :: subname='ShootRootElmTransfer'
@@ -546,7 +546,7 @@ module PlantNonstElmDynMod
   !     iPlantPhenolPattern_pft=growth habit:0=annual,1=perennial from PFT file
   !     iPlantCalendar_brch(ipltcal_SetSeedNumber,=end date for setting final seed number
   !     BranchSinkWeight_pft=branch sink weighting factor
-  !     GrothPART2LeafPetole=allocation to leaf+PetolSheth used to modify ShootRootNonstElmConduts_pft,in annuals
+  !     GrothPART2LeafPetole=main-branch leaf+petiole allocation before remobilization and normalization; modifies annual exchange
   !     FWOOD,FWOODN,FWOODP=C,N,P woody fraction in root:0=woody,1=non-woody
   !     FWODB=C woody fraction in branch:0=woody,1=non-woody
   !     FSNK=min ratio of branch or mycorrhizae to root for calculating C transfer
@@ -559,7 +559,7 @@ module PlantNonstElmDynMod
   ENDDO
 
   IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual)THEN
-    PTSHTR=ShootRootNonstElmConduts_pft(NZ)*GrothPART2LeafPetole**0.167_r8    !0.167=(1/6)~sqrt(length), GrothPART2LeafPetole is the main branch growth allocation to leaf+PetolSheth
+    PTSHTR=ShootRootNonstElmConduts_pft(NZ)*GrothPART2LeafPetole**0.167_r8    !ECOSYS PTRT modifier; approximately a sixth-root response
   ELSE
     PTSHTR=ShootRootNonstElmConduts_pft(NZ)
   ENDIF
@@ -660,7 +660,7 @@ module PlantNonstElmDynMod
   implicit none
   integer,  intent(in) :: I,J,NZ
   integer,  intent(in) :: BegRemoblizePlant !main-branch eligibility for root seasonal storage
-  real(r8), intent(in):: GrothPART2LeafPetole  !rate modifier for root-shoot nonstrucal material exchange 
+  real(r8), intent(in):: GrothPART2LeafPetole  !main-branch leaf + petiole allocation before remobilization and normalization, [-]
   real(r8), INTENT(IN) :: RootSinkC_vr(pltpar%jroots,JZ1)
   real(r8), intent(in) :: RootSinkC(pltpar%jroots)
   real(r8) :: massE_beg(NumPlantChemElms)

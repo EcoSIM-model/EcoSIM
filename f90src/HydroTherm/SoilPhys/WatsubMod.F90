@@ -10,7 +10,7 @@ module WatsubMod
   use data_const_mod,    only: GravAcceleration=>DAT_CONST_G
   use abortutils,        only: endrun, print_info, iulog
   use ElmIDMod,          only: iWestEastDirection,          iNorthSouthDirection, iVerticalDirection
-  use SurfPhysData,      only: InitSurfPhysData,            DestructSurfPhysData
+  use SurfPhysData,      only: InitSurfPhysData,DestructSurfPhysData,IceVaporMicPM_vr
   use EcosysWarmingMod,  only: check_warming_dates,         is_warming_layerL,    apply_soil_cable_warming
   use PlantDataRateType, only: TWaterPlantRoot2SoilPrev_vr,THeatPlantRoot2SoilPrev_vr, &
     TWaterPlantRoot2Soil_vr,THeatLossRoot2Soil_vr
@@ -996,8 +996,11 @@ module WatsubMod
   D95951: DO NX=NHW,NHE                !from west to east
     D95901: DO NY=NVN,NVS              !from north to south
       HeatFlx2Grnd_col(NY,NX) = HeatFlx2Grnd_col(NY,NX)+HeatInfl2Soil(NY,NX)
-      Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX)
-      Qinflx2SoilM_col(NY,NX) = Qinflx2SoilM_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX)
+      ! The mass ledger includes direct ice exchange; hydraulic faces remain liquid-only.
+      Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX) &
+        +IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)
+      Qinflx2SoilM_col(NY,NX) = Qinflx2SoilM_col(NY,NX)+Qinfl2MicP_col(NY,NX)+Qinfl2MacP_col(NY,NX) &
+        +IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)
 
       D95851: DO L=NUM_col(NY,NX),NL_col(NY,NX) !from top to bottom
 
@@ -1123,6 +1126,44 @@ module WatsubMod
   end subroutine Summarize3DFlowM
 !------------------------------------------------------------------------------------------
 
+  subroutine RemainingLiquidAfterFlows(L,NY,NX,MicPWater,MacPWater)
+  ! Description:
+  ! Return liquid remaining after accepted internal and external face flows.
+  ! Share the donor budget across outlets before computing exported heat.
+  implicit none
+  integer, intent(in) :: L,NY,NX               ! active soil layer and column indices [-]
+  real(r8), intent(out) :: MicPWater,MacPWater ! remaining liquid by pore domain [m3/cell]
+  integer :: N,TX,TY,TL,LL,first_face,last_face
+  character(len=*), parameter :: subname='RemainingLiquidAfterFlows'
+
+  call PrintInfo('beg '//subname)
+  MicPWater=VLWatMicP1_vr(L,NY,NX)
+  MacPWater=VLWatMacP1_vr(L,NY,NX)
+  do N=FlowDirIndicator_col(NY,NX),iVerticalDirection
+    TX=NX; TY=NY; TL=L
+    if(N==iWestEastDirection)TX=NX+1
+    if(N==iNorthSouthDirection)TY=NY+1
+    if(N==iVerticalDirection)then
+      TL=L+1
+      do LL=L+1,NL_col(NY,NX)
+        if(VLSoilPoreMicP_vr(LL,NY,NX)<=ZEROS2(NY,NX))cycle
+        TL=LL
+        exit
+      enddo
+    endif
+    call SoilFaceIncomingRange(N,L,NY,NX,first_face,last_face)
+
+    MicPWater=MicPWater+sum(WaterFlow2Micpt_3D(N,first_face:last_face,NY,NX)) &
+      -WaterFlow2Micpt_3D(N,SoilFaceSlot(N,L,TL),TY,TX)
+    MacPWater=MacPWater+sum(WaterFlow2Macpt_3D(N,first_face:last_face,NY,NX)) &
+      -WaterFlow2Macpt_3D(N,SoilFaceSlot(N,L,TL),TY,TX)
+  enddo
+  MicPWater = MAX(0._r8,MicPWater)
+  MacPWater = MAX(0._r8,MacPWater)
+  call PrintInfo('end '//subname)
+  end subroutine RemainingLiquidAfterFlows
+!------------------------------------------------------------------------------------------
+
   subroutine VertBoundaryDrainM(I,J,N,N1,N2,N3,M4,M5,M6,RainEkReducedKsat,XN,RechargDist2WTBL,Recharg2WTBLScal)    
   !
   !Drainage across the lateral or bottom boundaries.      
@@ -1138,11 +1179,12 @@ module WatsubMod
 
   character(len=*), parameter :: subname='VertBoundaryDrainM'
   real(r8) :: THETA1,HydcondSrc,RechargRate
-  real(r8) :: watflx,heatflx,HydGrad,VOLWZ
+  real(r8) :: watflx,heatflx,HydGrad,VOLWZ,MicPWater,MacPWater
   integer :: K1 !saturation index, saturate=1
 !
 
   call PrintInfo('beg '//subname)
+  call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
 ! IDWaterTable=water table flag
 
   RechargRate=Recharg2WTBLScal*dts_HeatWatTP*RechargDist2WTBL
@@ -1161,11 +1203,11 @@ module WatsubMod
   !x-section area scaled hydraulic gradient, HydGrad > 0, when XN=-1, ES; HydGrad < 0, when XN=1, WN
   HydGrad=XN*mGravAccelerat*(-ABS(SLOPE_col(N,N2,N1)))*AREA_3D(3,N3,N2,N1)
 
-  VOLWZ=AZMAX1(VLWatMicP1_vr(N3,N2,N1)*dts_wat) 
+  VOLWZ=MIN(MicPWater,AZMAX1(VLWatMicP1_vr(N3,N2,N1)*dts_wat))
 
   WaterFlow2Micpt_3D(N,M6,M5,M4)=AZERO(AMIN1(VOLWZ, AMAX1(-VOLWZ,RechargRate*HydGrad*HydcondSrc)))
 
-  VOLWZ=AZMAX1(VLWatMacP1_vr(N3,N2,N1)*dts_wat) 
+  VOLWZ=MIN(MacPWater,AZMAX1(VLWatMacP1_vr(N3,N2,N1)*dts_wat))
   WaterFlow2MicptX_3D(N,M6,M5,M4) = WaterFlow2Micpt_3D(N,M6,M5,M4)  
   WaterFlow2Macpt_3D(N,M6,M5,M4)  = AZERO(AMIN1(VOLWZ,AMAX1(-VOLWZ,RechargRate*HydGrad*HydroCondMacP1_vr(N3,N2,N1))))
     
@@ -1251,7 +1293,7 @@ module WatsubMod
           TWaterPlantRoot2SoilPrev_vr(L,NY,NX)=TWaterPlantRoot2SoilPrev_vr(L,NY,NX)+RootWaterM
           THeatPlantRoot2SoilPrev_vr(L,NY,NX)=THeatPlantRoot2SoilPrev_vr(L,NY,NX)+RootHeatM
 
-          VLiceMicP1_vr(L,NY,NX)  = VLiceMicP1_vr(L,NY,NX)-TMLiceThawedMicP_vr(L,NY,NX)/DENSICE
+          VLiceMicP1_vr(L,NY,NX)  = VLiceMicP1_vr(L,NY,NX)+(IceVaporMicPM_vr(L,NY,NX)-TMLiceThawedMicP_vr(L,NY,NX))/DENSICE
           
           VLWatMacP1_vr(L,NY,NX) = VLWatMacP1_vr(L,NY,NX)+WatNetFlow2Macpt_3DM_vr(L,NY,NX)-FWatExMacP2MicPiM_vr(L,NY,NX) &
             +TMLiceThawedMacP_vr(L,NY,NX)
@@ -2301,6 +2343,7 @@ module WatsubMod
   real(r8) :: PSISWT,PSISWTH
   real(r8) :: watflx, heatflx
   real(r8) :: outlet_theta,outlet_conductivity
+  real(r8) :: MicPWater,MacPWater
   integer :: outlet_k
   
   character(len=2), parameter :: direcs(2)=(/'ew','ns'/)
@@ -2356,6 +2399,8 @@ module WatsubMod
       FLWT = 0._r8
     endif
 
+    call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
+    FLWT=MAX(FLWT,-MicPWater)
     watflx                          = XN*FLWT
     heatflx                         = cpw*TKSoil1_vr(N3,N2,N1)*watflx
     WaterFlow2Micpt_3D(N,M6,M5,M4)  = WaterFlow2Micpt_3D(N,M6,M5,M4)+watflx
@@ -2406,6 +2451,8 @@ module WatsubMod
     MacPoreDischarg=AMAX1(FLWTH,AZMIN1(-(VLWatMacP1_vr(N3,N2,N1)*dts_wat &
       +WaterFlow2Macpt_3D(3,N3,N2,N1)-WaterFlow2Macpt_3D(3,N3+1,N2,N1))))
 
+    call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
+    MacPoreDischarg=MAX(MacPoreDischarg,-MacPWater)
     watflx  = XN*MacPoreDischarg
     heatflx = cpw*TKSoil1_vr(N3,N2,N1)*watflx
 
@@ -2545,6 +2592,7 @@ module WatsubMod
   real(r8) :: VLHeatCapacityAX !
   real(r8) :: TK1App           !apparent temperature before freeze/thaw
   real(r8) :: MacPIceHeatFlxFrezPt,MacPIceHeatFlxFrez
+  real(r8) :: IceVolumePending ! ice after accepted atmospheric vapor, before freeze/thaw [m3/cell]
   real(r8) :: ENGY1
   real(r8) :: MicPIceHeatFlxFrez   !actual latent heat from micropore freeze-thaw
   real(r8) :: MicPIceHeatFlxFrezPt !potential heat flux supporting micropore freeze-thaw
@@ -2578,12 +2626,13 @@ module WatsubMod
   endif
   PSISMX          = PSISoilMatricPtmp_vr(N3,N2,N1)+PSISoilOsmotic_vr(N3,N2,N1)
   
+  IceVolumePending=MAX(0._r8,VLiceMicP1_vr(N3,N2,N1)+IceVaporMicPM_vr(N3,N2,N1)/DENSICE)
   TFREEZ=get_Tfrez(PSISMX)  
   !obtain the potential water
   VLWatMicP1X     = VLWatMicP1_vr(N3,N2,N1)+WatNetFlow2MicP_3DM_vr(N3,N2,N1)+FWatExMacP2MicPiM_vr(N3,N2,N1)+FWatIrrigate2MicP1_vr(N3,N2,N1)
   VLWatMacP1X     = VLWatMacP1_vr(N3,N2,N1)+WatNetFlow2Macpt_3DM_vr(N3,N2,N1)-FWatExMacP2MicPiM_vr(N3,N2,N1)
   ENGY1           = VHeatCapacity1_vr(N3,N2,N1)*TKSoil1_vr(N3,N2,N1)
-  VLHeatCapacityX = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*(VLWatMicP1X+VLWatMacP1X)+cpi*(VLiceMicP1_vr(N3,N2,N1)+VLiceMacP1_vr(N3,N2,N1))
+  VLHeatCapacityX = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*(VLWatMicP1X+VLWatMacP1X)+cpi*(IceVolumePending+VLiceMacP1_vr(N3,N2,N1))
 
   IF(VLHeatCapacityX.GT.ZEROS(NY,NX))THEN
     VLHeatCapacityX=VLHeatCapacityX+dcpo
@@ -2618,15 +2667,15 @@ module WatsubMod
 
     !freeze-thaw in micropore
     IF((TK1App.LT.TFREEZ .AND. VLWatMicP1_vr(N3,N2,N1).GT.ZERO*VGeomLayer_vr(N3,N2,N1)) &
-      .OR.(TK1App.GT.TFREEZ .AND. VLiceMicP1_vr(N3,N2,N1).GT.ZERO*VGeomLayer_vr(N3,N2,N1)))THEN
+      .OR.(TK1App.GT.TFREEZ .AND. IceVolumePending.GT.ZERO*VGeomLayer_vr(N3,N2,N1)))THEN
       
-      VLHeatCapacityAX     = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*VLWatMicP1X+cpi*VLiceMicP1_vr(N3,N2,N1)
+      VLHeatCapacityAX     = VHeatCapSolidSoil_vr(N3,N2,N1)+cpw*VLWatMicP1X+cpi*IceVolumePending
       if(VLHeatCapacityAX>0._r8)VLHeatCapacityAX=VLHeatCapacityAX+dcpo
       MicPIceHeatFlxFrezPt = VLHeatCapacityAX*(TFREEZ-TK1App)/((1.0_r8+6.2913E-03_r8*(TFREEZ-TFice)))*dts_wat
 
       !fusion energy absorb (<0) in thaw
       IF(MicPIceHeatFlxFrezPt.LT.0.0_r8)THEN
-        MicPIceHeatFlxFrez=AMAX1(-LtHeatIceMelt*DENSICE*VLiceMicP1_vr(N3,N2,N1)*dts_wat,MicPIceHeatFlxFrezPt)
+        MicPIceHeatFlxFrez=AMAX1(-LtHeatIceMelt*DENSICE*IceVolumePending*dts_wat,MicPIceHeatFlxFrezPt)
       !fusion energy release (>0) in freeze
       ELSE
         MicPIceHeatFlxFrez=AMIN1(LtHeatIceMelt*VLWatMicP1X*dts_wat,MicPIceHeatFlxFrezPt)

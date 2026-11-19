@@ -1,0 +1,745 @@
+netcdf sorghum_pftpar_20241206 {
+dimensions:
+	npfts = UNLIMITED ; // (1 currently)
+	JLI = 4 ;
+	nchars1 = 10 ;
+	nchars2 = 4 ;
+	nkopenclms = 31 ;
+	nchars3 = 40 ;
+	nchars4 = 2 ;
+	nchars5 = 3 ;
+	nchars6 = 64 ;
+	npft = 32 ;
+variables:
+	byte ICTYP(npfts) ;
+		ICTYP:long_name = "photosynthesis type" ;
+		ICTYP:units = "none" ;
+		ICTYP:flags = "C3 or C4" ;
+	byte IGTYP(npfts) ;
+		IGTYP:long_name = "root profile" ;
+		IGTYP:units = "none" ;
+		IGTYP:flags = "0=shallow (eg bryophytes),1=intermediate(eg herbs),2=deep (eg trees)" ;
+	byte ISTYP(npfts) ;
+		ISTYP:long_name = "growth habit" ;
+		ISTYP:units = "none" ;
+		ISTYP:flags = "0=annual,1=perennial" ;
+	byte IDTYP(npfts) ;
+		IDTYP:long_name = "growth habit" ;
+		IDTYP:units = "none" ;
+		IDTYP:flags = "0=determinate,1=indetermimate" ;
+	byte INTYP(npfts) ;
+		INTYP:long_name = "N2 fixation" ;
+		INTYP:units = "none" ;
+		INTYP:flags = "1,2,3=rapid to slow root symbiosis (e.g.legumes),4,5,6=rapid to slow canopy symbiosis (e.g. cyanobacteria)" ;
+	byte IWTYP(npfts) ;
+		IWTYP:long_name = "phenology type" ;
+		IWTYP:units = "none" ;
+		IWTYP:flags = "0=evergreen,1=cold deciduous,2=drought deciduous,3=1+2" ;
+	byte IPTYP(npfts) ;
+		IPTYP:long_name = "photoperiod type" ;
+		IPTYP:units = "none" ;
+		IPTYP:flags = "0=day neutral,1=short day,2=long day" ;
+	byte IBTYP(npfts) ;
+		IBTYP:long_name = "turnover of aboveground biomass" ;
+		IBTYP:units = "none" ;
+		IBTYP:flags = "0,1=rapid(fully deciduous),2=very slow(needle evergreen),3=(broadleaf evergreen),4=slow(semi-deciduous),5=(semi-evergreen)" ;
+	byte IRTYP(npfts) ;
+		IRTYP:long_name = "storage organ" ;
+		IRTYP:units = "none" ;
+		IRTYP:flags = "0=above ground,1=below ground" ;
+	byte MY(npfts) ;
+		MY:long_name = "mycorrhizal" ;
+		MY:units = "none" ;
+		MY:flags = "1=no,2=yes" ;
+	float ZTYPI(npfts) ;
+		ZTYPI:long_name = "thermal adaptation zone" ;
+		ZTYPI:units = "none" ;
+		ZTYPI:flags = "1=arctic,boreal,2=cool temperate" ;
+	float VCMX(npfts) ;
+		VCMX:long_name = "specific C3 rubisco carboxylase" ;
+		VCMX:units = "umol C g-1 s-1" ;
+	float VOMX(npfts) ;
+		VOMX:long_name = "specific rubisco oxygenase activity" ;
+		VOMX:units = "umol O g-1 s-1" ;
+	float VCMX4(npfts) ;
+		VCMX4:long_name = "specific PEP carboxylase activity" ;
+		VCMX4:units = "umol g-1 s-1" ;
+	float XKCO2(npfts) ;
+		XKCO2:long_name = "Km for VCMX" ;
+		XKCO2:units = "uM" ;
+	float XKO2(npfts) ;
+		XKO2:long_name = "Km for VOMX" ;
+		XKO2:units = "uM" ;
+	float XKCO24(npfts) ;
+		XKCO24:long_name = "Km for VCMX4" ;
+		XKCO24:units = "uM" ;
+	float RUBP(npfts) ;
+		RUBP:long_name = "fraction of leaf protein in rubisco" ;
+		RUBP:units = "none" ;
+	float PEPC(npfts) ;
+		PEPC:long_name = "fraction of leaf protein in PEP carboxylase" ;
+		PEPC:units = "none" ;
+	float ETMX(npfts) ;
+		ETMX:long_name = "specific chlorophyll activity" ;
+		ETMX:units = "umol e- g-1 s-1" ;
+	float CHL(npfts) ;
+		CHL:long_name = "fraction of leaf protein in mesophyll(C3) chlorophyll" ;
+		CHL:units = "none" ;
+	float CHL4(npfts) ;
+		CHL4:long_name = "fraction of leaf protein in bundle sheath(C4) chlorophyll" ;
+		CHL4:units = "none" ;
+	float FCO2(npfts) ;
+		FCO2:long_name = "intercellular" ;
+		FCO2:units = "none" ;
+		FCO2:flags = "atmospheric CO2 concentration ratio" ;
+	float ALBR(npfts) ;
+		ALBR:long_name = "leaf SW albedo" ;
+		ALBR:units = "none" ;
+	float ALBP(npfts) ;
+		ALBP:long_name = "leaf PAR albedo" ;
+		ALBP:units = "none" ;
+	float TAUR(npfts) ;
+		TAUR:long_name = "leaf SW transmission" ;
+		TAUR:units = "none" ;
+	float TAUP(npfts) ;
+		TAUP:long_name = "leaf PAR transmission" ;
+		TAUP:units = "none" ;
+	float XRNI(npfts) ;
+		XRNI:long_name = "rate of node initiation at 25oC" ;
+		XRNI:units = "h-1" ;
+	float XRLA(npfts) ;
+		XRLA:long_name = "rate of leaf appearance at 25oC" ;
+		XRLA:units = "h-1" ;
+	float CTC(npfts) ;
+		CTC:long_name = "chilling temperature for CO2 fixation, seed loss" ;
+		CTC:units = "oC" ;
+	float VRNLI(npfts) ;
+		VRNLI:long_name = "hour requirement for spring leafout" ;
+		VRNLI:units = "h" ;
+	float VRNXI(npfts) ;
+		VRNXI:long_name = "hour requirement for autumn leafoff" ;
+		VRNXI:units = "h" ;
+	float WDLF(npfts) ;
+		WDLF:long_name = "leaf length vs width ratio" ;
+		WDLF:units = "none" ;
+	float PB(npfts) ;
+		PB:long_name = "nonstructural C concentration needed for branching" ;
+		PB:units = "gC gC-1" ;
+	float GROUPX(npfts) ;
+		GROUPX:long_name = "initial plant maturity group, aka minimum number of vegetative nodes initiated before floral" ;
+		GROUPX:units = "none" ;
+	float XTLI(npfts) ;
+		XTLI:long_name = "node number in seed at planting" ;
+		XTLI:units = "none" ;
+	float XDL(npfts) ;
+		XDL:long_name = "critical daylength for phenological progress" ;
+		XDL:units = "h" ;
+	float XPPD(npfts) ;
+		XPPD:long_name = "photoperiod sensitivity, i.e. difference between current and critical daylengths used to calculate  phenological progress" ;
+		XPPD:units = "node h-1" ;
+	float SLA1(npfts) ;
+		SLA1:long_name = "growth in leaf area vs mass" ;
+		SLA1:units = "m2 gC-1" ;
+	float SSL1(npfts) ;
+		SSL1:long_name = "growth in petiole length vs mass" ;
+		SSL1:units = "m gC-1" ;
+	float SNL1(npfts) ;
+		SNL1:long_name = "growth in internode stalk length vs mass" ;
+		SNL1:units = "m gC-1" ;
+	float CLASS(npfts, JLI) ;
+		CLASS:long_name = "fraction of leaf area in 0-22.5,45,67.5,90o inclination classes" ;
+		CLASS:units = "none" ;
+	float CFI(npfts) ;
+		CFI:long_name = "initial clumping factor" ;
+		CFI:units = "none" ;
+	float ANGBR(npfts) ;
+		ANGBR:long_name = "stem angle from horizontal" ;
+		ANGBR:units = "degree" ;
+	float ANGSH(npfts) ;
+		ANGSH:long_name = "petiole angle from horizontal" ;
+		ANGSH:units = "degree" ;
+	float STMX(npfts) ;
+		STMX:long_name = "maximum potential seed mumber from pre-anthesis stalk growth" ;
+		STMX:units = "none" ;
+	float SDMX(npfts) ;
+		SDMX:long_name = "maximum seed number per STMX" ;
+		SDMX:units = "none" ;
+	float GRMX(npfts) ;
+		GRMX:long_name = "maximum seed size per SDMX" ;
+		GRMX:units = "gC" ;
+	float GRDM(npfts) ;
+		GRDM:long_name = "seed size at planting" ;
+		GRDM:units = "gC" ;
+	float GFILL(npfts) ;
+		GFILL:long_name = "grain filling rate at 25 oC" ;
+		GFILL:units = "gC seed-1 h-1" ;
+	float WTSTDI(npfts) ;
+		WTSTDI:long_name = "mass of dead standing biomass at planting" ;
+		WTSTDI:units = "gC m-2" ;
+	float RRAD1M(npfts) ;
+		RRAD1M:long_name = "radius of primary roots" ;
+		RRAD1M:units = "m" ;
+	float RRAD2M(npfts) ;
+		RRAD2M:long_name = "radius of secondary roots" ;
+		RRAD2M:units = "m" ;
+	float PORT(npfts) ;
+		PORT:long_name = "root porosity" ;
+		PORT:units = "m3 m-3" ;
+	float PR(npfts) ;
+		PR:long_name = "nonstructural C concentration needed for root branching" ;
+		PR:units = "gC gC-1" ;
+	float RSRR(npfts) ;
+		RSRR:long_name = "radial root resistivity" ;
+		RSRR:units = "m2 MPa-1 h-1" ;
+	float RSRA(npfts) ;
+		RSRA:long_name = "axial root resistivity" ;
+		RSRA:units = "m2 MPa-1 h-1" ;
+	float PTSHT(npfts) ;
+		PTSHT:long_name = "rate constant for equilibrating shoot-root nonstructural C concentration" ;
+		PTSHT:units = "h-1" ;
+	float RTFQ(npfts) ;
+		RTFQ:long_name = "root branching frequency" ;
+		RTFQ:units = "m-1" ;
+	float UPMXZH(npfts) ;
+		UPMXZH:long_name = "NH4 max uptake" ;
+		UPMXZH:units = "g m-2 h-1" ;
+	float UPKMZH(npfts) ;
+		UPKMZH:long_name = "NH4 uptake Km" ;
+		UPKMZH:units = "uM" ;
+	float UPMNZH(npfts) ;
+		UPMNZH:long_name = "NH4 uptake minimum conconcentration" ;
+		UPMNZH:units = "uM" ;
+	float UPMXZO(npfts) ;
+		UPMXZO:long_name = "NO3 max uptake" ;
+		UPMXZO:units = "g m-2 h-1" ;
+	float UPKMZO(npfts) ;
+		UPKMZO:long_name = "NO3 uptake Km" ;
+		UPKMZO:units = "uM" ;
+	float UPMNZO(npfts) ;
+		UPMNZO:long_name = "NO3 uptake minimum conconcentration" ;
+		UPMNZO:units = "uM" ;
+	float UPMXPO(npfts) ;
+		UPMXPO:long_name = "H2PO4 max uptake" ;
+		UPMXPO:units = "gP m-2 h-1" ;
+	float UPKMPO(npfts) ;
+		UPKMPO:long_name = "H2PO4 uptake Km" ;
+		UPKMPO:units = "uM" ;
+	float UPMNPO(npfts) ;
+		UPMNPO:long_name = "H2PO4 uptake minimum conconcentration" ;
+		UPMNPO:units = "uM" ;
+	float OSMO(npfts) ;
+		OSMO:long_name = "leaf osmotic potential at zero leaf water potential" ;
+		OSMO:units = "MPa" ;
+	float RCS(npfts) ;
+		RCS:long_name = "shape parameter for stomatal resistance vs leaf turgor potential" ;
+		RCS:units = "none" ;
+	float RSMX(npfts) ;
+		RSMX:long_name = "cuticular resistance" ;
+		RSMX:units = "s m-1" ;
+	float DMLF(npfts) ;
+		DMLF:long_name = "leaf dry matter C production vs nonstructural C consumption" ;
+		DMLF:units = "gC gC-1" ;
+	float DMSHE(npfts) ;
+		DMSHE:long_name = "petiole dry matter C production vs nonstructural C consumption" ;
+		DMSHE:units = "gC gC-1" ;
+	float DMSTK(npfts) ;
+		DMSTK:long_name = "stalk dry matter C production vs nonstructural C consumption" ;
+		DMSTK:units = "gC gC-1" ;
+	float DMRSV(npfts) ;
+		DMRSV:long_name = "stalk reserve C production vs nonstructural C consumption" ;
+		DMRSV:units = "gC gC-1)" ;
+	float DMHSK(npfts) ;
+		DMHSK:long_name = "husk dry matter C production vs nonstructural Cconsumption" ;
+		DMHSK:units = "gC gC-1" ;
+	float DMEAR(npfts) ;
+		DMEAR:long_name = "ear dry matter C production vs nonstructural Cconsumption" ;
+		DMEAR:units = "gC gC-1" ;
+	float DMGR(npfts) ;
+		DMGR:long_name = "grain C production vs nonstructural C consumption" ;
+		DMGR:units = "gC gC-1" ;
+	float DMRT(npfts) ;
+		DMRT:long_name = "root dry matter C production vs nonstructural C consumption" ;
+		DMRT:units = "gC gC-1" ;
+	float DMND(npfts) ;
+		DMND:long_name = "nodule bacteria in root nodule,canopy dry matter C production vs nonstructural C consumption" ;
+		DMND:units = "gC gC-1" ;
+	float CNLF(npfts) ;
+		CNLF:long_name = "NC ratio in plant leaves" ;
+		CNLF:units = "gN gC-1" ;
+	float CNSHE(npfts) ;
+		CNSHE:long_name = "NC ratio in plant petiole" ;
+		CNSHE:units = "gN gC-1" ;
+	float CNSTK(npfts) ;
+		CNSTK:long_name = "NC ratio in plant stalk" ;
+		CNSTK:units = "gN gC-1" ;
+	float CNRSV(npfts) ;
+		CNRSV:long_name = "NC ratio in plant stalk reserve" ;
+		CNRSV:units = "gN gC-1" ;
+	float CNHSK(npfts) ;
+		CNHSK:long_name = "NC ratio in plant husk" ;
+		CNHSK:units = "gN gC-1" ;
+	float CNEAR(npfts) ;
+		CNEAR:long_name = "NC ratio in plant ear" ;
+		CNEAR:units = "gN gC-1" ;
+	float CNGR(npfts) ;
+		CNGR:long_name = "NC ratio in plant grain" ;
+		CNGR:units = "gN gC-1" ;
+	float CNRT(npfts) ;
+		CNRT:long_name = "NC ratio in plant root" ;
+		CNRT:units = "gN gC-1" ;
+	float CNND(npfts) ;
+		CNND:long_name = "NC ratio in plant nodule" ;
+		CNND:units = "gN gC-1" ;
+	float CPLF(npfts) ;
+		CPLF:long_name = "PC ratio in plant leaves" ;
+		CPLF:units = "gP gC-1" ;
+	float CPSHE(npfts) ;
+		CPSHE:long_name = "PC ratio in plant petiole" ;
+		CPSHE:units = "gP gC-1" ;
+	float CPSTK(npfts) ;
+		CPSTK:long_name = "PC ratio in plant stalk" ;
+		CPSTK:units = "gP gC-1" ;
+	float CPRSV(npfts) ;
+		CPRSV:long_name = "PC ratio in plant stalk reserve" ;
+		CPRSV:units = "gP gC-1" ;
+	float CPHSK(npfts) ;
+		CPHSK:long_name = "PC ratio in plant husk" ;
+		CPHSK:units = "gP gC-1" ;
+	float CPEAR(npfts) ;
+		CPEAR:long_name = "PC ratio in plant ear" ;
+		CPEAR:units = "gP gC-1" ;
+	float CPGR(npfts) ;
+		CPGR:long_name = "PC ratio in plant grain" ;
+		CPGR:units = "gP gC-1" ;
+	float CPRT(npfts) ;
+		CPRT:long_name = "PC ratio in plant root" ;
+		CPRT:units = "gP gC-1" ;
+	float CPND(npfts) ;
+		CPND:long_name = "PC ratio in plant nodule" ;
+		CPND:units = "gP gC-1" ;
+	char pfts(npfts, nchars1) ;
+	char pfts_short(npft, nchars2) ;
+	char pfts_long(npft, nchars3) ;
+	char koppen_clim_no(nkopenclms, nchars4) ;
+	char koppen_clim_short(nkopenclms, nchars5) ;
+	char koppen_clim_long(nkopenclms, nchars6) ;
+	double RG_ELOW(npfts) ;
+		RG_ELOW:long_name = "Root growth low-temperature inactivation energy" ;
+		RG_ELOW:units = "J mol-1" ;
+		RG_ELOW:category = "thermal properties" ;
+		RG_ELOW:default_value = 197500. ;
+		RG_ELOW:comment = "Independent PFT trait; legacy model value retained as the default." ;
+	double RG_EHIGH(npfts) ;
+		RG_EHIGH:long_name = "Root growth high-temperature inactivation energy" ;
+		RG_EHIGH:units = "J mol-1" ;
+		RG_EHIGH:category = "thermal properties" ;
+		RG_EHIGH:default_value = 222500. ;
+		RG_EHIGH:comment = "Independent PFT trait; legacy model value retained as the default." ;
+	double CG_ELOW(npfts) ;
+		CG_ELOW:long_name = "Canopy growth low-temperature inactivation energy" ;
+		CG_ELOW:units = "J mol-1" ;
+		CG_ELOW:category = "thermal properties" ;
+		CG_ELOW:default_value = 197500. ;
+		CG_ELOW:comment = "Independent PFT trait; legacy model value retained as the default." ;
+	double CG_EHIGH(npfts) ;
+		CG_EHIGH:long_name = "Canopy growth high-temperature inactivation energy" ;
+		CG_EHIGH:units = "J mol-1" ;
+		CG_EHIGH:category = "thermal properties" ;
+		CG_EHIGH:default_value = 222500. ;
+		CG_EHIGH:comment = "Independent PFT trait; legacy model value retained as the default." ;
+	double LG_ELOW(npfts) ;
+		LG_ELOW:long_name = "Leaf/node phenology low-temperature inactivation energy" ;
+		LG_ELOW:units = "J mol-1" ;
+		LG_ELOW:category = "thermal properties" ;
+		LG_ELOW:default_value = 197500. ;
+		LG_ELOW:comment = "Independent PFT trait; legacy model value retained as the default." ;
+	double LG_EHIGH(npfts) ;
+		LG_EHIGH:long_name = "Leaf/node phenology high-temperature inactivation energy" ;
+		LG_EHIGH:units = "J mol-1" ;
+		LG_EHIGH:category = "thermal properties" ;
+		LG_EHIGH:default_value = 218500. ;
+		LG_EHIGH:comment = "Independent PFT trait; legacy model value retained as the default." ;
+
+// global attributes:
+		:description = "plant trait parameterization for ecosim created on 2024/12/06/09:59:23" ;
+data:
+
+ ICTYP = 4 ;
+
+ IGTYP = 1 ;
+
+ ISTYP = 0 ;
+
+ IDTYP = 0 ;
+
+ INTYP = 0 ;
+
+ IWTYP = 0 ;
+
+ IPTYP = 2 ;
+
+ IBTYP = 0 ;
+
+ IRTYP = 0 ;
+
+ MY = 2 ;
+
+ ZTYPI = 3.5 ;
+
+ VCMX = 90 ;
+
+ VOMX = 15 ;
+
+ VCMX4 = 180 ;
+
+ XKCO2 = 30 ;
+
+ XKO2 = 810 ;
+
+ XKCO24 = 3 ;
+
+ RUBP = 0.0500000007 ;
+
+ PEPC = 0.0500000007 ;
+
+ ETMX = 405 ;
+
+ CHL = 0.0500000007 ;
+
+ CHL4 = 0.0500000007 ;
+
+ FCO2 = 0.449999988 ;
+
+ ALBR = 0.200000003 ;
+
+ ALBP = 0.075000003 ;
+
+ TAUR = 0.200000003 ;
+
+ TAUP = 0.075000003 ;
+
+ XRNI = 0.0250000004 ;
+
+ XRLA = 0.0149999997 ;
+
+ CTC = 0 ;
+
+ VRNLI = 0 ;
+
+ VRNXI = 0 ;
+
+ WDLF = 12.5 ;
+
+ PB = 0.100000001 ;
+
+ GROUPX = 14 ;
+
+ XTLI = 5 ;
+
+ XDL = -1 ;
+
+ XPPD = 0.25 ;
+
+ SLA1 = 0.0299999993 ;
+
+ SSL1 = 0.300000012 ;
+
+ SNL1 = 0.300000012 ;
+
+ CLASS =
+  0, 0, 0.5, 0.5 ;
+
+ CFI = 0.899999976 ;
+
+ ANGBR = 90 ;
+
+ ANGSH = 90 ;
+
+ STMX = 12 ;
+
+ SDMX = 6 ;
+
+ GRMX = 0.0399999991 ;
+
+ GRDM = 0.0399999991 ;
+
+ GFILL = 4.99999987e-05 ;
+
+ WTSTDI = 0 ;
+
+ RRAD1M = 0.000250000012 ;
+
+ RRAD2M = 9.99999975e-05 ;
+
+ PORT = 0.25 ;
+
+ PR = 0.100000001 ;
+
+ RSRR = 10000 ;
+
+ RSRA = 1e+09 ;
+
+ PTSHT = 0.0500000007 ;
+
+ RTFQ = 250 ;
+
+ UPMXZH = 0.00999999978 ;
+
+ UPKMZH = 0.400000006 ;
+
+ UPMNZH = 0.0125000002 ;
+
+ UPMXZO = 0.00999999978 ;
+
+ UPKMZO = 0.349999994 ;
+
+ UPMNZO = 0.0299999993 ;
+
+ UPMXPO = 0.00999999978 ;
+
+ UPKMPO = 0.075000003 ;
+
+ UPMNPO = 0.00200000009 ;
+
+ OSMO = -1.5 ;
+
+ RCS = -4 ;
+
+ RSMX = 3500 ;
+
+ DMLF = 0.720000029 ;
+
+ DMSHE = 0.75999999 ;
+
+ DMSTK = 0.800000012 ;
+
+ DMRSV = 0.879999995 ;
+
+ DMHSK = 0.75999999 ;
+
+ DMEAR = 0.75999999 ;
+
+ DMGR = 0.879999995 ;
+
+ DMRT = 0.75999999 ;
+
+ DMND = 0.5 ;
+
+ CNLF = 0.100000001 ;
+
+ CNSHE = 0.0250000004 ;
+
+ CNSTK = 0.00999999978 ;
+
+ CNRSV = 0.0299999993 ;
+
+ CNHSK = 0.0199999996 ;
+
+ CNEAR = 0.0199999996 ;
+
+ CNGR = 0.0399999991 ;
+
+ CNRT = 0.0250000004 ;
+
+ CNND = 0.100000001 ;
+
+ CPLF = 0.00999999978 ;
+
+ CPSHE = 0.00249999994 ;
+
+ CPSTK = 0.00100000005 ;
+
+ CPRSV = 0.00300000003 ;
+
+ CPHSK = 0.00200000009 ;
+
+ CPEAR = 0.00200000009 ;
+
+ CPGR = 0.00400000019 ;
+
+ CPRT = 0.00249999994 ;
+
+ CPND = 0.00999999978 ;
+
+ pfts =
+  "sorg31    " ;
+
+ pfts_short =
+  "alfa",
+  "barl",
+  "bdlf",
+  "bdln",
+  "bdlw",
+  "brom",
+  "bspr",
+  "fmos",
+  "ndlf",
+  "ndld",
+  "gr3s",
+  "gr4s",
+  "gr3a",
+  "clva",
+  "clvs",
+  "bush",
+  "dfir",
+  "busn",
+  "lpin",
+  "maiz",
+  "oats",
+  "shru",
+  "soyb",
+  "swhe",
+  "lich",
+  "jpin",
+  "moss",
+  "mosf",
+  "smos",
+  "sedg",
+  "tasp",
+  "woak" ;
+
+ pfts_long =
+  "alfalfa                                 ",
+  "barley                                  ",
+  "broadleaf tree (deciduous or evergreen) ",
+  "broadleaf tree with N2 fixation         ",
+  "broadleaf tree adapted to wetland       ",
+  "brome                                   ",
+  "black spruce (needle leaf)              ",
+  "feather moss (with jack pine)           ",
+  "needleleaf tree (evergreen)             ",
+  "needleleaf tree (deciduous)             ",
+  "C3 grass perennial                      ",
+  "C4 grass perennial                      ",
+  "C3 grass annual                         ",
+  "clover annual                           ",
+  "clover perennial                        ",
+  "bush                                    ",
+  "douglas fir                             ",
+  "bush with N2 fixation                   ",
+  "loblolly pine                           ",
+  "maize                                   ",
+  "oats                                    ",
+  "shrub                                   ",
+  "soybean                                 ",
+  "spring wheat                            ",
+  "lichen                                  ",
+  "jackpine                                ",
+  "moss (sphagnum)                         ",
+  "moss (feathermoss)                      ",
+  "moss (sphagnum near sedge)              ",
+  "sedge                                   ",
+  "aspen                                   ",
+  "oak (upland)                            " ;
+
+ koppen_clim_no =
+  "11",
+  "12",
+  "13",
+  "14",
+  "21",
+  "22",
+  "26",
+  "27",
+  "31",
+  "32",
+  "33",
+  "34",
+  "35",
+  "36",
+  "37",
+  "38",
+  "39",
+  "41",
+  "42",
+  "43",
+  "44",
+  "45",
+  "46",
+  "47",
+  "48",
+  "49",
+  "50",
+  "51",
+  "52",
+  "61",
+  "62" ;
+
+ koppen_clim_short =
+  "Af ",
+  "Am ",
+  "As ",
+  "Aw ",
+  "BWk",
+  "BWh",
+  "BSk",
+  "BSh",
+  "Cfa",
+  "Cfb",
+  "Cfc",
+  "Csa",
+  "Csb",
+  "Csc",
+  "Cwa",
+  "Cwb",
+  "Cwc",
+  "Dfa",
+  "Dfb",
+  "Dfc",
+  "Dfd",
+  "Dsa",
+  "Dsb",
+  "Dsc",
+  "Dsd",
+  "Dwa",
+  "Dwb",
+  "Dwc",
+  "Dwd",
+  "ET ",
+  "EF " ;
+
+ koppen_clim_long =
+  "Tropical rainforest climate                                     ",
+  "Tropical monsoon climate                                        ",
+  "Tropical summer-dry climate                                     ",
+  "Tropical winter-dry climate                                     ",
+  "Cold desert climate                                             ",
+  "Hot desert climate                                              ",
+  "Cold semi-arid climate                                          ",
+  "Hot semi-arid climate                                           ",
+  "Humid subtropical climate                                       ",
+  "Temperate oceanic climate                                       ",
+  "Subpolar oceanic climate                                        ",
+  "Hot-summer Mediterranean climate                                ",
+  "Warm-summer Mediterranean climate                               ",
+  "Cold-summer Mediterranean climate                               ",
+  "Monsoon-influenced humid subtropical climate                    ",
+  "Subtropical highland climate                                    ",
+  "Cold subtropical highland climate                               ",
+  "Hot-summer humid continental climate                            ",
+  "Warm-summer humid continental climate                           ",
+  "Subarctic climate                                               ",
+  "Extremely cold subarctic climate                                ",
+  "Mediterranean-influenced hot-summer humid continental climate   ",
+  "Mediterranean-influenced warm-summer humid continental climate  ",
+  "Mediterranean-influenced subarctic climate                      ",
+  "Mediterranean-influenced extremely cold subarctic climate       ",
+  "Monsoon-influenced hot-summer humid continental climate         ",
+  "Monsoon-influenced warm-summer humid continental climate        ",
+  "Monsoon-influenced subarctic climate                            ",
+  "Monsoon-influenced extremely cold subarctic climate             ",
+  "Tundra climate                                                  ",
+  "Ice cap climate                                                 " ;
+
+ RG_ELOW = 197500 ;
+
+ RG_EHIGH = 222500 ;
+
+ CG_ELOW = 197500 ;
+
+ CG_EHIGH = 222500 ;
+
+ LG_ELOW = 197500 ;
+
+ LG_EHIGH = 218500 ;
+}

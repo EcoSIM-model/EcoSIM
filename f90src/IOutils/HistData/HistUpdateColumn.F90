@@ -43,6 +43,7 @@ submodule (HistDataType) HistUpdateColumn
     NetNH4Mineralize_CumYr_col, NetPO4Mineralize_CumYr_col
   use SoilPropertyDataType, only: VLSoilMicPMass_vr
   use SurfLitterDataType, only: FracSurfByLitR_col, VLitR_col
+  use SurfPhysData, only: RSoilEvap_col,RLitterEvap_col,QSUBLIM_col
   use SoilBGCDataType, only: AmendC_CumYr_flx_col, FerP_Flx_CumYr_col, FertN_Flx_CumYr_col, &
     Gas_Prod_TP_cumRes_col, Gas_WetDeposit_flx_col, GasDiff2Surf_flx_col, GasHydroLoss_cumflx_col, &
     HydroIonFlx_CumYr_col, Hydroloss_NH4_cumflx_col, Hydroloss_NO3_cumflx_col, HydroSubsDICFlx_col, &
@@ -231,6 +232,15 @@ contains
       this%h1D_Snofall_col(ncol)          = SnoFalPrec_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SOIL_RN_col(ncol)          = HeatByRad2Surf_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_LWSky_col(ncol)            = LWRadSky_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      ! Preserve zero wet-surface resistance; inactive/blocked/unrepresentable
+      ! samples remain fill instead of overflowing single-precision history.
+      this%h1D_RSoilEvap_col(ncol)=spval
+      this%h1D_RLitterEvap_col(ncol)=spval
+      if(RSoilEvap_col(NY,NX)>=0._r8.and.RSoilEvap_col(NY,NX)<spval/secs1hour) &
+        this%h1D_RSoilEvap_col(ncol)=RSoilEvap_col(NY,NX)*secs1hour
+      if(RLitterEvap_col(NY,NX)>=0._r8.and.RLitterEvap_col(NY,NX)<spval/secs1hour) &
+        this%h1D_RLitterEvap_col(ncol)=RLitterEvap_col(NY,NX)*secs1hour
+      this%h1D_QSUBLIM_col(ncol)          = QSUBLIM_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SOIL_LE_col(ncol)          = HeatEvapAir2Surf_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SOIL_H_col(ncol)           = HeatSensAir2Surf_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SOIL_G_col(ncol)           = -(HeatNet2Surf_col(NY,NX)-HeatSensVapAir2Surf_col(NY,NX))*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)

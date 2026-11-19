@@ -5,6 +5,7 @@ module PlantTraitDataType
 
 !
 !!
+! Description:
 ! data types of plant trait characteristics that cannot be grouped into canopy
 ! or roots
   use data_kind_mod, only : r8 => DAT_KIND_R8
@@ -97,11 +98,13 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  rProteinC2RootP_pft(:,:,:)                 !Protein C to root P ratio in remobilizable nonstructural biomass, [-]
   real(r8),target,allocatable ::  rProteinC2LeafN_pft(:,:,:)                 !Protein C to leaf N ratio in remobilizable nonstructural biomass, [-]
   real(r8),target,allocatable ::  rProteinC2LeafP_pft(:,:,:)                 !Protein C to leaf P ratio in remobilizable nonstructural biomass, [-]
+  real(r8),target,allocatable ::  rNPRatio_pft(:,:,:)                        !leaf protein-equivalent N:P ratio [gN gP-1], (PFT,NY,NX)
   real(r8),target,allocatable ::  OrganOsmoPsi0pt_pft(:,:,:)                   !Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
   real(r8),target,allocatable ::  TC4LeafOff_pft(:,:,:)                      !threshold temperature for autumn leafoff/hardening, [oC]
   real(r8),target,allocatable ::  PlantInitThermoAdaptZone_pft(:,:,:)            !initial plant thermal adaptation zone, [-]
   real(r8),target,allocatable ::  rPlantThermoAdaptZone_pft(:,:,:)           !plant thermal adaptation zone, [-]
   real(r8),target,allocatable ::  MatureGroup_brch(:,:,:,:)                  !plant maturity group, [-]
+  real(r8),target,allocatable :: FloralDevNodes_brch(:,:,:,:) !floral development, [node equivalents], branch/PFT/y/x
   real(r8),target,allocatable ::  MatureGroup_pft(:,:,:)                     !acclimated plant maturity group, [-]
   real(r8),target,allocatable ::  GROUPX_pft(:,:,:)                          !initial plant maturity group, [-]
   real(r8),target,allocatable ::  PPI_pft(:,:,:)                             !initial plant population, [# m-2]
@@ -140,9 +143,16 @@ module PlantTraitDataType
   integer,target,allocatable ::  KLeafNumber_brch(:,:,:,:)                   !leaf number, [-]
   integer,target,allocatable ::  KLowestGroLeafNode_brch(:,:,:,:)            !leaf growth stage counter, [-]
   integer,target,allocatable ::  KMinNumLeaf4GroAlloc_brch(:,:,:,:)          !NUMBER OF MINIMUM LEAFED NODE USED IN GROWTH ALLOCATION,[-]
-  integer,target,allocatable ::  KHiestGroLeafNode_brch(:,:,:,:)             !leaf growth stage counter, [-]
+  integer,target,allocatable ::  KHiestGroLeafNode_brch(:,:,:,:)             !highest retained absolute node this cycle; growth cap applied separately, [-]
   real(r8),target,allocatable ::  RateRefLeafAppearance_pft(:,:,:)               !rate of leaf initiation at 25 oC, [h-1]
   real(r8),target,allocatable ::  rLen2WidthLeaf_pft(:,:,:)                  !leaf length:width ratio, [-]
+  real(r8),target,allocatable :: HypocotLeafAreaCoeff_pft(:,:,:) !HYPA: hypocotyl-leaf area allometry coefficient, [-]
+  real(r8), target, allocatable :: RootGrowEnergyLow_pft(:,:,:) !RG_ELOW: low-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: RootGrowEnergyHigh_pft(:,:,:) !RG_EHIGH: high-temperature inactivation, root growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyLow_pft(:,:,:) !CG_ELOW: low-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: CanopyGrowEnergyHigh_pft(:,:,:) !CG_EHIGH: high-temperature inactivation, canopy growth, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyLow_pft(:,:,:) !LG_ELOW: low-temperature inactivation, leaf/node phenology, [J mol-1]
+  real(r8), target, allocatable :: LeafGrowEnergyHigh_pft(:,:,:) !LG_EHIGH: high-temperature inactivation, leaf/node phenology, [J mol-1]
   real(r8),target,allocatable ::  SLA1_pft(:,:,:)                            !leaf area:mass during growth, [m2 g-1]
   real(r8),target,allocatable :: PrescribedLeafProteinDensity_pft(:,:,:)     !LFPRTC: SP protein C per leaf area [gC protein m-2 leaf]
   real(r8),target,allocatable ::  TC4LeafOut_pft(:,:,:)                      !threshold temperature for spring leafout/dehardening, [oC]
@@ -194,6 +204,8 @@ module PlantTraitDataType
   real(r8),target,allocatable ::  SeedTempSens_pft(:,:,:)                    !sensitivity to canopy temperature, [oC-1]
   real(r8),target,allocatable ::  CriticPhotoPeriod_pft(:,:,:)               !critical daylength for phenological progress, [h]
   real(r8),target,allocatable ::  PhotoPeriodSens_pft(:,:,:)                 !difference between current and critical daylengths used to calculate  phenological progress, [h]
+  real(r8),target,allocatable :: FloralPhotoSens_pft(:,:,:) !exponential floral photoperiod sensitivity, [h-1]; PFT/y/x
+  real(r8),target,allocatable :: FloralPhotoOpt_pft(:,:,:) !fully inductive floral photoperiod; -1 uses resolved XDL, [h]; PFT/y/x
   real(r8),target,allocatable ::  ClumpFactorInit_pft(:,:,:)                 !initial clumping factor for self-shading in canopy layer, [-]
   real(r8),target,allocatable ::  HourReq4LeafOff_brch(:,:,:,:)              !number of hours below set temperature required for autumn leafoff/hardening, [-]
   real(r8),target,allocatable ::  StemSpecVolume_pft(:,:,:)                  !stalk specific volume, [m3 gC-1]
@@ -303,11 +315,13 @@ contains
   allocate(rProteinC2RootP_pft(JP,JY,JX)); rProteinC2RootP_pft=0._r8  
   allocate(rProteinC2LeafN_pft(JP,JY,JX));     rProteinC2LeafN_pft=0._r8
   allocate(rProteinC2LeafP_pft(JP,JY,JX));     rProteinC2LeafP_pft=0._r8
+  allocate(rNPRatio_pft(JP,JY,JX));           rNPRatio_pft=0._r8
   allocate(OrganOsmoPsi0pt_pft(JP,JY,JX));     OrganOsmoPsi0pt_pft=0._r8
   allocate(TC4LeafOff_pft(JP,JY,JX));      TC4LeafOff_pft=0._r8
   allocate(PlantInitThermoAdaptZone_pft(JP,JY,JX));    PlantInitThermoAdaptZone_pft=0._r8
   allocate(rPlantThermoAdaptZone_pft(JP,JY,JX));     rPlantThermoAdaptZone_pft=0._r8
   allocate(MatureGroup_brch(MaxNumBranches,JP,JY,JX)); MatureGroup_brch=0._r8
+  allocate(FloralDevNodes_brch(MaxNumBranches,JP,JY,JX));FloralDevNodes_brch=0._r8
   allocate(MatureGroup_pft(JP,JY,JX));   MatureGroup_pft=0._r8
   allocate(GROUPX_pft(JP,JY,JX));   GROUPX_pft=0._r8
   allocate(PPI_pft(JP,JY,JX));      PPI_pft=0._r8
@@ -349,6 +363,13 @@ contains
   allocate(KHiestGroLeafNode_brch(MaxNumBranches,JP,JY,JX)); KHiestGroLeafNode_brch=0
   allocate(RateRefLeafAppearance_pft(JP,JY,JX));     RateRefLeafAppearance_pft=0._r8
   allocate(rLen2WidthLeaf_pft(JP,JY,JX));     rLen2WidthLeaf_pft=0._r8
+  allocate(HypocotLeafAreaCoeff_pft(JP,JY,JX));HypocotLeafAreaCoeff_pft=100._r8
+  allocate(RootGrowEnergyLow_pft(JP,JY,JX));RootGrowEnergyLow_pft=197500._r8
+  allocate(RootGrowEnergyHigh_pft(JP,JY,JX));RootGrowEnergyHigh_pft=222500._r8
+  allocate(CanopyGrowEnergyLow_pft(JP,JY,JX));CanopyGrowEnergyLow_pft=197500._r8
+  allocate(CanopyGrowEnergyHigh_pft(JP,JY,JX));CanopyGrowEnergyHigh_pft=222500._r8
+  allocate(LeafGrowEnergyLow_pft(JP,JY,JX));LeafGrowEnergyLow_pft=197500._r8
+  allocate(LeafGrowEnergyHigh_pft(JP,JY,JX));LeafGrowEnergyHigh_pft=218500._r8
   allocate(SLA1_pft(JP,JY,JX));     SLA1_pft=0._r8
   allocate(PrescribedLeafProteinDensity_pft(JP,JY,JX));PrescribedLeafProteinDensity_pft=0._r8
   allocate(TC4LeafOut_pft(JP,JY,JX));      TC4LeafOut_pft=0._r8
@@ -400,6 +421,8 @@ contains
   allocate(SeedTempSens_pft(JP,JY,JX));     SeedTempSens_pft=0._r8
   allocate(CriticPhotoPeriod_pft(JP,JY,JX));      CriticPhotoPeriod_pft=0._r8
   allocate(PhotoPeriodSens_pft(JP,JY,JX));     PhotoPeriodSens_pft=0._r8
+  allocate(FloralPhotoSens_pft(JP,JY,JX));FloralPhotoSens_pft=0.0_r8
+  allocate(FloralPhotoOpt_pft(JP,JY,JX));FloralPhotoOpt_pft=-1.0_r8
   allocate(ClumpFactorInit_pft(JP,JY,JX));      ClumpFactorInit_pft=0._r8
   allocate(HourReq4LeafOff_brch(NumCanopyLayers,JP,JY,JX));  HourReq4LeafOff_brch=0._r8
   allocate(TempOffset_pft(JP,JY,JX));    TempOffset_pft=0._r8
@@ -507,11 +530,13 @@ contains
   call destroy(rProteinC2RootN_pft)
   call destroy(rProteinC2LeafN_pft)
   call destroy(rProteinC2LeafP_pft)
+  call destroy(rNPRatio_pft)
   call destroy(OrganOsmoPsi0pt_pft)
   call destroy(TC4LeafOff_pft)
   call destroy(PlantInitThermoAdaptZone_pft)
   call destroy(rPlantThermoAdaptZone_pft)
   call destroy(MatureGroup_brch)
+  call destroy(FloralDevNodes_brch)
   call destroy(MatureGroup_pft)
   call destroy(GROUPX_pft)
   call destroy(PPI_pft)
@@ -553,6 +578,13 @@ contains
   call destroy(KHiestGroLeafNode_brch)
   call destroy(RateRefLeafAppearance_pft)
   call destroy(rLen2WidthLeaf_pft)
+  call destroy(HypocotLeafAreaCoeff_pft)
+  call destroy(RootGrowEnergyLow_pft)
+  call destroy(RootGrowEnergyHigh_pft)
+  call destroy(CanopyGrowEnergyLow_pft)
+  call destroy(CanopyGrowEnergyHigh_pft)
+  call destroy(LeafGrowEnergyLow_pft)
+  call destroy(LeafGrowEnergyHigh_pft)
   call destroy(SLA1_pft)
   call destroy(PrescribedLeafProteinDensity_pft)
   call destroy(TC4LeafOut_pft)
@@ -604,6 +636,8 @@ contains
   call destroy(SeedTempSens_pft)
   call destroy(CriticPhotoPeriod_pft)
   call destroy(PhotoPeriodSens_pft)
+  call destroy(FloralPhotoSens_pft)
+  call destroy(FloralPhotoOpt_pft)
   call destroy(ClumpFactorInit_pft)
   call destroy(HourReq4LeafOff_brch)
   call destroy(TempOffset_pft)
