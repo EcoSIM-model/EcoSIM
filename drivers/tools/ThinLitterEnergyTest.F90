@@ -11,7 +11,8 @@ program ThinLitterEnergyTest
   use EcoSIMCtrlDataType, only: ZERO,ZEROS,ZEROS2
   use EcoSIMSolverPar, only: NPH,dts_HeatWatTP
   use EcoSimConst, only: cpo,cpw,cpi,DENSICE,EvapLHTC,SublmHTC
-  use SurfaceVaporExchangeMod, only: PartitionSurfaceVapor
+  use SurfaceVaporExchangeMod, only: PartitionSurfaceVapor,SurfaceVaporDensity
+  use LitterHydraulicMod, only: LitterHydraulicParameters,LitterResistance,LitterMatricPotential
   use MiniFuncMod, only: gOC_to_m3_OM
   use HydroThermData
   use SurfLitterDataType
@@ -31,6 +32,8 @@ program ThinLitterEnergyTest
   real(r8), parameter :: RainWater=2.e-8_r8,RunoffWater=1.e-8_r8
   real(r8) :: ExpectedHeat,LandscapeHeat
   real(r8) :: LiquidVapor,IceVapor,LatentDerivative,MassBefore,HeatBefore
+  type(LitterHydraulicParameters) :: litter
+  real(r8) :: resistance,vapor_source,vapor_demand
   real(r8) :: SurfaceFluxes(5) ! litter-soil and atmospheric transfers [MJ/cell or m3/cell]
   integer :: ic,iv
 
@@ -107,13 +110,21 @@ program ThinLitterEnergyTest
 
   ! Exercise the actual litter inventory/temperature commit with separate ice
   ! vapor transfers: neither liquid flow nor later freeze/thaw may debit it twice.
+  litter=LitterHydraulicParameters(.1336_r8,.97_r8,.0668_r8,LOG(.1336_r8),LOG(.0668_r8), &
+    LOG(2._r8),LOG(4._r8),LOG(.0005_r8),LOG(.033_r8),LOG(.033_r8/.0005_r8), &
+    LOG(1.5_r8/.033_r8),1._r8,-.0005_r8,-2500._r8)
   do ic=1,2
     call reset_state(0.5_r8,1.e-8_r8)
     VLiceMicP1_vr(0,1,1)=3.e-7_r8
     VHeatCapacity1_vr(0,1,1)=VHeatCapacity1_vr(0,1,1)+cpi*VLiceMicP1_vr(0,1,1)
     MassBefore=VLWatMicP1_vr(0,1,1)+DENSICE*VLiceMicP1_vr(0,1,1)
     HeatBefore=VHeatCapacity1_vr(0,1,1)*TKSoil1_vr(0,1,1)
-    call PartitionSurfaceVapor(real(2*ic-3,r8)*4.e-10_r8,VLWatMicP1_vr(0,1,1), &
+    vapor_source=SurfaceVaporDensity(270._r8,LitterMatricPotential(litter,.01_r8),VLiceMicP1_vr(0,1,1))
+    resistance=LitterResistance(litter,VLWatMicP1_vr(0,1,1),VLiceMicP1_vr(0,1,1), &
+      VLitR_col(1,1),.5_r8,1.e-7_r8,.077_r8,.66_r8,vapor_source)
+    ! Area*time times vapor-density gradient divided by air+internal resistance.
+    vapor_demand=real(2*ic-3,r8)*1.e-10_r8*(.5_r8*.5_r8)/(.0139_r8+resistance)
+    call PartitionSurfaceVapor(vapor_demand,VLWatMicP1_vr(0,1,1), &
       VLiceMicP1_vr(0,1,1),270._r8,1._r8,LiquidVapor,IceVapor,LatentDerivative)
     WatFLo2LitrM_col=LiquidVapor
     IceVaporMicPM_vr(0,1,1)=IceVapor

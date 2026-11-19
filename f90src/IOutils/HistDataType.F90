@@ -167,6 +167,9 @@ module HistDataType
   real(r8),pointer   :: h1D_PREC_col(:)   
   real(r8),pointer   :: h1D_LWSky_col(:)
   real(r8),pointer   :: h1D_SOIL_RN_col(:)      
+  real(r8),pointer   :: h1D_RSoilEvap_col(:)   ! internal resistance [s m-1]
+  real(r8),pointer   :: h1D_RLitterEvap_col(:) ! internal resistance [s m-1]
+  real(r8),pointer   :: h1D_QSUBLIM_col(:) ! gross snow/litter/soil sublimation [mm H2O hr-1], positive to air
   real(r8),pointer   :: h1D_SOIL_LE_col(:)      
   real(r8),pointer   :: h1D_SOIL_H_col(:)       
   real(r8),pointer   :: h1D_SOIL_G_col(:)       

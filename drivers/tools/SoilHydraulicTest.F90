@@ -7,7 +7,7 @@ program SoilHydraulicTest
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use abortutils, only: iulog
   use DebugToolMod, only: PrintInfo
-  use EcoSIMCtrlMod, only: lverb,use_ecosys_drainage
+  use EcoSIMCtrlMod, only: lverb,use_ecosys_drainage,soil_hydraulic_scheme
   use ElmIDMod, only: ielmc,isoi_set,isoi_unset,isoi_scnv,isoi_scnh
   use EcoSIMCtrlDataType
   use SoilPhysDataType
@@ -18,7 +18,10 @@ program SoilHydraulicTest
   use FlagDataType
   use SOMDataType
   use SurfLitterDataType
-  use SoilHydroParaMod, only: SoilHydroProperty,LitterHydroproperty
+  use SoilHydroParaMod, only: SoilHydroProperty
+  use LitterHydraulicMod, only: LitterHydroproperty,LitterHydraulicParameters, &
+    GetLitterHydraulicParameters,UpdateLitterHydraulicLimits,LitterMatricPotential, &
+    LitterWaterContent,LitterDryContent,LitterMatricPotentialDerivative,LitterMoistureClass,LitterResistance
   use SoilPhysParaMod, only: ComputePsiMCM,ComputeSoilAirDryContent, &
     ComputeKsatReferenceContent,getMoistK
   use HydrologyDiagMod, only: ComputeWaterTableEquilContent
@@ -169,7 +172,7 @@ program SoilHydraulicTest
   call check_close('zero Ksat retains air entry',PSISoilAirEntry_vr(1,1,1),-3000._r8)
 
   ! Litter uses its own porosity and r=1, even with the legacy drainage policy.
-  POROS0_col=.8_r8;POROS_vr(0,1,1)=.8_r8
+  fLitRPore4WatHold_col=.8_r8;POROS_vr(0,1,1)=.8_r8
   FieldCapacity_vr(0,1,1)=.4_r8;WiltPoint_vr(0,1,1)=.1_r8
   LOGPOROS_vr(0,1,1)=log(.8_r8);LOGFldCapacity_vr(0,1,1)=log(.4_r8)
   LOGWiltPoint_vr(0,1,1)=log(.1_r8)
@@ -178,16 +181,176 @@ program SoilHydraulicTest
   do mode=1,2
     use_ecosys_drainage=mode==2
     PSISoilAirEntry_vr(0,1,1)=-.0015_r8;ThetaSat_vr(0,1,1)=0._r8
-    call LitterHydroproperty(1,1)
+    call LitterHydroproperty(1,1,use_ecosys_drainage)
     call check_close('litter air-entry policy',PSISoilAirEntry_vr(0,1,1),litter_entry(mode))
     call check_close('litter ThetaSat policy',ThetaSat_vr(0,1,1),litter_theta_sat(mode))
     call check_close('litter curvature retained',SRP_vr(0,1,1),1._r8)
     call require('no horizontal litter transport',all(HydroCond_3D(1:2,:,0,1,1)==0._r8))
     call check_close('saturated litter conductivity',HydroCond_3D(3,1,0,1,1),.98_r8)
   enddo
+  call check_litter_independence()
   call FinalizeSoilHydraulicScheme()
   write(*,*) 'SoilHydraulicTest passed'
 contains
+!------------------------------------------------------------------------------------------
+  subroutine check_litter_resistance(litter)
+    ! Description:
+    ! Check transport against an analytic slope and independently formed bulk
+    ! diffusivity, including patch geometry, wet films, ice and blocked limits.
+    type(LitterHydraulicParameters), intent(in) :: litter ! litter retention and pore parameters
+    real(r8), parameter :: vol=.01_r8,area=1._r8,k=1.e-7_r8,dgas=.077_r8,tau=.66_r8,rhov=1.e-5_r8
+    real(r8) :: theta,psi,analytic,dv,expected,r,gas_only,icy,thin,liquid_only
+    character(len=*), parameter :: subname='check_litter_resistance'
+
+    call PrintInfo('beg '//subname)
+    theta=.0334_r8
+    psi=LitterMatricPotential(litter,theta)
+    analytic=-psi*litter%log_dry_potential_ratio/(litter%log_dry_content_ratio*theta)
+    dv=dgas*(litter%physical_porosity-theta)**2*tau/litter%physical_porosity
+    expected=(vol/area)/(2._r8*(dv+theta*k*analytic/rhov))
+    r=LitterResistance(litter,theta*vol,0._r8,vol,area,k,dgas,tau,rhov)
+    call require('analytic parallel litter resistance',abs(r/expected-1._r8)<2.e-7_r8)
+    call check_close('litter area-volume scaling',LitterResistance(litter,2._r8*theta*vol,0._r8, &
+      2._r8*vol,2._r8*area,k,dgas,tau,rhov),r)
+    call check_close('litter covered-area thickness',LitterResistance(litter,theta*vol,0._r8, &
+      vol,.5_r8*area,k,dgas,tau,rhov),2._r8*r)
+    thin=LitterResistance(litter,theta*vol*1.e-6_r8,0._r8,vol*1.e-6_r8,area,k,dgas,tau,rhov)
+    call require('no artificial thin-litter thickness floor',abs(thin/r-1.e-6_r8)<1.e-17_r8)
+    gas_only=LitterResistance(litter,0._r8,0._r8,vol,area,k,dgas,tau,rhov)
+    call check_close('dry gas-only limit',gas_only,vol/(2._r8*area*dgas*litter%physical_porosity*tau))
+    icy=LitterResistance(litter,0._r8,.2_r8*vol,vol,area,k,dgas,tau,rhov)
+    expected=vol/(2._r8*area*dgas*(litter%physical_porosity-.2_r8)**2*tau/litter%physical_porosity)
+    call check_close('ice reduces actual pore-air diffusion',icy,expected)
+    call require('ice-filled pores increase porous resistance',icy>gas_only)
+    liquid_only=LitterResistance(litter,theta*vol,0._r8,vol,area,k,0._r8,tau,rhov)
+    expected=vol/(2._r8*area*theta*k*analytic/rhov)
+    call require('liquid-only limit',abs(liquid_only/expected-1._r8)<2.e-7_r8)
+    call require('parallel paths lower resistance',r<LitterResistance(litter,theta*vol,0._r8, &
+      vol,area,0._r8,dgas,tau,rhov).and.r<liquid_only)
+    call require('blocked pore limit',LitterResistance(litter,theta*vol,0._r8,vol,area, &
+      0._r8,0._r8,tau,rhov)==huge(1._r8))
+    call require('mobile liquid wet-film limit',LitterResistance(litter,1.01_r8*litter%holding_fraction*vol, &
+      0._r8,vol,area,k,dgas,tau,rhov)==0._r8)
+    call require('exposed ice limit',LitterResistance(litter,0._r8,litter%physical_porosity*vol, &
+      vol,area,k,dgas,tau,rhov)==0._r8)
+    call require('no footprint limit',LitterResistance(litter,theta*vol,0._r8,vol,0._r8,k,dgas,tau,rhov)==0._r8)
+    call require('no porous volume limit',LitterResistance(litter,0._r8,0._r8,0._r8,area,k,dgas,tau,rhov)==0._r8)
+    r=LitterResistance(litter,theta*vol,0._r8,vol,area,1.e-300_r8,dgas,tau,0._r8)
+    call require('underflowed source vapor safe',ieee_is_finite(r).and.r>0._r8)
+    call PrintInfo('end '//subname)
+  end subroutine check_litter_resistance
+!------------------------------------------------------------------------------------------
+  subroutine check_litter_independence()
+    ! Description:
+    ! Check physical retention anchors, inverse/slope consistency and invariance of
+    ! the real litter cache/compatibility entry points under both soil selectors.
+    type(LitterHydraulicParameters) :: litter,changed_geometry
+    real(r8) :: reference_table(3,100,2),reference_entry(2),reference_sat(2)
+    real(r8) :: reference_dry,reference_pressure,reference_slope,pressure,content,slope,analytic
+    real(r8) :: held_water,held_ice,theta,reference_inverse,resistance,reference_resistance
+    integer :: scheme,policy,k
+    character(len=*), parameter :: subname='check_litter_independence'
+
+    call PrintInfo('beg '//subname)
+    POROS_vr(0,1,1)=.97_r8
+    call UpdateLitterHydraulicLimits(1,1,.1336_r8)
+    SatHydroCondVert_vr(0,1,1)=.98_r8
+    litter=GetLitterHydraulicParameters(1,1)
+    call check_litter_resistance(litter)
+    call check_close('litter holding fraction',litter%holding_fraction,.1336_r8)
+    call check_close('litter geometric porosity',litter%physical_porosity,.97_r8)
+    call check_close('litter saturation anchor',LitterMatricPotential(litter,.1336_r8),-.0005_r8)
+    call check_close('litter field anchor',LitterMatricPotential(litter,.0668_r8),-.033_r8)
+    call check_close('litter wilt anchor',LitterMatricPotential(litter,.0167_r8),-1.5_r8)
+    call check_close('litter zero water',LitterMatricPotential(litter,0._r8),-2500._r8)
+    call check_close('litter dry inverse',LitterWaterContent(litter,-25000._r8),LitterDryContent(litter))
+    call check_close('litter wet inverse',LitterWaterContent(litter,0._r8),.1336_r8)
+    call require('empty litter class safe',LitterMoistureClass(0._r8,0._r8)==100)
+    call require('dry litter class',LitterMoistureClass(0._r8,.1336_r8)==100)
+    call require('wet litter class',LitterMoistureClass(.2_r8,.1336_r8)==1)
+    changed_geometry=litter
+    changed_geometry%physical_porosity=.4_r8
+    do k=1,30
+      theta=.1336_r8*real(k,r8)/30._r8
+      pressure=LitterMatricPotential(litter,theta)
+      call check_close('litter forward/inverse',LitterWaterContent(litter,pressure),theta)
+      call require('litter curve independent of geometric porosity', &
+        LitterMatricPotential(changed_geometry,theta)==pressure)
+      call require('litter class preserves existing indexing', &
+        LitterMoistureClass(theta,.1336_r8)==getMoistK(theta,.1336_r8))
+    enddo
+    theta=.0334_r8
+    pressure=LitterMatricPotential(litter,theta)
+    analytic=-pressure*litter%log_dry_potential_ratio/(litter%log_dry_content_ratio*theta)
+    slope=LitterMatricPotentialDerivative(litter,theta)
+    call require('litter dry-branch derivative',abs(slope/analytic-1._r8)<2.e-7_r8)
+    theta=.1_r8
+    pressure=LitterMatricPotential(litter,theta)
+    analytic=-pressure*litter%log_wet_potential_ratio/(litter%log_wet_content_ratio*theta)
+    slope=LitterMatricPotentialDerivative(litter,theta)
+    call require('litter wet-branch derivative',abs(slope/analytic-1._r8)<2.e-7_r8)
+    call require('litter dry plateau derivative',LitterMatricPotentialDerivative(litter,0._r8)==0._r8)
+    call require('litter wet plateau derivative',LitterMatricPotentialDerivative(litter,.2_r8)==0._r8)
+    ! Supply real ordinary-soil inputs so switching also exercises a soil refresh.
+    allocate(PSIAtFldCapacity_col(1,1),PSIAtWiltPoint_col(1,1))
+    PSIAtFldCapacity_col=-.033_r8;PSIAtWiltPoint_col=-1.5_r8
+    allocate(VGThetaR_vr(1:1,1,1),VGAlpha_vr(1:1,1,1),VGN_vr(1:1,1,1),VGL_vr(1:1,1,1))
+    VGThetaR_vr=.05_r8;VGAlpha_vr=100._r8;VGN_vr=1.6_r8;VGL_vr=.5_r8
+    held_water=VLWatMicP_vr(0,1,1);held_ice=VLiceMicP_vr(0,1,1)
+    do scheme=1,2
+      if(scheme==1)then
+        soil_hydraulic_scheme='ecosim'
+      else
+        soil_hydraulic_scheme='van_genuchten'
+      endif
+      call InitializeSoilHydraulicScheme()
+      call require('soil selector actually switched',GetSoilHydraulicSchemeName()==soil_hydraulic_scheme)
+      call SoilHydroProperty(1,1,1,1,1)
+      do policy=1,2
+        PSISoilAirEntry_vr(0,1,1)=-.0015_r8;ThetaSat_vr(0,1,1)=0._r8
+        use_ecosys_drainage=policy==2
+        call LitterHydroproperty(1,1,use_ecosys_drainage)
+        ! The generic entry point must delegate before ordinary-soil estimators.
+        call SoilHydroProperty(1,1,0,1,1)
+        call check_close('generic litter holding fraction retained',fLitRPore4WatHold_col(1,1),.1336_r8)
+        call check_close('generic litter curvature retained',SRP_vr(0,1,1),1._r8)
+        if(scheme==1)then
+          reference_table(:,:,policy)=HydroCond_3D(:,:,0,1,1)
+          reference_entry(policy)=PSISoilAirEntry_vr(0,1,1)
+          reference_sat(policy)=ThetaSat_vr(0,1,1)
+        else
+          call require('litter K invariant under soil scheme',all(HydroCond_3D(:,:,0,1,1)==reference_table(:,:,policy)))
+          call require('litter air entry invariant',PSISoilAirEntry_vr(0,1,1)==reference_entry(policy))
+          call require('litter saturation threshold invariant',ThetaSat_vr(0,1,1)==reference_sat(policy))
+        endif
+      enddo
+      theta=.1_r8
+      call ComputePsiMCM(0,1,1,theta,pressure)
+      call ComputeSoilAirDryContent(0,1,1,content)
+      litter=GetLitterHydraulicParameters(1,1)
+      slope=LitterMatricPotentialDerivative(litter,.1_r8)
+      resistance=LitterResistance(litter,.001_r8,0._r8,.01_r8,1._r8, &
+        HydroCond_3D(3,LitterMoistureClass(.1_r8,litter%holding_fraction),0,1,1),.077_r8,.66_r8,1.e-5_r8)
+      if(scheme==1)then
+        reference_pressure=pressure;reference_dry=content;reference_slope=slope
+        reference_inverse=LitterWaterContent(litter,-.05_r8)
+        reference_resistance=resistance
+      else
+        call require('litter pressure dispatch invariant',pressure==reference_pressure)
+        call require('litter dry content dispatch invariant',content==reference_dry)
+        call require('litter slope invariant',slope==reference_slope)
+        call require('litter resistance invariant',resistance==reference_resistance)
+        call require('litter inverse invariant',LitterWaterContent(litter,-.05_r8)==reference_inverse)
+      endif
+      call require('litter liquid preserved',VLWatMicP_vr(0,1,1)==held_water)
+      call require('litter ice preserved',VLiceMicP_vr(0,1,1)==held_ice)
+    enddo
+    call require('litter conductivity finite',all(ieee_is_finite(HydroCond_3D(:,:,0,1,1))))
+    do k=2,100
+      call require('litter conductivity monotonic',HydroCond_3D(3,k,0,1,1)<=HydroCond_3D(3,k-1,0,1,1))
+    enddo
+    call PrintInfo('end '//subname)
+  end subroutine check_litter_independence
 !------------------------------------------------------------------------------------------
   subroutine check_soil_resistance(scheme,context)
     ! Description:
@@ -313,7 +476,7 @@ contains
   SatHydroCondVert_vr=1._r8;SatHydroCondHrzn_vr=2._r8
   VGeomLayer_vr=1._r8;VLSoilMicP_vr=1._r8;VLMicP_vr=.45_r8;VLWatMicP_vr=.27_r8
   VLiceMicP_vr=0._r8;VLMacroPores_vr=0._r8;VLWatMacP_vr=0._r8;VLiceMacP_vr=0._r8;TCS_vr=10._r8
-  allocate(POROS0_col(1,1),VLSoilMicPMass_vr(0:1,1,1))
+  allocate(fLitRPore4WatHold_col(1,1),VLSoilMicPMass_vr(0:1,1,1))
   VLSoilMicPMass_vr=1._r8
   CSoilOrgM_vr=0._r8
   call PrintInfo('end '//subname)

@@ -7,6 +7,7 @@ module SoilHydraulicModelMod
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use abortutils, only: endrun,iulog
   use DebugToolMod, only: PrintInfo
+  use PorousSurfaceResistanceMod, only: PorousSurfaceResistance
   implicit none
   private
   integer, parameter, public :: NumSoilMoistureClasses=100
@@ -146,8 +147,7 @@ contains
     real(r8), intent(in) :: bulk_vapor_diffusivity          ! epsilon*D_g on the same soil-volume basis [m2 h-1]
     real(r8), intent(in) :: bunsen_coefficient              ! liquid/soil-vapor density ratio B [-]
     real(r8) :: resistance                                  ! soil-internal resistance [h m-1]
-    real(r8) :: slope,log_liquid,log_vapor,log_transport,log_resistance
-    logical :: liquid_transport
+    real(r8) :: slope
     character(len=*), parameter :: subname='SoilResistance'
 
     call PrintInfo('beg '//subname)
@@ -175,27 +175,8 @@ contains
           call endrun('Invalid soil resistance retention slope')
         endif
       endif
-      liquid_transport=slope>0._r8
-      if(liquid_transport)log_liquid=LOG(bunsen_coefficient)+LOG(theta) &
-        +LOG(hydraulic_conductivity)+LOG(slope)
-      if(bulk_vapor_diffusivity>0._r8)then
-        log_vapor=LOG(bulk_vapor_diffusivity)
-        log_transport=log_vapor
-        if(liquid_transport)log_transport=MAX(log_liquid,log_vapor) &
-          +LOG(1._r8+EXP(-ABS(log_liquid-log_vapor)))
-      elseif(liquid_transport)then
-        log_transport=log_liquid
-      endif
-
-      resistance=huge(1._r8)
-      if(bulk_vapor_diffusivity>0._r8.or.liquid_transport)then
-        log_resistance=LOG(thickness)-LOG(2._r8)-log_transport
-        if(log_resistance<LOG(tiny(1._r8)))then
-          resistance=0._r8
-        elseif(log_resistance<LOG(huge(1._r8)))then
-          resistance=EXP(log_resistance)
-        endif
-      endif
+      resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope, &
+        bulk_vapor_diffusivity,bunsen_coefficient)
     endif
     call PrintInfo('end '//subname)
   end function SoilResistance

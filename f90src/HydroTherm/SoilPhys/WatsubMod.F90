@@ -1126,6 +1126,44 @@ module WatsubMod
   end subroutine Summarize3DFlowM
 !------------------------------------------------------------------------------------------
 
+  subroutine RemainingLiquidAfterFlows(L,NY,NX,MicPWater,MacPWater)
+  ! Description:
+  ! Return liquid remaining after accepted internal and external face flows.
+  ! Share the donor budget across outlets before computing exported heat.
+  implicit none
+  integer, intent(in) :: L,NY,NX               ! active soil layer and column indices [-]
+  real(r8), intent(out) :: MicPWater,MacPWater ! remaining liquid by pore domain [m3/cell]
+  integer :: N,TX,TY,TL,LL,first_face,last_face
+  character(len=*), parameter :: subname='RemainingLiquidAfterFlows'
+
+  call PrintInfo('beg '//subname)
+  MicPWater=VLWatMicP1_vr(L,NY,NX)
+  MacPWater=VLWatMacP1_vr(L,NY,NX)
+  do N=FlowDirIndicator_col(NY,NX),iVerticalDirection
+    TX=NX; TY=NY; TL=L
+    if(N==iWestEastDirection)TX=NX+1
+    if(N==iNorthSouthDirection)TY=NY+1
+    if(N==iVerticalDirection)then
+      TL=L+1
+      do LL=L+1,NL_col(NY,NX)
+        if(VLSoilPoreMicP_vr(LL,NY,NX)<=ZEROS2(NY,NX))cycle
+        TL=LL
+        exit
+      enddo
+    endif
+    call SoilFaceIncomingRange(N,L,NY,NX,first_face,last_face)
+
+    MicPWater=MicPWater+sum(WaterFlow2Micpt_3D(N,first_face:last_face,NY,NX)) &
+      -WaterFlow2Micpt_3D(N,SoilFaceSlot(N,L,TL),TY,TX)
+    MacPWater=MacPWater+sum(WaterFlow2Macpt_3D(N,first_face:last_face,NY,NX)) &
+      -WaterFlow2Macpt_3D(N,SoilFaceSlot(N,L,TL),TY,TX)
+  enddo
+  MicPWater = MAX(0._r8,MicPWater)
+  MacPWater = MAX(0._r8,MacPWater)
+  call PrintInfo('end '//subname)
+  end subroutine RemainingLiquidAfterFlows
+!------------------------------------------------------------------------------------------
+
   subroutine VertBoundaryDrainM(I,J,N,N1,N2,N3,M4,M5,M6,RainEkReducedKsat,XN,RechargDist2WTBL,Recharg2WTBLScal)    
   !
   !Drainage across the lateral or bottom boundaries.      
@@ -1141,11 +1179,12 @@ module WatsubMod
 
   character(len=*), parameter :: subname='VertBoundaryDrainM'
   real(r8) :: THETA1,HydcondSrc,RechargRate
-  real(r8) :: watflx,heatflx,HydGrad,VOLWZ
+  real(r8) :: watflx,heatflx,HydGrad,VOLWZ,MicPWater,MacPWater
   integer :: K1 !saturation index, saturate=1
 !
 
   call PrintInfo('beg '//subname)
+  call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
 ! IDWaterTable=water table flag
 
   RechargRate=Recharg2WTBLScal*dts_HeatWatTP*RechargDist2WTBL
@@ -1164,11 +1203,11 @@ module WatsubMod
   !x-section area scaled hydraulic gradient, HydGrad > 0, when XN=-1, ES; HydGrad < 0, when XN=1, WN
   HydGrad=XN*mGravAccelerat*(-ABS(SLOPE_col(N,N2,N1)))*AREA_3D(3,N3,N2,N1)
 
-  VOLWZ=AZMAX1(VLWatMicP1_vr(N3,N2,N1)*dts_wat) 
+  VOLWZ=MIN(MicPWater,AZMAX1(VLWatMicP1_vr(N3,N2,N1)*dts_wat))
 
   WaterFlow2Micpt_3D(N,M6,M5,M4)=AZERO(AMIN1(VOLWZ, AMAX1(-VOLWZ,RechargRate*HydGrad*HydcondSrc)))
 
-  VOLWZ=AZMAX1(VLWatMacP1_vr(N3,N2,N1)*dts_wat) 
+  VOLWZ=MIN(MacPWater,AZMAX1(VLWatMacP1_vr(N3,N2,N1)*dts_wat))
   WaterFlow2MicptX_3D(N,M6,M5,M4) = WaterFlow2Micpt_3D(N,M6,M5,M4)  
   WaterFlow2Macpt_3D(N,M6,M5,M4)  = AZERO(AMIN1(VOLWZ,AMAX1(-VOLWZ,RechargRate*HydGrad*HydroCondMacP1_vr(N3,N2,N1))))
     
@@ -2304,6 +2343,7 @@ module WatsubMod
   real(r8) :: PSISWT,PSISWTH
   real(r8) :: watflx, heatflx
   real(r8) :: outlet_theta,outlet_conductivity
+  real(r8) :: MicPWater,MacPWater
   integer :: outlet_k
   
   character(len=2), parameter :: direcs(2)=(/'ew','ns'/)
@@ -2359,6 +2399,8 @@ module WatsubMod
       FLWT = 0._r8
     endif
 
+    call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
+    FLWT=MAX(FLWT,-MicPWater)
     watflx                          = XN*FLWT
     heatflx                         = cpw*TKSoil1_vr(N3,N2,N1)*watflx
     WaterFlow2Micpt_3D(N,M6,M5,M4)  = WaterFlow2Micpt_3D(N,M6,M5,M4)+watflx
@@ -2409,6 +2451,8 @@ module WatsubMod
     MacPoreDischarg=AMAX1(FLWTH,AZMIN1(-(VLWatMacP1_vr(N3,N2,N1)*dts_wat &
       +WaterFlow2Macpt_3D(3,N3,N2,N1)-WaterFlow2Macpt_3D(3,N3+1,N2,N1))))
 
+    call RemainingLiquidAfterFlows(N3,N2,N1,MicPWater,MacPWater)
+    MacPoreDischarg=MAX(MacPoreDischarg,-MacPWater)
     watflx  = XN*MacPoreDischarg
     heatflx = cpw*TKSoil1_vr(N3,N2,N1)*watflx
 
