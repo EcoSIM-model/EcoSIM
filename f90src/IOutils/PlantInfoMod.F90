@@ -1,6 +1,6 @@
 module PlantInfoMod
 !
-! DESCRIPTION
+! Description:
 ! code to read plant information
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -615,6 +615,9 @@ implicit none
 
     call SetPlantTraits(nu_plt,pft_changed,NZ,NY,NX,VRNLI,VRNXI)
 
+    ! Initialize the derived exchange ratio whenever this PFT's traits are loaded.
+    rNPRatio_pft(NZ,NY,NX) = rProteinC2LeafP_pft(NZ,NY,NX)/rProteinC2LeafN_pft(NZ,NY,NX)
+
     ! Drought leaf-out uses PSIMin4LeafOut(2:4) in PlantPhenolMod.
     IF ((iPlantPhenolType_pft(NZ,NY,NX).EQ.iphenotyp_drouhtdecidu .OR. &
          iPlantPhenolType_pft(NZ,NY,NX).EQ.4 .OR. &
@@ -717,12 +720,21 @@ implicit none
   call ncd_getvar(pft_nfid, 'VRNLI', loc,VRNLI)
   call ncd_getvar(pft_nfid, 'VRNXI', loc,VRNXI)
   call ncd_getvar(pft_nfid, 'WDLF', loc,rLen2WidthLeaf_pft(NZ,NY,NX))
+  call ncd_getvar(pft_nfid, 'HYPA', loc,HypocotLeafAreaCoeff_pft(NZ,NY,NX))
+  call ReadThermalTrait('RG_ELOW',RootGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('RG_EHIGH',RootGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,222500._r8)
+  call ReadThermalTrait('CG_ELOW',CanopyGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('CG_EHIGH',CanopyGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,222500._r8)
+  call ReadThermalTrait('LG_ELOW',LeafGrowEnergyLow_pft(NZ:NZ,NY,NX),loc,197500._r8)
+  call ReadThermalTrait('LG_EHIGH',LeafGrowEnergyHigh_pft(NZ:NZ,NY,NX),loc,218500._r8)
   call ncd_getvar(pft_nfid, 'PB', loc,NonstCMinConc2InitBranch_pft(NZ,NY,NX))
 
   call ncd_getvar(pft_nfid, 'GROUPX', loc,GROUPX_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'XTLI', loc,ShootNodeNumAtPlanting_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'XDL', loc,CriticPhotoPeriod_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'XPPD', loc,PhotoPeriodSens_pft(NZ,NY,NX))
+  call ReadFloralTrait('FL_POPT',FloralPhotoOpt_pft(NZ:NZ,NY,NX),loc,-1._r8,-1._r8,24._r8)
+  call ReadFloralTrait('FL_PSENS',FloralPhotoSens_pft(NZ:NZ,NY,NX),loc,0._r8,0._r8,1.e6_r8)
 
   call ncd_getvar(pft_nfid, 'SLA1', loc,SLA1_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'SSL1', loc,PetolShethLen2Mass_pft(NZ,NY,NX))
@@ -807,6 +819,7 @@ implicit none
 
   if(disp_planttrait)then
     call pft_display(nu_plt,NZ,NY,NX,pft_lname,koppen_climl,koppen_clims)
+    call thermal_trait_disp(nu_plt,NZ,NY,NX)
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
@@ -890,12 +903,21 @@ implicit none
   enh_cyto_pft(NZ,NY,NX)                 = enh_cyto_tab(Loc)
   StalkAxialResist_pft(NZ,NY,NX)         = StalkAxialResist_tab(loc)
   rLen2WidthLeaf_pft(NZ,NY,NX)           = rLen2WidthLeaf_tab(loc)
+  HypocotLeafAreaCoeff_pft(NZ,NY,NX) = HypocotLeafAreaCoeff_tab(loc)
+  RootGrowEnergyLow_pft(NZ,NY,NX) = RootGrowEnergyLow_tab(loc)
+  RootGrowEnergyHigh_pft(NZ,NY,NX) = RootGrowEnergyHigh_tab(loc)
+  CanopyGrowEnergyLow_pft(NZ,NY,NX) = CanopyGrowEnergyLow_tab(loc)
+  CanopyGrowEnergyHigh_pft(NZ,NY,NX) = CanopyGrowEnergyHigh_tab(loc)
+  LeafGrowEnergyLow_pft(NZ,NY,NX) = LeafGrowEnergyLow_tab(loc)
+  LeafGrowEnergyHigh_pft(NZ,NY,NX) = LeafGrowEnergyHigh_tab(loc)
   NonstCMinConc2InitBranch_pft(NZ,NY,NX) = NonstCMinConc2InitBranch_tab(loc)
 
   GROUPX_pft(NZ,NY,NX)                 = GROUPX_tab(loc)
   ShootNodeNumAtPlanting_pft(NZ,NY,NX) = ShootNodeNumAtPlanting_tab(loc)
   CriticPhotoPeriod_pft(NZ,NY,NX)      = CriticPhotoPeriod_tab(loc)
   PhotoPeriodSens_pft(NZ,NY,NX)        = PhotoPeriodSens_tab(loc)
+  FloralPhotoOpt_pft(NZ,NY,NX) = FloralPhotoOpt_tab(loc)
+  FloralPhotoSens_pft(NZ,NY,NX) = FloralPhotoSens_tab(loc)
 
   SLA1_pft(NZ,NY,NX)         = SLA1_tab(loc)
   PetolShethLen2Mass_pft(NZ,NY,NX) = PetolShethLen2Mass_tab(loc)
@@ -1023,8 +1045,20 @@ implicit none
   IF(CriticPhotoPeriod_pft(NZ,NY,NX).LT.0.0_r8)THEN
     CriticPhotoPeriod_pft(NZ,NY,NX)=DayLenthMax_col(NY,NX)
   ENDIF
+  ! Negative FL_POPT explicitly selects the site-resolved XDL as its default.
+  IF(FloralPhotoOpt_pft(NZ,NY,NX).LT.0._r8) &
+    FloralPhotoOpt_pft(NZ,NY,NX)=CriticPhotoPeriod_pft(NZ,NY,NX)
+
+  IF(iPlantPhenolPattern_pft(NZ,NY,NX).EQ.iplt_annual .AND. &
+    iPlantPhenolType_pft(NZ,NY,NX).EQ.iphenotyp_evgreen .AND. &
+    iPlantPhotoperiodType_pft(NZ,NY,NX).NE.iphotop_neutral .AND. &
+    FloralPhotoSens_pft(NZ,NY,NX).EQ.0._r8)THEN
+    write(iulog,*) 'Annual crop floral clock has FL_PSENS=0; no photoperiod delay. PFT=',NZ
+  ENDIF
+
   if(disp_planttrait.and.pft_changed)then
     call pft_display(nu_plt,NZ,NY,NX,pft_lname,koppen_climl,koppen_clims)
+    call thermal_trait_disp(nu_plt,NZ,NY,NX)
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
@@ -1153,7 +1187,7 @@ implicit none
   case (in2fixtyp_canopy_slow)
     strval='Slow canopy N-fixation'
   case default
-    strval='Not defined'
+    strval='No N-fixation'
   end select
   id=addone(id)
   call writefixsl(nu_plt,'INTYP: N-fixation symbiosis',strval,60,id)
@@ -1278,6 +1312,128 @@ implicit none
   end subroutine pft_display
 
 !------------------------------------------------------------------------------------------
+  subroutine ReadFloralTrait(varname,values,first_pft,default_value,min_value,max_value)
+  ! Description:
+  ! Read an optional floral trait on the WDLF PFT axis and validate its bounds.
+  ! Defaults are explicit; FL_PSENS=0 supplies no uncalibrated photoperiod delay.
+  implicit none
+  character(len=*), intent(in) :: varname !NetCDF floral trait name, [-]
+  real(r8), intent(out) :: values(:) !consecutive PFT values, [h] for FL_POPT or [h-1] for FL_PSENS
+  integer, intent(in) :: first_pft !first PFT record, one-based, [-]
+  real(r8), intent(in) :: default_value !value for an absent variable, same units as values
+  real(r8), intent(in) :: min_value,max_value !accepted bounds, same units as values
+  character(len=*), parameter :: subname='ReadFloralTrait'
+  integer :: status,varid,refid,ndims,dims(nf90_max_var_dims),refdims(nf90_max_var_dims),i
+  real(r8) :: missing
+  character(len=13), parameter :: missing_atts(2)=[character(len=13) :: '_FillValue','missing_value']
+
+  call PrintInfo('beg '//subname)
+  values=default_value
+  status=nf90_inq_varid(pft_nfid%fh,varname,varid)
+  if(status/=nf90_enotvar)then
+    call check_ret(status,subname//'::'//varname)
+    dims=0; refdims=0
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,varid,ndims=ndims,dimids=dims),subname//'::dimensions')
+    call check_ret(nf90_inq_varid(pft_nfid%fh,'WDLF',refid),subname//'::WDLF')
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,refid,dimids=refdims),subname//'::PFT axis')
+    if(ndims/=1.or.dims(1)/=refdims(1))call endrun(varname//' must use the same single PFT dimension as WDLF')
+    call check_ret(nf90_get_var(pft_nfid%fh,varid,values,start=[first_pft],count=[size(values)]),subname//'::read')
+    if(any(.not.ieee_is_finite(values)))call endrun(varname//' must contain finite floral trait values')
+    if(any(values<min_value).or.any(values>max_value).or.any(values==real(nf90_fill_double,r8)).or.any(values==real(nf90_fill_float,r8))) &
+      call endrun(varname//' contains out-of-range or unwritten floral values')
+    do i=1,size(missing_atts)
+      status=nf90_get_att(pft_nfid%fh,varid,trim(missing_atts(i)),missing)
+      if(status==nf90_noerr)then
+        if(ieee_is_finite(missing))then
+          if(any(values==missing))call endrun(varname//' contains '//trim(missing_atts(i))//' records')
+        endif
+      else if(status/=nf90_enotatt)then
+        call check_ret(status,subname//'::'//trim(missing_atts(i)))
+      endif
+    enddo
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine ReadFloralTrait
+!------------------------------------------------------------------------------------------
+  subroutine ReadThermalTrait(varname,values,first_pft,default_value)
+  ! Description:
+  ! Read an optional thermal trait on the WDLF PFT axis. Older parameter files
+  ! retain the legacy energy; supplied records must be finite positive values.
+  implicit none
+  character(len=*), intent(in) :: varname !NetCDF thermal trait name, [-]
+  real(r8), intent(out) :: values(:) !consecutive PFT inactivation energies, [J mol-1]
+  integer, intent(in) :: first_pft !first PFT record, one-based, [-]
+  real(r8), intent(in) :: default_value !legacy energy when the variable is absent, [J mol-1]
+  character(len=*), parameter :: subname='ReadThermalTrait'
+  integer :: status,varid,refid,ndims,dims(nf90_max_var_dims),refdims(nf90_max_var_dims),i
+  real(r8) :: missing
+  character(len=13), parameter :: missing_atts(2)=[character(len=13) :: '_FillValue','missing_value']
+
+  call PrintInfo('beg '//subname)
+  values=default_value
+  status=nf90_inq_varid(pft_nfid%fh,varname,varid)
+  if(status/=nf90_enotvar)then
+    call check_ret(status,subname//'::'//varname)
+    dims=0; refdims=0
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,varid,ndims=ndims,dimids=dims),subname//'::dimensions')
+    call check_ret(nf90_inq_varid(pft_nfid%fh,'WDLF',refid),subname//'::WDLF')
+    call check_ret(nf90_inquire_variable(pft_nfid%fh,refid,dimids=refdims),subname//'::PFT axis')
+    if(ndims/=1.or.dims(1)/=refdims(1))call endrun(varname//' must use the same single PFT dimension as WDLF')
+    call check_ret(nf90_get_var(pft_nfid%fh,varid,values,start=[first_pft],count=[size(values)]),subname//'::read')
+    if(any(.not.ieee_is_finite(values)))call endrun(varname//' must contain finite positive energies [J mol-1]')
+    if(any(values<=0._r8).or.any(values==real(nf90_fill_double,r8)).or.any(values==real(nf90_fill_float,r8))) &
+      call endrun(varname//' contains invalid or unwritten energies [J mol-1]')
+    do i=1,size(missing_atts)
+      status=nf90_get_att(pft_nfid%fh,varid,trim(missing_atts(i)),missing)
+      if(status==nf90_noerr)then
+        if(ieee_is_finite(missing))then
+          if(any(values==missing))call endrun(varname//' contains '//trim(missing_atts(i))//' records')
+        endif
+      else if(status/=nf90_enotatt)then
+        call check_ret(status,subname//'::'//trim(missing_atts(i)))
+      endif
+    enddo
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine ReadThermalTrait
+!------------------------------------------------------------------------------------------
+
+  subroutine thermal_trait_disp(nu_plt,NZ,NY,NX)
+  ! Description:
+  ! Write resolved independent growth/phenology inactivation energies per PFT.
+  implicit none
+  integer, intent(in) :: nu_plt !open plant_trait.desc output unit, [-]
+  integer, intent(in) :: NZ,NY,NX !PFT slot and column row/column indices, [-]
+  character(len=*), parameter :: subname='thermal_trait_disp'
+  integer :: j,id
+
+  call PrintInfo('beg '//subname)
+  write(nu_plt,*)('-',j=1,110)
+  write(nu_plt,*)'THERMAL PROPERTIES'
+  id=0
+  id=addone(id)
+  call writefixl(nu_plt,id,'RG_ELOW','Root growth low-temperature inactivation energy [J mol-1]', &
+    RootGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'RG_EHIGH','Root growth high-temperature inactivation energy [J mol-1]', &
+    RootGrowEnergyHigh_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'CG_ELOW','Canopy growth low-temperature inactivation energy [J mol-1]', &
+    CanopyGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'CG_EHIGH','Canopy growth high-temperature inactivation energy [J mol-1]', &
+    CanopyGrowEnergyHigh_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'LG_ELOW','Leaf/node phenology low-temperature inactivation energy [J mol-1]', &
+    LeafGrowEnergyLow_pft(NZ,NY,NX),100)
+  id=addone(id)
+  call writefixl(nu_plt,id,'LG_EHIGH','Leaf/node phenology high-temperature inactivation energy [J mol-1]', &
+    LeafGrowEnergyHigh_pft(NZ,NY,NX),100)
+  call PrintInfo('end '//subname)
+  end subroutine thermal_trait_disp
+
+!------------------------------------------------------------------------------------------
+
   subroutine photosyns_trait_disp(nu_plt,NZ,NY,NX)
   ! Description:
   ! Write the active PFT photosynthetic traits and SP prescribed protein density.
@@ -1370,6 +1526,10 @@ implicit none
   call writefixl(nu_plt,id,'XDL','Critical photoperiod for leaf and flora development (<= maximum daylength;<0=maximum) [h]',CriticPhotoPeriod_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'XPPD','Critical difference between critical photoperiod and current day length [h]',PhotoPeriodSens_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'FL_POPT','Fully inductive floral photoperiod boundary (annual crop) [h]', &
+    FloralPhotoOpt_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'FL_PSENS','Exponential floral photoperiod sensitivity; 0=no delay [h-1]', &
+    FloralPhotoSens_pft(NZ,NY,NX),100)
 
   end subroutine Phenology_trait_disp
 
@@ -1396,6 +1556,8 @@ implicit none
   call writefixl(nu_plt,id,'STDENS','Stem dry mass density (including voids) [gC cm-3]',1.e-6_r8/StemSpecVolume_pft(NZ,NY,NX),100)    
   id=addone(id)
   call writefixl(nu_plt,id,'WDLF','Leaf length:width ratio [-]',rLen2WidthLeaf_pft(NZ,NY,NX),100)  
+  id=addone(id)
+  call writefixl(nu_plt,id,'HYPA','Hypocotyl-leaf area allometry coefficient [-]',HypocotLeafAreaCoeff_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CFI','Initial clumping factor seedling [-]',ClumpFactorInit_pft(NZ,NY,NX),100)
   id=addone(id)
@@ -2046,11 +2208,20 @@ implicit none
   call ncd_getvar(pft_nfid,'R95MAT',Radius95pctMature_tab)
   call ncd_getvar(pft_nfid,'PhiMAX',xylemPhi_max_tab)
   call ncd_getvar(pft_nfid, 'WDLF', rLen2WidthLeaf_tab)
+  call ncd_getvar(pft_nfid, 'HYPA', HypocotLeafAreaCoeff_tab)
+  call ReadThermalTrait('RG_ELOW',RootGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('RG_EHIGH',RootGrowEnergyHigh_tab,1,222500._r8)
+  call ReadThermalTrait('CG_ELOW',CanopyGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('CG_EHIGH',CanopyGrowEnergyHigh_tab,1,222500._r8)
+  call ReadThermalTrait('LG_ELOW',LeafGrowEnergyLow_tab,1,197500._r8)
+  call ReadThermalTrait('LG_EHIGH',LeafGrowEnergyHigh_tab,1,218500._r8)
   call ncd_getvar(pft_nfid, 'PB', NonstCMinConc2InitBranch_tab)
   call ncd_getvar(pft_nfid, 'GROUPX', GROUPX_tab)
   call ncd_getvar(pft_nfid, 'XTLI', ShootNodeNumAtPlanting_tab)
   call ncd_getvar(pft_nfid, 'XDL', CriticPhotoPeriod_tab)
   call ncd_getvar(pft_nfid, 'XPPD',PhotoPeriodSens_tab)
+  call ReadFloralTrait('FL_POPT',FloralPhotoOpt_tab,1,-1._r8,-1._r8,24._r8)
+  call ReadFloralTrait('FL_PSENS',FloralPhotoSens_tab,1,0._r8,0._r8,1.e6_r8)
   call ncd_getvar(pft_nfid, 'SLA1', SLA1_tab)
   call ncd_getvar(pft_nfid, 'SSL1', PetolShethLen2Mass_tab)
   call ncd_getvar(pft_nfid, 'SNL1', NodeLenPergC_tab)

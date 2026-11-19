@@ -400,6 +400,7 @@ contains
     plt_allom%rProteinC2RootN_pft(NZ) = rProteinC2RootN_pft(NZ,NY,NX)
     plt_allom%rProteinC2LeafN_pft(NZ) = rProteinC2LeafN_pft(NZ,NY,NX)
     plt_allom%rProteinC2LeafP_pft(NZ) = rProteinC2LeafP_pft(NZ,NY,NX)
+    plt_allom%rNPRatio_pft(NZ) = rNPRatio_pft(NZ,NY,NX)
 
     plt_photo%DiffCO2Atmos2Intracel_pft(NZ) = DiffCO2Atmos2Intracel_pft(NZ,NY,NX)
     plt_photo%AirConc_pft(NZ)               = AirConc_pft(NZ,NY,NX)

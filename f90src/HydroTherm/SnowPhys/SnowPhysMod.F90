@@ -20,6 +20,7 @@ module SnowPhysMod
   use SoilWaterDataType
   use HydroThermData
   use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
+  use LitterHydraulicMod, only: LitterMatricPotential,GetLitterHydraulicParameters
   use SurfLitterDataType
   use SurfSoilDataType
   use SoilHeatDataType
@@ -1884,18 +1885,9 @@ contains
 
   IF(VLitR_col(NY,NX).GT.ZEROS(NY,NX).AND.VLWatMicP1_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
     ThetaWLitR=AMIN1(VWatLitRHoldCapcity_col(NY,NX),VLWatMicP1_vr(0,NY,NX))/VLitR_col(NY,NX)
-    IF(ThetaWLitR.LT.FieldCapacity_vr(0,NY,NX))THEN
-      PSISM1_vr(0,NY,NX)=AMAX1(PSIHY,-EXP(LOGPSIFLD_col(NY,NX)+((LOGFldCapacity_vr(0,NY,NX)-LOG(ThetaWLitR))/FCD_vr(0,NY,NX) &
-        *LOGPSIMND_col(NY,NX))))
-    ELSEIF(ThetaWLitR.LT.POROS0_col(NY,NX))THEN
-      PSISM1_vr(0,NY,NX)=-EXP(LOGPSIAtSat(NY,NX)+(((LOGPOROS_vr(0,NY,NX)-LOG(ThetaWLitR))/PSD_vr(0,NY,NX))**SRP_vr(0,NY,NX) &
-        *LOGPSIMXD_col(NY,NX)))
-    ELSE
-      ThetaWLitR=POROS0_col(NY,NX)
-      PSISM1_vr(0,NY,NX)=PSI_at_Sautration_vr(0,NY,NX)
-    ENDIF
+    PSISM1_vr(0,NY,NX)=LitterMatricPotential(GetLitterHydraulicParameters(NY,NX),ThetaWLitR)
   ELSE
-    ThetaWLitR         = POROS0_col(NY,NX)
+    ThetaWLitR         = fLitRPore4WatHold_col(NY,NX)
     PSISM1_vr(0,NY,NX) = PSI_at_Sautration_vr(0,NY,NX)
   ENDIF
 

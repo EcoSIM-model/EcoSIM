@@ -1,31 +1,36 @@
 module PlantPhaseWorkMod
+  !
   ! Description:
   ! Retain independent full-plant workspaces between hydraulic and BGC phases.
   ! Pointer-bearing API objects exchange ownership with a column workspace;
   ! assignments swap pointers rather than making shallow snapshot copies.
   ! The soil chemistry workspace is refreshed after soil/microbial updates.
   ! No phase workspace is needed at an hourly checkpoint boundary.
-  use data_kind_mod, only: r8 => DAT_KIND_R8,yearIJ_type
-  use PlantAPICommonData, only: JP1,JZ1,pltpar
-  use abortutils, only: endrun
-  use DebugToolMod, only: PrintInfo
-  use PlantSiteAPIData, only: plant_siteinfo_type,plt_site
-  use PlantPhotosynthesisAPIData, only: plant_photosyns_type,plt_photo
-  use PlantRadiationAPIData, only: plant_radiation_type,plt_rad
-  use PlantMorphologyAPIData, only: plant_morph_type,plt_morph
-  use PlantPhenologyAPIData, only: plant_pheno_type,plt_pheno
-  use PlantAllometryAPIData, only: plant_allometry_type,plt_allom
-  use PlantBiomassAPIData, only: plant_biom_type,plt_biom
-  use PlantEnergyWaterAPIData, only: plant_ew_type,plt_ew
-  use PlantDisturbanceAPIData, only: plant_disturb_type,plt_distb
-  use PlantBGCRatesAPIData, only: plant_bgcrate_type,plt_bgcr
-  use PlantRootBGCAPIData, only: plant_rootbgc_type,plt_rbgc
+  !
+  use data_kind_mod,              only: r8 => DAT_KIND_R8,    yearIJ_type
+  use PlantAPICommonData,         only: JP1,                  JZ1, pltpar
+  use abortutils,                 only: endrun
+  use DebugToolMod,               only: PrintInfo
+  use PlantSiteAPIData,           only: plant_siteinfo_type,  plt_site
+  use PlantPhotosynthesisAPIData, only: plant_photosyns_type, plt_photo
+  use PlantRadiationAPIData,      only: plant_radiation_type, plt_rad
+  use PlantMorphologyAPIData,     only: plant_morph_type,     plt_morph
+  use PlantPhenologyAPIData,      only: plant_pheno_type,     plt_pheno
+  use PlantAllometryAPIData,      only: plant_allometry_type, plt_allom
+  use PlantBiomassAPIData,        only: plant_biom_type,      plt_biom
+  use PlantEnergyWaterAPIData,    only: plant_ew_type,        plt_ew
+  use PlantDisturbanceAPIData,    only: plant_disturb_type,   plt_distb
+  use PlantBGCRatesAPIData,       only: plant_bgcrate_type,   plt_bgcr
+  use PlantRootBGCAPIData,        only: plant_rootbgc_type,   plt_rbgc
   implicit none
   private
+  character(len=*),private, parameter :: mod_filename = &
+  __FILE__  
   public :: InitPlantPhaseWork,DestroyPlantPhaseWork,SwapPlantPhaseColumn
   public :: SavePlantHydraulicColumn,OpenPlantBGCColumn,ClosePlantBGCColumn
   public :: WaterLive_pft,WaterPassive_pft,WaterDryMatter_pft,WaterPath_pvr,WaterRadius_pvr
   public :: WaterRootShare_pvr,WaterRootDepth_pvr,WaterRootLength_pvr
+
   type :: PlantColumnWorkspace
     ! Description:
     ! Own one column's intermediate plant API state until its BGC phase finishes.
@@ -44,75 +49,77 @@ module PlantPhaseWorkMod
     type(plant_rootbgc_type) :: RootBGC
   end type PlantColumnWorkspace
   type(PlantColumnWorkspace), allocatable, target :: Workspace(:,:)
-  logical, allocatable :: WaterLive_pft(:,:,:),WaterPassive_pft(:,:,:) ! PFT/row/column [-]
-  real(r8), allocatable :: WaterDryMatter_pft(:,:,:) ! accepted dry-matter fraction [-], PFT/row/column
+  logical, allocatable :: WaterLive_pft(:,:,:),WaterPassive_pft(:,:,:)         ! PFT/row/column [-]
+  real(r8), allocatable :: WaterDryMatter_pft(:,:,:)                           ! accepted dry-matter fraction [-], PFT/row/column
   real(r8), allocatable :: WaterPath_pvr(:,:,:,:,:),WaterRadius_pvr(:,:,:,:,:) ! [m], root type/layer/PFT/row/column
-  real(r8), allocatable :: WaterRootShare_pvr(:,:,:,:,:) ! root carbon share [-], root type/layer/PFT/row/column
-  real(r8), allocatable :: WaterRootDepth_pvr(:,:,:,:) ! rooted layer fraction [-], layer/PFT/row/column
-  real(r8), allocatable :: WaterRootLength_pvr(:,:,:,:,:) ! [m], root type/layer/PFT/row/column
+  real(r8), allocatable :: WaterRootShare_pvr(:,:,:,:,:)                       ! root carbon share [-], root type/layer/PFT/row/column
+  real(r8), allocatable :: WaterRootDepth_pvr(:,:,:,:)                         ! rooted layer fraction [-], layer/PFT/row/column
+  real(r8), allocatable :: WaterRootLength_pvr(:,:,:,:,:)                      ! [m], root type/layer/PFT/row/column
 contains
 !------------------------------------------------------------------------------------------
   subroutine InitPlantPhaseWork(NHW,NHE,NVN,NVS)
-    ! Description:
-    ! Allocate column-owned plant and hydraulic work for the fixed active domain.
-    integer, intent(in) :: NHW,NHE,NVN,NVS ! west/east/north/south column bounds [-]
-    character(len=*), parameter :: subname='InitPlantPhaseWork'
-    integer :: NY,NX
+  !
+  ! Description:
+  ! Allocate column-owned plant and hydraulic work for the fixed active domain.
+  !
+  integer, intent(in) :: NHW,NHE,NVN,NVS ! west/east/north/south column bounds [-]
+  character(len=*), parameter :: subname='InitPlantPhaseWork'
+  integer :: NY,NX
 
-    call PrintInfo('beg '//subname)
-    if(allocated(Workspace))then
-      if(any(lbound(Workspace)/=[NVN,NHW]).or.any(ubound(Workspace)/=[NVS,NHE])) &
-        call endrun('Plant phase workspace domain changed during the simulation',__LINE__)
-    else
-      allocate(Workspace(NVN:NVS,NHW:NHE))
-      allocate(WaterLive_pft(JP1,NVN:NVS,NHW:NHE),WaterPassive_pft(JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterDryMatter_pft(JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterPath_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterRadius_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterRootShare_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterRootDepth_pvr(JZ1,JP1,NVN:NVS,NHW:NHE))
-      allocate(WaterRootLength_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
-      do NX=NHW,NHE
-        do NY=NVN,NVS
-          call InitPlantPhaseColumn(NY,NX)
-        enddo
+  call PrintInfo('beg '//subname)
+  if(allocated(Workspace))then
+    if(any(lbound(Workspace)/=[NVN,NHW]).or.any(ubound(Workspace)/=[NVS,NHE])) &
+      call endrun('Plant phase workspace domain changed during the simulation',__LINE__)
+  else
+    allocate(Workspace(NVN:NVS,NHW:NHE))
+    allocate(WaterLive_pft(JP1,NVN:NVS,NHW:NHE),WaterPassive_pft(JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterDryMatter_pft(JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterPath_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterRadius_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterRootShare_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterRootDepth_pvr(JZ1,JP1,NVN:NVS,NHW:NHE))
+    allocate(WaterRootLength_pvr(pltpar%jroots,JZ1,JP1,NVN:NVS,NHW:NHE))
+    do NX=NHW,NHE
+      do NY=NVN,NVS
+        call InitPlantPhaseColumn(NY,NX)
       enddo
-    endif
-    call PrintInfo('end '//subname)
+    enddo
+  endif
+  call PrintInfo('end '//subname)
   end subroutine InitPlantPhaseWork
 !------------------------------------------------------------------------------------------
   subroutine InitPlantPhaseColumn(NY,NX)
-    ! Description:
-    ! Initialize an independent set of plant API arrays for one column.
-    integer, intent(in) :: NY,NX ! column row and column indices [-]
-    character(len=*), parameter :: subname='InitPlantPhaseColumn'
-    call PrintInfo('beg '//subname)
-    associate(                                         &
-      Site           => Workspace(NY,NX)%Site        , & ! inout: owned Site API workspace; units/dimensions as in its type
-      Photo          => Workspace(NY,NX)%Photo       , & ! inout: owned Photo API workspace; units/dimensions as in its type
-      Radiation      => Workspace(NY,NX)%Radiation   , & ! inout: owned Radiation API workspace; units/dimensions as in its type
-      Morphology     => Workspace(NY,NX)%Morphology  , & ! inout: owned Morphology API workspace; units/dimensions as in its type
-      Phenology      => Workspace(NY,NX)%Phenology   , & ! inout: owned Phenology API workspace; units/dimensions as in its type
-      Allometry      => Workspace(NY,NX)%Allometry   , & ! inout: owned Allometry API workspace; units/dimensions as in its type
-      Biomass        => Workspace(NY,NX)%Biomass     , & ! inout: owned Biomass API workspace; units/dimensions as in its type
-      EnergyWater    => Workspace(NY,NX)%EnergyWater , & ! inout: owned EnergyWater API workspace; units/dimensions as in its type
-      Disturbance    => Workspace(NY,NX)%Disturbance , & ! inout: owned Disturbance API workspace; units/dimensions as in its type
-      BGCRates       => Workspace(NY,NX)%BGCRates    , & ! inout: owned BGCRates API workspace; units/dimensions as in its type
-      RootBGC        => Workspace(NY,NX)%RootBGC       & ! inout: owned RootBGC API workspace; units/dimensions as in its type
-    )
-    call Site%Init()
-    call Photo%Init()
-    call Radiation%Init()
-    call Morphology%Init()
-    call Phenology%Init()
-    call Allometry%Init()
-    call Biomass%Init()
-    call EnergyWater%Init()
-    call Disturbance%Init()
-    call BGCRates%Init()
-    call RootBGC%Init()
-    end associate
-    call PrintInfo('end '//subname)
+  ! Description:
+  ! Initialize an independent set of plant API arrays for one column.
+  integer, intent(in) :: NY,NX ! column row and column indices [-]
+  character(len=*), parameter :: subname='InitPlantPhaseColumn'
+  call PrintInfo('beg '//subname)
+  associate(                                         &
+    Site           => Workspace(NY,NX)%Site        , & ! inout: owned Site API workspace; units/dimensions as in its type
+    Photo          => Workspace(NY,NX)%Photo       , & ! inout: owned Photo API workspace; units/dimensions as in its type
+    Radiation      => Workspace(NY,NX)%Radiation   , & ! inout: owned Radiation API workspace; units/dimensions as in its type
+    Morphology     => Workspace(NY,NX)%Morphology  , & ! inout: owned Morphology API workspace; units/dimensions as in its type
+    Phenology      => Workspace(NY,NX)%Phenology   , & ! inout: owned Phenology API workspace; units/dimensions as in its type
+    Allometry      => Workspace(NY,NX)%Allometry   , & ! inout: owned Allometry API workspace; units/dimensions as in its type
+    Biomass        => Workspace(NY,NX)%Biomass     , & ! inout: owned Biomass API workspace; units/dimensions as in its type
+    EnergyWater    => Workspace(NY,NX)%EnergyWater , & ! inout: owned EnergyWater API workspace; units/dimensions as in its type
+    Disturbance    => Workspace(NY,NX)%Disturbance , & ! inout: owned Disturbance API workspace; units/dimensions as in its type
+    BGCRates       => Workspace(NY,NX)%BGCRates    , & ! inout: owned BGCRates API workspace; units/dimensions as in its type
+    RootBGC        => Workspace(NY,NX)%RootBGC       & ! inout: owned RootBGC API workspace; units/dimensions as in its type
+  )
+  call Site%Init()
+  call Photo%Init()
+  call Radiation%Init()
+  call Morphology%Init()
+  call Phenology%Init()
+  call Allometry%Init()
+  call Biomass%Init()
+  call EnergyWater%Init()
+  call Disturbance%Init()
+  call BGCRates%Init()
+  call RootBGC%Init()
+  end associate
+  call PrintInfo('end '//subname)
   end subroutine InitPlantPhaseColumn
 !------------------------------------------------------------------------------------------
   subroutine SwapPlantPhaseColumn(NY,NX)

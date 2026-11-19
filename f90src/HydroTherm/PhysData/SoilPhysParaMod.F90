@@ -5,6 +5,8 @@ module SoilPhysParaMod
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
+  use LitterHydraulicMod, only: LitterHydraulicParameters,GetLitterHydraulicParameters, &
+    LitterMatricPotential,LitterDryContent
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use EcoSiMParDataMod, only: micpar
   use DebugToolMod,     only: PrintInfo,DebugPrint
@@ -277,8 +279,8 @@ implicit none
 
   subroutine ComputePsiMCM(N6,N5,N4,THETWL,PSISM1)
   ! Description:
-  ! Dispatch ordinary-soil pressure to the selected scheme. Litter and pond-table
-  ! calls retain the current curve; ambient pond/ice pressure uses ComputePSIPond.
+  ! Dispatch ordinary soil to its selected scheme and litter to LitterHydraulicMod.
+  ! Pond tables retain the original curve; ambient pond/ice uses ComputePSIPond.
   implicit none
   integer, intent(in) :: N6,N5,N4
   real(r8), intent(inout) :: THETWL  !liquid content [m3 m-3 soil]; set to porosity near saturation
@@ -288,14 +290,21 @@ implicit none
   type(SoilHydraulicParameters) :: parameters
   class(SoilHydraulicModel), pointer :: model
   type(EcoSIMSoilHydraulicModel) :: surface_model
+  type(LitterHydraulicParameters) :: litter_parameters
 
   call PrintInfo('beg '//subname)
-  parameters=GetSoilHydraulicParameters(N6,N5,N4,DTHETW)
-  IF(N6.EQ.0 .OR. SoilBulkDensity_vr(N6,N5,N4).LE.ZERO)THEN
-    PSISM1=surface_model%matric_potential(parameters,THETWL)
+  IF(N6.EQ.0)THEN
+    litter_parameters=GetLitterHydraulicParameters(N5,N4)
+    PSISM1=LitterMatricPotential(litter_parameters,THETWL)
+    THETWL=MIN(THETWL,litter_parameters%holding_fraction)
   ELSE
-    model=>GetSoilHydraulicModel()
-    PSISM1=model%matric_potential(parameters,THETWL)
+    parameters=GetSoilHydraulicParameters(N6,N5,N4,DTHETW)
+    IF(SoilBulkDensity_vr(N6,N5,N4).LE.ZERO)THEN
+      PSISM1=surface_model%matric_potential(parameters,THETWL)
+    ELSE
+      model=>GetSoilHydraulicModel()
+      PSISM1=model%matric_potential(parameters,THETWL)
+    ENDIF
   ENDIF
   call PrintInfo('end '//subname)
   END subroutine ComputePsiMCM
@@ -313,13 +322,12 @@ implicit none
 
   type(SoilHydraulicParameters) :: parameters
   class(SoilHydraulicModel), pointer :: model
-  type(EcoSIMSoilHydraulicModel) :: litter_model
 
   call PrintInfo('beg '//subname)
-  parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
   IF(L.EQ.0)THEN
-    WaterContent=litter_model%dry_content(parameters)
+    WaterContent=LitterDryContent(GetLitterHydraulicParameters(NY,NX))
   ELSE
+    parameters=GetSoilHydraulicParameters(L,NY,NX,DTHETW)
     model=>GetSoilHydraulicModel()
     WaterContent=model%dry_content(parameters)
   ENDIF

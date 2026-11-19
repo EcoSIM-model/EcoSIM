@@ -358,6 +358,9 @@ contains
 
 !----------------------------------------------------------------------------------------------------
   subroutine RemoveRootsByTillage(yearIJ,NZ,XHVST)
+  ! Description:
+  ! Transfer removed root biomass to litter and reduce surviving geometry,
+  ! retaining respiration already produced this timestep.
   implicit none        
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
@@ -398,9 +401,8 @@ contains
     RootNodulStrutElms_rpvr    => plt_biom%RootNodulStrutElms_rpvr      ,& !inoput :root layer nodule element, [g d-2]
     RootGasLossDisturb_pft     => plt_bgcr%RootGasLossDisturb_pft       ,& !inoput :gaseous flux fron root disturbance, [g d-2 h-1]
     LitrfallElms_pvr           => plt_bgcr%LitrfallElms_pvr             ,& !inoput :plant LitrFall element, [g d-2 h-1]
-    RootCO2Autor_pvr           => plt_rbgc%RootCO2Autor_pvr             ,& !inoput :root respiration constrained by O2, [g d-2 h-1]
-    RootRespPotent_pvr         => plt_rbgc%RootRespPotent_pvr           ,& !inoput :root respiration unconstrained by O2, [g d-2 h-1]
-    RootCO2EmisPot_pvr         => plt_rbgc%RootCO2EmisPot_pvr           ,& !inoput :root CO2 efflux unconstrained by root nonstructural C, [g d-2 h-1]
+    RootRespPotent_pvr         => plt_rbgc%RootRespPotent_pvr           ,& !inoput :O2 demand predictor for surviving roots, [gC d-2 h-1]
+    RootCO2EmisPot_pvr         => plt_rbgc%RootCO2EmisPot_pvr           ,& !inoput :respiratory demand predictor for surviving roots, [gC d-2 h-1]
     Root1stLenPP_rpvr          => plt_morph%Root1stLenPP_rpvr           ,& !inoput :primary root length per axis in soil layer, [m]
     RootVH2O_pvr               => plt_morph%RootVH2O_pvr                ,& !inoput :root layer volume water, [m2 d-2]
     RootSAreaPerPlant_pvr      => plt_morph%RootSAreaPerPlant_pvr       ,& !inoput :root layer area per plant, [m p-1]
@@ -530,9 +532,10 @@ contains
       RootPoreVol_pvr(N,L,NZ)         = RootPoreVol_pvr(N,L,NZ)*XHVST
       RootVH2O_pvr(N,L,NZ)            = RootVH2O_pvr(N,L,NZ)*XHVST
       RootSAreaPerPlant_pvr(N,L,NZ)   = RootSAreaPerPlant_pvr(N,L,NZ)*FracGeometryLeft
-      RootRespPotent_pvr(N,L,NZ)      = RootRespPotent_pvr(N,L,NZ)*XHVST
-      RootCO2EmisPot_pvr(N,L,NZ)      = RootCO2EmisPot_pvr(N,L,NZ)*XHVST
-      RootCO2Autor_pvr(N,L,NZ)        = RootCO2Autor_pvr(N,L,NZ)*XHVST
+      RootRespPotent_pvr(N,L,NZ) = RootRespPotent_pvr(N,L,NZ)*XHVST
+      RootCO2EmisPot_pvr(N,L,NZ) = RootCO2EmisPot_pvr(N,L,NZ)*XHVST
+      ! RootCO2Autor_pvr records completed respiration, not surviving tissue.
+      ! Retain it in the timestep ledger even when tillage removes every root.
       !
       !     LitrFall AND STATE VARIABLES FOR NODULES DURING TILLAGE
       !

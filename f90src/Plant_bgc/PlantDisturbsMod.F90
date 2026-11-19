@@ -2184,6 +2184,9 @@ module PlantDisturbsMod
   end subroutine TerminateRoots4Annuals
 !----------------------------------------------------------------------------------------------------
   subroutine HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1,PopulationThinning)
+  ! Description:
+  ! Reduce surviving root pools and geometry without rescaling fluxes that
+  ! were already produced by growth earlier in the current timestep.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
 
@@ -2226,9 +2229,8 @@ module PlantDisturbsMod
     RootSAreaPerPlant_pvr     => plt_morph%RootSAreaPerPlant_pvr     ,& !inoput :root layer area per plant, [m p-1]
     PopuRootMycoC_pvr         => plt_biom% PopuRootMycoC_pvr         ,& !inoput :root layer C, [gC d-2]
     RootVH2O_pvr              => plt_morph%RootVH2O_pvr              ,& !inoput :root layer volume water, [m2 d-2]
-    RootCO2Autor_pvr          => plt_rbgc%RootCO2Autor_pvr           ,& !inoput :root respiration constrained by O2, [g d-2 h-1]
-    RootCO2EmisPot_pvr        => plt_rbgc%RootCO2EmisPot_pvr         ,& !inoput :root CO2 efflux unconstrained by root nonstructural C, [g d-2 h-1]
-    RootRespPotent_pvr        => plt_rbgc%RootRespPotent_pvr         ,& !inoput :root respiration unconstrained by O2, [g d-2 h-1]
+    RootCO2EmisPot_pvr        => plt_rbgc%RootCO2EmisPot_pvr         ,& !inoput :respiratory demand predictor for surviving roots, [gC d-2 h-1]
+    RootRespPotent_pvr        => plt_rbgc%RootRespPotent_pvr         ,& !inoput :O2 demand predictor for surviving roots, [gC d-2 h-1]
     LitrfallElms_pvr          => plt_bgcr%LitrfallElms_pvr           ,& !inoput :plant LitrFall element, [g d-2 h-1]
     RootNodulStrutElms_rpvr   => plt_biom%RootNodulStrutElms_rpvr    ,& !inoput :root layer nodule element, [g d-2]
     RootNodulNonstElms_rpvr   => plt_biom%RootNodulNonstElms_rpvr    ,& !inoput :root layer nonstructural element, [g d-2]
@@ -2306,8 +2308,10 @@ module PlantDisturbsMod
   RootPoreVol_pvr(N,L,NZ)         = RootPoreVol_pvr(N,L,NZ)*FracLeftThin
   RootVH2O_pvr(N,L,NZ)            = RootVH2O_pvr(N,L,NZ)*FracLeftThin
   RootSAreaPerPlant_pvr(N,L,NZ)   = RootSAreaPerPlant_pvr(N,L,NZ)*FracGeometryLeft
-  RootRespPotent_pvr(N,L,NZ)      = RootRespPotent_pvr(N,L,NZ)*FracLeftThin
-  RootCO2EmisPot_pvr(N,L,NZ)      = RootCO2EmisPot_pvr(N,L,NZ)*FracLeftThin
+  ! Scale demand predictors for surviving roots, while completed respiration
+  ! remains in RootCO2Autor_pvr for this timestep's carbon ledger.
+  RootRespPotent_pvr(N,L,NZ) = RootRespPotent_pvr(N,L,NZ)*FracLeftThin
+  RootCO2EmisPot_pvr(N,L,NZ) = RootCO2EmisPot_pvr(N,L,NZ)*FracLeftThin
   !
   !     NODULE LitrFall AND STATE VARIABLES DURING HARVESTING
   !

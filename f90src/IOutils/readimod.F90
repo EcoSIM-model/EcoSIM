@@ -11,6 +11,7 @@ module readiMod
   use EcoSIMConfig,     only: column_mode
   use EcoSiMParDataMod, only: micpar
   use SoilHydroParaMod, only: ComputeSoilHydroPars
+  use LitterHydraulicMod, only: LitterSaturatedConductivity
   use SoilPhysParaMod,  only: SetDeepSoil
   use DebugToolMod,     only: PrintInfo
   use ncdio_pio
@@ -741,7 +742,7 @@ module readiMod
         RSN_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.04E-06_r8,RSN_vr(k_fine_comp,0,NY,NX))
         RSP_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.004E-06_r8,RSP_vr(k_fine_comp,0,NY,NX))
 
-        SatHydroCondVert_vr(0,NY,NX) = 10.0_r8*0.098_r8
+        SatHydroCondVert_vr(0,NY,NX) = LitterSaturatedConductivity
         !
         !     SET FLAGS FOR ESTIMATING FC,WP,SCNV,SCNH IF UNKNOWN
         !

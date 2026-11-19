@@ -645,6 +645,21 @@ contains
   call hist_addfld1d(fname='LW_Sky_col',units='W/m2',avgflag='A',&
     long_name='Incoming sky long wave radiation',ptr_col=data1d_ptr)
 
+  data1d_ptr => this%h1D_RSoilEvap_col(beg_col:end_col)
+  call hist_addfld1d(fname='RSoilEvap_col',units='s/m',avgflag='A',&
+    long_name='Internal soil or open-water evaporation resistance, timestep-end sample; excludes air-side resistance',&
+    ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_RLitterEvap_col(beg_col:end_col)
+  call hist_addfld1d(fname='RLitterEvap_col',units='s/m',avgflag='A',&
+    long_name='Internal litter evaporation resistance, timestep-end sample; excludes air-side resistance',&
+    ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_QSUBLIM_col(beg_col:end_col)
+  call hist_addfld1d(fname='QSUBLIM_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Gross sublimation from snow, frozen litter and soil ice; positive to atmosphere, excludes frost deposition',&
+    ptr_col=data1d_ptr)
+
   data1d_ptr => this%h1D_SOIL_LE_col(beg_col:end_col)
   call hist_addfld1d(fname='SOIL_LE_col',units='W/m2',avgflag='A',&
     long_name='Latent heat flux into ground surface (exclude plant canopy)',ptr_col=data1d_ptr)

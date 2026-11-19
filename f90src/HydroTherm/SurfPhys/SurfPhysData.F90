@@ -1,7 +1,9 @@
 module SurfPhysData
+  ! Description:
   ! Own surface-exchange work arrays, local resistances and area/time prefactors.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
+  use data_const_mod, only: SurfaceResistanceMissing => DAT_CONST_SPVAL
 implicit none
   save
   character(len=*), private, parameter :: mod_filename=&
@@ -56,6 +58,16 @@ implicit none
   real(r8),allocatable :: HeatSnow2LitrM_col(:,:) !heat flux from snow to litter [MJ/d-2]
   real(r8),allocatable :: HeatAir2LitrM_col(:,:)  !heat flux from air to litter [MJ/d-2]
   real(r8),allocatable :: HeatSoil2LitrM_col(:,:) !heat flux from soil to litter [MJ/d-2]
+  ! Accepted direct atmospheric ice transfer, separate from liquid and freeze/thaw.
+  ! Work array only: reset each soil substep, committed before the next substep.
+  real(r8),allocatable :: IceVaporMicPM_vr(:,:,:) ! [m3 water equivalent/cell/step], layer 0=litter
+  ! Gross atmospheric loss from snow, litter ice and exposed soil ice.
+  ! Sum accepted substep transfers; frost deposition is excluded.
+  real(r8),allocatable :: QSUBLIM_col(:,:) ! hourly sublimation [m3 water equivalent/cell], positive to air
+  ! Last evaluated active substep; history averages these timestep-end samples.
+  ! Missing for inactive/covered paths. These diagnostics never drive a flux.
+  real(r8),allocatable :: RSoilEvap_col(:,:)   ! internal exposed-soil/water resistance [h m-1]
+  real(r8),allocatable :: RLitterEvap_col(:,:) ! internal exposed-litter resistance [h m-1]
   public :: InitSurfPhysData,DestructSurfPhysData
 
   contains
@@ -65,6 +77,10 @@ implicit none
   ! Allocate and initialize surface-exchange work arrays.
   implicit none
 
+  allocate(RSoilEvap_col(JY,JX)); RSoilEvap_col=SurfaceResistanceMissing
+  allocate(RLitterEvap_col(JY,JX)); RLitterEvap_col=SurfaceResistanceMissing
+  allocate(IceVaporMicPM_vr(0:JZ,JY,JX)); IceVaporMicPM_vr=0._r8
+  allocate(QSUBLIM_col(JY,JX)); QSUBLIM_col=0._r8
   allocate(HeatSoil2LitrM_col(JY,JX)); HeatSoil2LitrM_col=0._r8
   allocate(watflw(JY, JX))
   allocate(waticefl(JY,JX))
@@ -113,6 +129,10 @@ implicit none
   use abortutils, only : destroy
   implicit none
 
+  call destroy(RSoilEvap_col)
+  call destroy(RLitterEvap_col)
+  call destroy(IceVaporMicPM_vr)
+  call destroy(QSUBLIM_col)
   call destroy(HeatSoil2LitrM_col)
   call destroy(HeatAir2LitrM_col)
   call destroy(HeatSnow2LitrM_col)

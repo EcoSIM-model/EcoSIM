@@ -167,6 +167,9 @@ module HistDataType
   real(r8),pointer   :: h1D_PREC_col(:)   
   real(r8),pointer   :: h1D_LWSky_col(:)
   real(r8),pointer   :: h1D_SOIL_RN_col(:)      
+  real(r8),pointer   :: h1D_RSoilEvap_col(:)   ! internal resistance [s m-1]
+  real(r8),pointer   :: h1D_RLitterEvap_col(:) ! internal resistance [s m-1]
+  real(r8),pointer   :: h1D_QSUBLIM_col(:) ! gross snow/litter/soil sublimation [mm H2O hr-1], positive to air
   real(r8),pointer   :: h1D_SOIL_LE_col(:)      
   real(r8),pointer   :: h1D_SOIL_H_col(:)       
   real(r8),pointer   :: h1D_SOIL_G_col(:)       
@@ -366,6 +369,7 @@ module HistDataType
   real(r8),pointer   :: h1D_RootAct1stC_ptc(:)
   real(r8),pointer   :: h1D_PLANT_BALANCE_C_ptc(:) 
   real(r8),pointer   :: h1D_MainBranchNodeNumber_ptc(:)
+  real(r8),pointer :: h1D_FloralDevProgress_ptc(:) !main-branch induction / requirement, [-]
   real(r8),pointer   :: h1D_ShootNodeNumber_ptc(:)
   real(r8),pointer   :: h1D_STANDING_DEAD_C_ptc(:) 
   real(r8),pointer   :: h1D_FIREp_CO2_FLX_ptc(:)   

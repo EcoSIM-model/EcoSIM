@@ -18,6 +18,7 @@ module PlantAllometryAPIData
   real(r8), pointer :: rProteinC2RootP_pft(:)           => null()  !Protein C to root P ratio in remobilizable nonstructural biomass,        [-]
   real(r8), pointer :: rProteinC2LeafN_pft(:)          => null()  !Protein C to leaf N ratio in remobilizable nonstructural biomass,        [-]
   real(r8), pointer :: rProteinC2LeafP_pft(:)          => null()  !Protein C to leaf P ratio in remobilizable nonstructural biomass,        [-]
+  real(r8), pointer :: rNPRatio_pft(:)                => null()  !leaf protein-equivalent N:P ratio, [gN gP-1], (PFT)
   real(r8), pointer :: NoduGrowthYield_pft(:)           => null()  !nodule growth yield,                                     [g g-1]
   real(r8), pointer :: RootBiomGrosYld_pft(:)           => null()  !root growth yield,                                       [g g-1]
   real(r8), pointer :: rPCEar_pft(:)                    => null()  !ear P:C ratio,                                           [gP gC-1]
@@ -78,6 +79,7 @@ contains
   allocate(this%rProteinC2RootP_pft(JP1));this%rProteinC2RootP_pft=spval
   allocate(this%rProteinC2LeafN_pft(JP1));this%rProteinC2LeafN_pft=spval
   allocate(this%rProteinC2LeafP_pft(JP1));this%rProteinC2LeafP_pft=spval
+  allocate(this%rNPRatio_pft(JP1));this%rNPRatio_pft=spval
   allocate(this%CPRTS_pft(JP1));this%CPRTS_pft=spval
   allocate(this%CNRTS_pft(JP1));this%CNRTS_pft=spval
   allocate(this%rNCNodule_pft(JP1));this%rNCNodule_pft=spval
@@ -133,6 +135,7 @@ contains
   if(associated(this%rProteinC2RootP_pft))deallocate(this%rProteinC2RootP_pft);nullify(this%rProteinC2RootP_pft)
   if(associated(this%rProteinC2LeafN_pft))deallocate(this%rProteinC2LeafN_pft);nullify(this%rProteinC2LeafN_pft)
   if(associated(this%rProteinC2LeafP_pft))deallocate(this%rProteinC2LeafP_pft);nullify(this%rProteinC2LeafP_pft)
+  if(associated(this%rNPRatio_pft))deallocate(this%rNPRatio_pft);nullify(this%rNPRatio_pft)
   if(associated(this%NoduGrowthYield_pft))deallocate(this%NoduGrowthYield_pft);nullify(this%NoduGrowthYield_pft)
   if(associated(this%RootBiomGrosYld_pft))deallocate(this%RootBiomGrosYld_pft);nullify(this%RootBiomGrosYld_pft)
   if(associated(this%rPCEar_pft))deallocate(this%rPCEar_pft);nullify(this%rPCEar_pft)

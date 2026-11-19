@@ -35,7 +35,7 @@ contains
     integer, intent(in) :: NY,NX                ! row and column indices [-]
     real(r8), intent(in) :: SurfaceTemperature  ! current soil, litter or snow temperature [K]
     real(r8), intent(in) :: LocalResistance     ! local aerodynamic/film segment [h m-1]
-    real(r8) :: resistance                      ! complete resistance to the selected air endpoint [h m-1]
+    real(r8) :: resistance                      ! complete aerodynamic resistance to the selected air endpoint [h m-1]
     real(r8) :: neutral,ri,atmospheric
     character(len=*), parameter :: subname='SurfaceExchangeResistance'
 

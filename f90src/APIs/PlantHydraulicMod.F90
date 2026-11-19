@@ -3,19 +3,21 @@ module PlantHydraulicMod
   ! Advance plant water and energy exchange independently of plant
   ! growth, nutrient uptake and litter accounting. The soil driver consumes the
   ! accepted layer water and donor enthalpy before advancing soil transport.
-  use data_kind_mod, only: r8 => DAT_KIND_R8,yearIJ_type
-  use DebugToolMod, only: PrintInfo
-  use PlantAPICommonData, only: JP1,JZ1,pltpar
-  use PlantAPI4Uptake, only: PlantUptakeAPISend,PlantUptakeAPIRecv
-  use PlantSiteAPIData, only: plt_site
-  use EcoSIMCtrlMod, only: ldo_sp_mode
-  use PlantMod, only: PreparePlantColumn
-  use PlantDisturbMod, only: PrepLandscapeGrazing
-  use PlantPhaseWorkMod
+  use data_kind_mod,      only: r8 => DAT_KIND_R8,  yearIJ_type
+  use DebugToolMod,       only: PrintInfo
+  use PlantAPICommonData, only: JP1, JZ1, pltpar
+  use PlantAPI4Uptake,    only: PlantUptakeAPISend, PlantUptakeAPIRecv
+  use PlantSiteAPIData,   only: plt_site
+  use EcoSIMCtrlMod,      only: ldo_sp_mode
+  use PlantMod,           only: PreparePlantColumn
+  use PlantDisturbMod,    only: PrepLandscapeGrazing
   use UptakesMod, only: RootWaterUptake
   use ExtractsMod, only: ExtractRootWaterHeat,ExtractCanopyEnergyWater,ExtractCanopyInventory
-  implicit none
+  use PlantPhaseWorkMod  
+  implicit none  
   private
+  character(len=*),private, parameter :: mod_filename = &
+  __FILE__  
   public :: PlantHydraulicModel
 contains
 !------------------------------------------------------------------------------------------

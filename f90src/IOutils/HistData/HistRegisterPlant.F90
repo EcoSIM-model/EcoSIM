@@ -399,6 +399,11 @@ contains
   call hist_addfld1d(fname='STANDING_DEAD_C_pft',units='gC/m2',avgflag='A',&
     long_name='pft Standing dead C',ptr_patch=data1d_ptr,default='inactive')
 
+  data1d_ptr => this%h1D_FloralDevProgress_ptc(beg_ptc:end_ptc)
+  call hist_addfld1d(fname='FloralDevProgress_pft',units='1',avgflag='I', &
+    long_name='Annual crop main branch accumulated floral induction divided by node requirement', &
+    ptr_patch=data1d_ptr,default='inactive')
+
   data1d_ptr => this%h1D_MainBranchNodeNumber_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='MainBranchNodeNumber_pft',units='-',avgflag='I',&
     long_name='Plant main branch node number as a measure of phenoloigcal development',ptr_patch=data1d_ptr,default='inactive')
