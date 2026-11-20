@@ -9,7 +9,10 @@ module LitterHydraulicMod
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use abortutils, only: endrun,iulog
   use PorousSurfaceResistanceMod, only: PorousSurfaceResistance
-  use EcoSimConst, only: PSIHY
+  use BETResistanceMod, only: BETResistanceParameters,MakeBETResistanceParameters,BETResistanceState, &
+    BETReferencePressure,LitterBETCutoffFCFraction
+  use PhysPars, only: litter_bet_c
+  use EcoSimConst, only: PSIHY,RGASC,TFice
   use EcoSiMParDataMod, only: micpar
   use SoilPhysDataType, only: FieldCapacity_vr,WiltPoint_vr,LOGPOROS_vr,LOGFldCapacity_vr, &
     LOGWiltPoint_vr,PSD_vr,FCD_vr,LOGPSIAtSat,LOGPSIFLD_col,LOGPSIMXD_col,LOGPSIMND_col, &
@@ -24,6 +27,9 @@ module LitterHydraulicMod
   __FILE__
   integer, parameter, public :: NumLitterMoistureClasses=100
   real(r8), parameter, public :: LitterSaturatedConductivity=10.0_r8*0.098_r8 ! [m2 MPa-1 h-1]
+
+  type(BETResistanceParameters), allocatable, save :: resistance_cache(:,:)
+  real(r8), allocatable, save :: resistance_signature(:,:,:) ! native input signatures, (9,row,column)
 
   type, public :: LitterHydraulicParameters
     ! Description:
@@ -43,19 +49,21 @@ module LitterHydraulicMod
     real(r8) :: curvature                  ! wet-branch exponent [-]
     real(r8) :: saturation_potential       ! saturated matric potential [MPa]
     real(r8) :: dry_potential              ! lower matric-potential bound [MPa]
+    type(BETResistanceParameters) :: resistance=BETResistanceParameters() ! derived resistance-only material
   end type LitterHydraulicParameters
 
   public :: GetLitterHydraulicParameters,UpdateLitterHydraulicLimits,LitterHydroproperty
   public :: LitterMatricPotential,LitterWaterContent,LitterMatricPotentialDerivative,LitterDryContent
-  public :: LitterConductivityTable,LitterMoistureClass,LitterResistance
+  public :: LitterConductivityTable,LitterMoistureClass,LitterResistance,LitterResistanceRetention
 contains
 !------------------------------------------------------------------------------------------
   function GetLitterHydraulicParameters(NY,NX) result(parameters)
   !
   ! Description:
   ! Read native litter parameters directly; never dispatch through a soil model.
-  integer, intent(in) :: NY,NX ! column indices, row and column [-]
+  integer, intent(in) :: NY,NX                  ! column indices, row and column [-]
   type(LitterHydraulicParameters) :: parameters ! litter material view
+  real(r8) :: signature(9)                      ! native anchors and adjustable adsorption C [mixed units as parameter view]
   character(len=*), parameter :: subname='GetLitterHydraulicParameters'
 
   call PrintInfo('beg '//subname)
@@ -64,6 +72,25 @@ contains
     LOGPOROS_vr(0,NY,NX),LOGFldCapacity_vr(0,NY,NX),PSD_vr(0,NY,NX),FCD_vr(0,NY,NX), &
     LOGPSIAtSat(NY,NX),LOGPSIFLD_col(NY,NX),LOGPSIMXD_col(NY,NX),LOGPSIMND_col(NY,NX), &
     SRP_vr(0,NY,NX),PSI_at_Sautration_vr(0,NY,NX),PSIHY)
+  if(parameters%holding_fraction>0._r8.and.parameters%log_dry_content_ratio>0._r8)then
+    if(allocated(resistance_cache))then
+      if(any(shape(resistance_cache)/=shape(fLitRPore4WatHold_col))) &
+        deallocate(resistance_cache,resistance_signature)
+    endif
+    if(.not.allocated(resistance_cache))then
+      allocate(resistance_cache(size(fLitRPore4WatHold_col,1),size(fLitRPore4WatHold_col,2)))
+      allocate(resistance_signature(9,size(fLitRPore4WatHold_col,1),size(fLitRPore4WatHold_col,2)))
+      resistance_signature=0._r8
+    endif
+    signature=[parameters%holding_fraction,parameters%log_field_capacity,parameters%log_dry_content_ratio, &
+      parameters%log_field_potential,parameters%log_dry_potential_ratio,parameters%dry_potential, &
+      parameters%curvature,litter_bet_c,parameters%field_capacity]
+    if(.not.resistance_cache(NY,NX)%ready.or.any(signature/=resistance_signature(:,NY,NX)))then
+      resistance_cache(NY,NX)=LitterResistanceRetention(parameters)
+      resistance_signature(:,NY,NX)=signature
+    endif
+    parameters%resistance=resistance_cache(NY,NX)
+  endif
   call PrintInfo('end '//subname)
   end function GetLitterHydraulicParameters
 !------------------------------------------------------------------------------------------
@@ -260,8 +287,28 @@ contains
     call PrintInfo('end '//subname)
   end subroutine LitterHydroproperty
 !------------------------------------------------------------------------------------------
+  function LitterResistanceRetention(parameters) result(retention)
+    ! Description:
+    ! Derive a cubic/BET material at theta=0.5*field_capacity, independent of
+    ! physical pore porosity. The getter caches it and refreshes on material change.
+    type(LitterHydraulicParameters), intent(in) :: parameters ! current litter retention anchors
+    type(BETResistanceParameters) :: retention ! reconstructible resistance-only material
+    real(r8) :: theta,potential,slope,candidate
+    character(len=*), parameter :: subname='LitterResistanceRetention'
+
+    call PrintInfo('beg '//subname)
+    associate(context => parameters) ! input: native litter anchors on dry bulk-volume basis [-]
+    theta=LitterBETCutoffFCFraction*context%field_capacity
+    potential=LitterMatricPotential(context,theta)
+    slope=LitterMatricPotentialDerivative(context,theta)
+    candidate=LitterWaterContent(context,BETReferencePressure(potential))
+    retention=MakeBETResistanceParameters(theta,potential,slope,candidate,litter_bet_c)
+    end associate
+    call PrintInfo('end '//subname)
+  end function LitterResistanceRetention
+!------------------------------------------------------------------------------------------
   function LitterResistance(parameters,liquid_volume,ice_volume,bulk_volume,litter_area, &
-    hydraulic_conductivity,free_vapor_diffusivity,tortuosity_factor,vapor_density) result(resistance)
+    hydraulic_conductivity,free_vapor_diffusivity,tortuosity_factor,vapor_density,temperature,source_potential) result(resistance)
     ! Description:
     ! Apply Tang-Riley to the exposed litter-atmosphere branch. Retained liquid
     ! supplies capillary transport; actual liquid and physical ice displace pore
@@ -272,6 +319,10 @@ contains
     ! Water/ice filling all physical pores is treated as exposed free water/ice.
     ! Those limits, and absent litter, have zero internal resistance; atmospheric
     ! film resistance and the accepted liquid/ice donor budgets remain external.
+    ! Temperature enables cached cubic/BET resistance-only dry extrapolation.
+    ! Global litter_bet_c defaults to 13; the wet cutoff is theta/field_capacity=0.5.
+    ! Native litter pressure, hydraulic tables and the vapor flux gradient do not
+    ! change. Without temperature, retain the native resistance API behavior.
     type(LitterHydraulicParameters), intent(in) :: parameters ! litter material view
     real(r8), intent(in) :: liquid_volume          ! current inner-step liquid [m3 per cell]
     real(r8), intent(in) :: ice_volume             ! current physical ice, not water equivalent [m3 per cell]
@@ -281,8 +332,13 @@ contains
     real(r8), intent(in) :: free_vapor_diffusivity ! temperature-adjusted pore-air diffusivity [m2 h-1]
     real(r8), intent(in) :: tortuosity_factor      ! existing dimensionless pore-connectivity factor [-]
     real(r8), intent(in) :: vapor_density          ! common equilibrium source vapor density [Mg H2O m-3]
+    real(r8), optional, intent(in) :: temperature ! current litter temperature [K]; enables BET resistance
+    real(r8), optional, intent(in) :: source_potential ! matric pressure used for source vapor [MPa]
     real(r8) :: resistance ! internal litter resistance [h m-1]
     real(r8) :: theta,air_fraction,bulk_diffusivity,thickness,slope,bunsen
+    real(r8) :: baseline_potential,log_slope,log_theta_rh,log_prefactor,potential
+    logical :: extrapolate
+    type(BETResistanceParameters) :: retention
     character(len=*), parameter :: subname='LitterResistance'
 
     call PrintInfo('beg '//subname)
@@ -313,7 +369,30 @@ contains
         if(theta>0._r8.and.hydraulic_conductivity>0._r8)slope=LitterMatricPotentialDerivative(parameters,theta)
         ! Native liquid density is 1 Mg m-3; use the same source vapor as the flux.
         bunsen=1._r8/MAX(vapor_density,tiny(1._r8))
-        resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope,bulk_diffusivity,bunsen)
+        extrapolate=.false.
+        if(present(temperature).and.theta>0._r8.and.hydraulic_conductivity>0._r8)then
+          if(.not.ieee_is_finite(temperature).or.temperature<=0._r8)call endrun('Invalid BET litter temperature')
+          retention=parameters%resistance
+          if(.not.retention%ready)retention=LitterResistanceRetention(parameters)
+          extrapolate=theta<retention%theta_wet
+          if(extrapolate)then
+            call BETResistanceState(retention,theta,temperature,potential,log_slope,log_theta_rh)
+            baseline_potential=LitterMatricPotential(parameters,theta)
+            if(present(source_potential))baseline_potential=source_potential
+            if(.not.ieee_is_finite(baseline_potential))call endrun('Invalid BET litter source potential')
+            if(ice_volume>0._r8.and.temperature<TFice)then
+              log_prefactor=LOG(bunsen)+LOG(theta)+log_slope
+            else
+              log_prefactor=LOG(bunsen)+baseline_potential*18._r8/(RGASC*temperature)+log_theta_rh+log_slope
+            endif
+          endif
+        endif
+        if(extrapolate)then
+          resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,0._r8, &
+            bulk_diffusivity,bunsen,log_prefactor)
+        else
+          resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope,bulk_diffusivity,bunsen)
+        endif
       endif
     endif
     call PrintInfo('end '//subname)

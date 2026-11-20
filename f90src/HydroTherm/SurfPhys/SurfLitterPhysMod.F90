@@ -433,7 +433,8 @@ implicit none
         LitterClass = LitterMoistureClass(ThetaWLitR,litter_parameters%holding_fraction)
         RLitterEvap = LitterResistance(litter_parameters,MAX(0._r8,VWatLitr2),IceLitter, &
           VLitR_col(NY,NX),AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfByLitR_col(NY,NX), &
-          HydroCond_3D(3,LitterClass,0,NY,NX),TEFGASDIF(TKR1)*7.70E-02_r8,POROQ,VapLitR)
+          HydroCond_3D(3,LitterClass,0,NY,NX),TEFGASDIF(TKR1)*7.70E-02_r8,POROQ,VapLitR, &
+          temperature=TKR1,source_potential=PSISM1_vr(0,NY,NX))
       endif
       if(AScaledCdWOverLitr_col(NY,NX)>0._r8)RLitterEvap_col(NY,NX)=RLitterEvap
       CdLitREvap=AScaledCdWOverLitr_col(NY,NX)/(ExchangeResistance+RLitterEvap)

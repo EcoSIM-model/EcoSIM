@@ -877,7 +877,8 @@ contains
     BunsenWater = 1._r8/MAX(VaporSoi1,tiny(1._r8))
     RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaLiquidSurface, &
       DLYR_3D(3,TopSoilLayer,NY,NX),HydroCond_3D(3,MoistureClass,TopSoilLayer,NY,NX), &
-      BulkVaporDiffusivity,BunsenWater)
+      BulkVaporDiffusivity,BunsenWater,temperature=TKX1, &
+      source_potential=PSISM1_vr(TopSoilLayer,NY,NX),ice_volume=IceAvailable)
   else
     ! A pond/lake is an open-water surface, not a porous topsoil control volume.
     RSoilEvap=RZ

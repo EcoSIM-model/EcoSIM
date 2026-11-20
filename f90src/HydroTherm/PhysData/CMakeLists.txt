@@ -1,8 +1,9 @@
 # Litter hydraulics now belongs to Constitutive; discard its old module artifact.
 file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/litterhydraulicmod.mod")
+# PhysPars is now compiled by modelpars; discard the previous module location.
+file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/physpars.mod")
 
 set(PHYSDATA_SOURCES
- PhysPars.F90
  WatsubDataMod.F90
  SurfaceAirExchangeMod.F90
  SurfaceVaporExchangeMod.F90
