@@ -1250,12 +1250,16 @@ contains
     !     TK1=soil surface temperature, why not to litter layer
     !
   ! Test the current constituents, including redistribution, on every substep.
+  ! A thin meltwater film with no resolved frozen stock belongs to the surface
+  ! below even in cold air; otherwise its vanishing heat capacity stays exposed.
   VLHeatCapSnow_snvr(1,NY,NX) = cps*VLDrySnoWE0_snvr(1,NY,NX) &
     +cpw*VLWatSnow0_snvr(1,NY,NX)+cpi*VLIceSnow0_snvr(1,NY,NX)
   IF(VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) .AND. &
-    (TairK_col(NY,NX).GT.TFice.or.(.not.ats_cpl_mode.and..not.fixWaterLevel.and. &
+    (TairK_col(NY,NX).GT.TFice.or.(.not.ats_cpl_mode.and..not.fixWaterLevel.and.( &
       sum(VLDrySnoWE0_snvr(:,NY,NX))+sum(VLWatSnow0_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow0_snvr(:,NY,NX)) &
-      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))))THEN
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX).or. &
+      sum(VLDrySnoWE0_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow0_snvr(:,NY,NX)) &
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX)))))THEN
     FLWS                      = VLDrySnoWE0_snvr(1,NY,NX)
     FLWW                      = VLWatSnow0_snvr(1,NY,NX)
     FLWI                      = VLIceSnow0_snvr(1,NY,NX)
