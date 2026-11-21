@@ -14,6 +14,8 @@ module RestartMod
   use TracerIDMod       , only : trc_confs
   use EcoSIMCtrlMod     , only : etimer,do_budgets,plant_model,ldo_sp_mode,ldo_radiation_test,ATS_cpl_mode, &
     use_ecosys_drainage,DefaultSoilHydraulicScheme
+  use PhysPars, only: soil_bet_c,litter_bet_c
+  use BETResistanceMod, only: SoilBETCutoffFCFraction,LitterBETCutoffFCFraction
   use SoilHydraulicSchemeMod, only: GetSoilHydraulicSchemeName,GetSoilHydraulicSchemeRevision
   use ecosim_log_mod   , only : errMsg => shr_log_errMsg
   use abortutils        , only : endrun,destroy,iulog
@@ -5365,7 +5367,7 @@ implicit none
   ! Write scheme identity/revision and separate drainage policy as global attributes.
   ! Validate them before restoring caches. Attribute-free legacy files are EcoSIM;
   ! cross-scheme or cross-policy cache migration is not performed implicitly.
-  use netcdf, only: nf90_global,nf90_noerr,nf90_enotatt,nf90_char,nf90_int, &
+  use netcdf, only: nf90_global,nf90_noerr,nf90_enotatt,nf90_char,nf90_int,nf90_double, &
     nf90_inquire_attribute,nf90_get_att
   implicit none
   type(file_desc_t), intent(inout) :: ncid ! opened checkpoint descriptor [-]
@@ -5383,6 +5385,13 @@ implicit none
       call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_scheme',trim(selected_name)),subname)
       call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_scheme_revision',selected_revision),subname)
       call check_ret(ncd_putatt(ncid,nf90_global,'soil_hydraulic_ecosys_drainage',merge(1,0,use_ecosys_drainage)),subname)
+      ! Resistance coefficients are reconstructed from restored native anchors;
+      ! record their configured priors for provenance, not as prognostic state.
+      call check_ret(ncd_putatt(ncid,nf90_global,'surface_resistance_retention','cubic_bet_v1'),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'soil_bet_c',soil_bet_c,nf90_double),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'litter_bet_c',litter_bet_c,nf90_double),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'soil_bet_cutoff_fc_fraction',SoilBETCutoffFCFraction,nf90_double),subname)
+      call check_ret(ncd_putatt(ncid,nf90_global,'litter_bet_cutoff_fc_fraction',LitterBETCutoffFCFraction,nf90_double),subname)
     elseif(flag=='read')then
       status=nf90_inquire_attribute(handle,nf90_global,'soil_hydraulic_scheme')
       has_name=status==nf90_noerr

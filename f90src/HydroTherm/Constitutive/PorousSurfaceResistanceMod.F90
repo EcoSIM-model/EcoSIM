@@ -14,19 +14,21 @@ module PorousSurfaceResistanceMod
 contains
 !------------------------------------------------------------------------------------------
   function PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope, &
-    bulk_vapor_diffusivity,bunsen_coefficient) result(resistance)
+    bulk_vapor_diffusivity,bunsen_coefficient,log_liquid_prefactor) result(resistance)
     ! Description:
     ! Evaluate r=(d/2)/(D_v_bulk+B*theta*K*dpsi/dtheta) in native hours and MPa.
     ! Gas and liquid conductances act in parallel; air fraction/tortuosity must
     ! already be included once in D_v_bulk. No atmospheric film or flux is added.
     ! Logarithmic sums preserve very dry limits without multiplying large B by K.
-    real(r8), intent(in) :: theta ! liquid content per bulk transport volume [m3 m-3]
-    real(r8), intent(in) :: thickness ! full porous control-volume thickness [m]
+    ! An optional ln(B*theta*dpsi/dtheta) preserves BET cancellations before K.
+    real(r8), intent(in) :: theta                  ! liquid content per bulk transport volume [m3 m-3]
+    real(r8), intent(in) :: thickness              ! full porous control-volume thickness [m]
     real(r8), intent(in) :: hydraulic_conductivity ! pressure-gradient K [m2 MPa-1 h-1]
-    real(r8), intent(in) :: slope ! dpsi/dtheta of this material [MPa per (m3 m-3)]
+    real(r8), intent(in) :: slope                  ! dpsi/dtheta of this material [MPa per (m3 m-3)]
     real(r8), intent(in) :: bulk_vapor_diffusivity ! includes pore air/tortuosity [m2 h-1]
-    real(r8), intent(in) :: bunsen_coefficient ! equal-unit liquid/vapor density ratio [-]
-    real(r8) :: resistance ! internal resistance, HUGE if blocked [h m-1]
+    real(r8), intent(in) :: bunsen_coefficient     ! equal-unit liquid/vapor density ratio [-]
+    real(r8), optional, intent(in) :: log_liquid_prefactor ! ln(B*theta*dpsi/dtheta), native MPa; excludes K
+    real(r8) :: resistance                         ! internal resistance, HUGE if blocked [h m-1]
     real(r8) :: log_liquid,log_vapor,log_transport,log_resistance
     logical :: liquid_transport
     character(len=*), parameter :: subname='PorousSurfaceResistance'
@@ -44,8 +46,13 @@ contains
     resistance=0._r8
     if(thickness>0._r8)then
       liquid_transport=slope>0._r8.and.theta>0._r8.and.hydraulic_conductivity>0._r8.and.bunsen_coefficient>0._r8
-      if(liquid_transport)log_liquid=LOG(bunsen_coefficient)+LOG(theta) &
-        +LOG(hydraulic_conductivity)+LOG(slope)
+      if(present(log_liquid_prefactor))then
+        if(.not.ieee_is_finite(log_liquid_prefactor))call endrun('Nonfinite porous resistance log prefactor')
+        liquid_transport=theta>0._r8.and.hydraulic_conductivity>0._r8.and.bunsen_coefficient>0._r8
+        if(liquid_transport)log_liquid=log_liquid_prefactor+LOG(hydraulic_conductivity)
+      elseif(liquid_transport)then
+        log_liquid=LOG(bunsen_coefficient)+LOG(theta)+LOG(hydraulic_conductivity)+LOG(slope)
+      endif
       if(bulk_vapor_diffusivity>0._r8)then
         log_vapor=LOG(bulk_vapor_diffusivity)
         log_transport=log_vapor

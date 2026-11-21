@@ -1,4 +1,7 @@
 file(GLOB MODELPARS_SOURCES "*.F90")
+# Compile the physical parameter module before constitutive models consume it.
+# Its source remains with the physical-process data modules.
+list(APPEND MODELPARS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/../HydroTherm/PhysData/PhysPars.F90")
 #set(MODELPARS_SOURCES
 #  NitroPars.F90
 #  PlantBGCPars.F90
@@ -17,7 +20,8 @@ target_include_directories(modelpars  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Mesh/
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/  
   ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
-  ${CMAKE_BINARY_DIR}/f90src/DebugTools/)
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 
 set(ECOSIM_LIBRARIES ${ECOSIM_LIBRARIES};modelpars PARENT_SCOPE)

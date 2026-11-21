@@ -8,6 +8,8 @@ program VanGenuchtenTest
   use DebugToolMod, only: PrintInfo
   use MiniFuncMod, only: FilmThickness
   use EcoSimConst, only: PSIPS
+  use EcoSimConst, only: RGASC
+  use MiniMathMod, only: vapsat
   use EcoSIMCtrlMod, only: lverb,soil_hydraulic_scheme,VanGenuchtenSchemeName
   use SoilPhysDataType, only: VGThetaR_vr,VGAlpha_vr,VGN_vr,VGL_vr
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters,NumSoilMoistureClasses
@@ -126,11 +128,12 @@ contains
   subroutine check_soil_resistance(scheme,context)
     ! Description:
     ! Validate the inherited resistance against Eq. 13 using analytic VG slopes
-    ! across shapes, spatial pressure scales and liquid contents.
+    ! across shapes, spatial pressure scales and liquid contents, including the
+    ! dry-boundary transport slope extension below the pressure cutoff.
     class(SoilHydraulicModel), intent(in) :: scheme      ! selected VG implementation [-]
     type(SoilHydraulicParameters), intent(in) :: context ! layer indices and hydraulic bounds
     real(r8), parameter :: samples(5)=[.12_r8,.20_r8,.25_r8,.35_r8,.40_r8]
-    real(r8) :: theta,work,pressure,slope,expected,actual,se,m,n,residual
+    real(r8) :: theta,work,pressure,slope,expected,actual,se,m,n,residual,dry,boundary_resistance,bunsen
     integer :: i
     character(len=*), parameter :: subname='check_soil_resistance'
 
@@ -151,6 +154,22 @@ contains
     enddo
     actual=scheme%soil_resistance(context,context%porosity,.02_r8,1.e-6_r8,0._r8,60000._r8)
     call require('finite wet VG soil resistance',ieee_is_finite(actual).and.actual>0._r8)
+    dry=scheme%dry_content(context)
+    boundary_resistance=scheme%soil_resistance(context,dry,.02_r8,1.e-6_r8,0._r8,60000._r8)
+    theta=.5_r8*(residual+dry);work=theta
+    actual=scheme%soil_resistance(context,theta,.02_r8,1.e-6_r8,0._r8,60000._r8)
+    call check_close('VG extended slope retains actual liquid content',actual,boundary_resistance*dry/theta)
+    call check_close('VG dry extension preserves capped pressure',scheme%matric_potential(context,work),context%dry_potential)
+    call require('VG dry extension preserves liquid content',theta==.5_r8*(residual+dry).and.work==theta)
+    call require('VG dry retention derivative remains clipped',scheme%matric_potential_derivative(context,theta)==0._r8)
+    actual=scheme%soil_resistance(context,theta,.02_r8,0._r8,.004_r8,60000._r8)
+    call check_close('VG zero conductivity leaves vapor path',actual,.02_r8/(2._r8*.004_r8))
+    pressure=scheme%matric_potential(context,work)
+    bunsen=1._r8/(vapsat(293.15_r8)*EXP(18._r8*pressure/(RGASC*293.15_r8)))
+    actual=scheme%soil_resistance(context,theta,.02_r8,1.e-6_r8,.004_r8,bunsen, &
+      temperature=293.15_r8,source_potential=pressure)
+    call require('finite cubic/BET resistance with selected VG wet curve',ieee_is_finite(actual).and.actual>0._r8)
+    call require('cubic/BET resistance leaves VG hydraulic pressure unchanged',scheme%matric_potential(context,work)==pressure)
     call PrintInfo('end '//subname)
   end subroutine check_soil_resistance
 !------------------------------------------------------------------------------------------

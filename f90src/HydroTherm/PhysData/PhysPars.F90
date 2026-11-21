@@ -1,4 +1,7 @@
 module PhysPars
+  ! Description:
+  ! Store shared physical-process parameters, including global BET adsorption
+  ! priors used by soil and litter evaporation resistance.
   use data_kind_mod , only : r8 => DAT_KIND_R8
   use data_const_mod, only : GravAcceleration=>DAT_CONST_G
   use EcoSimConst, only : ppmc  
@@ -46,4 +49,11 @@ implicit none
   real(r8), parameter :: FVOLAH=0.0_r8
   real(r8), parameter :: DTHETW=ppmc
   real(r8), parameter :: ZEROL=1.E-3_r8        !minimum litter fraction
+  ! Global BET priors for now, not ecosim namelist controls; distinct from density ratio B.
+  ! TODO: replace these scalars with column-dependent soil/litter adsorption parameters
+  ! when material-specific estimates are available. Keep these constants as fallbacks.
+  real(r8), parameter :: DefaultSoilBETC=18._r8   ! default soil BET adsorption C [-]
+  real(r8), parameter :: DefaultLitterBETC=13._r8 ! default litter BET adsorption C [-]
+  real(r8) :: soil_bet_c=DefaultSoilBETC     ! global soil BET adsorption prior C [-]
+  real(r8) :: litter_bet_c=DefaultLitterBETC ! global litter BET adsorption prior C [-]
 end module PhysPars

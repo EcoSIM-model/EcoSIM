@@ -377,7 +377,7 @@ contains
 
   data1d_ptr => this%h1D_SURF_LITRf_C_FLX_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='SURF_LITRf_C_FLX_pft',units='gC/m2',avgflag='I',&
-    long_name='Cumulative plant LitrFall C to the soil surface',ptr_patch=data1d_ptr,default='inactive')
+    long_name='Cumulative plant LitrFall C to the soil surface',ptr_patch=data1d_ptr)
 
   data1d_ptr => this%h1D_AUTO_RESP_FLX_ptc(beg_ptc:end_ptc)
   call hist_addfld1d(fname='AUTO_RESP_pft',units='gC/m2/hr',avgflag='A',&

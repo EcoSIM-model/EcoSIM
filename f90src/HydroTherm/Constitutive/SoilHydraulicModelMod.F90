@@ -8,6 +8,10 @@ module SoilHydraulicModelMod
   use abortutils, only: endrun,iulog
   use DebugToolMod, only: PrintInfo
   use PorousSurfaceResistanceMod, only: PorousSurfaceResistance
+  use BETResistanceMod, only: BETResistanceParameters,MakeBETResistanceParameters,BETResistanceState, &
+    BETReferencePressure,SoilBETCutoffFCFraction
+  use PhysPars, only: soil_bet_c
+  use EcoSimConst, only: RGASC,TFice
   implicit none
   private
   integer, parameter, public :: NumSoilMoistureClasses=100
@@ -32,6 +36,7 @@ module SoilHydraulicModelMod
     real(r8) :: saturation_potential        ! returned potential at saturation [MPa]
     real(r8) :: dry_potential               ! lower matric-potential bound [MPa]
     real(r8) :: saturation_tolerance        ! near-saturation content tolerance [m3 m-3]
+    type(BETResistanceParameters) :: resistance=BETResistanceParameters() ! cached resistance-only material
     integer :: layer=0,row=0,column=0       ! spatial indices for scheme-specific parameter arrays [-]
   end type SoilHydraulicParameters
 
@@ -43,6 +48,7 @@ module SoilHydraulicModelMod
     procedure(matric_interface), deferred :: matric_potential
     procedure :: matric_potential_derivative => MatricPotentialDerivative
     procedure :: soil_resistance             => SoilResistance
+    procedure :: resistance_parameters       => SoilResistanceRetention
     procedure(inverse_interface), deferred :: water_content
     procedure(table_interface), deferred :: conductivity_table
     procedure :: relative_conductivity  => LookupRelativeConductivity
@@ -61,6 +67,7 @@ module SoilHydraulicModelMod
       real(r8), intent(inout) :: theta ! liquid content; may be adjusted at saturation [m3 m-3]
       real(r8) :: potential ! matric potential [MPa]
     end function matric_interface
+!------------------------------------------------------------------------------------------
 
     function inverse_interface(this,parameters,potential) result(theta)
       ! Description:
@@ -71,6 +78,7 @@ module SoilHydraulicModelMod
       real(r8), intent(in) :: potential ! matric potential [MPa]
       real(r8) :: theta ! bounded liquid content [m3 m-3]
     end function inverse_interface
+!------------------------------------------------------------------------------------------
 
     subroutine table_interface(this,parameters,ksat_vertical,ksat_horizontal,water_classes,pressure_classes,conductivity)
       ! Description:
@@ -109,22 +117,22 @@ contains
     theta_min=MAX(tiny(1._r8),this%dry_content(parameters))
     if(theta>=theta_min.and.theta<=parameters%porosity.and.parameters%porosity>theta_min)then
       ! Balance central-difference truncation and roundoff on the content scale.
-      step=epsilon(1._r8)**(1._r8/3._r8)*parameters%porosity
-      theta_lo=MAX(theta_min,theta-step)
-      theta_hi=MIN(parameters%porosity,theta+step)
+      step     = epsilon(1._r8)**(1._r8/3._r8)*parameters%porosity
+      theta_lo = MAX(theta_min,theta-step)
+      theta_hi = MIN(parameters%porosity,theta+step)
       if(theta_hi>theta_lo)then
-        theta_work=theta_lo
-        psi_lo=this%matric_potential(parameters,theta_work)
-        theta_work=theta_hi
-        psi_hi=this%matric_potential(parameters,theta_work)
-        dpsi_dtheta=(psi_hi-psi_lo)/(theta_hi-theta_lo)
+        theta_work  = theta_lo
+        psi_lo      = this%matric_potential(parameters,theta_work)
+        theta_work  = theta_hi
+        psi_hi      = this%matric_potential(parameters,theta_work)
+        dpsi_dtheta = (psi_hi-psi_lo)/(theta_hi-theta_lo)
       endif
     endif
     call PrintInfo('end '//subname)
   end function MatricPotentialDerivative
 !------------------------------------------------------------------------------------------
   function SoilResistance(this,parameters,theta,thickness,hydraulic_conductivity, &
-    bulk_vapor_diffusivity,bunsen_coefficient) result(resistance)
+    bulk_vapor_diffusivity,bunsen_coefficient,temperature,source_potential,ice_volume) result(resistance)
     !
     ! Description:
     ! Compute the soil-internal resistance of Tang and Riley (2013), Eqs. 13-14,
@@ -134,6 +142,12 @@ contains
     ! and tortuosity exactly once. B=rho_liquid/rho_soil_vapor uses equal density
     ! units. Native K [m2 MPa-1 h-1] times the pressure slope [MPa] is D_w [m2 h-1];
     ! no conversion to hydraulic head is needed. K must match the selected curve.
+    ! With temperature supplied, a matched cubic/BET curve extrapolates dry
+    ! pressure, its derivative and the vapor partition factor only inside this
+    ! resistance. Existing K, water state and the caller's vapor gradient stay
+    ! external. Ice-controlled vapor retains its original partition coefficient.
+    ! Calls without temperature retain the boundary-slope extension for API
+    ! compatibility. The general derivative still describes the hydraulic curve.
     ! No atmospheric/film resistance, empirical floor or water flux is included.
     ! Zero thickness has zero resistance; blocked transport returns HUGE, and
     ! resistances below the normal floating-point range return zero. Evaluate
@@ -146,8 +160,13 @@ contains
     real(r8), intent(in) :: hydraulic_conductivity          ! current vertical K [m2 MPa-1 h-1]
     real(r8), intent(in) :: bulk_vapor_diffusivity          ! epsilon*D_g on the same soil-volume basis [m2 h-1]
     real(r8), intent(in) :: bunsen_coefficient              ! liquid/soil-vapor density ratio B [-]
+    real(r8), optional, intent(in) :: temperature           ! current material temperature [K]; enables BET resistance
+    real(r8), optional, intent(in) :: source_potential      ! matric pressure used for caller's source vapor [MPa]
+    real(r8), optional, intent(in) :: ice_volume            ! physical vapor-connected ice [m3 per cell]
     real(r8) :: resistance                                  ! soil-internal resistance [h m-1]
-    real(r8) :: slope
+    real(r8) :: slope,theta_slope,work,baseline_potential,resistance_potential,log_slope,log_theta_rh,log_prefactor
+    logical :: extrapolate,ice_controlled
+    type(BETResistanceParameters) :: retention
     character(len=*), parameter :: subname='SoilResistance'
 
     call PrintInfo('beg '//subname)
@@ -168,18 +187,79 @@ contains
     resistance=0._r8
     if(thickness>0._r8)then
       slope=0._r8
+      extrapolate=.false.
       if(theta>0._r8.and.hydraulic_conductivity>0._r8.and.bunsen_coefficient>0._r8)then
-        slope=this%matric_potential_derivative(parameters,theta)
+        if(present(temperature))then
+          if(.not.ieee_is_finite(temperature).or.temperature<=0._r8)call endrun('Invalid BET soil temperature')
+          retention=parameters%resistance
+          if(.not.retention%ready)retention=this%resistance_parameters(parameters)
+          extrapolate=theta<retention%theta_wet
+          if(extrapolate)then
+            call BETResistanceState(retention,theta,temperature,resistance_potential,log_slope,log_theta_rh)
+            work=MAX(theta,this%dry_content(parameters))
+            baseline_potential=this%matric_potential(parameters,work)
+            if(present(source_potential))baseline_potential=source_potential
+            if(.not.ieee_is_finite(baseline_potential))call endrun('Invalid BET soil source potential')
+            ice_controlled=.false.
+            if(present(ice_volume))then
+              if(.not.ieee_is_finite(ice_volume).or.ice_volume<0._r8)call endrun('Invalid BET soil ice volume')
+              ice_controlled=ice_volume>0._r8.and.temperature<TFice
+            endif
+            if(ice_controlled)then
+              log_prefactor=LOG(bunsen_coefficient)+LOG(theta)+log_slope
+            else
+              ! The supplied B already contains any osmotic vapor depression.
+              ! Replace only its matric contribution; log(theta/RH) is bounded.
+              log_prefactor=LOG(bunsen_coefficient)+baseline_potential*18._r8/(RGASC*temperature) &
+                +log_theta_rh+log_slope
+            endif
+          else
+            slope=this%matric_potential_derivative(parameters,theta)
+          endif
+        else
+          theta_slope=MAX(theta,this%dry_content(parameters))
+          slope=this%matric_potential_derivative(parameters,theta_slope)
+        endif
         if(.not.ieee_is_finite(slope).or.slope<0._r8)then
           write(iulog,*) subname,': invalid retention slope',theta,slope
           call endrun('Invalid soil resistance retention slope')
         endif
       endif
-      resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope, &
-        bulk_vapor_diffusivity,bunsen_coefficient)
+      if(extrapolate)then
+        resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,0._r8, &
+          bulk_vapor_diffusivity,bunsen_coefficient,log_prefactor)
+      else
+        resistance=PorousSurfaceResistance(theta,thickness,hydraulic_conductivity,slope, &
+          bulk_vapor_diffusivity,bunsen_coefficient)
+      endif
     endif
     call PrintInfo('end '//subname)
   end function SoilResistance
+!------------------------------------------------------------------------------------------
+  function SoilResistanceRetention(this,parameters) result(retention)
+    ! Description:
+    ! Derive the resistance-only cubic material from the selected native curve.
+    ! Set theta_wet=0.6*field_capacity (S_wet=0.6*S_fc); no native hydraulic state or
+    ! conductivity is modified. Production getters cache these derived anchors.
+    class(SoilHydraulicModel), intent(in) :: this ! selected native hydraulic model [-]
+    type(SoilHydraulicParameters), intent(in) :: parameters ! native pressure/content anchors
+    type(BETResistanceParameters) :: retention ! reconstructible cubic/BET material
+    real(r8) :: theta,work,potential,slope,candidate
+    character(len=*), parameter :: subname='SoilResistanceRetention'
+
+    call PrintInfo('beg '//subname)
+    associate( &
+      model => this, & ! input: selected native constitutive model [-]
+      context => parameters) ! input: material anchors and soil porosity [-]
+    theta     = SoilBETCutoffFCFraction*context%field_capacity
+    work      = theta
+    potential = model%matric_potential(context,work)
+    slope     = model%matric_potential_derivative(context,theta)
+    candidate = model%water_content(context,BETReferencePressure(potential))
+    retention = MakeBETResistanceParameters(theta,potential,slope,candidate,soil_bet_c)
+    end associate
+    call PrintInfo('end '//subname)
+  end function SoilResistanceRetention
 !------------------------------------------------------------------------------------------
   function LookupRelativeConductivity(this,parameters,theta) result(relative_k)
     ! Description:

@@ -828,8 +828,12 @@ contains
     long_name='CO2 solute concentration in litter',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_EVAPG_col(beg_col:end_col)
-  call hist_addfld1d(fname='EVAPGrnd_col',units='mm H2O/m2/hr',avgflag='A',&
+  call hist_addfld1d(fname='EVAPGrnd_col',units='mm H2O/hr',avgflag='A',&
     long_name='Column-integrated ground surface evaporation(>0 into soil)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_PotEvapGrnd_col(beg_col:end_col)
+  call hist_addfld1d(fname='PotEvapGrnd_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Potential net soil/litter/snow vapor exchange before donor limits (>0 into surface)',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_CondGasXSurf_col(beg_col:end_col)
   call hist_addfld1d(fname='GasXSurfConduct_col',units='m/hr',avgflag='A',&
