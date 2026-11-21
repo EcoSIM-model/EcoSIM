@@ -208,6 +208,7 @@ module HistDataType
   real(r8),pointer   :: h1D_O2_SEMIS_FLX_col(:)  
   real(r8),pointer   :: h1D_CO2_LITR_col(:)      
   real(r8),pointer   :: h1D_EVAPG_col(:)         
+  real(r8),pointer   :: h1D_PotEvapGrnd_col(:)  !potential net ground vapor flux, positive inward [mm H2O/hr]
   real(r8),pointer   :: h1D_CANET_col(:)         
   real(r8),pointer   :: h1D_CanopyEvap_col(:)
   real(r8),pointer   :: h1D_RUNOFF_FLX_col(:)    

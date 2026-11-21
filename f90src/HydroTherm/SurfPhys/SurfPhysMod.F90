@@ -95,6 +95,8 @@ implicit none
 contains
 
   subroutine SetHourlyAccumulatorsATS(NY,NX)
+  ! Description:
+  ! Reset surface-exchange diagnostics and accumulators for an ATS advance.
 !     implicit none
   integer, intent(in) :: NX,NY
   character(len=*), parameter :: subname='SetHourlyAccumulatorsATS'
@@ -114,6 +116,7 @@ contains
   HeatSensVapAir2Surf_col(NY,NX) = 0.0_r8
   HeatNet2Surf_col(NY,NX)        = 0.0_r8
   VapXAir2GSurf_col(NY,NX)       = 0.0_r8
+  PotEvapGrnd_col(NY,NX)        = 0.0_r8
 
   !TFLWCI(NY,NX)           = 0.0_r8
   RainIntceptByCanopy_col(NY,NX) = 0.0_r8
@@ -750,6 +753,7 @@ contains
   real(r8) :: BulkVaporDiffusivity !air fraction times effective vapor diffusivity [m2 h-1]
   real(r8) :: BunsenWater        !liquid/soil-vapor density ratio [-]
   real(r8) :: VaporDemand,LiquidVapor,IceVapor,IceAvailable,LatentDerivative
+  real(r8) :: PotVaporDemand !aerodynamic-only signed vapor demand [m3 water equivalent/cell/step]
   real(r8) :: VaporHeatCapacity ! accepted vapor donor sensible capacity [MJ/K]
   integer :: TopSoilLayer,MoistureClass
   type(SoilHydraulicParameters) :: soil_parameters !surface layer's selected retention parameters
@@ -890,7 +894,10 @@ contains
 
   ! One merged-resistance demand, partitioned by physical liquid/ice volume.
   if(TopLayWatVol<1.0e-30_r8)TopLayWatVol=0._r8
-  VaporDemand=CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)
+  VaporDemand    = CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)
+  PotVaporDemand = AScaledCdWOverSoil_col(NY,NX)/ExchangeResistance*(VPQ_col(NY,NX)-VaporSoi1)
+  ! Conductance already includes the exposed area and substep duration.
+  PotEvapGrnd_col(NY,NX)=PotEvapGrnd_col(NY,NX)+PotVaporDemand
   if(.not.ats_cpl_mode)then
     call PartitionSurfaceVapor(VaporDemand,TopLayWatVol,IceAvailable,TKX1,dts_wat, &
       LiquidVapor,IceVapor,LatentDerivative, &

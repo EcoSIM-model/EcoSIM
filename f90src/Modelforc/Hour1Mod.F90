@@ -720,6 +720,8 @@ module Hour1Mod
 !------------------------------------------------------------------------------------------
 
   subroutine SetHourlyDiagnostics(I,J,NY,NX)
+  ! Description:
+  ! Reset hourly column diagnostics and transfer accumulators before advancing the model.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: NX,NY
@@ -813,6 +815,7 @@ module Hour1Mod
   HeatSensVapAir2Surf_col(NY,NX)                  = 0._r8
   HeatNet2Surf_col(NY,NX)                         = 0._r8
   VapXAir2GSurf_col(NY,NX)                        = 0._r8
+  PotEvapGrnd_col(NY,NX)                         = 0._r8
   THeatSnowThaw_col(NY,NX)                        = 0._r8
   THeatSoiThaw_col(NY,NX)                         = 0._r8
   TPlantRootH2OUptake_col(NY,NX)                  = 0._r8

@@ -884,6 +884,7 @@ contains
   real(r8) :: LatentHeatAir2Sno2    !latent heat flux [MJ]
   real(r8) :: EvapSublimation2                           !snow loss as sublimation
   real(r8) :: MaxVapXAir2Sno                             ![kg H2O]
+  real(r8) :: PotVapXAir2Sno !aerodynamic-only signed vapor demand [m3 water equivalent/cell/step]
   real(r8) :: HeatNetFlx2Sno1,HeatNetFlx2Sno2
   real(r8) :: HeatAdvAir2SnoByEvap2                      !convective heat flux
   real(r8) :: NetHeatAir2Snow,SnofallRain
@@ -941,6 +942,9 @@ contains
   SnowSensibleDeriv=CdSnoHSens
   VPSno0         = vapsat(TKSnow1_snvr(1,NY,NX))  !*dssign(VLWatSnow0M_snvr(1,NY,NX))
   MaxVapXAir2Sno = CdSnoEvap*(VPQ_col(NY,NX)-VPSno0)
+  PotVapXAir2Sno = AScaledCdWOverSnow_col(NY,NX)/RAa*(VPQ_col(NY,NX)-VPSno0)
+  ! Conductance includes snow cover and substep duration; retain uncapped demand.
+  PotEvapGrnd_col(NY,NX)=PotEvapGrnd_col(NY,NX)+PotVapXAir2Sno
 
   !first: evaporation from snow held water
   EVAPW2 = AMAX1(MaxVapXAir2Sno,-AZMAX1(VLWatSnow0M_snvr(1,NY,NX)*dts_sno))
