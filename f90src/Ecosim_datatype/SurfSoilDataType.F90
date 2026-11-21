@@ -1,4 +1,5 @@
 module SurfSoilDataType
+  ! Description:
   ! Own surface-soil exchange state and species-dependent gas-transfer work arrays.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
@@ -19,6 +20,9 @@ module SurfSoilDataType
   real(r8),target,allocatable ::  HeatSensVapAir2Surf_col(:,:)           !total convective heat flux at ground surface, [MJ d-2 t-1]
   real(r8),target,allocatable ::  HeatNet2Surf_col(:,:)                  !total ground heat flux at ground surface, [MJ d-2 t-1]
   real(r8),target,allocatable ::  VapXAir2GSurf_col(:,:)                 !negative of total evaporation at ground surface, [m3 d-2 t-1]
+  ! Hourly sum of soil, litter and snow vapor demands before donor limits;
+  ! positive into the surface, including condensation/frost [m3 water equivalent/cell/hour].
+  real(r8),target,allocatable ::  PotEvapGrnd_col(:,:)                  !column demand (NY,NX)
   real(r8),target,allocatable ::  VWatStoreCapSurf_col(:,:)              !surface water storage capacity, [m3 d-2]
   real(r8),target,allocatable ::  VLWatHeldCapSurf_col(:,:)              !soil surface water retention capacity,[m3 d-2]
   real(r8),target,allocatable ::  VHCPNX_col(:,:)                        !minimum heat capacities,[MJ k-1 d-2]
@@ -35,6 +39,7 @@ module SurfSoilDataType
 
 contains
   subroutine InitSurfSoilData
+  ! Description:
   ! Allocate and zero surface-soil exchange state and species/substep coefficients.
 
   implicit none
@@ -47,6 +52,7 @@ contains
   allocate(HeatSensVapAir2Surf_col(JY,JX));    HeatSensVapAir2Surf_col = 0._r8
   allocate(HeatNet2Surf_col(JY,JX));           HeatNet2Surf_col        = 0._r8
   allocate(VapXAir2GSurf_col(JY,JX));          VapXAir2GSurf_col       = 0._r8
+  allocate(PotEvapGrnd_col(JY,JX));           PotEvapGrnd_col        = 0._r8
   allocate(FracSurfBareSoil_col(JY,JX));      FracSurfBareSoil_col     = 0._r8
   allocate(VWatStoreCapSurf_col(JY,JX));       VWatStoreCapSurf_col            = 0._r8
   allocate(VLWatHeldCapSurf_col(JY,JX));       VLWatHeldCapSurf_col        = 0._r8
@@ -64,6 +70,7 @@ contains
 
 !----------------------------------------------------------------------
   subroutine DestructSurfSoilData
+  ! Description:
   ! Release surface-soil state and gas-transfer work arrays.
   use abortutils, only : destroy
   implicit none
@@ -76,6 +83,7 @@ contains
   call destroy(HeatSensVapAir2Surf_col)
   call destroy(HeatNet2Surf_col)
   call destroy(VapXAir2GSurf_col)
+  call destroy(PotEvapGrnd_col)
   call destroy(FracSurfBareSoil_col)
   call destroy(VWatStoreCapSurf_col)
   call destroy(VLWatHeldCapSurf_col)

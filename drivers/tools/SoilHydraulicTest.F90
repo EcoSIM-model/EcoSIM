@@ -8,6 +8,7 @@ program SoilHydraulicTest
   use abortutils, only: iulog
   use DebugToolMod, only: PrintInfo
   use EcoSIMCtrlMod, only: lverb,use_ecosys_drainage,soil_hydraulic_scheme
+  use PhysPars, only: soil_bet_c,litter_bet_c
   use ElmIDMod, only: ielmc,isoi_set,isoi_unset,isoi_scnv,isoi_scnh
   use EcoSIMCtrlDataType
   use SoilPhysDataType
@@ -21,12 +22,17 @@ program SoilHydraulicTest
   use SoilHydroParaMod, only: SoilHydroProperty
   use LitterHydraulicMod, only: LitterHydroproperty,LitterHydraulicParameters, &
     GetLitterHydraulicParameters,UpdateLitterHydraulicLimits,LitterMatricPotential, &
-    LitterWaterContent,LitterDryContent,LitterMatricPotentialDerivative,LitterMoistureClass,LitterResistance
+    LitterWaterContent,LitterDryContent,LitterMatricPotentialDerivative,LitterMoistureClass,LitterResistance,LitterResistanceRetention
   use SoilPhysParaMod, only: ComputePsiMCM,ComputeSoilAirDryContent, &
     ComputeKsatReferenceContent,getMoistK
   use HydrologyDiagMod, only: ComputeWaterTableEquilContent
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
+  use BETResistanceMod, only: BETResistanceParameters,MakeBETResistanceParameters,BETResistanceState, &
+    BETResistanceHumidity,BETReferenceTemperature,SoilBETCutoffFCFraction,LitterBETCutoffFCFraction
+  use PorousSurfaceResistanceMod, only: PorousSurfaceResistance
+  use EcoSimConst, only: RGASC
+  use MiniMathMod, only: vapsat
   use SoilHydraulicSchemeMod, only: InitializeSoilHydraulicScheme,FinalizeSoilHydraulicScheme, &
     GetSoilHydraulicModel,GetSoilHydraulicSchemeName,GetSoilHydraulicParameters
   implicit none
@@ -71,6 +77,7 @@ program SoilHydraulicTest
   class(SoilHydraulicModel), pointer :: model
 
   call initialize_state()
+  call check_bet_resistance_state()
   call InitializeSoilHydraulicScheme()
   call require('default scheme identity',GetSoilHydraulicSchemeName()=='ecosim')
   model=>GetSoilHydraulicModel()
@@ -97,6 +104,7 @@ program SoilHydraulicTest
     call check_close('air-entry policy',PSISoilAirEntry_vr(1,1,1),expected_entry(mode))
     call check_close('ThetaSat policy',ThetaSat_vr(1,1,1),expected_theta_sat(mode))
     parameters=GetSoilHydraulicParameters(1,1,1,1.e-6_r8)
+    if(mode==1)call check_resistance_cache(model,parameters)
     call check_retention_derivative(model,parameters)
     call check_soil_resistance(model,parameters)
     do j=1,11
@@ -193,13 +201,128 @@ program SoilHydraulicTest
   write(*,*) 'SoilHydraulicTest passed'
 contains
 !------------------------------------------------------------------------------------------
+  subroutine check_resistance_cache(scheme,context)
+    ! Description:
+    ! Exercise initialization, adjustable C invalidation and deterministic native
+    ! anchor reconstruction. Check the prescribed wet cutoff against native data.
+    class(SoilHydraulicModel), intent(in) :: scheme ! selected native model [-]
+    type(SoilHydraulicParameters), intent(in) :: context ! initialized one-layer view
+    type(SoilHydraulicParameters) :: refreshed
+    type(BETResistanceParameters) :: rebuilt
+    real(r8) :: work,pressure,log_g,log_ratio,native_slope,extension_pressure,saved_fc(4)
+    character(len=*), parameter :: subname='check_resistance_cache'
+
+    call PrintInfo('beg '//subname)
+    associate( &
+      native => scheme, & ! input: selected native hydraulic implementation [-]
+      material => context) ! input: initialized layer view and cached resistance material [-]
+    call require('soil material cache initialized',material%resistance%ready)
+    call check_close('soil cutoff is 0.6 field capacity',material%resistance%theta_wet,.6_r8*material%field_capacity)
+    rebuilt=native%resistance_parameters(material)
+    call require('soil cache rebuild is deterministic',all(rebuilt%coefficient==material%resistance%coefficient))
+    work=.6_r8*material%field_capacity
+    pressure=native%matric_potential(context,work)
+    native_slope=native%matric_potential_derivative(context,work)
+    call BETResistanceState(material%resistance,work,273.15_r8,extension_pressure,log_g,log_ratio)
+    call require('soil cutoff pressure matches native at different T',ABS(extension_pressure/pressure-1._r8)<1.e-12_r8)
+    call require('soil cutoff slope matches native at different T',ABS(EXP(log_g)/native_slope-1._r8)<1.e-12_r8)
+    soil_bet_c=24._r8
+    refreshed=GetSoilHydraulicParameters(1,1,1,material%saturation_tolerance)
+    call require('soil C override refreshes cache',refreshed%resistance%adsorption_c==24._r8)
+    call require('soil C override changes monolayer',refreshed%resistance%monolayer/=material%resistance%monolayer)
+    soil_bet_c=18._r8
+    refreshed=GetSoilHydraulicParameters(1,1,1,material%saturation_tolerance)
+    call require('soil cache reset is deterministic',all(refreshed%resistance%coefficient==material%resistance%coefficient))
+    saved_fc=[FieldCapacity_vr(1,1,1),LOGFldCapacity_vr(1,1,1),PSD_vr(1,1,1),FCD_vr(1,1,1)]
+    FieldCapacity_vr(1,1,1)=.9_r8*material%field_capacity
+    LOGFldCapacity_vr(1,1,1)=LOG(FieldCapacity_vr(1,1,1))
+    PSD_vr(1,1,1)=LOGPOROS_vr(1,1,1)-LOGFldCapacity_vr(1,1,1)
+    FCD_vr(1,1,1)=LOGFldCapacity_vr(1,1,1)-LOGWiltPoint_vr(1,1,1)
+    refreshed=GetSoilHydraulicParameters(1,1,1,material%saturation_tolerance)
+    call check_close('soil material change refreshes FC-scaled cutoff', &
+      refreshed%resistance%theta_wet,.6_r8*FieldCapacity_vr(1,1,1))
+    FieldCapacity_vr(1,1,1)=saved_fc(1);LOGFldCapacity_vr(1,1,1)=saved_fc(2)
+    PSD_vr(1,1,1)=saved_fc(3);FCD_vr(1,1,1)=saved_fc(4)
+    refreshed=GetSoilHydraulicParameters(1,1,1,material%saturation_tolerance)
+    call require('restored FC gives identical cached coefficients', &
+      all(refreshed%resistance%coefficient==material%resistance%coefficient))
+    work=SoilBulkDensity_vr(1,1,1)
+    SoilBulkDensity_vr(1,1,1)=0._r8
+    refreshed=GetSoilHydraulicParameters(1,1,1,material%saturation_tolerance)
+    call require('pond adapter does not initialize selected-soil resistance',.not.refreshed%resistance%ready)
+    SoilBulkDensity_vr(1,1,1)=work
+    end associate
+    call PrintInfo('end '//subname)
+  end subroutine check_resistance_cache
+!------------------------------------------------------------------------------------------
+  subroutine check_bet_resistance_state()
+    ! Description:
+    ! Verify both cubic endpoints, monotonicity across temperature, independent
+    ! BET inversion/slopes, finite-difference cubic slopes and hyperdry stability.
+    type(BETResistanceParameters) :: retention,flat
+    real(r8), parameter :: temperatures(3)=[233.15_r8,293.15_r8,323.15_r8]
+    real(r8) :: thermal,theta,potential,log_g,log_ratio,x,expected,factor,resistance
+    real(r8) :: lo,hi,unused1,unused2,step,previous,temperature,slope_lo,slope_hi
+    integer :: j,i
+    character(len=*), parameter :: subname='check_bet_resistance_state'
+
+    call PrintInfo('beg '//subname)
+    call require('global soil and litter BET defaults',soil_bet_c==18._r8.and.litter_bet_c==13._r8)
+    call require('requested material wet cutoffs',SoilBETCutoffFCFraction==.6_r8.and.LitterBETCutoffFCFraction==.5_r8)
+    retention=MakeBETResistanceParameters(.1_r8,-2._r8,55._r8,.02_r8,soil_bet_c)
+    do j=1,size(temperatures)
+      temperature=temperatures(j)
+      thermal=RGASC*temperature/18._r8
+      call BETResistanceState(retention,.1_r8,temperature,potential,log_g,log_ratio)
+      call require('cubic fixed native wet pressure',ABS(potential/(-2._r8)-1._r8)<1.e-12_r8)
+      call require('cubic fixed native wet slope',ABS(EXP(log_g)/55._r8-1._r8)<1.e-12_r8)
+      call BETResistanceState(retention,retention%theta_bet,temperature,potential,log_g,log_ratio)
+      call require('temperature-updated BET joining pressure',ABS(potential/(thermal*LOG(.3_r8))-1._r8)<1.e-12_r8)
+      call BETResistanceState(retention,retention%theta_bet*(1._r8-1.e-8_r8),temperature,lo,slope_lo,unused1)
+      call BETResistanceState(retention,retention%theta_bet*(1._r8+1.e-8_r8),temperature,hi,slope_hi,unused2)
+      call require('cubic BET pressure continuity',ABS(lo/hi-1._r8)<1.e-7_r8)
+      call require('cubic BET slope continuity',ABS(slope_lo-slope_hi)<1.e-6_r8)
+      previous=-huge(1._r8)
+      do i=1,400
+        theta=.1_r8*real(i,r8)/400._r8
+        call BETResistanceState(retention,theta,temperature,potential,log_g,log_ratio)
+        call require('temperature-dependent cubic BET monotonicity',potential>previous.and.ieee_is_finite(log_g))
+        previous=potential
+      enddo
+      theta=.5_r8*(retention%theta_wet+retention%theta_bet)
+      step=theta*1.e-5_r8
+      call BETResistanceState(retention,theta,temperature,potential,log_g,log_ratio)
+      call BETResistanceState(retention,theta-step,temperature,lo,unused1,unused2)
+      call BETResistanceState(retention,theta+step,temperature,hi,unused1,unused2)
+      call require('cubic analytic derivative against finite difference',ABS((hi-lo)/(2._r8*step)/EXP(log_g)-1._r8)<1.e-7_r8)
+      x=.01_r8
+      factor=(1._r8-x)*(1._r8+17._r8*x)
+      theta=retention%monolayer*18._r8*x/factor
+      call BETResistanceState(retention,theta,temperature,potential,log_g,log_ratio)
+      call require('BET independent Kelvin inverse',ABS(potential/(thermal*LOG(x))-1._r8)<1.e-12_r8)
+      call check_close('BET independent theta/RH',EXP(log_ratio),theta/x)
+      expected=thermal*factor**2/(retention%monolayer*18._r8*x*(1._r8+17._r8*x*x))
+      call check_close('BET independent analytic derivative',EXP(log_g),expected)
+    enddo
+    call BETResistanceState(retention,tiny(1._r8),293.15_r8,potential,log_g,log_ratio)
+    call require('hyperdry logarithmic factors finite',all(ieee_is_finite([potential,log_g,log_ratio])))
+    call check_close('BET finite dry theta/RH',EXP(log_ratio),retention%monolayer*18._r8)
+    resistance=PorousSurfaceResistance(tiny(1._r8),.01_r8,1.e-300_r8,0._r8,.01_r8,1._r8,log_g+log_ratio)
+    call require('hyperdry liquid resistance finite',ieee_is_finite(resistance).and.resistance>0._r8)
+    flat=MakeBETResistanceParameters(.1_r8,-2500._r8,0._r8,.2_r8,18._r8)
+    call BETResistanceState(flat,.1_r8,293.15_r8,potential,log_g,log_ratio)
+    call require('capped native cutoff remains pressure continuous',ABS(potential/(-2500._r8)-1._r8)<1.e-12_r8)
+    call require('capped native cutoff remains slope continuous',EXP(log_g)<1.e-7_r8)
+    call PrintInfo('end '//subname)
+  end subroutine check_bet_resistance_state
+!------------------------------------------------------------------------------------------
   subroutine check_litter_resistance(litter)
     ! Description:
     ! Check transport against an analytic slope and independently formed bulk
     ! diffusivity, including patch geometry, wet films, ice and blocked limits.
     type(LitterHydraulicParameters), intent(in) :: litter ! litter retention and pore parameters
     real(r8), parameter :: vol=.01_r8,area=1._r8,k=1.e-7_r8,dgas=.077_r8,tau=.66_r8,rhov=1.e-5_r8
-    real(r8) :: theta,psi,analytic,dv,expected,r,gas_only,icy,thin,liquid_only
+    real(r8) :: theta,psi,analytic,dv,expected,r,gas_only,icy,thin,liquid_only,source_vapor
     character(len=*), parameter :: subname='check_litter_resistance'
 
     call PrintInfo('beg '//subname)
@@ -237,6 +360,21 @@ contains
     call require('no porous volume limit',LitterResistance(litter,0._r8,0._r8,0._r8,area,k,dgas,tau,rhov)==0._r8)
     r=LitterResistance(litter,theta*vol,0._r8,vol,area,1.e-300_r8,dgas,tau,0._r8)
     call require('underflowed source vapor safe',ieee_is_finite(r).and.r>0._r8)
+    theta=.001_r8
+    psi=LitterMatricPotential(litter,theta)
+    source_vapor=vapsat(293.15_r8)*EXP(18._r8*psi/(RGASC*293.15_r8))
+    r=LitterResistance(litter,theta*vol,0._r8,vol,area,k,dgas,tau,source_vapor,temperature=293.15_r8,source_potential=psi)
+    ! Independent 60-digit BET inversion with analytic native slope at 0.5*FC.
+    expected=.000099656100869129922_r8
+    call require('independent C13 cubic/BET litter resistance reference',ABS(r/expected-1._r8)<2.e-7_r8)
+    call require('BET leaves native litter pressure unchanged',LitterMatricPotential(litter,theta)==psi)
+    r=LitterResistance(litter,0._r8,0._r8,vol,area,k,dgas,tau,rhov,temperature=293.15_r8)
+    call check_close('BET zero liquid leaves vapor path',r,gas_only)
+    r=LitterResistance(litter,theta*vol,.2_r8*vol,vol,area,k,dgas,tau,rhov, &
+      temperature=270._r8,source_potential=-2500._r8)
+    expected=LitterResistance(litter,theta*vol,.2_r8*vol,vol,area,k,dgas,tau,rhov, &
+      temperature=270._r8,source_potential=-1.5_r8)
+    call check_close('BET retains ice-equilibrium vapor partition',r,expected)
     call PrintInfo('end '//subname)
   end subroutine check_litter_resistance
 !------------------------------------------------------------------------------------------
@@ -248,6 +386,7 @@ contains
     real(r8) :: reference_table(3,100,2),reference_entry(2),reference_sat(2)
     real(r8) :: reference_dry,reference_pressure,reference_slope,pressure,content,slope,analytic
     real(r8) :: held_water,held_ice,theta,reference_inverse,resistance,reference_resistance
+    real(r8) :: wet_pressure,wet_log_slope,wet_log_ratio,native_wet_slope
     integer :: scheme,policy,k
     character(len=*), parameter :: subname='check_litter_independence'
 
@@ -256,6 +395,35 @@ contains
     call UpdateLitterHydraulicLimits(1,1,.1336_r8)
     SatHydroCondVert_vr(0,1,1)=.98_r8
     litter=GetLitterHydraulicParameters(1,1)
+    call require('litter resistance cache initialized',litter%resistance%ready)
+    call check_close('litter cutoff is half field capacity',litter%resistance%theta_wet,.5_r8*litter%field_capacity)
+    theta=litter%resistance%theta_wet
+    call BETResistanceState(litter%resistance,theta,273.15_r8,wet_pressure,wet_log_slope,wet_log_ratio)
+    native_wet_slope=LitterMatricPotentialDerivative(litter,theta)
+    call require('litter cutoff pressure matches native at different T', &
+      ABS(wet_pressure/LitterMatricPotential(litter,theta)-1._r8)<1.e-12_r8)
+    call require('litter cutoff slope matches native at different T', &
+      ABS(EXP(wet_log_slope)/native_wet_slope-1._r8)<1.e-12_r8)
+    FieldCapacity_vr(0,1,1)=.9_r8*litter%field_capacity
+    changed_geometry=GetLitterHydraulicParameters(1,1)
+    call check_close('litter field capacity refreshes cutoff', &
+      changed_geometry%resistance%theta_wet,.5_r8*FieldCapacity_vr(0,1,1))
+    FieldCapacity_vr(0,1,1)=litter%field_capacity
+    changed_geometry=GetLitterHydraulicParameters(1,1)
+    call require('litter restored FC gives identical cached coefficients', &
+      all(changed_geometry%resistance%coefficient==litter%resistance%coefficient))
+    litter_bet_c=17._r8
+    changed_geometry=GetLitterHydraulicParameters(1,1)
+    call require('litter C override refreshes cache',changed_geometry%resistance%adsorption_c==17._r8)
+    litter_bet_c=13._r8
+    call UpdateLitterHydraulicLimits(1,1,.2_r8)
+    changed_geometry=GetLitterHydraulicParameters(1,1)
+    call check_close('litter capacity refreshes cutoff',changed_geometry%resistance%theta_wet,.05_r8)
+    call require('litter capacity refreshes monolayer', &
+      ABS(changed_geometry%resistance%monolayer/litter%resistance%monolayer-.2_r8/.1336_r8)<1.e-12_r8)
+    call UpdateLitterHydraulicLimits(1,1,.1336_r8)
+    changed_geometry=GetLitterHydraulicParameters(1,1)
+    call require('litter restored cache deterministic',all(changed_geometry%resistance%coefficient==litter%resistance%coefficient))
     call check_litter_resistance(litter)
     call check_close('litter holding fraction',litter%holding_fraction,.1336_r8)
     call check_close('litter geometric porosity',litter%physical_porosity,.97_r8)
@@ -355,11 +523,12 @@ contains
   subroutine check_soil_resistance(scheme,context)
     ! Description:
     ! Verify the paper's parallel transport against an analytic retention slope,
-    ! including the half-cell length, native units, blocked paths and numeric limits.
+    ! including the half-cell length, native units, dry-end slope extension,
+    ! blocked paths and numeric limits.
     class(SoilHydraulicModel), intent(in) :: scheme      ! selected constitutive implementation [-]
     type(SoilHydraulicParameters), intent(in) :: context ! layer retention parameters
     real(r8), parameter :: dz=.02_r8,k=1.e-6_r8,dgas=.004_r8,bunsen=60000._r8
-    real(r8) :: theta,work,pressure,slope,combined,rg,rw,expected,dry
+    real(r8) :: theta,work,pressure,slope,combined,rg,rw,expected,dry,boundary_resistance,source_bunsen
     character(len=*), parameter :: subname='check_soil_resistance'
 
     call PrintInfo('beg '//subname)
@@ -388,8 +557,37 @@ contains
       scheme%soil_resistance(context,theta,0._r8,k,dgas,bunsen)==0._r8)
     call require('blocked soil transport', &
       scheme%soil_resistance(context,theta,dz,0._r8,0._r8,bunsen)==huge(1._r8))
-    dry=.5_r8*scheme%dry_content(context)
-    call check_close('clipped dry slope leaves vapor path',scheme%soil_resistance(context,dry,dz,k,dgas,bunsen),rg)
+    dry=scheme%dry_content(context)
+    boundary_resistance=scheme%soil_resistance(context,dry,dz,k,0._r8,bunsen)
+    call require('finite positive dry boundary resistance', &
+      ieee_is_finite(boundary_resistance).and.boundary_resistance>0._r8.and.boundary_resistance<huge(1._r8))
+    theta=.5_r8*dry;work=theta
+    call check_close('extended slope retains actual liquid content', &
+      scheme%soil_resistance(context,theta,dz,k,0._r8,bunsen),2._r8*boundary_resistance)
+    expected=1._r8/(1._r8/rg+1._r8/(2._r8*boundary_resistance))
+    call check_close('extended slope combines both transport paths', &
+      scheme%soil_resistance(context,theta,dz,k,dgas,bunsen),expected)
+    call check_close('dry extension preserves capped pressure',scheme%matric_potential(context,work),context%dry_potential)
+    call require('dry extension preserves input content',theta==.5_r8*dry.and.work==theta)
+    call require('dry retention derivative remains clipped',scheme%matric_potential_derivative(context,theta)==0._r8)
+    theta=dry*(1._r8-1.e-8_r8)
+    combined=scheme%soil_resistance(context,theta,dz,k,dgas,bunsen)
+    theta=dry*(1._r8+1.e-8_r8)
+    expected=scheme%soil_resistance(context,theta,dz,k,dgas,bunsen)
+    call require('soil resistance continuous across dry cutoff',ABS(combined-expected)<1.e-6_r8*expected)
+    theta=.5_r8*dry;work=theta
+    pressure=scheme%matric_potential(context,work)
+    source_bunsen=1._r8/(vapsat(293.15_r8)*EXP(18._r8*pressure/(RGASC*293.15_r8)))
+    combined=scheme%soil_resistance(context,theta,dz,k,dgas,source_bunsen, &
+      temperature=293.15_r8,source_potential=pressure)
+    expected=.000027726926060740094_r8
+    call require('independent C18 cubic/BET soil resistance reference',ABS(combined/expected-1._r8)<2.e-7_r8)
+    call require('BET leaves native soil pressure unchanged',scheme%matric_potential(context,work)==pressure)
+    combined=scheme%soil_resistance(context,theta,dz,k,dgas,bunsen, &
+      temperature=270._r8,source_potential=-2500._r8,ice_volume=1.e-5_r8)
+    expected=scheme%soil_resistance(context,theta,dz,k,dgas,bunsen, &
+      temperature=270._r8,source_potential=-1.5_r8,ice_volume=1.e-5_r8)
+    call check_close('BET soil retains ice-equilibrium partition',combined,expected)
     call require('large parallel conductance avoids product overflow', &
       scheme%soil_resistance(context,theta,dz,huge(1._r8)/4._r8,dgas,huge(1._r8)/4._r8)==0._r8)
     expected=scheme%soil_resistance(context,theta,huge(1._r8)/8._r8,0._r8,tiny(1._r8),bunsen)

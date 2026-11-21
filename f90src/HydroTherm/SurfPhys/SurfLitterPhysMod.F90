@@ -325,6 +325,7 @@ implicit none
   real(r8) :: tHeatLitR2Soil2,TKR1Pre
   real(r8) :: LitREnergyNew,LitRTempDenom
   real(r8) :: IceLitter,VaporDemand,LiquidVapor,IceVapor,LatentDerivative,IceSoil
+  real(r8) :: PotVaporDemand !aerodynamic-only signed vapor demand [m3 water equivalent/cell/step]
   type(LitterHydraulicParameters) :: litter_parameters
   real(r8) :: RLitterEvap ! current porous-litter internal vapor resistance [h m-1]
   integer :: LitterClass ! wet-to-dry conductivity index [-]
@@ -433,7 +434,8 @@ implicit none
         LitterClass = LitterMoistureClass(ThetaWLitR,litter_parameters%holding_fraction)
         RLitterEvap = LitterResistance(litter_parameters,MAX(0._r8,VWatLitr2),IceLitter, &
           VLitR_col(NY,NX),AREA_3D(3,NUM_col(NY,NX),NY,NX)*FracSurfByLitR_col(NY,NX), &
-          HydroCond_3D(3,LitterClass,0,NY,NX),TEFGASDIF(TKR1)*7.70E-02_r8,POROQ,VapLitR)
+          HydroCond_3D(3,LitterClass,0,NY,NX),TEFGASDIF(TKR1)*7.70E-02_r8,POROQ,VapLitR, &
+          temperature=TKR1,source_potential=PSISM1_vr(0,NY,NX))
       endif
       if(AScaledCdWOverLitr_col(NY,NX)>0._r8)RLitterEvap_col(NY,NX)=RLitterEvap
       CdLitREvap=AScaledCdWOverLitr_col(NY,NX)/(ExchangeResistance+RLitterEvap)
@@ -448,6 +450,9 @@ implicit none
       !     VAPOR FLUX AT RESIDUE SURFACE against atmosphere
       !
       VaporDemand=CdLitREvap*(VPQ_col(NY,NX)-VapLitR)
+      PotVaporDemand=AScaledCdWOverLitr_col(NY,NX)/ExchangeResistance*(VPQ_col(NY,NX)-VapLitR)
+      ! Accumulate signed demand before liquid/ice availability limits.
+      PotEvapGrnd_col(NY,NX)=PotEvapGrnd_col(NY,NX)+PotVaporDemand
       if(.not.ats_cpl_mode)then
         call PartitionSurfaceVapor(VaporDemand,VWatLitr2,IceLitter,TKR1,dts_wat, &
           LiquidVapor,IceVapor,LatentDerivative, &

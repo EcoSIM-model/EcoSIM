@@ -58,7 +58,7 @@ submodule (HistDataType) HistUpdateColumn
     tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr, tXPO4_col
   use AqueChemDatatype, only: TProd_CO2_geochem_soil_vr, trcg_mass_cumerr_col, trcx_solml_vr
   use SurfSoilDataType, only: FracSurfSnowCovered_col, HeatByRad2Surf_col, HeatEvapAir2Surf_col, HeatNet2Surf_col, &
-    HeatSensAir2Surf_col, HeatSensVapAir2Surf_col, VapXAir2GSurf_col
+    HeatSensAir2Surf_col, HeatSensVapAir2Surf_col, VapXAir2GSurf_col, PotEvapGrnd_col
   use TracerPropMod, only: GramPerHr2umolPerSec
   implicit none
 contains
@@ -279,6 +279,7 @@ contains
       this%h1D_NO3_hydloss_flx_col(ncol)  = (Hydroloss_NO3_cumflx_col(NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CO2_LITR_col(ncol)         = trc_solcl_vr(idg_CO2,0,NY,NX)
       this%h1D_EVAPG_col(ncol)            = VapXAir2GSurf_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_PotEvapGrnd_col(ncol)      = PotEvapGrnd_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CondGasXSurf_col(ncol)     = CondGasXSurf_col(NY,NX)
       this%h1D_CanopyEvap_col(ncol)       = VapXAir2Canopy_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CANET_col(ncol)            = QVegET_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)

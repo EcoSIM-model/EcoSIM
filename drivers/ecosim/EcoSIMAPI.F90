@@ -706,8 +706,9 @@ end subroutine regressiontest
 !------------------------------------------------------------------------------------------
   subroutine write_modelconfig()
   ! Description:
-  ! Write the selected process controls and soil hydraulic scheme to the run setup file.
+  ! Record process controls, hydraulic scheme and physical BET priors in the setup file.
   use fileUtil, only : getavu, relavu, opnfil
+  use PhysPars, only: soil_bet_c,litter_bet_c
   use readiMod
   implicit none
   character(len=64) :: fnm_loc
@@ -725,6 +726,8 @@ end subroutine regressiontest
     write(nu_cfg,*)'grid_mode=',GridConectionMode(grid_mode)
     write(nu_cfg,*)'soil_mgmt_use_model_year=',soil_mgmt_use_model_year
     write(nu_cfg,*)'soil_hydraulic_scheme=',trim(soil_hydraulic_scheme)
+    write(nu_cfg,*)'soil_bet_c=',soil_bet_c
+    write(nu_cfg,*)'litter_bet_c=',litter_bet_c
     write(nu_cfg,*)'use_ecosys_drainage=',use_ecosys_drainage
     call relavu(nu_cfg)
   endif

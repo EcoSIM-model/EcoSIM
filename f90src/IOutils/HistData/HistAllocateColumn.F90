@@ -224,6 +224,7 @@ contains
   allocate(this%h1D_O2_SEMIS_FLX_col(beg_col:end_col))          ;this%h1D_O2_SEMIS_FLX_col(:)=spval
   allocate(this%h1D_CO2_LITR_col(beg_col:end_col))        ;this%h1D_CO2_LITR_col(:)=spval
   allocate(this%h1D_EVAPG_col(beg_col:end_col))           ;this%h1D_EVAPG_col(:)=spval
+  allocate(this%h1D_PotEvapGrnd_col(beg_col:end_col)); this%h1D_PotEvapGrnd_col(:)=spval
   allocate(this%h1D_CondGasXSurf_col(beg_col:end_col)); this%h1D_CondGasXSurf_col(:)=spval
   allocate(this%h1D_CANET_col(beg_col:end_col))           ;this%h1D_CANET_col(:)=spval
   allocate(this%h1D_CanopyEvap_col(beg_col:end_col)) ; this%h1D_CanopyEvap_col(:)=spval

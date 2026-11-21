@@ -121,7 +121,7 @@ program ThinLitterEnergyTest
     HeatBefore=VHeatCapacity1_vr(0,1,1)*TKSoil1_vr(0,1,1)
     vapor_source=SurfaceVaporDensity(270._r8,LitterMatricPotential(litter,.01_r8),VLiceMicP1_vr(0,1,1))
     resistance=LitterResistance(litter,VLWatMicP1_vr(0,1,1),VLiceMicP1_vr(0,1,1), &
-      VLitR_col(1,1),.5_r8,1.e-7_r8,.077_r8,.66_r8,vapor_source)
+      VLitR_col(1,1),.5_r8,1.e-7_r8,.077_r8,.66_r8,vapor_source,temperature=270._r8)
     ! Area*time times vapor-density gradient divided by air+internal resistance.
     vapor_demand=real(2*ic-3,r8)*1.e-10_r8*(.5_r8*.5_r8)/(.0139_r8+resistance)
     call PartitionSurfaceVapor(vapor_demand,VLWatMicP1_vr(0,1,1), &
