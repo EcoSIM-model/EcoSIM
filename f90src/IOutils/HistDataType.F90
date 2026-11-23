@@ -167,6 +167,9 @@ module HistDataType
   real(r8),pointer   :: h1D_PREC_col(:)   
   real(r8),pointer   :: h1D_LWSky_col(:)
   real(r8),pointer   :: h1D_SOIL_RN_col(:)      
+  real(r8),pointer   :: h1D_RAeroSoil_col(:)   ! air-side resistance [s m-1]
+  real(r8),pointer   :: h1D_RAeroLitter_col(:) ! air-side resistance [s m-1]
+  real(r8),pointer   :: h1D_RAeroSnow_col(:)   ! air-side resistance [s m-1]
   real(r8),pointer   :: h1D_RSoilEvap_col(:)   ! internal resistance [s m-1]
   real(r8),pointer   :: h1D_RLitterEvap_col(:) ! internal resistance [s m-1]
   real(r8),pointer   :: h1D_QSUBLIM_col(:) ! gross snow/litter/soil sublimation [mm H2O hr-1], positive to air
@@ -207,7 +210,10 @@ module HistDataType
   real(r8),pointer   :: h1D_Ar_soilMass_col(:)
   real(r8),pointer   :: h1D_O2_SEMIS_FLX_col(:)  
   real(r8),pointer   :: h1D_CO2_LITR_col(:)      
-  real(r8),pointer   :: h1D_EVAPG_col(:)         
+  real(r8),pointer   :: h1D_EVAPG_col(:)
+  real(r8),pointer   :: h1D_EVAPSoil_col(:) !net soil-surface vapor exchange, positive inward [mm H2O/hr]
+  real(r8),pointer   :: h1D_EVAPLitr_col(:) !net litter-surface vapor exchange, positive inward [mm H2O/hr]
+  real(r8),pointer   :: h1D_EVAPSnow_col(:) !net snow-surface vapor exchange, positive inward [mm H2O/hr]
   real(r8),pointer   :: h1D_PotEvapGrnd_col(:)  !potential net ground vapor flux, positive inward [mm H2O/hr]
   real(r8),pointer   :: h1D_CANET_col(:)         
   real(r8),pointer   :: h1D_CanopyEvap_col(:)

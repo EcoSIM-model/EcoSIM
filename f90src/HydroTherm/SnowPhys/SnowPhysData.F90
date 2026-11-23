@@ -1,5 +1,8 @@
 module SnowPhysData
+  ! Description:
+  ! Own snow transport, energy-exchange work arrays and resistance diagnostics.
   use data_kind_mod, only : r8 => DAT_KIND_R8
+  use data_const_mod, only: SnowResistanceMissing => DAT_CONST_SPVAL
   use GridConsts
   use TracerIDMod
 
@@ -7,6 +10,10 @@ module SnowPhysData
 
   character(len=*), private, parameter :: mod_filename=&
   __FILE__
+
+  private :: SnowResistanceMissing
+  ! Timestep-end active sample; missing when snow exchange is inactive.
+  real(r8),allocatable :: RAeroSnow_col(:,:) ! air-side snow resistance, excluding RZ [h m-1]
 
   real(r8),allocatable ::  trcg_AquaAdv_NetFlx_snvr(:,:,:,:)          !dissolved volatile advection in snow [g d-2]
   real(r8),allocatable ::  trcn_AquaAdv_NetFlx_snvr(:,:,:,:)          !dissolved nutrient advection in snow [g d-2]
@@ -68,8 +75,11 @@ module SnowPhysData
   contains
 !----------------------------------------------------------------------  
   subroutine  InitSnowPhysData
+  ! Description:
+  ! Allocate and initialize snow work arrays and exchange diagnostics.
   implicit none
 
+  allocate(RAeroSnow_col(JY,JX)); RAeroSnow_col=SnowResistanceMissing
   allocate(WatSnoFlxByRedistM_2DH(60,2,2,JY,JX)); WatSnoFlxByRedistM_2DH=0._r8
   allocate(IceSnoFlxByRedistM_2DH(60,2,2,JY,JX)); IceSnoFlxByRedistM_2DH=0._r8
   allocate(HeatSnoFlxByRedistM_2DH(60,2,2,JY,JX)); HeatSnoFlxByRedistM_2DH=0._r8
@@ -132,6 +142,8 @@ module SnowPhysData
   end subroutine  InitSnowPhysData
 !----------------------------------------------------------------------  
   subroutine DestructSnowPhysData
+  ! Description:
+  ! Release snow work arrays and resistance diagnostics.
   use abortutils, only : destroy
   implicit none
 
@@ -141,6 +153,7 @@ module SnowPhysData
   call destroy(tEnGYM_snvr)
   call destroy(trcg_LossXSnowRedist_col)
   call destroy(trcn_LossXSnowRedist_col)  
+  call destroy(RAeroSnow_col)
   call destroy(WatSnoFlxByRedistM_2DH)
   call destroy(IceSnoFlxByRedistM_2DH)
   call destroy(HeatSnoFlxByRedistM_2DH)

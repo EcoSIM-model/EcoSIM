@@ -356,6 +356,7 @@ implicit none
   dt_litrHeat            = dts_HeatWatTP/real(NPR,kind=r8)      !time step for litter flux calculation
   CdLitRHSens_col(NY,NX) = 0._r8
   D5000: DO NN=1,NPR
+    RAeroLitter_col(NY,NX)=SurfaceResistanceMissing
     RLitterEvap_col(NY,NX)=SurfaceResistanceMissing
     ! Save current enthalpy even when drying has disabled litter exchange.
     ENGYR = VLHeatCapcityLitR2*TKR1
@@ -381,6 +382,7 @@ implicit none
       !update aerodynamic resistance over litter
       RawH2OLitr2CanAir_col(NY,NX) = AMAX1(RAM,0.8_r8*RAGX,AMIN1(1.2_r8*RAGX,RawIsoTLitr2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
       ExchangeResistance=SurfaceExchangeResistance(NY,NX,TKR1,RawH2OLitr2CanAir_col(NY,NX))
+      if(AScaledCdWOverLitr_col(NY,NX)>0._r8)RAeroLitter_col(NY,NX)=ExchangeResistance
       CdLitRHSens = AScaledCdHOverLitr_col(NY,NX)/ExchangeResistance
       !
       !     NET RADIATION AT RESIDUE SURFACE

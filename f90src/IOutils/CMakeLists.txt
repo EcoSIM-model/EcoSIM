@@ -52,6 +52,7 @@ target_include_directories(ioutils  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Layers_Micmodel/  
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SoilPhys/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SurfPhys/
   ${CMAKE_BINARY_DIR}/f90src/Disturbances/
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/)

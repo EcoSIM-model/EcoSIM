@@ -20,6 +20,7 @@ module SnowPhysMod
   use SoilWaterDataType
   use HydroThermData
   use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
+  use data_const_mod, only: SnowResistanceMissing => DAT_CONST_SPVAL
   use LitterHydraulicMod, only: LitterMatricPotential,GetLitterHydraulicParameters
   use SurfLitterDataType
   use SurfSoilDataType
@@ -634,6 +635,7 @@ contains
 
   D3000: DO MM = 1, NPS
 
+    RAeroSnow_col(NY,NX)=SnowResistanceMissing
     SnowSensibleDeriv=0._r8
     TopLaySnoVol=(VLDrySnoWE0M_snvr(1,NY,NX)+SnoFallWE)+(VLIceSnow0M_snvr(1,NY,NX)+IceFallVol) &
       +VLWatSnow0M_snvr(1,NY,NX)+Rainfall
@@ -924,6 +926,7 @@ contains
     AMIN1(1.2_r8*RawH2OSnow2CanAir_col(NY,NX),RawIsoTSoil2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
   RawH2OSnow2CanAir_col(NY,NX) = RAGX
   RAa = SurfaceExchangeResistance(NY,NX,TKSnow1_snvr(1,NY,NX),RAGX)
+  if(AScaledCdWOverSnow_col(NY,NX)>0._r8)RAeroSnow_col(NY,NX)=RAa
   !
   ! PARAMETERS FOR CALCULATING LATENT AND SENSIBLE HEAT FLUXES
   !
