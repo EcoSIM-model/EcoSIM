@@ -39,7 +39,8 @@ Module SharedDataMod
   real(r8), allocatable :: a_MATP(:,:)    !Matric Pressure
   
 !  real(r8), allocatable ::a_CORGR(:,:)   !organic nitrogen  content
-  real(r8), allocatable :: a_ASP(:)       !Aspect
+  real(r8), allocatable :: a_ASP(:)       !Aspect, [rad] clockwise from north to the direction the ground faces (ATS convention)
+  real(r8), allocatable :: a_SLOPE(:)     !Ground slope, tangent of the slope angle [-] (ATS slope magnitude)
   real(r8), allocatable :: a_ALT(:)       !Altitude
   real(r8), allocatable :: a_LAI(:,:)       !Leaf Area Index
   real(r8), allocatable :: a_SAI(:,:)       !Stem Area Index
@@ -192,6 +193,43 @@ Module SharedDataMod
 
 !------------------------------------------------------------------------------------------
 
+  subroutine SetGroundSlopeAspect(slope_tan, aspect_rad, slope_deg, aspect_geom_deg)
+  ! Description:
+  ! Convert the ground geometry ATS provides into the form EcoSIM uses for the
+  ! solar geometry of the ground and the canopy. ATS gives the slope as the
+  ! tangent of the slope angle and the aspect in radians clockwise from north
+  ! toward the direction the ground faces. EcoSIM keeps the slope angle in degrees
+  ! and the aspect as a geometric angle in degrees, counter-clockwise from east
+  ! (the grid-file convention 450 - geographic aspect, wrapped to [0,360)).
+  implicit none
+  real(r8), intent(in)  :: slope_tan       !tangent of the slope angle, [-]
+  real(r8), intent(in)  :: aspect_rad      !aspect, clockwise from north, [rad]
+  real(r8), intent(out) :: slope_deg       !slope angle, [degree]
+  real(r8), intent(out) :: aspect_geom_deg !geometric aspect, counter-clockwise from east, [degree]
+  real(r8), parameter :: pi=3.14159265358979323846_r8
+  character(len=*), parameter :: subname='SetGroundSlopeAspect'
+
+  slope_deg       = atan(abs(slope_tan))*180._r8/pi
+  aspect_geom_deg = 450._r8-aspect_rad*180._r8/pi
+  aspect_geom_deg = aspect_geom_deg-360._r8*floor(aspect_geom_deg/360._r8)
+  end subroutine SetGroundSlopeAspect
+
+!------------------------------------------------------------------------------------------
+
+  pure function ATSSurfaceArea(NY) result(area)
+  ! Description:
+  ! Area of the ATS surface cell of column NY, over which ATS applies the water and energy
+  ! sources EcoSIM returns per unit area. EcoSIM's own column area (column_area) is the horizontal
+  ! projection of that cell, so the surface area is that divided by the cosine of the slope.
+  implicit none
+  integer, intent(in) :: NY       !column index
+  real(r8) :: area                !surface area of the ATS cell, [m2]
+
+  area = column_area(NY)*sqrt(1._r8+a_SLOPE(NY)**2)
+  end function ATSSurfaceArea
+
+!------------------------------------------------------------------------------------------
+
   subroutine DestroySharedData()
   implicit none
 
@@ -214,6 +252,7 @@ Module SharedDataMod
   call destroy(a_PORO)
   call destroy(a_AREA3)
   call destroy(a_ASP)
+  call destroy(a_SLOPE)
   call destroy(a_ALT)
   call destroy(tairc)
   call destroy(uwind)

@@ -167,6 +167,9 @@ contains
   call c_f_pointer(env%aspect%data, data, (/num_cols/))
   a_ASP = data(:)
 
+  call c_f_pointer(env%slope%data, data, (/num_cols/))
+  a_SLOPE = data(:)
+
   !call c_f_pointer(env%LAI%data, data, (/num_cols/))
   !a_LAI = data(:)
 

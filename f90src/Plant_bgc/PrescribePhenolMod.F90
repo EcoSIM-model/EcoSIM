@@ -408,7 +408,9 @@ implicit none
           call SetRootProfileZ(irootType_pft(NZ,NY,NX),NL_col(NY,NX), &
             CumDepz2LayBottom_vr(1:NL_col(NY,NX),NY,NX),PerPlantFineRootC_vr, &
             PerPlantRootLen_vr,PopulationDensity)
-          PlantPopuLive_pft(NZ,NY,NX)=PopulationDensity
+          !PlantPopuLive_pft is the cell total, as for the standalone phenology above (population x area); the
+          !population density alone is right only for a 1 m2 column
+          PlantPopuLive_pft(NZ,NY,NX)=PopulationDensity*AREA_3D(3,NU_col(NY,NX),NY,NX)
         else
           call SetRootProfileZ(irootType_pft(NZ,NY,NX),NL_col(NY,NX), &
             CumDepz2LayBottom_vr(1:NL_col(NY,NX),NY,NX),PerPlantFineRootC_vr, &

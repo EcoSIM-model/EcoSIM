@@ -110,7 +110,8 @@ implicit none
     TXCO2(NY,NX)            = 0.0_r8
     DORGE(NY,NX)            = 0.0_r8
     QRunSurf_col(NY,NX)     = 0.0_r8
-    ASP_col(NY,NX)          = a_ASP(NY)
+    ! ground slope and aspect from ATS: they set the solar geometry of the ground and the canopy (StartsMod)
+    call SetGroundSlopeAspect(a_SLOPE(NY), a_ASP(NY), SL_col(NY,NX), ASP_col(NY,NX))
     TairK_col(NY,NX)=tairc(NY) !it's already in K??
     !convert VPA from ATS units (Pa) to EcoSIM (MPa)
     VPK_col(NY,NX)          = vpair(NY)/1.0e3 !vapor pressure in kPa
