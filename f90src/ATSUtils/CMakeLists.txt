@@ -1,5 +1,4 @@
 set(ATSUTILS_MOD_SOURCES
-  ATSLayer0Mod.F90
   SharedDataMod.F90
   ATSUtilsMod.F90
   ATSCPLMod.F90

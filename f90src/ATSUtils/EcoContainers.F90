@@ -136,7 +136,6 @@ module EcoContainers_module
      logical (c_bool) :: microbe_bool
      real (c_double) :: wind_speed_ref_height
      real (c_double) :: soil_surface_roughness
-     logical(c_bool) :: shared_surface_layer
      logical(c_bool) :: ponded_aware
      type (c_ptr) :: pft_file
   end type EcoConfig
@@ -185,10 +184,7 @@ module EcoContainers_module
      type (EcoVectorDouble) :: slope
      type (EcoVectorDouble) :: vegetation_type
      type (EcoVectorDouble) :: snow_albedo
-     type (EcoVectorDouble) :: surface_water_liquid
-     type (EcoVectorDouble) :: surface_water_ice
      type (EcoVectorDouble) :: ponded_depth
-     type (EcoVectorDouble) :: surface_gauge_pressure
      type (EcoVectorDouble) :: surface_temperature
      ! atmosphere composition
      real (c_double) :: atm_n2
@@ -214,13 +210,6 @@ module EcoContainers_module
      type (EcoVectorDouble) :: surface_energy_source
      type (EcoVectorDouble) :: surface_energy_source_dtemperature
      type (EcoVectorDouble) :: surface_energy_reference_temperature
-     type (EcoVectorDouble) :: layer0_water_source
-     type (EcoVectorDouble) :: layer0_energy_source
-     type (EcoVectorDouble) :: ground_water_source
-     type (EcoVectorDouble) :: ground_energy_source
-     type (EcoVectorDouble) :: ground_energy_source_dtemperature
-     type (EcoVectorDouble) :: ground_energy_reference_temperature
-     type (EcoVectorDouble) :: layer0_fraction
      type (EcoVectorDouble) :: snow_depth
      type (EcoMatrixDouble) :: canopy_snow
   end type EcoFeedback

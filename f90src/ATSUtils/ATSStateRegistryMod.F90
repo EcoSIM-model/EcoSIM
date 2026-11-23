@@ -15,8 +15,7 @@ module ATSStateRegistryMod
   ! or resizing an entry changes the checkpoint layout, so bump kLayoutVersion.
   !
   ! Description:
-  ! Register native carried state and diagnostic ATS-owned layer-zero mirrors.
-  use EcoSIMCtrlDataType, only: ats_shared_surface_layer
+  ! Register native carried state.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use, intrinsic :: iso_c_binding
   use EcoContainers_module, only : EcoSizes, EcoInternalState
@@ -77,10 +76,8 @@ contains
   implicit none
   type(EcoSizes), intent(in) :: sizes
   logical, intent(in) :: bind
-  integer :: npft,layer0_role
+  integer :: npft
 
-  layer0_role=kRolePrivate
-  if(ats_shared_surface_layer)layer0_role=kRoleOutput
   npft = min(sizes%num_pfts, JP)
   bind_arrays = bind
   ncol_bind = sizes%num_columns
@@ -110,13 +107,13 @@ contains
     'heat capacity per snow layer', VLHeatCapSnow_snvr, 1, JS)
   call add3('snow_layer_vapor_diffusivity', 'H2OVapDifsc_snvr', 'm2 h-1', kRolePrivate, &
     'water vapor diffusivity per snow layer', H2OVapDifsc_snvr, 1, JS)
-  call add3('litter_water', 'VLWatMicP_vr(0)', 'm3 d-2', layer0_role, &
+  call add3('litter_water', 'VLWatMicP_vr(0)', 'm3 d-2', kRolePrivate, &
     'surface litter (soil layer 0) liquid water', VLWatMicP_vr, 0, 1)
-  call add3('litter_ice', 'VLiceMicP_vr(0)', 'm3 d-2', layer0_role, &
+  call add3('litter_ice', 'VLiceMicP_vr(0)', 'm3 d-2', kRolePrivate, &
     'surface litter (soil layer 0) ice', VLiceMicP_vr, 0, 1)
-  call add3('litter_temperature', 'TKS_vr(0)', 'K', layer0_role, &
+  call add3('litter_temperature', 'TKS_vr(0)', 'K', kRolePrivate, &
     'surface litter (soil layer 0) temperature', TKS_vr, 0, 1)
-  call add3('litter_heat_capacity', 'VHeatCapacity_vr(0)', 'MJ m-3 K-1', layer0_role, &
+  call add3('litter_heat_capacity', 'VHeatCapacity_vr(0)', 'MJ m-3 K-1', kRolePrivate, &
     'surface litter (soil layer 0) heat capacity', VHeatCapacity_vr, 0, 1)
   call add3('canopy_water_pft', 'WatHeldOnCanopy_pft', 'm3 d-2', kRolePrivate, &
     'water held on the canopy per PFT', WatHeldOnCanopy_pft, 1, npft)

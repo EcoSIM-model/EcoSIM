@@ -45,7 +45,7 @@ Module SharedDataMod
   real(r8), allocatable :: a_SAI(:,:)       !Stem Area Index
   real(r8), allocatable :: a_VEG(:)       !Vegetation type
   real(r8), allocatable :: a_SALB(:)      !Snow Albedo
-  real(r8), allocatable :: a_WAT0(:),a_ICE0(:),a_POND0(:),a_PRES0(:) ! shared layer-zero state
+  real(r8), allocatable :: a_POND0(:) ! ATS ponded depth [m], read-only for EcoSIM
   real(r8), allocatable :: a_TSURF(:)     !ATS surface temperature [K]
   real(r8), allocatable :: a_TCOND(:,:)   !ATS thermal conductivity [MW m-1 K-1]
   real(r8), allocatable :: a_ATKA(:)
@@ -83,13 +83,6 @@ Module SharedDataMod
   real(r8), allocatable :: surf_e_source_dtemperature(:) !radiation+sensible slope [MJ m-2 K-1 per hour]
   real(r8), allocatable :: surf_e_source_temperature_ref(:) !surface temperature used for the source [K]
   real(r8), allocatable :: surf_w_source(:) !surface water source
-  real(r8), allocatable :: surf_layer0_w_source(:)
-  real(r8), allocatable :: surf_layer0_e_source(:)
-  real(r8), allocatable :: surf_ground_w_source(:)
-  real(r8), allocatable :: surf_ground_e_source(:)
-  real(r8), allocatable :: surf_ground_e_dtemperature(:)
-  real(r8), allocatable :: surf_ground_temperature_ref(:)
-  real(r8), allocatable :: surf_layer0_fraction(:)
   real(r8), allocatable :: surf_snow_depth(:) !snow depth source
   real(r8), allocatable :: a_CanSnow(:,:)    !canopy snow per PFT (num_pfts x num_columns)
   !real(r8), allocatable :: a_AREA3(:)
