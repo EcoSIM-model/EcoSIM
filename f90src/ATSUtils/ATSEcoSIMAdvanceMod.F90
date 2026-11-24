@@ -80,6 +80,7 @@ implicit none
   integer, intent(in) :: NYS  !Number of columns?
 
   integer :: NY,NX,NZ,L,NHW,NHE,NVN,NVS, I, J, M, heat_vec_size, NPH_Test, LS, npfts, NP
+  integer :: iveg
   real(r8) :: Wat_next
   real(r8) :: YSIN(NumOfSkyAzimuthSects),YCOS(NumOfSkyAzimuthSects),SkyAzimuthAngle(NumOfSkyAzimuthSects)
   real(r8) :: ResistanceLitRLay(JY,JX)
@@ -387,8 +388,9 @@ implicit none
     
     !if(ldo_sp_mode) call startq(NHW,NHE,NVN,NVS,1,num_pfts)
 
-    do i=1,5
-      a_VEG_test(i) = 1
+    !Fortran is case-insensitive: the loop variable must not be I, the day of year of this advance
+    do iveg=1,5
+      a_VEG_test(iveg) = 1
     enddo
     a_VEG_test(1) = a_VEG(1)
     
