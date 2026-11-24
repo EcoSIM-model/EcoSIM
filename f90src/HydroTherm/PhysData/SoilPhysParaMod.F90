@@ -13,6 +13,7 @@ module SoilPhysParaMod
   use SoilPropertyDataType
   USE SoilPhysDataType
   use EcoSIMCtrlDataType
+  use EcoSIMCtrlMod, only: ats_cpl_mode
   use HydroThermData
   use PhysPars
   use EcoSimConst
@@ -146,7 +147,10 @@ implicit none
   )
 
   DO L=NM+1,JZ
-    CumDepz2LayBottom_vr(L,NY,NX) = 2.0_r8*CumDepz2LayBottom_vr(L-1,NY,NX)-1.0_r8*CumDepz2LayBottom_vr(L-2,NY,NX)
+    ! The coupled path is given the depth to the bottom of every layer by ATS; extrapolating the first
+    ! layers down would replace them (all deeper layers would take the thickness of layer 2).
+    if(.not.(ats_cpl_mode .and. L.LE.NL_col(NY,NX))) &
+      CumDepz2LayBottom_vr(L,NY,NX) = 2.0_r8*CumDepz2LayBottom_vr(L-1,NY,NX)-1.0_r8*CumDepz2LayBottom_vr(L-2,NY,NX)
     SoiBulkDensityt0_vr(L,NY,NX)  = SoiBulkDensityt0_vr(L-1,NY,NX)
     FieldCapacity_vr(L,NY,NX)     = FieldCapacity_vr(L-1,NY,NX)
     WiltPoint_vr(L,NY,NX)         = WiltPoint_vr(L-1,NY,NX)
