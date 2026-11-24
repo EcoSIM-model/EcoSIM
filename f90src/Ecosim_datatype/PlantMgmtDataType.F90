@@ -1,4 +1,7 @@
 module PlantMgmtDataType
+!
+! Description:
+! Store planting, harvest and disturbance schedules and their per-PFT inputs.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use ElmIDMod, only : ifalse  
@@ -8,6 +11,7 @@ module PlantMgmtDataType
   __FILE__
 
   logical, target,allocatable ::  flag_active_pft(:,:,:)                       !flag for plant presence,[-]
+  real(r8),allocatable :: PlantingGroupX_pft(:,:,:) !planting GROUPX override, [-]; -1 uses the trait table
   real(r8),target,allocatable ::  THIN_pft(:,:,:,:)                            !thinning of plant population, [-]
   real(r8),target,allocatable ::  FracBiomHarvsted(:,:,:,:,:,:)                !harvest efficiency, [-]
   real(r8),target,allocatable ::  CanopyCutProxy_pft(:,:,:,:)             !harvest cutting height (+ve) or fractional LAI removal (-ve), [m] or [-]
@@ -48,6 +52,7 @@ module PlantMgmtDataType
 
   implicit none
   allocate(flag_active_pft(JP,JY,JX));  flag_active_pft                    = .false.
+  allocate(PlantingGroupX_pft(JP,JY,JX)); PlantingGroupX_pft = -1._r8
   allocate(THIN_pft(JP,366,JY,JX)); THIN_pft                               = 0._r8
   allocate(FracBiomHarvsted(2,4,JP,366,JY,JX));FracBiomHarvsted            = 0._r8
   allocate(CanopyCutProxy_pft(JP,366,JY,JX)); CanopyCutProxy_pft = 0._r8
@@ -82,6 +87,7 @@ module PlantMgmtDataType
 
   call destroy(FireReSet_pft)
   call destroy(flag_active_pft)
+  call destroy(PlantingGroupX_pft)
   call destroy(THIN_pft)
   call destroy(FracBiomHarvsted)
   call destroy(CanopyCutProxy_pft)

@@ -753,6 +753,7 @@ contains
   real(r8) :: AlbedoGrnd      !albedo at the ground
   real(r8) :: RadSWbySoil     !shortwave radiation absorbed by exposed soil [MJ]
   real(r8) :: ThetaLiquidSurface !current liquid content [m3 water m-3 micropore soil]
+  real(r8) :: ThetaForResistance !effective liquid-supply content on the same basis [m3 m-3]
   real(r8) :: AirPorositySurface !current air content [m3 air m-3 micropore soil]
   real(r8) :: BulkVaporDiffusivity !air fraction times effective vapor diffusivity [m2 h-1]
   real(r8) :: BunsenWater        !liquid/soil-vapor density ratio [-]
@@ -877,16 +878,20 @@ contains
       safe_adb(VLWatMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
     AirPorositySurface=MAX(0._r8,MIN(soil_parameters%porosity, &
       safe_adb(VLairMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
+    ! Evaluate the liquid factor, K lookup and retention slope at effective
+    ! moisture. Gas diffusion and source vapor still use the physical state.
+    ThetaForResistance = moisture_factor(ThetaLiquidSurface,soil_parameters%porosity,NY,NX) * ThetaLiquidSurface
+
     BulkVaporDiffusivity=WVapDifusvitySoil_vr(TopSoilLayer,NY,NX) &
       *AirPorositySurface**2*POROQ/soil_parameters%porosity
-    MoistureClass=getMoistK(ThetaLiquidSurface,soil_parameters%porosity)
+    MoistureClass=getMoistK(ThetaForResistance,soil_parameters%porosity)
     ! vapsat returns Mg water m-3; liquid density is 1 Mg m-3. Protect only
     ! the partition ratio against underflow, retaining VaporSoi1 in the flux.
     BunsenWater = 1._r8/MAX(VaporSoi1,tiny(1._r8))
     ! Use the same rainfall seal as surface liquid infiltration/exfiltration.
     ! Reduce only the liquid transport path; pore-gas diffusion stays separate.
     ! Keep the cached bulk K table unchanged for subsurface water flow.
-    RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaLiquidSurface, &
+    RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaForResistance, &
       DLYR_3D(3,TopSoilLayer,NY,NX), &
       HydroCond_3D(3,MoistureClass,TopSoilLayer,NY,NX)*RainEkReducedKsat, &
       BulkVaporDiffusivity,BunsenWater,temperature=TKX1, &
