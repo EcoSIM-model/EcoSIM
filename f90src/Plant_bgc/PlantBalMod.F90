@@ -6,8 +6,18 @@ module PlantBalMod
   use data_kind_mod,    only: r8 => DAT_KIND_R8,yearIJ_type
   use EcoSiMParDataMod, only: pltpar
   use abortutils,       only: endrun
+  use EcoSIMCtrlMod, only: guard_floor_dying_stand, VEGC_BAL_FLOOR_dying
   use PlantMathFuncMod
-  use PlantAPIData  
+  use PlantAPICommonData
+  use PlantSiteAPIData, only : plt_site
+  use PlantPhotosynthesisAPIData, only : plt_photo
+  use PlantMorphologyAPIData, only : plt_morph
+  use PlantPhenologyAPIData, only : plt_pheno
+  use PlantAllometryAPIData, only : plt_allom
+  use PlantBiomassAPIData, only : plt_biom
+  use PlantDisturbanceAPIData, only : plt_distb
+  use PlantBGCRatesAPIData, only : plt_bgcr
+  use PlantRootBGCAPIData, only : plt_rbgc
 implicit none
   private
   character(len=*), private, parameter :: mod_filename = &
@@ -29,13 +39,17 @@ implicit none
   contains
   ![header]
 !----------------------------------------------------------------------------------------------------
-  subroutine SumPlantBiome(yearIJ,NZ,header,vegE)
+  subroutine SumPlantBiome(yearIJ,NZ,header,tvegE,canopyE,RootE)
 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
   character(len=*), intent(in) :: header
-  real(r8),optional, intent(out) :: vegE(NumPlantChemElms)
+  real(r8),optional, intent(out) :: tvegE(NumPlantChemElms)
+  real(r8),optional, intent(out) :: canopyE(NumPlantChemElms)
+  real(r8),optional, intent(out) :: RootE(NumPlantChemElms)
+
+  real(r8) :: tvegE1(NumPlantChemElms),canopyE1(NumPlantChemElms),RootE1(NumPlantChemElms)
   integer :: L,K,N,NE,NB,M
   real(r8) :: root1st,root2nd
 
@@ -58,11 +72,12 @@ implicit none
     LitrfallBlgrElms_pft     => plt_bgcr%LitrfallBlgrElms_pft       ,& !output :belowground plant element LitrFall, [g d-2 h-1]
     GrossResp_pft            => plt_bgcr%GrossResp_pft               & !output :total plant respiration, [gC d-2 ]
   )
-  if(present(vegE))then
-    call SumPlantBiomStates(yearIJ,NZ,header,vegE)
-  else
-    call SumPlantBiomStates(yearIJ,NZ,header)
-  endif  
+
+  call SumPlantBiomStates(yearIJ,NZ,header,tvegE=tvegE1,canopyE=canopyE1,RootE=RootE1)
+
+  if(present(tvegE))tvegE=tvegE1
+  if(present(canopyE))canopyE=canopyE1
+  if(present(RootE))RootE=RootE1
 
   call SumRootAR(NZ)
   
@@ -164,19 +179,20 @@ implicit none
   INTEGER, optional, INTENT(IN) :: NZ1
   integer :: NZ ,L,N,idg,K
   real(r8) :: trcg(idg_beg:idg_NH3)
-  associate(                                         &
-    trcg_rootml_pvr  => plt_rbgc%trcg_rootml_pvr    ,& !input  :root gas content, [g d-2]
-    trcs_rootml_pvr  => plt_rbgc%trcs_rootml_pvr    ,& !input  :root aqueous content, [g d-2]
-    Myco_pft         => plt_morph%Myco_pft          ,& !input  :mycorrhizal type (no or yes),[-]
-    MaxSoiL4Root_pft => plt_morph%MaxSoiL4Root_pft  ,& !input  :maximum soil layer number for all root axes,[-]
-    trcg_root_vr     => plt_rbgc%trcg_root_vr        & !inoput :total root internal gas flux, [g d-2 h-1]
+  associate(                                                 &
+    trcg_rootml_pvr      => plt_rbgc%trcg_rootml_pvr        ,& !input  :root gas content, [g d-2]
+    trcs_rootml_pvr      => plt_rbgc%trcs_rootml_pvr        ,& !input  :root aqueous content, [g d-2]
+    Myco_pft             => plt_morph%Myco_pft              ,& !input  :mycorrhizal type (no or yes),[-]
+    NK                   => plt_site%NK                     ,& !input  : total layers with roots,  can be set to NL_col
+    MaxSoilLays4Root_pft => plt_morph%MaxSoilLays4Root_pft  ,& !input  :maximum soil layer number for all root axes,[-]
+    trcg_root_vr         => plt_rbgc%trcg_root_vr            & !inoput :total root internal gas flux, [g d-2 h-1]
   )
   trcg_root_vr(idg_beg:idg_NH3,:)   = 0._r8
 
   trcg(:)=0._r8
   IF(present(NZ1))THEN
     NZ=NZ1
-    DO L=1,MaxSoiL4Root_pft(NZ)
+    DO L=1,MIN(MaxSoilLays4Root_pft(NZ)+1,NK)
       DO N=1,Myco_pft(NZ)  
         DO idg=idg_beg,idg_NH3
           trcg_root_vr(idg,L)=trcg_root_vr(idg,L)+trcs_rootml_pvr(idg,N,L,NZ)+trcg_rootml_pvr(idg,N,L,NZ)        
@@ -189,7 +205,7 @@ implicit none
   ELSE
     DO NZ=1,plt_site%NP  
 
-      DO L=1,MaxSoiL4Root_pft(NZ)
+      DO L=1,MIN(MaxSoilLays4Root_pft(NZ)+1,NK)
         DO N=1,Myco_pft(NZ)  
           DO idg=idg_beg,idg_NH3
             trcg_root_vr(idg,L)=trcg_root_vr(idg,L)+trcs_rootml_pvr(idg,N,L,NZ)+trcg_rootml_pvr(idg,N,L,NZ)        
@@ -306,26 +322,29 @@ implicit none
   END associate
   end subroutine SumCanopyBiome
 !----------------------------------------------------------------------------------------------------
-  subroutine SumPlantBiomStates(yearIJ,NZ,header,tvegE)
+  subroutine SumPlantBiomStates(yearIJ,NZ,header,tvegE,canopyE,RootE)
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
   character(len=*),intent(in) :: header
   real(r8), optional, intent(out) :: tvegE(NumPlantChemElms)
-  real(r8) :: canopyE(NumPlantChemElms)
-  real(r8) :: RootE(NumPlantChemElms)
+  real(r8), optional, intent(out) :: canopyE(NumPlantChemElms)
+  real(r8), optional, intent(out) :: RootE(NumPlantChemElms)
+
+  real(r8) :: tvegE1(NumPlantChemElms)
+  real(r8) :: canopyE1(NumPlantChemElms)
+  real(r8) :: RootE1(NumPlantChemElms)
+
 !     begin_execution
   
-  if(present(tvegE))then
-    call SumCanopyBiome(yearIJ,NZ,canopyE)
 
-     call SumRootBiome(yearIJ,NZ,RootE)
-     tvegE=canopyE+RootE+plt_biom%SeasonalNonstElms_pft(:,NZ)
-  else
-    call SumCanopyBiome(yearIJ,NZ)
+  call SumCanopyBiome(yearIJ,NZ,canopyE1)
 
-    call SumRootBiome(yearIJ,NZ)
-  endif  
+  call SumRootBiome(yearIJ,NZ,RootE1)
+
+  if(present(tvegE))tvegE=canopyE1+RootE1+plt_biom%SeasonalNonstElms_pft(:,NZ)
+  if(present(canopyE))canopyE=canopyE1
+  if(present(rootE))RootE=RootE1
 
   END subroutine SumPlantBiomStates
 
@@ -384,8 +403,14 @@ implicit none
   associate(                                                   &
     Myco_pft               => plt_morph%Myco_pft              ,& !input  :mycorrhizal type (no or yes),[-]
     NU                     => plt_site%NU                     ,& !input  :current soil surface layer number, [-]
-    MaxSoiL4Root_pft       => plt_morph%MaxSoiL4Root_pft      ,& !input  :maximum soil layer number for all root axes,[-]
+    MaxSoilLays4Root_pft   => plt_morph%MaxSoilLays4Root_pft  ,& !input  :maximum soil layer number for all root axes,[-]
     MaxNumRootLays         => plt_site%MaxNumRootLays         ,& !input  :maximum root layer number,[-]
+    Root1stActStruct_pvr   => plt_biom%Root1stActStruct_pvr   ,& !output :derived primary active root element mass
+    Root1stLigStruct_pvr   => plt_biom%Root1stLigStruct_pvr   ,& !output :derived primary lignified root element mass
+    RootMedStruct_pvr      => plt_biom%RootMedStruct_pvr      ,& !output :derived medium root element mass
+    RootMyco2ndStrutElms_pvr => plt_biom%RootMyco2ndStrutElms_pvr ,& !output :derived secondary root/mycorrhizal element mass
+    RootSinkWeight_pvr     => plt_morph%RootSinkWeight_pvr    ,& !output :root-layer sink weighting
+    RootAtmGasConductance_rpvr => plt_rbgc%RootAtmGasConductance_rpvr ,& !output :root-atmosphere gas conductance
     RootCO2Autor_pvr       => plt_rbgc%RootCO2Autor_pvr       ,& !input  :root respiration constrained by O2, [g d-2 h-1]
     CO2NetFix_pft          => plt_bgcr%CO2NetFix_pft          ,& !output :canopy net CO2 exchange, [gC d-2 h-1]
     RCanMaintDef_CO2_pft   => plt_bgcr%RCanMaintDef_CO2_pft   ,& !output :canopy maintenance respiraiton deficit as CO2, [gC d-2]    
@@ -406,6 +431,7 @@ implicit none
     SSXferElms_pft         => plt_bgcr%SSXferElms_pft         ,& !inoput :flux export from seasonal storage, [g h-1 d-2] 
     SSXfer2ShootElms_pft   => plt_bgcr%SSXfer2ShootElms_pft   ,& !inoput :flux export from seasonal storage to shoot, [g h-1 d-2]            
     PlantElmDistLoss_pft   => plt_distb%PlantElmDistLoss_pft  ,& !ouput  :plant element loss due to disturbance, [g d-2 h-1]
+    RootLost2Fire_pft      => plt_distb%RootLost2Fire_pft     ,& !inoput :plant root biomass lost by fire, [g d-2 h-1]    
     LitrfallElms_pvr       => plt_bgcr%LitrfallElms_pvr       ,& !output :plant LitrFall element, [g d-2 h-1]
     LitrFallElms_brch      => plt_bgcr%LitrFallElms_brch      ,& !inoput :litterfall from the branch, [g d-2 h-1]        
     GPP_brch               => plt_rbgc%GPP_brch               ,& !output :GPP over branch, [gC d-2 h-1]    
@@ -421,6 +447,8 @@ implicit none
     trcs_deadroot2soil_pvr => plt_rbgc%trcs_deadroot2soil_pvr ,& !inoput :gases released to soil upong dying roots, [g d-2 h-1]    
     RNodeInitiate_pft      => plt_rbgc%RNodeInitiate_pft      ,& !inoput :node initiation rate, [h-1]
     RLeafAppear_pft        => plt_rbgc%RLeafAppear_pft        ,& !inoput :leaf appearing rate, [h-1]
+    CO2Intra_pft           => plt_photo%CO2Intra_pft          ,& !inoput :leaf-area-weighted intracellular CO2 sum, [umol mol-1 m2 d-2]
+    CO2IntraScal_pft       => plt_photo%CO2IntraScal_pft      ,& !inoput :intracellular CO2 leaf-area weight, [m2 d-2]
     fNCLFW_brch            => plt_pheno%fNCLFW_brch           ,& !output : NC ratio of growing leaf on branch, [gN/gC]
     fPCLFW_brch            => plt_pheno%fPCLFW_brch           ,& !output : PC ratio of growing leaf on branch, [gP/gC]
     fNCLFW_pft             => plt_pheno%fNCLFW_pft            ,& !output : NC ratio of growing leaf, [gN/gC]
@@ -431,6 +459,18 @@ implicit none
   plt_rbgc%trcs_Soil2plant_uptake_vr=0._r8
 
   D9980: DO NZ=1,NP
+    ! Excluded layers can retain legacy mass, but have no active root diagnostics.
+    ! Clear shared working arrays so neither another column nor a restart leaves
+    ! stale values in history. The underlying structural and reserve pools are kept.
+    Root1stActStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
+    Root1stLigStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
+    RootMedStruct_pvr(:,MaxNumRootLays+1:,NZ) = 0._r8
+    RootMyco2ndStrutElms_pvr(:,:,MaxNumRootLays+1:,NZ) = 0._r8
+    RootSinkWeight_pvr(MaxNumRootLays+1:,NZ) = 0._r8
+    RootAtmGasConductance_rpvr(:,:,MaxNumRootLays+1:,NZ) = 0._r8
+    CO2Intra_pft(NZ) = 0._R8
+    CO2IntraScal_pft(NZ) = 0._R8
+    plt_rbgc%NH3Dep2Can_brch(:,NZ) = 0._R8  
     RLeafAppear_pft(NZ) = 0._r8
     RNodeInitiate_pft(NZ) = 0._r8
     SSXfer2ShootElms_pft(:,NZ)                  = 0._r8
@@ -453,6 +493,7 @@ implicit none
     plt_biom%LeafPEPCperm2LA_pft(NZ)             = 0._r8
     plt_biom%SpecificLeafArea_pft(NZ)            = 0._r8
     plt_biom%LeafProteinCperm2LA_pft(NZ)         = 0._r8
+    plt_bgcr%Xfer2RootsC_pft(NZ)                 = 0._R8
     D1: DO L=0,MaxNumRootLays
       DO K=1,pltpar%NumOfPlantLitrCmplxs
         DO M=1,jsken
@@ -470,7 +511,7 @@ implicit none
     CH2OSunlit_pft(NZ)                                          = 0._r8
     CH2OSunsha_pft(NZ)                                          = 0._r8
     RootMaintDef_CO2_pvr(:,:,NZ)                                = 0._r8
-    RootCO2Autor_pvr(1:Myco_pft(NZ),NU:MaxSoiL4Root_pft(NZ),NZ) = 0._r8
+    RootCO2Autor_pvr(1:Myco_pft(NZ),NU:MaxSoilLays4Root_pft(NZ),NZ) = 0._r8
     NH3Dep2Can_pft(NZ)                                          = 0._r8
     GrossResp_pft(NZ)                                           = 0._r8
     GrossCO2Fix_pft(NZ)                                         = 0._r8
@@ -479,6 +520,7 @@ implicit none
     CanopyGrosRCO2_pft(NZ)                                      = 0._r8
     CanopyResp_brch(:,NZ)                                       = 0._r8
     PlantElmDistLoss_pft(1:NumPlantChemElms,NZ)                 = 0._r8
+    RootLost2Fire_pft(1:NumPlantChemElms,NZ)                    = 0._R8
     Soil2RootMycoExudE_pft(1:NumPlantChemElms,NZ)               = 0._r8
     NodulInfectElms_pft(1:NumPlantChemElms,NZ)                  = 0._r8
     CO2FixCL_pft(NZ)                                            = 0._r8
@@ -498,47 +540,64 @@ implicit none
 
 !----------------------------------------------------------------------------------------------------
   subroutine SumRootBiome(yearIJ,NZ,massroot)
+  ! Aggregate per-axis structural and reserve pools into root/mycorrhizal totals.
 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
   real(r8), optional, intent(out) :: massroot(NumPlantChemElms)  
+  character(len=*), parameter :: subname='SumRootBiome'
 
   integer :: NE,N,L
   real(r8) :: massr1st1(NumPlantChemElms)
   real(r8) :: massr2nd1(NumPlantChemElms)
   real(r8) :: massnonst1(NumPlantChemElms)
   associate(                                                          &
+    PlantPopuLive_pft         => plt_site%PlantPopuLive_pft         , & !inoput :plant population, [d-2]  
     NU                        => plt_site%NU                         ,& !input  :current soil surface layer number, [-]
     Myco_pft                  => plt_morph%Myco_pft                  ,& !input  :mycorrhizal type (no or yes),[-]
     NMaxRootBotLayer_pft      => plt_morph%NMaxRootBotLayer_pft      ,& !input  :maximum soil layer number for all root axes, [-]    
     MaxNumRootLays            => plt_site%MaxNumRootLays             ,& !input  :maximum root layer number,[-]
-    MaxSoiL4Root_pft          => plt_morph%MaxSoiL4Root_pft          ,& !input  :maximum soil layer number for all root axes,[-]
+    MaxSoilLays4Root_pft      => plt_morph%MaxSoilLays4Root_pft      ,& !input  :maximum soil layer number for all root axes,[-]
     iPlantNfixType_pft        => plt_morph%iPlantNfixType_pft        ,& !input  :N2 fixation type,[-]
-    NumPrimeRootAxes_pft      => plt_morph%NumPrimeRootAxes_pft      ,& !input  :root primary axis number,[-]
+    NumStructuralRootAxes_pft => plt_morph%NumStructuralRootAxes_pft ,& !input  :number of structural root axes,[-]
+    RootMediumStructElms_rpvr => plt_biom%RootMediumStructElms_rpvr  ,& !inoput :root layer element for medium size root axes, [g d-2]
+    RootMedStruct_pvr         => plt_biom%RootMedStruct_pvr          ,& !inoput :root layer element biomass for medium size roots, [g d-2]    
+    Root1stActStructElms_rpvr => plt_biom%Root1stActStructElms_rpvr  ,& !inoput :Root layer primary axes Active zone structrual element, [g d-2]    
+    Root1stLigStructElms_rpvr => plt_biom%Root1stLigStructElms_rpvr  ,& !inoput :root layer lignified zone element in primary axes, [g d-2]    
     RootNodulStrutElms_rpvr   => plt_biom%RootNodulStrutElms_rpvr    ,& !input  :root layer nodule element, [g d-2]
     RootNodulNonstElms_rpvr   => plt_biom%RootNodulNonstElms_rpvr    ,& !input  :root layer nonstructural element, [g d-2]
     RootMyco1stStrutElms_rpvr => plt_biom%RootMyco1stStrutElms_rpvr  ,& !input  :root layer element primary axes, [g d-2]
     RootMyco2ndStrutElms_rpvr => plt_biom%RootMyco2ndStrutElms_rpvr  ,& !input  :root layer element secondary axes, [g d-2]
+    RootMyco2ndStrutElms_pvr  => plt_biom%RootMyco2ndStrutElms_pvr   ,& !output :secondary structural elements summed over active NR, [g element cell-1]
     RootMycoNonstElms_rpvr    => plt_biom%RootMycoNonstElms_rpvr     ,& !input  :root layer nonstructural element, [g d-2]
     RootElms_pft              => plt_biom%RootElms_pft               ,& !output :plant root element mass, [g d-2]    
     RootNoduleElms_pft        => plt_biom%RootNoduleElms_pft         ,& !output :plant root nodule element mass, [g d-2]    
     RootMycoNonstElms_pft     => plt_biom%RootMycoNonstElms_pft      ,& !output :nonstructural root-myco chemical element, [g d-2]
     RootStrutElms_pft         => plt_biom%RootStrutElms_pft          ,& !output :plant root structural element mass, [g d-2]
+    Root1stActStruct_pvr      => plt_biom%Root1stActStruct_pvr       ,& !output :active zone of primary roots, [g d-2]
+    Root1stLigStruct_pvr      => plt_biom%Root1stLigStruct_pvr       ,& !output :lignifed primary root biomass, [g d-2]    
     RootMycoMassElm_pvr       => plt_biom%RootMycoMassElm_pvr         & !output :root biomass in chemical elements, [g d-2]
   )
+  call PrintInfo('beg '//subname)
   massr1st1=0._r8;massr2nd1=0._r8
+  RootMyco2ndStrutElms_pvr(:,:,:,NZ)=0._r8
   RootElms_pft(:,NZ)=0._r8
   RootMycoNonstElms_pft(:,:,NZ)=0._r8
   DO NE=1,NumPlantChemElms
     DO L=1,MaxNumRootLays
       DO N=1,Myco_pft(NZ)
-        RootMycoMassElm_pvr(NE,N,L,NZ) = sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumPrimeRootAxes_pft(NZ),NZ))+RootMycoNonstElms_rpvr(NE,N,L,NZ)
+        RootMyco2ndStrutElms_pvr(NE,N,L,NZ) = &
+          sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+        RootMycoMassElm_pvr(NE,N,L,NZ) = RootMyco2ndStrutElms_pvr(NE,N,L,NZ)+RootMycoNonstElms_rpvr(NE,N,L,NZ)
         RootMycoNonstElms_pft(NE,N,NZ) = RootMycoNonstElms_pft(NE,N,NZ)+RootMycoNonstElms_rpvr(NE,N,L,NZ)
-        massr2nd1(NE)                  = massr2nd1(NE)+sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumPrimeRootAxes_pft(NZ),NZ))
+        massr2nd1(NE)                  = massr2nd1(NE)+RootMyco2ndStrutElms_pvr(NE,N,L,NZ)
       ENDDO  
-      massr1st1(NE)=massr1st1(NE)+sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumPrimeRootAxes_pft(NZ),NZ))        
-      RootMycoMassElm_pvr(NE,ipltroot,L,NZ)= RootMycoMassElm_pvr(NE,ipltroot,L,NZ)+sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumPrimeRootAxes_pft(NZ),NZ))
+      RootMedStruct_pvr(NE,L,NZ)    = SUM(RootMediumStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+      Root1stActStruct_pvr(NE,L,NZ) = SUM(Root1stActStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+      Root1stLigStruct_pvr(NE,L,NZ) = SUM(Root1stLigStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+      massr1st1(NE)=massr1st1(NE)+sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))+RootMedStruct_pvr(NE,L,NZ)        
+      RootMycoMassElm_pvr(NE,ipltroot,L,NZ)= RootMycoMassElm_pvr(NE,ipltroot,L,NZ)+sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))+RootMedStruct_pvr(NE,L,NZ)        
     ENDDO
     
     RootStrutElms_pft(NE,NZ)=massr1st1(NE)+massr2nd1(NE)
@@ -546,7 +605,7 @@ implicit none
     
     RootElms_pft(NE,NZ) = massr1st1(NE)+massr2nd1(NE)+massnonst1(NE)
     if(RootElms_pft(NE,NZ)<0._r8)then
-    write(945,*)yearIJ%I*1000+yearIJ%J/24., massr1st1(NE),massr2nd1(NE),massnonst1(NE),'NZ',NZ,NE,NumPrimeRootAxes_pft(NZ)
+    write(945,*)yearIJ%I*1000+yearIJ%J/24., massr1st1(NE),massr2nd1(NE),massnonst1(NE),'NZ',NZ,NE,NumStructuralRootAxes_pft(NZ)
     endif
     !add reserve to struct
     RootNoduleElms_pft(NE,NZ)=0._r8
@@ -554,9 +613,9 @@ implicit none
       RootNoduleElms_pft(NE,NZ) = RootNoduleElms_pft(NE,NZ)+sum(RootNodulStrutElms_rpvr(NE,NU:NMaxRootBotLayer_pft(NZ),NZ))+sum(RootNodulNonstElms_rpvr(NE,NU:NMaxRootBotLayer_pft(NZ),NZ))
     endif      
   ENDDO
-
+  
   if(present(massroot))massroot=RootElms_pft(:,NZ)+RootNoduleElms_pft(:,NZ)
-
+  call PrintInfo('end '//subname)
   end associate
   end subroutine SumRootBiome
 
@@ -590,6 +649,8 @@ implicit none
       plt_biom%TotBegVegE_pft(NE,NZ)            = plt_biom%TotEndVegE_pft(NE,NZ)
       plt_biom%RootNoduleElmsBeg_pft(NE,NZ)     = plt_biom%RootNoduleElms_pft(NE,NZ)
       plt_distb%FireLossE_pft(NE,NZ)            = 0._r8
+      plt_bgcr%NH3Dep2Can_pft(NZ)               = 0._r8
+      plt_bgcr%SurfLitrfallElms_pft(NE,NZ)      = 0._r8
     ENDDO
 
   ENDDO
@@ -634,6 +695,12 @@ implicit none
   integer :: NE,I,J,K
   real(r8) :: balE(NumPlantChemElms)
   real(r8) :: err_rel,dGPP  
+! --- Jing Tao ---
+! set true only when guard_floor_dying_stand is on AND total vegetation carbon has
+! collapsed below VEGC_BAL_FLOOR_dying, which makes the RELATIVE balance test
+! meaningless. Declared here rather than module-scope so it cannot leak between calls.
+  logical :: lveg_too_small_for_relative_test
+  logical :: lbalC_abort
   associate(                                                          &
     NY                        => plt_site%NY                         ,& !input  : Y coordinate
     NX                        => plt_site%NX                         ,& !input  : X coordinate
@@ -667,10 +734,15 @@ implicit none
     RootN2Fix_pft             => plt_rbgc%RootN2Fix_pft              ,& !input  :total root N2 fixation, [gN d-2 h-1]    
     SurfLitrfallElms_pft      => plt_bgcr%SurfLitrfallElms_pft       ,& !input :surface litterfall, [g d-2 h-1]    
     CanopyN2Fix_pft           => plt_rbgc%CanopyN2Fix_pft            ,& !input  :total canopy N2 fixation, [gN d-2 h-1]        
+    CanopyCi2CaRatio_pft      => plt_photo%CanopyCi2CaRatio_pft      ,& !input  :prior Ci:Ca ratio, [-]
+    CanopyGasCO2_pft          => plt_photo%CanopyGasCO2_pft          ,& !inoput :canopy gaesous CO2 concentration, [umol mol-1]
+    DynCi2CaRatio_pft         => plt_photo%DynCi2CaRatio_pft         ,& !output :dynamic Ci:Ca ratio, [-]
     SeedPlantedElm_pft        => plt_biom%SeedPlantedElm_pft         ,& !input  :seed biomass at planting, [g d-2] 
     iDayPlantHarvest_pft      => plt_distb%iDayPlantHarvest_pft      ,& !input  : day of plant harvest,[-]
     LitrfallAbvgElms_pft      => plt_bgcr%LitrfallAbvgElms_pft       ,& !input  :aboveground plant element LitrFall, [g d-2 h-1]
     LitrfallBlgrElms_pft      => plt_bgcr%LitrfallBlgrElms_pft       ,& !input  :belowground plant element LitrFall, [g d-2 h-1]
+    CO2Intra_pft              => plt_photo%CO2Intra_pft              ,& !inoput :leaf-area-weighted intracellular CO2 sum, [umol mol-1 m2 d-2]
+    CO2IntraScal_pft          => plt_photo%CO2IntraScal_pft          ,& !inoput :intracellular CO2 leaf-area weight, [m2 d-2]
     FireLossE_pft             => plt_distb%FireLossE_pft             ,& !input  :plant element lost by fire, [g d-2 h-1]
     TotBegVegE_pft            => plt_biom%TotBegVegE_pft             ,& !Input  :total vegetation carbon at the beginning of the time step,[g d-2]
     TotEndVegE_pft            => plt_biom%TotEndVegE_pft              & !output :total vegetation carbon at the end of the time step,[g d-2]
@@ -678,6 +750,12 @@ implicit none
 
   call PrintInfo('beg '//subname)
   
+  ! Preserve the weighted sum for the Ci history diagnostic.
+  IF(CO2IntraScal_pft(NZ).GT.1.E-5_R8.AND.CanopyGasCO2_pft(NZ).GT.0._r8)THEN
+    DynCi2CaRatio_pft(NZ)=(CO2Intra_pft(NZ)/CO2IntraScal_pft(NZ))/CanopyGasCO2_pft(NZ)
+  ELSE
+    DynCi2CaRatio_pft(NZ)=  CanopyCi2CaRatio_pft(NZ)
+  ENDIF
   call SumPlantBiome(yearIJ,NZ,header)
 
   I=yearIJ%I; J=yearIJ%J  
@@ -688,9 +766,9 @@ implicit none
 
     balE(NE)=TotEndVegE_pft(NE,NZ)-TotBegVegE_pft(NE,NZ) &
       -NodulInfectElms_pft(NE,NZ)-Soil2RootMycoExudE_pft(NE,NZ) &
-      +LitrfallElms_pft(NE,NZ)+PlantElmDistLoss_pft(NE,NZ)-SeedPlantedElm_pft(NE,NZ)+FireLossE_pft(NE,NZ)    
+      +LitrfallElms_pft(NE,NZ)+PlantElmDistLoss_pft(NE,NZ)-SeedPlantedElm_pft(NE,NZ)
   ENDDO
-
+  
   dGPP=sum(plt_rbgc%GPP_brch(:,NZ))
   balE(ielmc)=balE(ielmc)-GrossCO2Fix_pft(NZ)-GrossResp_pft(NZ)   
   balE(ielmn)=balE(ielmn)-RootNutUptakeN_pft(NZ)-CanopyN2Fix_pft(NZ)-RootN2Fix_pft(NZ)-NH3Dep2Can_pft(NZ)             
@@ -702,7 +780,23 @@ implicit none
   else
     err_rel=1.e-10_r8
   endif
-  if(abs(balE(NE))>1.e-6_r8 .and. abs(err_rel)>1.e-3_r8 .or. len_trim(header)>3)then      
+! --- Jing Tao (2026-10-14, branch a2mc-anchor-0ffe5a06) ---
+! err_rel is normalised by total vegetation carbon, which COLLAPSES as the stand
+! dies, so a rounding-level absolute residual can read as a large relative error,
+! or (via safe_adb's own near-zero-denominator clamp) as a spuriously SMALL one --
+! either direction is unreliable below a floor on total vegetation carbon. Compute
+! the regime flag and the single abort condition HERE, before the diagnostic-write
+! gate below, so the gate and the abort test share ONE condition rather than two
+! copies that can drift apart (the previous form let the gate require
+! abs(err_rel)>1e-3 while the abort below the floor did not, which could make a
+! corrected abort unreachable).
+! Default-off: when guard_floor_dying_stand is .false. this reduces exactly to the
+! original abs(balE)>1e-6 .and. abs(err_rel)>1e-3.
+  lveg_too_small_for_relative_test = .false.
+  if(guard_floor_dying_stand) lveg_too_small_for_relative_test = &
+    (AMAX1(TotEndVegE_pft(NE,NZ),TotBegVegE_pft(NE,NZ)) < VEGC_BAL_FLOOR_dying)
+  lbalC_abort = abs(balE(NE))>1.e-6_r8 .and. (lveg_too_small_for_relative_test .or. abs(err_rel)>1.e-3_r8)
+  if(lbalC_abort .or. len_trim(header)>3)then      
     write(888,*)iYearCurrent*1000+I+J/24.,'pft=',NZ,'balC err err_rel',balE(ielmc),err_rel,plt_distb%iDayPlanting_pft(NZ),plt_distb%iDayPlantHarvest_pft(NZ)
     write(888,*)'NY, NX=',NY,NX,header
     write(888,*)'endc, begc        =',TotEndVegE_pft(NE,NZ),TotBegVegE_pft(NE,NZ),TotEndVegE_pft(NE,NZ)-TotBegVegE_pft(NE,NZ)
@@ -725,8 +819,7 @@ implicit none
     write(888,*)'surf literfall C  =',SurfLitrfallElms_pft(NE,NZ)       
     write(888,*)('-',K=1,100)         
     !if(I/=plt_distb%iDayPlantHarvest_pft(NZ) .and. I/=plt_distb%iDayPlanting_pft(NZ)) &  
-    if(abs(balE(NE))>1.e-6_r8 .and. abs(err_rel)>1.e-3_r8)call endrun('C balance error test failure in '//trim(mod_filename)//' at line',__LINE__)                    
-    
+    if(lbalC_abort)call endrun('C balance error test failure in '//trim(mod_filename)//' at line',__LINE__)                    
   endif
 
   NE=ielmn
@@ -740,12 +833,12 @@ implicit none
     write(888,*)iYearCurrent*1000+I+J/24.,NZ,'balN',balE(NE),err_rel,plt_distb%iDayPlanting_pft(NZ),plt_distb%iDayPlantHarvest_pft(NZ)
     write(888,*)'NY,NX=',plt_site%NY,plt_site%NX,header
     write(888,*)'endN, begN        =',TotEndVegE_pft(NE,NZ),TotBegVegE_pft(NE,NZ),TotEndVegE_pft(NE,NZ)-TotBegVegE_pft(NE,NZ)
-    write(888,*)'rootN             =',RootElms_pft(NE,NZ),RootElmsBeg_pft(NE,NZ),RootElms_pft(NE,NZ)-RootElmsBeg_pft(NE,NZ)
-    write(888,*)'shootN            =',ShootElms_pft(NE,NZ),ShootElmsBeg_pft(NE,NZ),ShootElms_pft(NE,NZ)-ShootElmsBeg_pft(NE,NZ)
-    write(888,*)'sstoreN           =',SeasonalNonstElms_pft(NE,NZ),SeasonalNonstElmsbeg_pft(NE,NZ),SeasonalNonstElms_pft(NE,NZ)-SeasonalNonstElmsbeg_pft(NE,NZ)
-    write(888,*)'ssteadN           =',StandDeadStrutElms_pft(NE,NZ),StandDeadStrutElmsBeg_pft(NE,NZ),StandDeadStrutElms_pft(NE,NZ)-StandDeadStrutElmsBeg_pft(NE,NZ)
-    write(888,*)'ShootNodulN       =',ShootNoduleElms_pft(NE,NZ),ShootNoduleElmsBeg_pft(NE,NZ),ShootNoduleElms_pft(NE,NZ)-ShootNoduleElmsBeg_pft(NE,NZ)
-    write(888,*)'RootNoduleN       =',RootNoduleElms_pft(NE,NZ),RootNoduleElmsBeg_pft(NE,NZ),RootNoduleElms_pft(NE,NZ)-RootNoduleElmsBeg_pft(NE,NZ)    
+    write(888,*)'end/begrootN      =',RootElms_pft(NE,NZ),RootElmsBeg_pft(NE,NZ),RootElms_pft(NE,NZ)-RootElmsBeg_pft(NE,NZ)
+    write(888,*)'end/begshootN     =',ShootElms_pft(NE,NZ),ShootElmsBeg_pft(NE,NZ),ShootElms_pft(NE,NZ)-ShootElmsBeg_pft(NE,NZ)
+    write(888,*)'end/begsstoreN    =',SeasonalNonstElms_pft(NE,NZ),SeasonalNonstElmsbeg_pft(NE,NZ),SeasonalNonstElms_pft(NE,NZ)-SeasonalNonstElmsbeg_pft(NE,NZ)
+    write(888,*)'end/begssteadN    =',StandDeadStrutElms_pft(NE,NZ),StandDeadStrutElmsBeg_pft(NE,NZ),StandDeadStrutElms_pft(NE,NZ)-StandDeadStrutElmsBeg_pft(NE,NZ)
+    write(888,*)'end/begShootNodulN=',ShootNoduleElms_pft(NE,NZ),ShootNoduleElmsBeg_pft(NE,NZ),ShootNoduleElms_pft(NE,NZ)-ShootNoduleElmsBeg_pft(NE,NZ)
+    write(888,*)'end/begRootNoduleN=',RootNoduleElms_pft(NE,NZ),RootNoduleElmsBeg_pft(NE,NZ),RootNoduleElms_pft(NE,NZ)-RootNoduleElmsBeg_pft(NE,NZ)    
     write(888,*)'nodulinfectN      =',NodulInfectElms_pft(NE,NZ)
     write(888,*)'rootexudN         =',Soil2RootMycoExudE_pft(NE,NZ)
     write(888,*)'litfallN, abg,blg =',LitrfallElms_pft(NE,NZ),LitrfallAbvgElms_pft(NE,NZ),LitrfallBlgrElms_pft(NE,NZ)

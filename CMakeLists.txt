@@ -1,9 +1,8 @@
 # NOTE: this is the old CMake file for compiling with a UNIX Makefile
-# Minimum CMake version, determined by hdf5.
-cmake_minimum_required (VERSION 3.10)
+# Fortran submodule dependency scanning requires CMake 3.12.
+cmake_minimum_required (VERSION 3.12)
 
 # We declare the project here.
-message(STATUS "JDM: >>>>>> Initate the project, first thing it checks is compilers")
 project (ecosim LANGUAGES NONE)
 
 # Version numbers.
@@ -43,8 +42,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 #option(TPL_NETCDF_LIBRARIES "List of absolute paths to netcdf link libraries [].")
 #option(TPL_NETCDF_INCLUDE_DIRS "List of absolute paths to netcdf include directories [].")
 
-if (NOT CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR}/local)
+# LANGUAGES NONE may leave the install prefix unset until languages are enabled
+# below. Also replace /usr/local cached by older configurations, so repeated
+# build_EcoSIM.sh runs install locally. Preserve other custom install prefixes.
+if (NOT DEFINED CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT
+    OR CMAKE_INSTALL_PREFIX STREQUAL "" OR CMAKE_INSTALL_PREFIX STREQUAL "/usr/local")
+  set(CMAKE_INSTALL_PREFIX "${PROJECT_BINARY_DIR}/local" CACHE PATH "EcoSIM installation directory" FORCE)
 endif()
 
 ## JDM: Not sure why we need this at all - is it used in running tests?
@@ -104,6 +107,7 @@ message("-- Fortran compiler is ${CMAKE_Fortran_COMPILER} (${CMAKE_Fortran_COMPI
 
 # Calling the custom macro to setup the compilers - not clear if this overrides flags we already set
 set_up_compilers()
+include(build_timing)
 
 if (BGC)
   set (ECOSIM_BGC 1)

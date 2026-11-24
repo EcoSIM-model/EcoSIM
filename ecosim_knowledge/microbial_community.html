@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoSIM microbial community — interactions, metabolism and mortality</title>
+<style>
+:root{--ink:#21352f;--muted:#526961;--paper:#f7f8f2;--green:#166450;--line:#d3ded4;--blue:#265b80;--orange:#9a4c18;--red:#963e36}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}header{background:#123e34;color:#f4faf3;padding:64px max(24px,calc((100% - 1080px)/2)) 46px}header p{max-width:850px;color:#d4e4da}h1{font-size:clamp(2.2rem,5vw,3.6rem);line-height:1.12;letter-spacing:-.035em;max-width:960px;margin:14px 0 24px}h2{font-size:1.85rem;line-height:1.25;margin:0 0 24px;letter-spacing:-.025em}h3{font-size:1.15rem;line-height:1.35;margin:0 0 12px}p{margin:0 0 17px}a{color:var(--green);text-underline-offset:3px}header a{color:#d2f1dd}.eyebrow{font-size:.76rem;letter-spacing:.15em;text-transform:uppercase;font-weight:750}.meta,.small{font-size:.86rem;color:var(--muted)}header .meta{color:#c2d9cc}main{max-width:1136px;margin:auto;padding:0 28px 60px}nav{display:flex;gap:10px 20px;flex-wrap:wrap;padding:24px 0;border-bottom:1px solid var(--line);font-size:.88rem}section{padding:45px 0;border-bottom:1px solid var(--line);scroll-margin-top:20px}.num{display:block;font-size:.76rem;color:var(--green);letter-spacing:.14em;font-weight:750;margin-bottom:9px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:24px 0}.grid.two{grid-template-columns:repeat(2,1fr)}.card{background:white;border:1px solid var(--line);border-radius:12px;padding:23px}.card p:last-child{margin-bottom:0}.callout{padding:20px 24px;border-left:4px solid var(--green);background:#eaf2e9;margin:24px 0}.callout.issue{border-color:var(--red);background:#fcf0e8}.callout.blue{border-color:var(--blue);background:#eaf1f5}.tag{display:inline-block;font-size:.72rem;font-weight:750;letter-spacing:.06em;text-transform:uppercase;color:var(--green);background:#e9f2e8;border-radius:4px;padding:3px 7px;margin-bottom:10px}.tag.issue{color:var(--red);background:#fbe9df}.tag.design{color:var(--blue);background:#e6f0f7}code{font: .88em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre{background:#edf1ea;border:1px solid var(--line);border-radius:9px;padding:20px;overflow:auto;line-height:1.6;font-size:.92rem}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:22px 0}table{border-collapse:collapse;width:100%;background:#fff;font-size:.92rem;min-width:680px}th,td{padding:14px 17px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{background:#e9f0e7;font-size:.79rem;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0}.flow>div{border-top:4px solid var(--green);background:white;padding:18px;border-radius:4px}.flow strong{display:block;margin-bottom:8px}.flow p{font-size:.91rem;margin:0}.step{font-size:.78rem;color:var(--green);font-weight:750}.network{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;margin:24px 0}.network svg{width:100%;height:auto;display:block}.legend{font-size:.85rem;color:var(--muted);margin-top:12px}.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}.controls label{font-size:.9rem;font-weight:650}.controls input{width:100%;accent-color:var(--green)}output{font-variant-numeric:tabular-nums}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}.metric{background:#edf3e9;border-radius:8px;padding:15px}.metric strong{display:block;font-size:1.45rem;color:var(--green)}.metric span{font-size:.8rem}.balance{font-size:.95rem;margin-top:18px}.formula{font-size:1.05rem;border-left:3px solid var(--blue);padding:10px 18px;background:#eef3f5;margin:20px 0}details{padding:16px 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-weight:650;color:var(--green)}details p{margin-top:14px}ol,ul{padding-left:25px}li{margin:9px 0}.sources a{overflow-wrap:anywhere}button{background:var(--green);color:white;border:0;border-radius:7px;padding:11px 16px;cursor:pointer;font:inherit;font-size:.85rem}footer{padding:30px 0;color:var(--muted);font-size:.85rem}a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #d79544;outline-offset:4px}@media(max-width:760px){body{font-size:16px}main{padding:0 18px 35px}header{padding:42px 22px 30px}.grid,.grid.two,.flow{grid-template-columns:1fr}.controls{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}section{padding:32px 0}.network{padding:12px;overflow:auto}.network svg{min-width:750px}h2{font-size:1.6rem}}@media print{body{background:white;font-size:10pt}header{background:white;color:#123e34;padding:0 0 18px}header p,header .meta{color:#345}main{max-width:none;padding:0}nav,.controls,button{display:none}section{padding:20px 0}.card,.callout,figure,pre{break-inside:avoid}h2,h3{break-after:avoid}table{min-width:0;font-size:9pt}.table-wrap{overflow:visible}.network svg{min-width:0}a{color:inherit}.grid{gap:10px}.metrics{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">EcoSIM knowledge / microbial biogeochemistry</div>
+<h1>A community connected<br>by shared resources</h1>
+<p>How microbial guilds exchange carbon and nutrients, couple energy metabolism to biomass production, and return biomass to organic matter—and where the implementation still needs improvement.</p>
+<p class="meta">Code-based overview · 30 September 2026 · Source snapshot <code>f0314ff4</code> · <code>solphys</code></p></header>
+<main>
+<nav aria-label="Document sections"><a href="#overview">Overview</a><a href="#structure">State structure</a><a href="#biomass-pools">Three biomass pools</a><a href="#community">Community network</a><a href="#sequence">Hourly sequence</a><a href="#coupling">Metabolic coupling</a><a href="#mortality">Mortality</a><a href="#controls">Key controls</a><a href="#issues">Improvement needs</a><a href="#sources">Source guide</a></nav>
+<section id="overview"><span class="num">01 / THE OVERALL REPRESENTATION</span><h2>Functional diversity, connected through pools and fluxes</h2>
+<p>EcoSIM represents microbial communities as biomass pools with functional identities and guild traits. Each population changes its activity in response to temperature, water conditions, nutrient status, available substrates, and—in aerobic pathways—oxygen supply. The populations interact mainly by consuming and producing shared chemical pools, rather than through a prescribed matrix of species-to-species interactions.</p>
+<div class="grid"><div class="card"><h3>What organisms can do</h3><p>Functional groups select metabolic pathways: aerobic respiration, denitrification, fermentation, methanogenesis, methane oxidation, nitrification, N₂ fixation, and cyanobacterial photosynthesis.</p></div><div class="card"><h3>How much they can do</h3><p>Guild biomass and physiological traits set potential rates. Resource concentrations, competition factors, transport limits, and donor caps constrain those rates.</p></div><div class="card"><h3>What they become</h3><p>Accepted substrate uptake supports maintenance, reserves, and structural biomass. Mortality recycles part of C/N/P and sends the remainder to microbial residue and humified material.</p></div></div>
+<p><strong>The central coupling is energy supply → maintenance allocation → growth-associated uptake → reserve and structural updates.</strong> These stages are distributed across group-specific catabolic modules and shared anabolic routines. A change in one stage must be reflected in the associated substrate withdrawals, respiratory products, biomass gains, and competition diagnostics.</p>
+<div class="callout"><strong>Scope.</strong> This document describes the implemented process structure, not proof that every reaction or long-term budget is correct. The recent PAR correction is present. The starvation-respiration redox issue is documented by TODOs and remains unresolved; the proposed O₂-only patch was reverted.</div>
+</section>
+<section id="structure"><span class="num">02 / STATE STRUCTURE</span><h2>Complexes, functional groups, guilds, compartments</h2>
+<div class="table-wrap"><table><thead><tr><th>Dimension</th><th>Meaning in the code</th><th>Why it matters</th></tr></thead><tbody>
+<tr><td>Layer <code>L</code></td><td>Surface litter (<code>L=0</code>) and active soil layers.</td><td>Water, temperature, radiation, gas transport, and access to soil nutrients differ by layer.</td></tr>
+<tr><td>Substrate complex <code>K</code></td><td>Woody litter, fine litter, manure, POM, humus. Surface litter uses the first three; soil uses all five.</td><td>Heterotrophic biomass and its associated organic pools retain a substrate-complex identity.</td></tr>
+<tr><td>Functional group <code>N</code></td><td>Eight heterotrophic/mixotrophic and six “autotrophic” pathway families.</td><td>Selects the catabolic routine and pathway-specific yields, reactants, and products.</td></tr>
+<tr><td>Guild <code>NGL</code></td><td>Configurable subdivisions, indexed through <code>JGniH/JGnfH</code> or <code>JGniA/JGnfA</code>.</td><td>Allows trait variation within a pathway family. The number of active guilds depends on configuration and parameters.</td></tr>
+<tr><td>Live compartment <code>M</code></td><td>Kinetic/labile, structural/recalcitrant, and reserve/nonstructural biomass.</td><td>Separates metabolic machinery and persistent structure from the C/N/P available for allocation.</td></tr>
+<tr><td>Element <code>NE</code></td><td>C, N, P in biomass, organic substrates, and residues.</td><td>Tracks elemental transfers and nutrient constraints rather than biomass carbon alone.</td></tr>
+</tbody></table></div>
+<p><code>mBiomeHeter(NE,MID,K)</code> stores heterotrophic and cyanobacterial biomass; <code>mBiomeAutor(NE,MID)</code> stores the separate autotrophic family. <code>MID=get_micb_id(M,NGL)</code> combines the compartment and guild indices. The separate “autotrophic” family has <strong>no organic-complex K axis</strong>; its name is a software grouping and does not mean that every member uses CO₂ as its sole biomass-carbon source.</p>
+<p>Organic pools include <code>SolidOM</code>, colonized solid C (<code>SolidOMAct</code>), dissolved DOC/DON/DOP/acetate (<code>DOM</code>), <code>SorbedOM</code>, and two microbial-residue components (<code>OMBioResdu</code>). The four litter chemical components are protein, carbohydrate, cellulose, and lignin; POM and humus reuse component slots with different kinetic meanings.</p>
+<p class="small">Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars: Init, get_micb_id</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicStateTraitTypeMod.F90">micsttype</a>. See <a href="microbial_complexes.html">complexes</a> and <a href="solid_organic_matter_kinetics.html">solid organic matter kinetics</a>.</p>
+</section>
+<section id="biomass-pools"><span class="num">02A / INTERACTIONS AMONG THE THREE LIVE POOLS</span><h2>Reserves supply both built-biomass pools; turnover recycles material back</h2>
+<p>Each guild has <strong>three live C/N/P compartments</strong>, not three interacting species. <code>iLbiom_kinetic=1</code>, <code>iLbiom_struct=2</code>, and <code>iLbiom_reserve=3</code>. The same organization applies to heterotrophic/mixotrophic and autotrophic-family biomass. In the heterotrophic family it is repeated for each organic complex K.</p>
+<div class="grid"><div class="card"><span class="tag">M = 1</span><h3>Kinetic / labile biomass</h3><p>Represents the fraction used to infer metabolic capacity. Its C determines the active-biomass proxy; its N:C and P:C ratios constrain activity. It receives growth from reserves, incurs maintenance demand, and loses material through ordinary and starvation mortality.</p></div><div class="card"><span class="tag">M = 2</span><h3>Structural / recalcitrant biomass</h3><p>Receives a separate share of reserve allocation and has its own turnover coefficient. Only the portion supported by kinetic biomass is counted as active structural biomass for maintenance. It remains a <strong>live</strong> compartment, distinct from dead microbial residue.</p></div><div class="card"><span class="tag">M = 3</span><h3>Reserve / nonstructural biomass</h3><p>Stores C/N/P available for allocation. It receives net assimilated C, nutrient uptake and recycling, and supplies both kinetic and structural growth. Reserve nutrient status also controls mineral uptake/release and recycling fractions.</p></div></div>
+<div class="network" id="pool-network"><svg viewBox="0 0 1020 325" role="img" aria-labelledby="pooltitle pooldesc"><title id="pooltitle">Transfers among kinetic, structural and reserve microbial biomass</title><desc id="pooldesc">Net assimilation and nutrient uptake enter reserves. Reserves supply kinetic and structural growth. Ordinary turnover returns recycled carbon nitrogen and phosphorus; starvation returns recycled nitrogen and phosphorus, while recycled carbon is currently emitted as carbon dioxide. The latter redox accounting remains unresolved.</desc><defs><marker id="poolarrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#477966"/></marker></defs><g fill="#edf3e8" stroke="#bfd2c0"><rect x="355" y="15" width="310" height="66" rx="9"/><rect x="15" y="155" width="245" height="95" rx="9"/><rect x="355" y="155" width="310" height="95" rx="9"/><rect x="760" y="155" width="245" height="95" rx="9"/></g><g stroke="#477966" stroke-width="2" fill="none" marker-end="url(#poolarrow)"><path d="M510 81 V155"/><path d="M355 178 H260"/><path d="M260 221 H355"/><path d="M665 178 H760"/><path d="M760 221 H665"/></g><g font-family="system-ui,sans-serif" text-anchor="middle" fill="#21352f"><g font-size="17"><text x="510" y="43">Net assimilated C + nutrient inputs</text><text x="510" y="66" font-size="14">C after metabolic costs; N/P uptake, N₂ fixation</text><text x="137" y="191">M1 · Kinetic / labile</text><text x="137" y="217" font-size="14">activity and nutrient-status proxy</text><text x="510" y="191">M3 · Reserve / nonstructural</text><text x="510" y="217" font-size="14">C/N/P supply for allocation</text><text x="882" y="191">M2 · Structural / recalcitrant</text><text x="882" y="217" font-size="14">live structural biomass</text></g><g font-size="13"><text x="307" y="169">growth</text><text x="712" y="169">growth</text><text x="307" y="242">recycling</text><text x="712" y="242">recycling</text></g><text x="510" y="294" font-size="15">Mortality from M1 and M2 also supplies microbial residue / humus and starvation CO₂.</text></g></svg><p class="legend">Growth arrows transfer C/N/P. Recycling arrows return C/N/P from ordinary mortality, but only N/P from the currently implemented starvation-recycling route. The unrecycled share leaves the live pools. These arrows summarize within-guild transfers, not priming among complexes.</p></div>
+<h3>1. Kinetic biomass controls the active portion of structural biomass</h3>
+<p><code>StageBGCEnvironCondition</code> does not simply sum all three pools to determine metabolic capacity. For a guild, write C₁ and C₂ for kinetic and structural C, and f₁ and f₂ for <code>FL(1)</code> and <code>FL(2)</code>. Omitting nonnegative guards for readability:</p>
+<div class="formula">Active-biomass proxy: A = C₁ / f₁<br>Active structural C: C₂,active = min(A × f₂, C₂)<br>Active structural N: N₂,active = N₂ × C₂,active / C₂ &nbsp; (zero when C₂ is negligible)</div>
+<p><code>OMActHeter/OMActAutor</code> store A; <code>OMC2/OMC2Autor</code> and <code>OMN2/OMN2Autor</code> track the active structural amounts. The corresponding fraction is <code>FOM2/FOM2Autor</code>. Thus loss of kinetic biomass can reduce metabolic capacity and active structural maintenance even while some structural biomass survives. <strong>This calculation changes activity diagnostics, not the stored mass of M2.</strong></p>
+<p>Kinetic N:C and P:C ratios also set the nutrient-status scalars (<code>FCN/FCP</code> and their autotrophic equivalents). In these staging equations each scalar is bounded between 0.5 and 1 before their minimum is used. Nutrient effects elsewhere in the model are additional constraints; this particular activity multiplier is not a complete nutrient-feasibility test.</p>
+<h3>2. Reserve allocation builds kinetic and structural biomass in parallel</h3>
+<p>The two growth transfers are prepared from the current reserve pool. With C₃ the reserve C and E the temperature/water growth multiplier:</p>
+<pre><code>G_C,total = E × OMGR × max(0, C₃)
+G_C,1     = FL(1) × G_C,total
+G_C,2     = FL(2) × G_C,total
+
+For X = N or P, when C₃ is positive:
+G_X,M = max(0, X₃) × min(FL(M), G_C,M / C₃)</code></pre>
+<p>These correspond to <code>NonstX2stBiomHeter</code> and <code>NonstX2stBiomAutor</code>. The autotrophic expressions write the same nutrient relation as the minimum of a fraction of reserve nutrients and the C-transfer rate times the reserve X:C ratio. Final N/P transfers may be reduced by the reserve-availability reconciliation before biomass is updated.</p>
+<p>There is no direct M1 → M2 “maturation” transfer in these allocation routines. Both receive material from M3. Here the phrase <em>reserve-to-structural growth</em> often refers collectively to construction of M1 and M2, even though only M2 carries the specific enum name <code>iLbiom_struct</code>.</p>
+<div class="callout blue"><strong>Illustrative allocation, not default parameters.</strong> If C₃=10, E×OMGR=0.1 per model step, and FL=(0.3,0.7), the prepared C transfers are 0.3 to M1 and 0.7 to M2. Reserve C decreases by 1 before net assimilation and recycling credits are included. With reserve N=1 and P=0.1, the corresponding proposed nutrient transfers are N=(0.03,0.07) and P=(0.003,0.007), subject to final availability checks.</div>
+<h3>3. Uptake and recycling replenish reserves</h3>
+<p>For heterotrophic C, the net current-step input <code>CGROMC</code> is <code>DOMUptk4GrothHeter(C) − RespGrossHeter − denitrification respiration</code>. Its value already accounts for the pathway’s metabolic carbon expenditure. For cyanobacteria, uptake includes photosynthetic C and the respiratory term includes the implemented photosynthate costs. Autotrophic-family updates use analogous accounting with their group-specific C source.</p>
+<p>Organic N/P uptake, mineral uptake or release, and N₂ fixation enter the reserve nutrient budgets. They are not credited directly as newly constructed kinetic or structural biomass. <code>LimitReserveNutrientTransfers</code> checks the combined reserve supply against structural nutrient transfers and mineral release.</p>
+<p>Ordinary mortality takes C/N/P from M1 and M2. The fractions represented by <code>RkillRecycOM*</code> return to M3; their elemental fractions depend on reserve composition and reserve-to-kinetic C status through <code>CCC</code>, <code>C3C</code>, <code>CNC</code>, <code>CPC</code>, and <code>RCC*</code>. Recycling is therefore part of physiological allocation, not a fixed universal fraction for every element. Unrecycled material enters the residue/humus routes.</p>
+<h3>4. Maintenance and starvation do not form a simple “drain reserves first” rule</h3>
+<p>Heterotrophic maintenance demand is based on kinetic N and active structural N, with temperature, pH, and density modifiers. Primary catabolism and, where available, denitrification are allocated to maintenance before growth. The model does <strong>not</strong> first subtract an arbitrary maintenance demand directly from C₃ and then consume M1/M2 only after C₃ reaches zero.</p>
+<p>Instead, a maintenance deficit relative to realized metabolic supply triggers withdrawal from M1 and M2, capped by tissue remaining after ordinary mortality. The recycled N/P are credited to M3. The recycled C is currently credited to CO₂ rather than M3; the redox-budget limitation described in <a href="#issues">issue 1</a> still applies. The remaining C/N/P go to residue/humus. Do not interpret all starvation recycling as a complete C/N/P return to reserves.</p>
+<h3>5. Pool bookkeeping and timing</h3>
+<p>For a within-guild update, omit priming, external redistribution, and numerical guards, and let D denote ordinary mortality, S starvation withdrawal, Q ordinary recycling, T starvation N/P recycling, G construction, U net metabolic C input, and I net nutrient input. The bookkeeping is:</p>
+<pre><code>For each element X and M = 1, 2:
+ΔB_X,M = G_X,M − D_X,M − S_X,M
+
+Reserve carbon:
+ΔC₃ = U_C − (G_C,1 + G_C,2) + (Q_C,1 + Q_C,2)
+
+Reserve N or P:
+ΔX₃ = I_X − (G_X,1 + G_X,2)
+      + (Q_X,1 + Q_X,2) + (T_X,1 + T_X,2)
+
+Starvation CO₂-C credit = T_C,1 + T_C,2  [currently not returned to C₃]</code></pre>
+<p>Here T<sub>C</sub> denotes the carbon counterpart of the starvation-recycling flux. Its CO₂ credit is in addition to the current-substrate respiratory costs already included in U<sub>C</sub>. These equations describe the transfer logic; they do not imply that the unresolved starvation respiratory chemistry is balanced.</p>
+<p>Growth and mortality fluxes are prepared before the final <code>*AnabolicUpdate</code> calls. Consequently, current-step uptake is not simply added to reserves and then immediately used to recompute all construction rates in the same call. Priming can also move biomass between organic complexes before the final update. The late N/P reserve check reconciles availability, but is not a new physiological iteration.</p>
+<p class="small">Sources: <a href="../f90src/Modelconfig/ElmIDMod.F90">live-compartment enum values</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">StageBGCEnvironCondition, GatherHetertrophAnabolicFlux, HeterotrophAnabolicUpdate</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">autotrophic allocation and AutotrophAnabolicUpdate</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">CalcRespMaintHeter and LimitReserveNutrientTransfers</a>.</p>
+</section>
+<section id="community"><span class="num">03 / COMMUNITY INTERACTIONS</span><h2>Competition and cross-feeding occur together</h2>
+<figure class="network community-schematic" aria-labelledby="community-caption">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1450" role="img" aria-labelledby="community-title community-desc">
+<title id="community-title">EcoSIM microbial community interactions: carbon, nitrogen, competition and recycling</title>
+<desc id="community-desc">Organic matter releases dissolved substrates shared by heterotrophs. Fermenters produce acetate and hydrogen that feed two methanogenic pathways. Methanogens supply methane to aerobic, nitrate-dependent and nitrite-dependent methane oxidizers. Ammonia and nitrite oxidizers supply oxidized nitrogen to reduction pathways. Shared oxygen and nutrients mediate competition. Cyanobacteria use shared DOC and acetate as well as light-driven CO₂ fixation, producing biomass and photosynthetic oxygen. Moss and lichen are represented through nonvascular plant pathways: photosynthesis supplies plant biomass and turnover supplies litter for microbial decomposition. Cyanobacteria fix carbon and nitrogen; microbial turnover returns residues and humus to organic matter. Arrows summarize implemented resource connections, not balanced reactions or timestep order.</desc>
+<defs><marker id="community-carbon" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#166450"/></marker><marker id="community-nitrogen" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#265b80"/></marker><marker id="community-shared" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#9a4c18"/></marker></defs>
+<style>.cs-panel{fill:#fafcf8;stroke:#d3ded4}.cs-pool{fill:#eaf2e9;stroke:#9dbca9}.cs-guild{fill:#fff;stroke:#9dbca9}.cs-npool{fill:#eaf1f5;stroke:#9fb7ca}.cs-shared{fill:#fcf0e8;stroke:#cba585}.cs-title{font:700 19px system-ui,sans-serif;fill:#21352f}.cs-label{font:650 16px system-ui,sans-serif;fill:#21352f}.cs-note{font:14px system-ui,sans-serif;fill:#526961}.cs-edge{fill:none;stroke-width:2;stroke-linejoin:round}.cs-c{stroke:#166450;marker-end:url(#community-carbon)}.cs-n{stroke:#265b80;marker-end:url(#community-nitrogen)}.cs-s{stroke:#9a4c18;stroke-dasharray:6 5;marker-end:url(#community-shared)}</style>
+<rect x="8" y="8" width="1064" height="736" rx="12" class="cs-panel"/>
+<text x="30" y="40" class="cs-title" text-anchor="start">1  Carbon cross-feeding · products of one guild become substrates for another</text>
+<rect x="30" y="66" width="235" height="72" rx="9" class="cs-pool"/>
+<text x="147.5" y="92" class="cs-label" text-anchor="middle">Litter / SOM / residues</text>
+<text x="147.5" y="115" class="cs-note" text-anchor="middle">Hydrolysis + desorption</text>
+<rect x="320" y="66" width="240" height="72" rx="9" class="cs-pool"/>
+<text x="440.0" y="92" class="cs-label" text-anchor="middle">Dissolved organic C</text>
+<text x="440.0" y="115" class="cs-note" text-anchor="middle">DOC + acetate</text>
+<path d="M265 102H320" class="cs-edge cs-c"/>
+<text x="292" y="88" class="cs-note" text-anchor="middle">release</text>
+<rect x="30" y="192" width="235" height="110" rx="9" class="cs-guild"/>
+<text x="147.5" y="218" class="cs-label" text-anchor="middle">Aerobic bacteria + fungi</text>
+<text x="147.5" y="241" class="cs-note" text-anchor="middle">DOC / acetate + O₂ → CO₂</text>
+<text x="147.5" y="261" class="cs-note" text-anchor="middle">Aerobic N₂ fixers share</text>
+<text x="147.5" y="281" class="cs-note" text-anchor="middle">this organic-C pathway</text>
+<path d="M390 138V163H148V192" class="cs-edge cs-c"/>
+<text x="260" y="180" class="cs-note" text-anchor="middle">shared C uptake</text>
+<rect x="320" y="192" width="240" height="90" rx="9" class="cs-guild"/>
+<text x="440.0" y="218" class="cs-label" text-anchor="middle">Facultative denitrifiers</text>
+<text x="440.0" y="241" class="cs-note" text-anchor="middle">DOC / acetate + O₂ or NOx</text>
+<text x="440.0" y="261" class="cs-note" text-anchor="middle">→ CO₂; N reduction below</text>
+<path d="M440 138V192" class="cs-edge cs-c"/>
+<rect x="620" y="66" width="195" height="90" rx="9" class="cs-guild"/>
+<text x="717.5" y="92" class="cs-label" text-anchor="middle">Fermenters</text>
+<text x="717.5" y="115" class="cs-note" text-anchor="middle">DOC → acetate + H₂ + CO₂</text>
+<text x="717.5" y="135" class="cs-note" text-anchor="middle">Also anaerobic N₂ fixers</text>
+<path d="M560 102H620" class="cs-edge cs-c"/>
+<rect x="620" y="192" width="195" height="90" rx="9" class="cs-guild"/>
+<text x="717.5" y="218" class="cs-label" text-anchor="middle">Acetotrophic</text>
+<text x="717.5" y="241" class="cs-note" text-anchor="middle">methanogens</text>
+<text x="717.5" y="261" class="cs-note" text-anchor="middle">Acetate → CH₄ + CO₂</text>
+<rect x="855" y="192" width="195" height="90" rx="9" class="cs-guild"/>
+<text x="952.5" y="218" class="cs-label" text-anchor="middle">Hydrogenotrophic</text>
+<text x="952.5" y="241" class="cs-note" text-anchor="middle">methanogens</text>
+<text x="952.5" y="261" class="cs-note" text-anchor="middle">H₂ + CO₂ → CH₄</text>
+<path d="M686 156V192" class="cs-edge cs-c"/>
+<text x="657" y="177" class="cs-note" text-anchor="middle">acetate</text>
+<path d="M750 156V174H952V192" class="cs-edge cs-c"/>
+<text x="901" y="164" class="cs-note" text-anchor="middle">H₂ + CO₂</text>
+<rect x="735" y="333" width="200" height="64" rx="9" class="cs-pool"/>
+<text x="835.0" y="359" class="cs-label" text-anchor="middle">Shared methane</text>
+<text x="835.0" y="382" class="cs-note" text-anchor="middle">CH₄ pool</text>
+<path d="M718 282V309H795V333" class="cs-edge cs-c"/>
+<path d="M952 282V309H875V333" class="cs-edge cs-c"/>
+<rect x="30" y="333" width="530" height="64" rx="9" class="cs-guild"/>
+<text x="295.0" y="359" class="cs-label" text-anchor="middle">Methane oxidizers → CO₂</text>
+<text x="295.0" y="382" class="cs-note" text-anchor="middle">Aerobic: O₂  ·  ANME-2d: NO₃  ·  NC10: NO₂</text>
+<path d="M735 367H560" class="cs-edge cs-c"/>
+<text x="647" y="353" class="cs-note" text-anchor="middle">CH₄ uptake</text>
+<path d="M345 138V150H18V495H30" class="cs-edge cs-c"/>
+<rect x="30" y="447" width="330" height="100" rx="9" class="cs-guild"/>
+<text x="195" y="473" class="cs-label" text-anchor="middle">Cyanobacteria (mixotrophs)</text>
+<text x="195" y="496" class="cs-note" text-anchor="middle">Shared DOC / acetate → respiration + biomass</text>
+<text x="195" y="516" class="cs-note" text-anchor="middle">Light-driven CO₂ fixation → biomass</text>
+<text x="195" y="536" class="cs-note" text-anchor="middle">Respiration can consume external O₂</text>
+<rect x="430" y="447" width="230" height="64" rx="9" class="cs-pool"/>
+<text x="545" y="473" class="cs-label" text-anchor="middle">Light + CO₂</text>
+<text x="545" y="496" class="cs-note" text-anchor="middle">Photosynthetic inputs</text>
+<path d="M430 483H360" class="cs-edge cs-c"/>
+<rect x="735" y="447" width="310" height="100" rx="9" class="cs-pool"/>
+<text x="890" y="473" class="cs-label" text-anchor="middle">Cyanobacterial products</text>
+<text x="890" y="496" class="cs-note" text-anchor="middle">Biomass C → organic pools via turnover</text>
+<text x="890" y="516" class="cs-note" text-anchor="middle">Photosynthetic O₂ → respiratory supply</text>
+<text x="890" y="536" class="cs-note" text-anchor="middle">Respiration → CO₂</text>
+<path d="M360 523H690V495H735" class="cs-edge cs-c"/>
+<rect x="30" y="602" width="330" height="100" rx="9" class="cs-guild"/>
+<text x="195" y="628" class="cs-label" text-anchor="middle">Moss + lichen</text>
+<text x="195" y="651" class="cs-note" text-anchor="middle">EcoSIM nonvascular plant pathways</text>
+<text x="195" y="671" class="cs-note" text-anchor="middle">Photosynthesis → plant biomass C</text>
+<text x="195" y="691" class="cs-note" text-anchor="middle">Plant respiration → CO₂</text>
+<rect x="430" y="602" width="230" height="64" rx="9" class="cs-pool"/>
+<text x="545" y="628" class="cs-label" text-anchor="middle">Light + CO₂</text>
+<text x="545" y="651" class="cs-note" text-anchor="middle">Photosynthetic inputs</text>
+<path d="M430 638H360" class="cs-edge cs-c"/>
+<rect x="735" y="602" width="310" height="100" rx="9" class="cs-pool"/>
+<text x="890" y="628" class="cs-label" text-anchor="middle">Plant litter / organic matter</text>
+<text x="890" y="651" class="cs-note" text-anchor="middle">Turnover transfers plant C / N / P</text>
+<text x="890" y="671" class="cs-note" text-anchor="middle">Decomposition → microbial substrates</text>
+<text x="890" y="691" class="cs-note" text-anchor="middle">Feeds litter / SOM pathways above</text>
+<path d="M360 678H690V650H735" class="cs-edge cs-c"/>
+<g transform="translate(0 320)">
+<rect x="8" y="442" width="1064" height="283" rx="12" class="cs-panel"/>
+<text x="30" y="474" class="cs-title" text-anchor="start">2  Nitrogen coupling · nitrification supplies substrates for reduction pathways</text>
+<rect x="30" y="505" width="145" height="64" rx="9" class="cs-npool"/>
+<text x="102.5" y="531" class="cs-label" text-anchor="middle">NH₄</text>
+<text x="102.5" y="554" class="cs-note" text-anchor="middle">Shared ammonium</text>
+<rect x="255" y="505" width="150" height="64" rx="9" class="cs-npool"/>
+<text x="330.0" y="531" class="cs-label" text-anchor="middle">NO₂</text>
+<text x="330.0" y="554" class="cs-note" text-anchor="middle">Shared nitrite</text>
+<rect x="485" y="505" width="150" height="64" rx="9" class="cs-npool"/>
+<text x="560.0" y="531" class="cs-label" text-anchor="middle">NO₃</text>
+<text x="560.0" y="554" class="cs-note" text-anchor="middle">Shared nitrate</text>
+<path d="M175 537H255" class="cs-edge cs-n"/>
+<text x="215" y="487" class="cs-note" text-anchor="middle">NH₄ oxidizers</text>
+<text x="215" y="589" class="cs-note" text-anchor="middle">+ O₂</text>
+<path d="M405 537H485" class="cs-edge cs-n"/>
+<text x="445" y="487" class="cs-note" text-anchor="middle">NO₂ oxidizers</text>
+<text x="445" y="589" class="cs-note" text-anchor="middle">+ O₂</text>
+<rect x="730" y="505" width="315" height="64" rx="9" class="cs-guild"/>
+<text x="887.5" y="531" class="cs-label" text-anchor="middle">Facultative denitrifiers</text>
+<text x="887.5" y="554" class="cs-note" text-anchor="middle">NO₃ → NO₂ → N₂O → N₂</text>
+<path d="M635 537H730" class="cs-edge cs-n"/>
+<rect x="255" y="621" width="220" height="74" rx="9" class="cs-guild"/>
+<text x="365.0" y="647" class="cs-label" text-anchor="middle">NC10 methane oxidizers</text>
+<text x="365.0" y="670" class="cs-note" text-anchor="middle">NO₂-dependent CH₄ oxidation</text>
+<text x="365.0" y="690" class="cs-note" text-anchor="middle">→ N₂</text>
+<rect x="520" y="621" width="225" height="74" rx="9" class="cs-guild"/>
+<text x="632.5" y="647" class="cs-label" text-anchor="middle">ANME-2d methane oxidizers</text>
+<text x="632.5" y="670" class="cs-note" text-anchor="middle">NO₃-dependent CH₄ oxidation</text>
+<text x="632.5" y="690" class="cs-note" text-anchor="middle">→ NO₂</text>
+<path d="M330 569V621" class="cs-edge cs-n"/>
+<path d="M560 569V621" class="cs-edge cs-n"/>
+<text x="40" y="642" class="cs-note" text-anchor="start">NH₄ oxidizers also have</text>
+<text x="40" y="663" class="cs-note" text-anchor="start">nitrifier denitrification</text>
+<text x="40" y="684" class="cs-note" text-anchor="start">and can produce N₂O.</text>
+<text x="780" y="644" class="cs-note" text-anchor="start">NO₂ also supplies later</text>
+<text x="780" y="665" class="cs-note" text-anchor="start">denitrification steps.</text>
+<text x="780" y="691" class="cs-note" text-anchor="start">Blue arrows: N transformations / supply</text>
+<rect x="8" y="743" width="1064" height="375" rx="12" class="cs-panel"/>
+<text x="30" y="775" class="cs-title" text-anchor="start">3  Shared resources, new inputs and the biomass–organic matter feedback</text>
+<rect x="30" y="801" width="315" height="95" rx="9" class="cs-shared"/>
+<text x="187.5" y="827" class="cs-label" text-anchor="middle">Shared O₂ + mineral N / P</text>
+<text x="187.5" y="850" class="cs-note" text-anchor="middle">Microbes + plants (including moss / lichen)</text>
+<text x="187.5" y="870" class="cs-note" text-anchor="middle">Compete for finite O₂ and nutrient pools</text>
+<text x="187.5" y="890" class="cs-note" text-anchor="middle">Transport + chemistry alter supply.</text>
+<rect x="415" y="801" width="250" height="95" rx="9" class="cs-guild"/>
+<text x="540.0" y="827" class="cs-label" text-anchor="middle">Microbial live C / N / P</text>
+<text x="540.0" y="850" class="cs-note" text-anchor="middle">Reserves ↔ kinetic / structural</text>
+<text x="540.0" y="870" class="cs-note" text-anchor="middle">Uptake, maintenance and growth</text>
+<rect x="735" y="801" width="310" height="95" rx="9" class="cs-guild"/>
+<text x="890.0" y="827" class="cs-label" text-anchor="middle">Cyanobacteria + N₂ fixers</text>
+<text x="890.0" y="850" class="cs-note" text-anchor="middle">Light + CO₂ → cyanobacterial C</text>
+<text x="890.0" y="870" class="cs-note" text-anchor="middle">N₂ → fixed N in living biomass</text>
+<text x="890.0" y="890" class="cs-note" text-anchor="middle">Cyanobacteria also alter O₂ supply</text>
+<path d="M345 847H415" class="cs-edge cs-s"/>
+<path d="M735 847H665" class="cs-edge cs-c"/>
+<rect x="415" y="956" width="250" height="74" rx="9" class="cs-guild"/>
+<text x="540.0" y="982" class="cs-label" text-anchor="middle">Turnover / mortality</text>
+<text x="540.0" y="1005" class="cs-note" text-anchor="middle">Recycling → reserves</text>
+<text x="540.0" y="1025" class="cs-note" text-anchor="middle">Unrecycled C/N/P → residue / humus</text>
+<path d="M540 896V956" class="cs-edge cs-c"/>
+<rect x="30" y="956" width="315" height="74" rx="9" class="cs-pool"/>
+<text x="187.5" y="982" class="cs-label" text-anchor="middle">Organic matter + dissolved pools</text>
+<text x="187.5" y="1005" class="cs-note" text-anchor="middle">Residue / humus; DOC / DON / DOP</text>
+<text x="187.5" y="1025" class="cs-note" text-anchor="middle">Decomposition makes substrates available</text>
+<path d="M415 993H345" class="cs-edge cs-c"/>
+<path d="M187 956V924H395V873H415" class="cs-edge cs-c"/>
+<text x="187" y="1061" class="cs-note" text-anchor="middle">Feeds carbon pathways above</text>
+<text x="735" y="957" class="cs-note" text-anchor="start">Shared pools mediate interaction;</text>
+<text x="735" y="979" class="cs-note" text-anchor="start">no species-to-species interaction matrix.</text>
+<text x="735" y="1011" class="cs-note" text-anchor="start">Fixed N reaches other organisms</text>
+<text x="735" y="1033" class="cs-note" text-anchor="start">through subsequent transfers / turnover.</text>
+<text x="30" y="1094" class="cs-note" text-anchor="start">Dashed amber: shared-resource competition / uptake. Green: carbon or biomass transfers.</text>
+</g>
+</svg>
+<figcaption id="community-caption" class="legend"><strong>Implemented community connections.</strong> Boxes distinguish chemical pools from microbial guilds; repeated guilds connect the carbon and nitrogen panels. Arrows summarize substrate use, product supply and recycling, rather than balanced stoichiometry, flux magnitudes or execution order. Pathways are conditional on the active guilds and available resources. Cross-feeding can involve staged pools or same-step supply estimates. Moss and lichen use the nonvascular plant representation; the lichen box does not imply an explicit fungal–photobiont carbon-exchange model. Mortality is simplified here; the starvation-respiration redox gap is described in <a href="#issues">Improvement needs</a>.</figcaption>
+</figure>
+<p class="small">Photosynthetic connections: <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">cyanobacterial fixation, organic-C use and O₂ supply</a>; <a href="../f90src/Plant_bgc/PhotoSynsMod.F90">plant photosynthesis</a>; <a href="../f90src/Plant_bgc/InitPlantMod.F90">nonvascular plant initialization</a>; <a href="../f90src/Plant_bgc/RootMod.F90">plant turnover and litter transfers</a>.</p>
+<div class="table-wrap"><table><thead><tr><th>Code family / group</th><th>Main metabolism</th><th>Community connection</th></tr></thead><tbody>
+<tr><td>Heterotrophic: aerobic bacteria; fungi</td><td>DOC/acetate use with O₂-supported respiration.</td><td>Compete for organic C, O₂ and nutrients; release CO₂ and support substrate hydrolysis.</td></tr>
+<tr><td>Heterotrophic: facultative denitrifiers</td><td>Aerobic metabolism plus NO₃ → NO₂ → N₂O → N₂ reduction.</td><td>Share DOC/acetate with other heterotrophs and oxidized N with nitrifiers, methane oxidizers, roots, and other consumers.</td></tr>
+<tr><td>Heterotrophic: fermenters</td><td>Organic-C catabolism producing acetate, CO₂, and H₂ without external O₂ uptake.</td><td>Supply methanogenic substrates; their products affect downstream energy yields and rates.</td></tr>
+<tr><td>Heterotrophic: acetotrophic methanogens</td><td>Acetate conversion yielding CH₄ and CO₂.</td><td>Compete for acetate; supply methane oxidizers.</td></tr>
+<tr><td>Heterotrophic: aerobic and anaerobic N₂ fixers</td><td>Aerobic organic-C or fermentative metabolism, with an energy allocation to N₂ fixation.</td><td>Add fixed N to microbial biomass; nutrient release to other organisms requires subsequent transfer or turnover.</td></tr>
+<tr><td>Mixotrophic: cyanobacteria</td><td>Light-driven CO₂ fixation, photosynthetic O₂ supply, DOC/acetate metabolism, and N₂ fixation.</td><td>Add organic C and fixed N; can release O₂ or consume external O₂. Biomass contributes to optical attenuation.</td></tr>
+<tr><td>Autotrophic family: ammonia oxidizers</td><td>NH₄ oxidation to NO₂ with aerobic energy metabolism; nitrifier denitrification is a further pathway.</td><td>Consume NH₄ and O₂; supply NO₂ and can produce N₂O. NH₄ catabolism is distinct from NH₄ incorporated into biomass.</td></tr>
+<tr><td>Autotrophic family: nitrite oxidizers</td><td>NO₂ oxidation to NO₃.</td><td>Compete with NO₂ reducers and connect nitrification to nitrate-consuming pathways.</td></tr>
+<tr><td>Autotrophic family: aerobic methanotrophs</td><td>CH₄ provides carbon for oxidation and biomass, with O₂ demand.</td><td>Consume methane produced elsewhere; CH₄ withdrawal must cover both energy and biomass requirements.</td></tr>
+<tr><td>Autotrophic family: ANME-2d; NC10</td><td>NO₃-dependent and NO₂-dependent methane oxidation, respectively.</td><td>Connect methane turnover to nitrogen reduction. Their reaction-specific accounting cannot be replaced by a generic external O₂ charge.</td></tr>
+<tr><td>Autotrophic family: hydrogenotrophic methanogens</td><td>H₂ and CO₂ support CH₄ formation and biomass synthesis.</td><td>Use H₂ supplied by fermentation; methane and biomass both consume the shared H₂ budget.</td></tr>
+</tbody></table></div>
+<p><strong>Plant–microbe interactions</strong> enter through shared O₂ and mineral nutrients, plant litter and rhizosphere inputs, and transport. Mycorrhizal processes in <code>Plant_bgc</code> are a separate representation; the microbial fungal functional group should not be treated as synonymous with all modeled mycorrhizae. Surface litter microbes can access nutrients in the underlying soil, with explicit band/nonband pools and volumes.</p>
+<p><strong>Priming and colonization</strong> link organic complexes. <code>OMTransferForPriming</code> redistributes DOM and microbial C/N/P between complexes. <code>MicrobialLitterColonization</code> expands the colonized fraction of existing solid organic matter using a microbial-activity proxy. It does not create live biomass. The separately named <code>MicrobeByLitterFall</code> seeding call in <code>RedistMod</code> is currently commented out.</p>
+<p class="small">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">ActiveHeterotrophsK, OMTransferForPriming, MicrobialLitterColonization</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">ActiveAutotrophs</a>; <a href="../f90src/Balances/RedistMod.F90">RedistMod</a>. Details: <a href="methanotrophs.html">methanotrophs</a>, <a href="nitrifiers.html">nitrifiers</a>, <a href="cyanobacteria.html">cyanobacteria</a>, <a href="mycorrhizal_hydraulics.html">mycorrhizae</a>.</p>
+</section>
+<section id="sequence"><span class="num">04 / EXECUTION AND COUPLING</span><h2>One hourly update has several distinct stages</h2>
+<p>The standalone driver runs hourly forcing and hydrology before <code>MicrobeModel</code>; plant processes, soil chemistry, transport, and later redistribution follow. Microbial routines therefore prepare reactions against a staged environment, while some physical replenishment and final tracer updates occur later.</p>
+<div class="flow"><div><span class="step">1 · STAGE</span><strong>Environment and states</strong><p>Send layer pools, concentrations, prior demands, temperature, water conditions, and PAR into the box model. Derive active biomass, nutrient-status factors, effective water volume, and substrate shares.</p></div><div><span class="step">2 · PROPOSE</span><strong>Metabolic fluxes</strong><p>Run heterotrophs by K and group, then autotrophs. Group routines calculate catabolism; their wrappers also prepare nutrient exchange, anabolic allocation, and mortality fluxes.</p></div><div><span class="step">3 · UPDATE</span><strong>Organic matter and biomass</strong><p>Apply chemical denitrification, priming, hydrolysis and decomposition-product redistribution, sorption, then autotrophic and heterotrophic biomass updates and colonization.</p></div><div><span class="step">4 · EXPORT</span><strong>Budgets and transport</strong><p>Aggregate gas, nutrient, residue, and organic-matter transfers. Return states and fluxes through the API; physical transport and chemistry apply their corresponding updates.</p></div></div>
+<details><summary>Actual call order inside SoilBGCOneLayer</summary><pre><code>StageBGCEnvironCondition
+ActiveMicrobeCatabolism
+  ActiveHeterotrophsK → group catabolism
+                       nutrient exchange
+                       GatherHeterotrophRespiration
+                       GatherHetertrophAnabolicFlux
+  ActiveAutotrophs    → group catabolism + O₂ / denitrification
+                       nutrient exchange and anabolic preparation
+ChemoDenitrification
+OMTransferForPriming
+SolidOMDecomposition
+RedistDecompProduct
+RDOMSorption
+AutotrophAnabolicUpdate
+HeterotrophAnabolicUpdate
+MicrobialLitterColonization
+AggregateTransfOMBioResdue</code></pre></details>
+<div class="callout blue"><strong>Preparation is not the same as state update.</strong> Despite the routine name, <code>ActiveMicrobeCatabolism</code> includes preparation of anabolic and mortality fluxes. The later <code>*AnabolicUpdate</code> routines commit those transfers to biomass. Moving a calculation across these stages changes which pools and competing withdrawals it sees.</div>
+<p class="small">Sources: <a href="../drivers/ecosim/EcoSIMAPI.F90">Run_EcoSIM_one_step</a>; <a href="../f90src/APIs/MicBGCAPI.F90">MicrobeModel, MicAPISend, MicAPIRecv</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">SoilBGCOneLayer</a>.</p>
+</section>
+<section id="coupling"><span class="num">05 / CATABOLISM → ANABOLISM</span><h2>Respiration supplies a budget; uptake and growth must reconcile with it</h2>
+<h3>Potential, allocated, and realized rates are different quantities</h3>
+<p>Potential metabolic rates depend on active biomass, guild traits, substrate saturation, environmental response, and nutrient status. Competition factors reserve a portion of a shared resource. Donor caps and electron-acceptor limitations then restrict the realized reaction. Aerobic O₂ routines use shorter gas/water substeps, microbial diffusion geometry, and gas–liquid exchange; their actual/potential uptake ratio is an oxygen limiter, with <strong>1 meaning no O₂ limitation</strong>.</p>
+<p>For common aerobic organic-C pathways, potential DOC or acetate respiration is bounded by an allocated donor amount multiplied by that donor’s respiratory fraction. The subsequent conversion from respiration to total uptake must use the matching donor-specific fraction. Using an averaged yield for individual donors can violate one donor’s allocation even if the summed C budget looks reasonable.</p>
+<h3>Maintenance is reserved before growth</h3>
+<p><code>CalcRespMaintHeter</code> derives maintenance demand from biomass N, temperature, pH, and density modifiers. <code>GatherHeterotrophRespiration</code> compares that demand with realized primary respiration. Denitrification-supported respiration can fill a remaining maintenance deficit through <code>ReserveDenitrifMaintenance</code>, using a yield conversion to the primary respiratory-C basis. Only the residual capacity supports growth-associated uptake or N₂ fixation.</p>
+<div class="formula"><strong>Simple one-donor illustration:</strong><br>R<sub>m</sub> = min(M, R); &nbsp; R<sub>g</sub> = max(0, R − M)<br>U = R<sub>m</sub> + R<sub>g</sub>/η; &nbsp; net substrate C to reserves = U − R</div>
+<p>Here <strong>η is a respiration fraction</strong>, not carbon-use efficiency; η=0.4 implies 0.4 units respired per unit of growth-associated uptake in this simplified case. Maintenance uptake earns no growth yield. The implemented formulas additionally distinguish DOC and acetate, denitrification, and N₂-fixation allocations.</p>
+<div class="card" id="budget-demo"><h3>Explore the maintenance–growth partition</h3><p class="small">Illustrative C budget for one accepted aerobic donor pathway. Units are arbitrary carbon units per timestep. This is not a simulation of substrate competition, O₂ supply, or starvation.</p><div class="controls"><label>Realized respiration R: <output id="rv"></output><input id="r" aria-label="Realized respiration" type="range" min="0" max="2" step="0.05" value="1"></label><label>Maintenance demand M: <output id="mv"></output><input id="m" aria-label="Maintenance demand" type="range" min="0" max="2" step="0.05" value="0.3"></label><label>Respiration fraction η: <output id="ev"></output><input id="eta" aria-label="Respiration fraction" type="range" min="0.1" max="1" step="0.05" value="0.4"></label></div><div class="metrics" aria-live="polite"><div class="metric"><strong id="u"></strong><span>Total substrate uptake U</span></div><div class="metric"><strong id="g"></strong><span>Net C to reserves U − R</span></div><div class="metric"><strong id="deficit"></strong><span>Unmet maintenance</span></div><div class="metric"><strong id="oxygen"></strong><span>O₂ mass for aerobic R</span></div></div><p class="balance" id="balance"></p><noscript><p>Default example: R=1, M=0.3, η=0.4 gives U=2.05, net reserve C=1.05, and O₂ consumption ≈2.667 mass units.</p></noscript></div>
+<h3>Reserves connect uptake to structural growth</h3>
+<p><code>DOMUptk4GrothHeter</code> and <code>DOMuptk4GrothAutor</code> carry elemental uptake, but their C meaning depends on the group. Organic heterotroph uptake must debit DOC/acetate; cyanobacteria also credit fixed CO₂-C; autotrophic-family carbon may originate from CO₂ or methane according to the implemented pathway. These array names alone do not identify a universal donor.</p>
+<p>Structural growth draws from the reserve compartment. For heterotrophs, the potential C transfer is proportional to <code>GrowthEnvScalHeter × OMGR × reserve C</code>, partitioned by <code>FL(M)</code>. N and P accompany allocation according to reserve availability and the implemented stoichiometric controls. The model therefore has a reserve-mediated allocation step; uptake is not simply instantaneous new structural biomass.</p>
+<p>At the final biomass update, <code>LimitReserveNutrientTransfers</code> reconciles N/P growth withdrawals and mineral release against reserve supply, including uptake and recycling. This matters because priming can alter pools between flux preparation and the final update. It is a local safeguard, not a whole-network C/N/P/redox solver.</p>
+<div class="grid two"><div class="card"><h3>Cyanobacteria: photosynthate is a supply</h3><p>Fixed C supplies maintenance first; the residual can support growth and N₂ fixation. Photosynthetic O₂ offsets respiratory demand before external O₂ uptake; unused O₂ is released. Additional photosynthate respiration for N₂ fixation has a corresponding adjustment to the net O₂ budget.</p><p>Each layer receives <code>PAR_RAD_incident</code> at its upper interface before its microbial biology runs. Updated cyanobacterial biomass then contributes to the optical depth used to shade deeper layers, with transmission <code>sfexp(−τ)</code>. This follows the intended surface-to-depth update. The microbial call still runs at night with zero PAR.</p><p>The litter and bare-soil streams already include surface-cover weighting. Only the litter stream attenuates through litter; both streams attenuate through soil. Their transmitted sum divided by cell area supplies the next layer. Incident exposure differs from both layer-mean irradiance and absorbed light; see the <a href="cyanobacteria.html#light">cyanobacterial light guide</a>.</p></div><div class="card"><h3>Autotrophic pathways: energy and C differ</h3><p>Nitrifiers derive energy from inorganic N oxidation while acquiring biomass C separately. Methanotrophs must account for methane used in both energy metabolism and biomass. Hydrogenotrophic methanogens require H₂ for methane formation and biomass synthesis.</p><p>A single generic “respiration C” variable cannot, by itself, determine every substrate debit or product. Group-specific stoichiometry remains essential.</p></div></div>
+<p class="small">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">CalcRespMaintHeter, ReserveDenitrifMaintenance, LimitReserveNutrientTransfers</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">GatherHeterotrophRespiration, GatherHetertrophAnabolicFlux</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">autotrophic allocation</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">cyanobacterial C/O₂ coupling</a>; <a href="../f90src/APIs/MicBGCAPI.F90">incident PAR and sequential shading</a>.</p>
+</section>
+<section id="mortality"><span class="num">06 / MORTALITY AND RETURN TO ORGANIC MATTER</span><h2>Ordinary turnover and starvation are distinct routes</h2>
+<div class="grid two"><div class="card"><h3>Ordinary mortality</h3><p>Mortality removes C/N/P from kinetic and structural biomass, using compartment rates, environmental response, and density modifiers. In the heterotrophic formula, <code>SPOMX = sqrt(GrowthEnvScalHeter) × SPOMC(M) × SPOMK(M)</code>, with withdrawal capped by compartment biomass.</p><p>Element-specific recycling returns part to reserves. The unrecycled part is partitioned between humified material and microbial residue. Residue subsequently becomes a substrate for hydrolysis and microbial uptake.</p></div><div class="card"><h3>Maintenance-deficit mortality</h3><p>A remaining maintenance deficit triggers additional structural withdrawal. Ordinary mortality is subtracted first when determining the available donor biomass, preventing the two withdrawals from independently consuming the same tissue.</p><p>N/P in the recycled fraction return to reserves. The current code instead emits its recycled C directly as CO₂. The rest is routed to residue/humus. This direct C-respiration shortcut is the unresolved redox issue below.</p></div></div>
+<pre><code>Withdrawn biomass element
+  = recycled element + unrecycled element
+
+Ordinary turnover: recycled C/N/P → reserves
+Starvation:        recycled N/P   → reserves
+                   recycled C     → CO₂  [redox accounting unresolved]
+
+Unrecycled element
+  = humified transfer + microbial-residue transfer</code></pre>
+<p><code>EHUM</code> controls the humified share of microbial litterfall. Soil humification feeds the humus complex; surface-litter humification can be routed to the underlying soil. Autotrophic residues require distribution among receiving organic complexes because their live biomass lacks a K axis. The destination weights must sum to one whenever material is transferred.</p>
+<p><strong>Mortality is an ecosystem feedback.</strong> It reduces future catalytic capacity while returning substrate and nutrients to the community. Recycling changes nutrient retention in living biomass, and residue/humus partitioning changes substrate accessibility and persistence. Correct elemental closure of this partition does not guarantee correct respiratory chemistry.</p>
+<p class="small">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">GatherHetertrophAnabolicFlux, HeterotrophAnabolicUpdate, AggregateTransfOMBioResdue</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">autotrophic mortality and AutotrophAnabolicUpdate</a>.</p>
+</section>
+<section id="controls"><span class="num">07 / PARAMETERS AND SHARED RESOURCES</span><h2>Traits determine potential; resource budgets determine feasibility</h2>
+<div class="table-wrap"><table><thead><tr><th>Control</th><th>Representative variables</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Functional diversity</td><td><code>NumGuild_*</code>, activation flags, <code>StageFuncGuild</code></td><td>Guild counts and selected trait values; supported groups need not all have appreciable biomass in a given case.</td></tr>
+<tr><td>Activity and environment</td><td><code>OMAct*</code>, <code>GrowthEnvScal*</code>, <code>TempMaintR*</code>, <code>FBiomStoiScalar*</code></td><td>Active biomass, temperature/water stress and nutrient-status controls.</td></tr>
+<tr><td>Kinetic uptake</td><td><code>VMX*</code>, <code>OQKM</code>, <code>OQKA</code>, pathway-specific half-saturation constants</td><td>Potential metabolic capacity and concentration response; concentration saturation is not a finite-pool cap.</td></tr>
+<tr><td>Respiration and allocation</td><td><code>EO2*</code>, <code>ENOX</code>, <code>ECHZ*</code>, <code>RMOM</code>, <code>OMGR</code>, <code>FL</code></td><td>Respiratory fractions/yield conversions, maintenance costs, and reserve-to-structure allocation.</td></tr>
+<tr><td>Competition</td><td><code>FOQC</code>, <code>FOQA</code>, <code>FOXYX</code>, <code>FMN</code>, previous ecosystem demands</td><td>Shares of a common donor, often based on previous demand with biomass fallback and a minimum share.</td></tr>
+<tr><td>Turnover and recycling</td><td><code>SPOMC</code>, <code>SPOMK</code>, <code>RCC*</code>, <code>EHUM</code></td><td>Mortality rate, recycled fraction, and residue/humus routing.</td></tr>
+<tr><td>Substrate accessibility</td><td><code>SolidOMAct</code>, <code>DOSA</code>, <code>FPRIM*</code>, sorption/hydrolysis coefficients</td><td>Colonization, transfer among complexes, and access to dissolved versus protected organic matter.</td></tr>
+<tr><td>Light</td><td><code>PAR_rad</code>, <code>k_litr</code>, <code>k_cyanoC</code>, <code>CalcKSoilPAR</code></td><td>Incident photosynthetic exposure at each layer’s upper interface; litter, soil and updated cyanobacterial biomass attenuate light passed to deeper layers. Some coefficients are currently hard-coded.</td></tr>
+</tbody></table></div>
+<p>Source quantities are commonly grid-cell totals (the legacy <code>d-2</code> area convention), while kinetics may use concentrations and PAR is supplied per area. Interpret units from the producing and consuming equations: array names or comments alone can obscure cell-total versus area-normalized values. Band and nonband nutrients are separate donor compartments and require their own fractions and water volumes.</p>
+<p class="small">Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">StageFuncGuild and nutrient/O₂ helpers</a>; <a href="../f90src/Microbial_bgc/Layers_Micmodel/SoilPARAttenuationMod.F90">CalcKSoilPAR</a>. See the detailed <a href="microbial_competition.html">competition rationale and limitations</a>.</p>
+</section>
+<section id="issues"><span class="num">08 / MAJOR IMPROVEMENT NEEDS</span><h2>Separate confirmed gaps from design choices</h2>
+<div class="callout issue"><span class="tag issue">Confirmed unresolved issue</span><h3>1. Starvation respiration lacks pathway-specific redox accounting</h3><p>Both anabolic updates add <code>RMaintDefcitRecycOM*(ielmc,...)</code> to CO₂ without a matching additional respiratory-reactant budget. Biomass C is debited, so the immediate problem is not carbon creation. It is respiration without the corresponding O₂ demand for aerobic organisms, or the appropriate substrates and reduced products for anaerobic pathways.</p><p>A complete correction must separate mortality from realized respiration, constrain reaction fluxes by available reactants, and keep unrespired carbon in organic pools. Facultative organisms need coordinated aerobic/anaerobic allocation. <strong>Do not apply an external O₂ charge to all organisms.</strong> The two source TODOs deliberately preserve this issue for a coordinated solution.</p><p class="small">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">HeterotrophAnabolicUpdate, TODO near RCO2ProdHeter</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">AutotrophAnabolicUpdate, TODO near RCO2ProdAutor</a>.</p></div>
+<div class="grid two"><div class="card"><span class="tag design">Architectural limitation</span><h3>2. Competition does not guarantee a globally feasible reaction set</h3><p>Previous-demand shares and biomass fallbacks provide an inexpensive ecological allocation rule. However, independently floored shares can sum above one. Adding a new guild or donor pathway requires manual changes to competing-demand sums, fallbacks, donor caps, products, and API accounting.</p><p>Local caps improve behavior but do not establish a universal guarantee across C, nutrients, gases, band/nonband pools, and coupled reactions. Keep ecological allocation separate from a common check that all accepted reactions can be supported simultaneously.</p></div><div class="card"><span class="tag issue">Explicit source TODO</span><h3>3. H₂ allocation remains sequential</h3><p><code>H2GSX</code> combines dissolved H₂ with a fermentation supply estimate. Hydrogenotrophic guilds withdraw methane- and biomass-associated demand from the remaining budget in loop order.</p><p>This avoids independent reuse within that loop but gives earlier guilds priority. The source explicitly calls for an H₂ competition factor. A shared allocation and a declared policy for same-step cross-feeding would make behavior less sensitive to guild ordering.</p><p class="small"><a href="../f90src/Microbial_bgc/Box_Micmodel/MethanogenMod.F90">H2MethanogensCatabolism</a></p></div><div class="card"><span class="tag design">Numerical limitation</span><h3>4. Deferred donor debt is not accepted-flux correction</h3><p><code>SubstrateDribbling</code> holds a donor pool nonnegative and carries unmet withdrawal forward as debt. The signed inventory is pool minus debt; a nonnegative displayed pool can coexist with substantial outstanding demand.</p><p>This mechanism does not retroactively scale already credited biomass or products to the available donor. Monitor debt explicitly and reconcile the whole reaction before applying products when strict instantaneous feasibility is required.</p><p class="small"><a href="../f90src/Minimath/MiniMathMod.F90">SubstrateDribbling</a>; <a href="../f90src/Transport/Nonsalt/TranspNoSaltFastMod.F90">gas source/sink application</a></p></div><div class="card"><span class="tag design">Coupling approximation</span><h3>5. Staged rates and sequential updates need convergence tests</h3><p>Some kinetics use staged concentrations and previous-hour competition, while hydrolysis, priming, biomass updates, and transport occur in a prescribed order. Some cross-feeding is explicitly credited within the hour, as for H₂; other exchanges wait for later pool updates.</p><p>This is a numerical design, not proof of a bug in every case. Test timestep sensitivity and guild-order sensitivity, and specify which products can fund same-step consumption.</p></div><div class="card"><span class="tag design">Representation and calibration</span><h3>6. Interface exposure and activity proxies simplify microsites</h3><p>Cyanobacterial photosynthesis uses incident PAR at the layer’s upper interface. This is an exposure assumption: representing biomass distributed throughout a thick layer would require its depth distribution and light response to be considered together. Sequential shading by updated biomass is the intended column coupling, not a confirmed defect. Layer-level gas/water conditions also simplify microbial spatial heterogeneity.</p><p>Hydrolysis and colonization use activity proxies rather than an explicit community-wide enzyme allocation budget in these routines. Evaluate whether finer surface layers, subgrid redox environments, or explicit enzyme costs are needed for the intended application.</p></div><div class="card"><span class="tag design">Validation priority</span><h3>7. Test reaction and community invariants</h3><p>A build or finite-output smoke run cannot verify the chemistry. Tests should track C/N/P, electron equivalents, and every donor, including deferred debt, while varying group counts and competing pathways.</p><p>Prioritize no-O₂/no-NOx starvation, mixed DOC/acetate uptake, methane plus biomass demand, band/nonband separation, litter–soil nutrient access, and cyanobacterial day/night transitions.</p></div></div>
+<h3>A direction for a scalable solver</h3>
+<ol><li><strong>Describe each reaction explicitly:</strong> donor pools, products, elemental/redox stoichiometry, potential rate, and energetic role.</li><li><strong>Allocate shared resources:</strong> keep the ecological rule—demand, biomass, kinetic affinity, or another justified choice—explicit.</li><li><strong>Accept a feasible reaction set:</strong> apply consistent limits across all donors and scale each reaction’s reactants and products together.</li><li><strong>Allocate accepted energy and carbon:</strong> maintenance first, then growth and N₂ fixation, with an explicit policy for mortality and recycling.</li><li><strong>Apply transfers once:</strong> export matched source/sink fluxes and verify state-plus-flux invariants before and after transport.</li></ol>
+<p>This is a proposed development direction, not a description of a solver already present. It should preserve useful ecological controls in EcoSIM while reducing the need to patch each new donor–consumer combination separately.</p>
+</section>
+<section id="sources" class="sources"><span class="num">09 / CODE READING GUIDE</span><h2>Where to follow the implementation</h2>
+<div class="table-wrap"><table><thead><tr><th>Question</th><th>Primary source</th><th>Entry points</th></tr></thead><tbody>
+<tr><td>How does the model invoke microbes?</td><td><a href="../drivers/ecosim/EcoSIMAPI.F90">EcoSIMAPI.F90</a>; <a href="../f90src/APIs/MicBGCAPI.F90">MicBGCAPI.F90</a></td><td>Run_EcoSIM_one_step; MicrobeModel; MicAPISend/Recv</td></tr>
+<tr><td>How is community identity stored?</td><td><a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobeDiagTypes.F90">MicrobeDiagTypes.F90</a></td><td>Init; group/guild maps; temporary state and flux arrays</td></tr>
+<tr><td>How are stages coupled?</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a></td><td>SoilBGCOneLayer; ActiveMicrobeCatabolism; Gather*; *AnabolicUpdate</td></tr>
+<tr><td>Where do metabolic pathways live?</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/AerobicBacteriaMod.F90">AerobicBacteriaMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/FungiMod.F90">FungiMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/DenitrifierMod.F90">DenitrifierMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/FermenterMod.F90">FermenterMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/MethanogenMod.F90">MethanogenMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/MethanotrophMod.F90">MethanotrophMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">NitrifierMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">CyanoBacteriaMod</a></td><td>Group-specific catabolic rates, yields, substrate limits and products</td></tr>
+<tr><td>How are autotrophs allocated and updated?</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">MicAutoCplxFGMod.F90</a></td><td>ActiveAutotrophs; GatherAutotrophRespiration; AutotrophAnabolicUpdate</td></tr>
+<tr><td>Where are shared constraints?</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a></td><td>StageFuncGuild; ReserveDenitrifMaintenance; LimitReserveNutrientTransfers; AerobicHeterO2Uptake</td></tr>
+<tr><td>Where do exported gas fluxes go?</td><td><a href="../f90src/Transport/Nonsalt/InitNoSaltTransportMod.F90">InitNoSaltTransportMod.F90</a>; <a href="../f90src/Transport/Nonsalt/TranspNoSaltFastMod.F90">TranspNoSaltFastMod.F90</a></td><td>Preparation and application of microbial/plant gas sources and sinks</td></tr>
+</tbody></table></div>
+<p>Related notes: <a href="microbial_competition.html">competition</a> · <a href="microbial_complexes.html">organic complexes</a> · <a href="solid_organic_matter_kinetics.html">substrate kinetics</a> · <a href="chemodenitrification.html">chemical denitrification</a> · <a href="bioaerosol_partitioning.html">bioaerosol inputs</a>.</p>
+</section>
+<footer><p>Prepared from the current Fortran implementation and the review decisions recorded for this checkout. Source links are relative to <code>ecosim_knowledge</code>; routine names are more stable than line numbers. Illustrations simplify the implementation where explicitly labeled. This document does not change model behavior.</p><button type="button" onclick="window.print()">Print / save PDF</button></footer>
+</main>
+<script>
+function updateBudget(){const r=Number(document.getElementById('r').value),m=Number(document.getElementById('m').value),e=Number(document.getElementById('eta').value);const rm=Math.min(r,m),rg=Math.max(0,r-m),u=rm+rg/e,g=u-r;for(const [id,value] of Object.entries({rv:r,mv:m,ev:e,u:u,g:g,deficit:Math.max(0,m-r),oxygen:2.667*r})){document.getElementById(id).textContent=value.toFixed(3)}document.getElementById('balance').textContent=`C balance: ${u.toFixed(3)} uptake = ${r.toFixed(3)} respiration + ${g.toFixed(3)} net reserve supply. Unmet maintenance is not automatically assigned extra respiration in this illustration.`;}
+for(const id of ['r','m','eta'])document.getElementById(id).addEventListener('input',updateBudget);updateBudget();
+</script></body></html>

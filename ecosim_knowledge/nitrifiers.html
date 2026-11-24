@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nitrifiers in EcoSIM</title>
+<style>
+:root{--ink:#203b3a;--muted:#56706d;--green:#086d61;--paper:#f3f6f2;--line:#ccdcd5;--light:#e3efe7;--amber:#87530b}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:48px 30px 75px}header{padding-bottom:28px;border-bottom:3px solid var(--green)}h1{font-size:clamp(2.4rem,6vw,3.8rem);line-height:1.08;letter-spacing:-.045em;margin:18px 0}h2{font-size:1.65rem;line-height:1.3;margin:0 0 18px}h3{line-height:1.35}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.8rem;color:var(--green);font-weight:750}.lead{font-size:1.2rem;max-width:850px}.meta,.source{font-size:.85rem;color:var(--muted)}a{color:var(--green);text-underline-offset:3px}nav{display:flex;gap:8px 22px;flex-wrap:wrap;margin-top:24px}nav a{font-size:.9rem}section{margin-top:44px;scroll-margin-top:22px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card,.metric{background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px;min-width:0}.card{border-top:4px solid var(--green)}.card h3{margin:5px 0 10px}.card p{margin:8px 0}.tag{font-weight:700;font-size:.8rem;color:var(--green)}code{font:.86em ui-monospace,monospace;overflow-wrap:anywhere}.formula{background:#1c3f3a;color:#fff;padding:20px 24px;border-radius:10px;font:14px/1.8 ui-monospace,monospace;overflow-x:auto}.formula pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}.note,.caveat{padding:18px 22px;border-radius:8px;background:var(--light);margin:22px 0}.caveat{background:#fff0d7;border-left:4px solid #ba801d}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--line)}th{background:var(--light)}td:first-child{min-width:150px}ol li{margin:12px 0}.sequence{counter-reset:step;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:24px 0}.sequence div{padding:18px;background:#e4eee8;border-radius:8px}.sequence b{display:block;color:var(--green)}.sequence b:before{counter-increment:step;content:counter(step) ' / ';font-size:.8rem}.network{background:white;border:1px solid var(--line);padding:22px;border-radius:10px}.network svg{width:100%;height:auto;display:block}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 30px;margin:24px 0}.controls label{font-size:.92rem}.controls input{display:block;width:100%;accent-color:var(--green);margin-top:10px}.controls output{font-weight:750}.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.metric strong{display:block;font-size:1.85rem;line-height:1.3;color:var(--green)}.metric small{font-size:.83rem}.explorer{background:#e4eee8;padding:26px;border-radius:12px}.explorer h3{margin-top:0}.status{font-size:.95rem;min-height:3em}footer{border-top:1px solid var(--line);margin-top:45px;padding-top:18px;color:var(--muted);font-size:.85rem}@media(max-width:720px){main{padding:28px 18px 45px}.cards,.sequence,.controls,.results{grid-template-columns:1fr}.formula{padding:16px;font-size:12px}.explorer{padding:18px}.network{padding:8px}th,td{padding:10px}nav{gap:8px 15px}}@media print{body{background:white;font-size:10.5pt}main{max-width:none;padding:0}nav,.controls{display:none}section{margin-top:25px}.formula{background:#f1f1f1;color:#111}.card,.note,.caveat,.network,.metric,tr{break-inside:avoid}h2,h3{break-after:avoid}a{color:inherit}.explorer{background:#f2f2f2}header{border-bottom-width:1px}}
+</style>
+</head>
+<body><main>
+<header><div class="eyebrow">EcoSIM · Process knowledge</div><h1>How nitrifiers connect<br>ammonia, nitrite, and N₂O</h1>
+<p class="lead">EcoSIM represents ammonia oxidizers and nitrite oxidizers as separate autotrophic functional groups. Both obtain energy from nitrogen transformations and take biomass carbon from CO₂. Ammonia oxidizers also have a nitrite-reduction pathway when oxygen supply falls short of demand.</p>
+<p class="meta">Implementation snapshot · 29 September 2026 · <code>solphys</code>, base commit <code>03f68ad5</code> plus the working-tree NH₄ donor-limit and denitrification-maintenance fixes. Primary source: <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">NitrifierMod.F90</a>. This is a guide to the implemented equations, not a general nitrification literature review.</p>
+<nav aria-label="Contents"><a href="#pathways">Pathways</a><a href="#state">State &amp; sequence</a><a href="#kinetics">Oxidation kinetics</a><a href="#oxygen">Oxygen</a><a href="#denit">Nitrifier denitrification</a><a href="#growth">Growth</a><a href="#budget">Nitrogen balance</a><a href="#explorer">Explore the cap</a><a href="#parameters">Parameters</a><a href="#sources">Source map</a></nav></header>
+<section id="pathways"><h2>1. Two functional groups, three transformations</h2>
+<div class="cards"><article class="card"><span class="tag">AUTOTROPHIC GROUP 1</span><h3>Ammonia oxidation</h3><p>NH₃ + 1.5 O₂ → NO₂⁻ + H⁺ + H₂O</p><p><code>AmmoniaOxidizerCatabolism</code> calculates potential oxidation. The shared oxygen solver determines its realized fraction.</p></article><article class="card"><span class="tag">AUTOTROPHIC GROUP 2</span><h3>Nitrite oxidation</h3><p>NO₂⁻ + 0.5 O₂ → NO₃⁻</p><p><code>NitriteOxidizerCatabolism</code> calculates a separate rate, biomass response, and NO₂ allocation.</p></article><article class="card"><span class="tag">ADDITIONAL GROUP 1 PATHWAY</span><h3>Nitrifier denitrification</h3><p>2 NO₂⁻ + NH₃ → 1.5 N₂O + 2 OH⁻ + 0.5 H₂O</p><p><code>AmmoniaOxiDenitCatabolism</code> couples additional ammonia consumption to nitrite reduction.</p></article></div>
+<p>The last reaction is the model’s coded stoichiometry. Its N₂O contains nitrogen from <strong>both ammonia and nitrite</strong>. It is distinct from heterotrophic denitrification in <code>DenitrifierMod</code>, and from the nitrite-dependent methane oxidation in <code>MethanotrophMod</code>. This nitrifier module does not implement a further N₂O-to-N₂ reaction.</p>
+<div class="network"><svg viewBox="0 0 940 230" role="img" aria-labelledby="diagram-title diagram-desc"><title id="diagram-title">Nitrogen routing through nitrifiers</title><desc id="diagram-desc">Aerobic ammonia oxidation supplies nitrite. Aerobic nitrite oxidation supplies nitrate. Under oxygen limitation the ammonia-oxidizer pathway combines nitrite nitrogen with additional ammonia nitrogen to produce nitrous oxide.</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#086d61"/></marker></defs><g fill="#e3efe7" stroke="#ccdcd5"><rect x="20" y="36" width="175" height="60" rx="9"/><rect x="380" y="36" width="175" height="60" rx="9"/><rect x="745" y="36" width="175" height="60" rx="9"/><rect x="380" y="164" width="175" height="54" rx="9"/></g><g font-family="system-ui,sans-serif" fill="#203b3a" text-anchor="middle" font-size="23"><text x="107" y="74">NH₄ / NH₃</text><text x="467" y="74">NO₂⁻</text><text x="832" y="74">NO₃⁻</text><text x="467" y="199">N₂O</text></g><g fill="none" stroke="#086d61" stroke-width="3" marker-end="url(#arrow)"><path d="M195 66H367"/><path d="M555 66H732"/><path d="M467 98V151"/><path d="M107 98V192H367"/></g><g font-family="system-ui,sans-serif" fill="#56706d" font-size="16"><text x="218" y="42">O₂-dependent</text><text x="582" y="42">O₂-dependent</text><text x="486" y="137">NO₂ reduction</text><text x="124" y="176">Additional NH₄-N</text></g></svg></div>
+<p class="source">Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars: group IDs and activation</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">three catabolic routines</a>.</p></section>
+<section id="state"><h2>2. State, compartments, and execution order</h2>
+<p>Each functional group can contain multiple guilds, indexed by <code>NGL</code> from <code>JGniA(N)</code> to <code>JGnfA(N)</code>. <code>mBiomeAutor</code> stores microbial C, N, and P in kinetic, structural, and reserve compartments; <code>OMActAutor</code> is the active-C quantity driving metabolic capacity. Catabolism skips guilds with nonpositive active biomass.</p>
+<p>Mineral donors are split into fertilizer-band and nonband pools. <code>ZNH4S/B</code> and <code>ZNO2S/B</code> are <strong>N pools</strong>; <code>CNH3S/B</code>, <code>CNH4S/B</code>, and <code>CNO2S/B</code> are <strong>concentrations</strong>. The ammonia oxidation kinetics use NH₃ concentration, but their donor cap uses the NH₄ pool supplied to this microbial interface. These variables cannot be substituted for one another. NH₄ fractions <code>VLNH4/VLNHB</code> and NO₂ fractions <code>VLNO3/VLNOB</code> can differ.</p>
+<div class="sequence"><div><b>Prepare</b>Stage biomass, temperature/water response, nutrient status, maintenance, and lagged competition.</div><div><b>Oxidize</b>Calculate NH₃ or NO₂ potential oxidation; apply the common O₂ uptake solver.</div><div><b>Reduce &amp; allocate</b>For ammonia oxidizers, calculate nitrite reduction. Then calculate mineral nutrition, maintenance, and anabolic fluxes.</div><div><b>Update &amp; export</b>Update biomass and residue pools; aggregate nitrogen and gas fluxes; pass them through the API.</div></div>
+<p><code>ActiveAutotrophs</code> performs the dispatch and shared calculations. The layer driver later calls <code>AutotrophAnabolicUpdate</code> and <code>AggregateTransfOMBioResdue</code>. Nitrifier denitrification therefore sees <em>realized, oxygen-limited</em> aerobic ammonia oxidation from the current call. Its fixed <code>RTotNH3OxidSoilAutor/BandAutor</code> totals represent NO₂ production by aerobic oxidation only.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">ActiveAutotrophs</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">SoilBGCOneLayer</a>; <a href="../f90src/APIs/MicBGCAPI.F90">pool and concentration mapping</a>.</p></section>
+<section id="kinetics"><h2>3. Potential oxidation: biomass, environment, and donors</h2>
+<p>For compact notation below, <code>B</code> means active microbial C, <code>E</code> is <code>GrowthEnvScalAutor</code>, <code>S</code> is <code>FBiomNutStoiScalAutor</code>, and <code>W</code> is <code>VOLWZ</code>. Subscript <code>j</code> denotes one band or nonband compartment. Fluxes are amounts per model hourly step on the layer’s spatial basis. Nitrogen transformations use N mass, carbon terms use C mass, and oxygen demand uses O₂ mass.</p>
+<div class="formula"><pre>fCO2 = CCO2S / (CCO2S + CCKM)
+
+Ammonia oxidizers:
+  Vraw = VMXNH3Oxi × E × S × fCO2 × B
+  V = Vraw / [1 + Vraw/(VHKI × W)]       (V = 0 when W is too small)
+  Kj = V × NH4_compartment_fractionj × CNH3j/(CNH3j + ZHKM)
+  Pj = max(0, min[Kj, FNH4j × ZNH4j]) × inhibition_multiplierj
+
+Nitrite oxidizers:
+  V = VMXNO2Oxi × E × S × fCO2 × B
+  Kj = V × NO2_compartment_fractionj × CNO2j/(CNO2j + ZNKM)
+  Pj = max(0, min[Kj, FNO2j × ZNO2j])</pre></div>
+<p>The NH₃ rate attenuation involving <code>VHKI</code> is labeled product inhibition in the source. It depends on potential rate per water volume; the expression does not directly use product concentration. NH₃ oxidation also has a fertilizer-related multiplier based on <code>ZNFN0</code>, evolving <code>ZNFNI</code>, temperature, and <code>CNH4/ZHKI</code>; without an active inhibition reference the multiplier is 1.</p>
+<h3>Competition is based on previous demand</h3>
+<div class="formula"><pre>F = max(FMN, guild demand from previous hour / ecosystem demand from previous hour)
+If previous ecosystem demand is negligible:
+  NH4: F = max(FMN, FracOMActAutor × NH4 compartment fraction)
+  NO2: F = max(FMN, FracNO2XupAutor × NO2 compartment fraction)</pre></div>
+<p>These are lagged allocations, not a simultaneous solve over all organisms. <code>FMN</code> supplies a minimum share; that floor alone does not normalize shares. <code>RNH3OxidAutor</code> and <code>RNO2XupAutor</code> are competition-demand arrays, while <code>RSMetaOxidSoilAutor/BandAutor</code> hold realized oxidation after O₂ limitation. The oxygen solver also scales the aerobic competition demands by its limiter. The denitrification routine then adds its potential NH₄ demand to the ammonia-oxidizer demand arrays.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">AmmoniaOxidizerCatabolism, NitriteOxidizerCatabolism</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">StageAutotroph</a>.</p></section>
+<section id="oxygen"><h2>4. What the oxygen limiter means</h2>
+<p>For total potential oxidation <code>P = Psoil + Pband</code>, the code calculates a gross-respiration C equivalent and the combined oxygen demand:</p>
+<div class="formula"><pre>η = EO2X
+Ammonia oxidizers: Rpotential = P × ECNH × η
+                   O2 demand = 3.429 × P + 2.667 × Rpotential
+Nitrite oxidizers:  Rpotential = P × ECNO × η
+                   O2 demand = 1.143 × P + 2.667 × Rpotential
+
+fLimO2Autor = min(1, max(0, realized O2 uptake / potential O2 demand))
+Realized oxidation = potential oxidation × fLimO2Autor
+RespGrossAutor = Rpotential × fLimO2Autor</pre></div>
+<p><strong>1 means no oxygen restriction; 0 means no aerobic activity supported by O₂.</strong> This is an actual-to-potential ratio, not the fraction inhibited. The coefficients 3.429 and 1.143 convert N oxidation to O₂ demand; 2.667 converts respiratory C to O₂ demand. The NH₃ routine contains a nearby comment with 3.249, but the executable equation uses 3.429.</p>
+<p><code>AerobicAutorO2Uptake</code> uses competition-allocated aqueous and gas O₂, diffusion through water films, and gas–water exchange over <code>NPH × NPT</code> substeps. It clips each uptake to dissolved O₂ available at that substep; dissolution afterward supplies the next substep. The kinetic response uses <code>OXKA</code>. The surface-litter branch with negligible micropore volume bypasses this transport solve and assigns a limiter of 1. Nitrifier denitrification is gated off under that same litter condition.</p>
+<p class="source">Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">AerobicAutorO2Uptake and ActiveAutotrophs</a>.</p></section>
+<section id="denit"><h2>5. Nitrifier denitrification and the two-donor cap</h2>
+<p>The additional pathway is driven by the unmet <em>respiration-associated</em> O₂ demand, rather than the whole oxidation-plus-respiration oxygen demand. It requires active biomass and positive potential respiration demand.</p>
+<div class="formula"><pre>O2 deficit = max(0, RO2Dmnd4GrossRespAutor − RO2Uptk4RespAutor)
+Vden = 0.875 × O2 deficit × fCO2
+Kj = NO2_compartment_fractionj × Vden × CNO2j/(CNO2j + Z2KM)
+Kj ← Kj / [1 + (Ksoil + Kband)/(VMKI × W)]
+       (both rates are zero when W is too small)
+
+NO2availablej = FNO2j × max(0, ZNO2j + total aerobic NH3 oxidationj)</pre></div>
+<p>The current-hour aerobic NO₂ production is snapshotted before looping over guilds. Additional NH₄ sent to N₂O is never counted as new NO₂ production.</p>
+<h3>Reserve remaining NH₄ separately in each compartment</h3>
+<div class="formula"><pre>At loop entry:
+  NH4remainingj = max(0, ZNH4j − sum of aerobic NH3 oxidationj over guilds)
+For each guild:
+  NH4availablej = max(0, min[NH4remainingj,
+                           FNH4j × ZNH4j − this guild's aerobic NH3 oxidationj])
+  Dj = max(0, min[Kj, NO2availablej, 2 × NH4availablej])
+  NH4remainingj ← max(0, NH4remainingj − 0.5 × Dj)
+
+Additional NH4-N consumed = 0.5 × Dj
+NO2-N consumed = Dj
+N2O-N produced = 1.5 × Dj</pre></div>
+<p>The NH₄ share is reconstructed using the same lagged allocation as aerobic ammonia oxidation. Consequently, the two pathways share one guild allocation. The running compartment remainder also prevents subsequent guilds from reusing NH₄ already consumed by denitrification if allocations overlap. It does not replace the model’s broader competition scheme or retroactively correct earlier uptake by other processes.</p>
+<p class="note">The recent fix adds the <code>2 × NH4available</code> bound before deriving respiration and growth supply. A nonband compartment with zero NH₄ now supports zero nitrifier denitrification there, even if fertilizer-band NH₄ supports layer-wide potential respiration. Potential NH₄ demand for the next hour includes <code>0.5 × Kj</code>; potential NO₂ demand remains <code>Kj</code>.</p>
+<p class="source">Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">AmmoniaOxiDenitCatabolism</a>.</p></section>
+<section id="growth"><h2>6. Carbon assimilation, maintenance, and nutrients</h2>
+<p>The catabolic routines supply the shared autotrophic growth machinery. Nitrogen oxidation provides the energy proxy; carbon comes from environmental CO₂. Mineral NH₄/NO₃ and phosphate exchanges needed for biomass stoichiometry are calculated separately from redox substrate consumption. Thus, ammonia oxidizers can consume NH₄ both as an energy substrate and as a biomass nutrient.</p>
+<div class="formula"><pre>R = realized aerobic gross respiration; M = maintenance demand
+Rd = (Dsoil + Dband) × ECNO × ENOX     [ammonia oxidizers only]
+Primary growth respiration = max(0, R − M)
+α = (1/ENOX − 1) / (1/EO2X − 1)     [default ≈ 0.2667]
+Md = min(Rd, max(0,M−R)/α)           [denitrification respiration reserved for maintenance]
+Maintenance deficit = max(0, M − R − α × Md)
+
+C uptake U = min(M,R) + max(0,R−M)/EO2X + Md + (Rd−Md)/ENOX
+C added to reserves G = U − R − Rd
+                     = max(0,R−M) × (1/EO2X − 1) + (Rd−Md) × (1/ENOX − 1)</pre></div>
+<p>These simplified equations follow the corrected shared routines; autotrophic N₂ fixation is set to zero there. For the zero-energy limit ENOX = 1, denitrification supplies no maintenance energy and Md is zero; the helper avoids division by α = 0. <code>DOMuptk4GrothAutor(ielmc,NGL)</code> stores <code>U</code>, despite its DOM-oriented name. For nitrifiers, <code>RCO2XumpAutor = U</code>. Aerobic CO₂ production and the denitrification respiratory term are aggregated separately, so metabolic net CO₂ uptake is <code>U − R − Rd = G</code> before mortality and other transfers.</p>
+<p>Reserve C/N/P can be allocated to kinetic and structural biomass. Ordinary mortality and maintenance-starvation losses generate recycling, microbial residues, and humified material. Those transfers are required for a complete biomass budget.</p>
+<div class="note"><strong>Maintenance before growth.</strong> <code>ReserveDenitrifMaintenance</code> first credits primary respiration, then reserves denitrification energy for the remaining maintenance demand. The reference conversion α follows the existing EO2X and ENOX yield relations, which share the growth-energy cost EOMC; the default ratio is 10/37.5. It preserves the primary pathway’s existing maintenance convention. Only unreserved denitrification respiration earns growth-associated C uptake, and only the remaining deficit triggers starvation. Previously, all denitrification respiration supported growth while maintenance ignored it. The same correction covers heterotrophic denitrifiers, with the reservation distributed proportionally between DOC and acetate respiration.</div>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">GatherAutotrophRespiration, GatherAutotrophAnabolicFlux, AutotrophAnabolicUpdate</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">AggregateTransfOMBioResdue</a>.</p></section>
+<section id="budget"><h2>7. Follow the nitrogen to the API</h2>
+<p>For one compartment, let <code>A</code> be realized aerobic ammonia-N oxidation, <code>B</code> aerobic nitrite-N oxidation, and <code>D</code> nitrite-N reduction by nitrifiers. Isolating these reactions from assimilation and other organisms gives:</p>
+<div class="table-wrap"><table><thead><tr><th>Pool</th><th>Change from nitrifier redox reactions</th><th>Meaning</th></tr></thead><tbody><tr><td>NH₄-N</td><td><code>−A − 0.5D</code></td><td>Ammonia used by aerobic oxidation and nitrifier denitrification.</td></tr><tr><td>NO₂-N</td><td><code>+A − B − D</code></td><td>Aerobic ammonia product, less oxidation and reduction.</td></tr><tr><td>NO₃-N</td><td><code>+B</code></td><td>Product of aerobic nitrite oxidation.</td></tr><tr><td>N₂O-N</td><td><code>+1.5D</code></td><td>Nitrite N plus additional ammonia N.</td></tr><tr><td>Total N</td><td><code>0</code></td><td>All four changes sum to zero.</td></tr></tbody></table></div>
+<p>After denitrification, the ammonia group’s <code>RSMetaOxidSoilAutor/BandAutor</code> contains <code>A + 0.5D</code>. Aggregation subtracts <code>0.5D</code> when crediting aerobic NO₂ production, preventing the additional ammonia-to-N₂O transfer from becoming a false nitrite source. <code>TNitNO2Redux2N2OSoil/Band</code> records <code>1.5D</code>, the full N₂O-N production.</p>
+<p><code>RNut_MicbRelease_vr</code> exports net mineral exchange with <strong>positive values meaning release to soil</strong>. <code>trcs_RMicbUptake_vr</code> exports gas exchange with <strong>positive values meaning uptake</strong>, so N₂O production contributes a negative gas-uptake flux. Whole-layer exports include other microbial pathways and nutrient assimilation; they need not equal the isolated reaction terms in this table.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">AggregateTransfOMBioResdue</a>; <a href="../f90src/APIs/MicBGCAPI.F90">gas/mineral export</a>; <a href="../f90src/Balances/RedistMod.F90">next-hour ecosystem demand accumulation</a>.</p></section>
+<section id="explorer"><h2>8. Explore the NH₄ constraint</h2><div class="explorer"><h3>One guild, one compartment</h3><p>This algebraic example starts with an NH₄ allocation <code>H</code>, of which fraction <code>a</code> was already consumed aerobically. It assumes the shared compartment remainder is no tighter than this guild’s allocation. <code>Q</code> is allocated NO₂ including any credited aerobic production; <code>K</code> is kinetic NO₂-reduction demand. Values use common N-mass units per hourly step. This is not a full EcoSIM simulation.</p>
+<div class="controls"><label for="h">NH₄ allocation H: <output id="h-value" for="h">0.200</output><input id="h" type="range" min="0" max="1" step="0.005" value="0.2"></label><label for="a">Fraction already consumed aerobically: <output id="a-value" for="a">50%</output><input id="a" type="range" min="0" max="1" step="0.01" value="0.5"></label><label for="q">Allocated NO₂-N Q: <output id="q-value" for="q">0.600</output><input id="q" type="range" min="0" max="1" step="0.005" value="0.6"></label><label for="k">Kinetic NO₂-N demand K: <output id="k-value" for="k">0.800</output><input id="k" type="range" min="0" max="1" step="0.005" value="0.8"></label></div>
+<div class="formula"><pre>D = min(K, Q, 2H(1−a))
+Extra NH4 consumption = D/2; N2O production = 1.5D</pre></div>
+<div class="results" aria-live="polite"><div class="metric"><small>Realized NO₂-N reduction D</small><strong id="d-result">0.200</strong></div><div class="metric"><small>Additional NH₄-N consumed</small><strong id="nh4-result">0.100</strong></div><div class="metric"><small>N₂O-N produced</small><strong id="n2o-result">0.300</strong></div></div>
+<p id="cap-status" class="status">Remaining NH₄ limits the reaction. NH₄ remaining after the reaction: 0.000.</p><p id="old-result">Without the NH₄ cap, D would be 0.600 and require 0.300 NH₄-N; only 0.100 remains allocated.</p><noscript><p>JavaScript is disabled. The displayed example uses H = 0.2, a = 0.5, Q = 0.6, K = 0.8. The corrected rate is D = 0.2.</p></noscript></div></section>
+<section id="parameters"><h2>9. Key parameters and useful diagnostics</h2>
+<p>These are source defaults in <code>NitroPars</code>, not guaranteed values for a particular run. Parameter loading can replace kinetic and energetic inputs. Rate capacities multiply active microbial C; the equations imply N-mass flux per active-C mass per hour for the two nitrifier oxidation rates.</p>
+<div class="table-wrap"><table><thead><tr><th>Parameter</th><th>Default</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>VMXNH3Oxi</code><br><code>VMXNO2Oxi</code></td><td>0.375; 0.25</td><td>Specific NH₃-N and NO₂-N oxidation capacities.</td></tr>
+<tr><td><code>ZHKM</code>, <code>ZNKM</code>, <code>Z2KM</code></td><td>1.4 g N m⁻³ each</td><td>NH₃ oxidation, NO₂ oxidation, and NO₂ reduction saturation scales. Despite the ZHKM declaration’s NH₄ label, the oxidation equation uses CNH3.</td></tr>
+<tr><td><code>CCKM</code></td><td>0.15 g C m⁻³</td><td>CO₂ saturation scale.</td></tr>
+<tr><td><code>ECNH</code>, <code>ECNO</code></td><td>0.30; 0.10</td><td>Conversion coefficients linking N oxidation to C-equivalent respiration; ECNO also enters nitrifier denitrification.</td></tr>
+<tr><td><code>EO2X</code>, <code>ENOX</code></td><td>0.4; ≈0.7143</td><td>Derived respiration fractions: 1/(1+GO2X/EOMC) and 1/(1+GNOX/EOMC). Used to partition C uptake between respiration and growth.</td></tr>
+<tr><td><code>VHKI</code>, <code>VMKI</code></td><td>15; 0.25</td><td>Rate-per-water-volume attenuation scales for ammonia oxidation and nitrite reduction.</td></tr>
+<tr><td><code>OXKA</code></td><td>0.16 g O m⁻³</td><td>Oxygen saturation parameter in the common uptake solver.</td></tr>
+<tr><td><code>FMN</code></td><td>0.005</td><td>Minimum competition share.</td></tr>
+<tr><td><code>RNFNI</code>, <code>ZHKI</code></td><td>0.0002; 7000 g N m⁻³</td><td>Evolution and concentration response of fertilizer-related nitrification inhibition.</td></tr>
+<tr><td><code>RMOM</code></td><td>0.010 g C g⁻¹ N h⁻¹</td><td>Maintenance rate, modified by biomass compartment, temperature, density, and pH.</td></tr>
+</tbody></table></div>
+<p>For diagnosis, inspect <code>fLimO2Autor</code>, <code>RSMetaOxidSoilAutor/BandAutor</code>, <code>RNOxReduxAutorSoil/Band</code>, <code>RNOxReduxRespAutorLim</code>, and NH₄/NO₂ competition demand arrays together. Always identify the group: the same <code>RSMetaOxid*</code> arrays mean ammonia oxidation for group 1 and nitrite oxidation for group 2. Many of these are internal arrays rather than guaranteed history-file variables.</p>
+<p class="source">Source: <a href="../f90src/Modelpars/NitroPars.F90">NitroPars: declarations, defaults, and loading</a>.</p></section>
+<section id="sources"><h2>10. Source map and validation scope</h2>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>What it establishes</th></tr></thead><tbody>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">NitrifierMod.F90</a></td><td>Oxidation kinetics, compartment competition, nitrite reduction, NH₄ cap, and demand bookkeeping.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">MicAutoCplxFGMod.F90</a></td><td>Dispatch, O₂ limitation, mineral nutrition, maintenance, C allocation, and biomass update.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a></td><td>Guild staging, environmental responses, maintenance demand, shared denitrification-maintenance reservation, and diffusion-limited uptake.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a></td><td>Layer sequence and final nitrogen/carbon/gas aggregation.</td></tr>
+<tr><td><a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a> / <a href="../f90src/Modelpars/NitroPars.F90">NitroPars.F90</a></td><td>Functional groups, guild configuration, kinetic and energy parameters.</td></tr>
+<tr><td><a href="../f90src/APIs/MicBGCAPI.F90">MicBGCAPI.F90</a> / <a href="../f90src/Balances/RedistMod.F90">RedistMod.F90</a></td><td>Imported pools/concentrations, exported net fluxes, and lagged competition totals.</td></tr>
+</tbody></table></div>
+<p>The NH₄ correction was checked with 1,134 source-extracted Fortran scenarios covering donor exhaustion, separate compartments, overlapping allocations, inactive guilds, respiration coupling, and N₂O-N balance. The pre-fix routine failed the zero-NH₄ regression case. The build passed; 16 example namelists completed 20 days (480 steps each), excluding <code>dryland2</code>, and 19 history files passed finite-output checks. These results validate the tested donor accounting and short-run execution, not the full model’s scientific accuracy or long-term behavior.</p>
+<p>Related explanation: <a href="methanotrophs.html">methanotrophs in EcoSIM</a>, including the distinct NO₂-dependent NC10 pathway.</p></section>
+<footer>Standalone HTML · Inline styles and interactive example · No network resources required · Source links are relative to <code>solphys/ecosim_knowledge</code>.</footer>
+</main>
+<script>
+(()=>{
+ const ids=['h','a','q','k'];const el=id=>document.getElementById(id);const fmt=x=>x.toFixed(3);
+ function update(){
+  const [h,a,q,k]=ids.map(id=>Number(el(id).value));
+  const remaining=h*(1-a),old=Math.min(q,k),d=Math.min(old,2*remaining),left=Math.max(0,remaining-d/2);
+  ids.forEach((id,i)=>{el(id+'-value').value=id==='a'?Math.round(a*100)+'%':fmt([h,a,q,k][i]);});
+  el('d-result').textContent=fmt(d);el('nh4-result').textContent=fmt(d/2);el('n2o-result').textContent=fmt(1.5*d);
+  const eps=1e-10;const limits=[];
+  if(Math.abs(d-2*remaining)<eps)limits.push('remaining NH₄');
+  if(Math.abs(d-q)<eps)limits.push('allocated NO₂');
+  if(Math.abs(d-k)<eps)limits.push('kinetic demand');
+  el('cap-status').textContent='Limiting constraint'+(limits.length>1?'s: ':': ')+limits.join(' and ')+'. NH₄ remaining after the reaction: '+fmt(left)+'.';
+  el('old-result').textContent='Without the NH₄ cap, D would be '+fmt(old)+' and require '+fmt(old/2)+' NH₄-N; '+fmt(remaining)+' remains allocated.';
+ }
+ ids.forEach(id=>el(id).addEventListener('input',update));update();
+})();
+</script>
+</body></html>

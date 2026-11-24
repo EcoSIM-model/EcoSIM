@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoSIM Calibration Tool — Usage Guide</title>
+<style>
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1.5rem; color: #222; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #2a6f6f; padding-bottom: .3rem; }
+  h2 { color: #2a6f6f; margin-top: 2rem; }
+  code, pre { background: #f4f6f7; border-radius: 4px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .9em; }
+  code { padding: 1px 5px; }
+  pre { padding: .8rem 1rem; overflow-x: auto; border: 1px solid #dde4e6; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid #cfd8da; padding: .45rem .7rem; text-align: left; vertical-align: top; }
+  th { background: #eef3f4; }
+  .note { background: #fdf6e3; border-left: 4px solid #d9a441; padding: .6rem 1rem; margin: 1rem 0; }
+  .warn { background: #fdeaea; border-left: 4px solid #c0504d; padding: .6rem 1rem; margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<h1>EcoSIM Calibration Tool — Usage Guide</h1>
+
+<p>An agent-based reinforcement-learning-style framework for calibrating EcoSIM
+parameters against observation targets, orchestrated entirely through the
+canonical skill scripts in <code>ecosim-agent/.agents/skills/</code>. No skill
+logic is reimplemented here.</p>
+
+<h2>1. Architecture</h2>
+
+<pre><code>calibration_tool/
+├── env.py                    # gym-style environment: reset() / step(theta)
+├── run.py                    # CLI entry point
+├── agent/
+│   └── random_search.py      # baseline agent (reference benchmark)
+├── cases/
+│   └── biocrust/config.json  # dryland case: parameters, bounds, targets
+├── runs/                     # per-episode scratch dirs (gitignored)
+└── usage.html                # this file
+</code></pre>
+
+<p>Each <code>step(theta)</code> executes one full calibration cycle in an
+isolated episode directory:</p>
+
+<ol>
+  <li><b>Reset / clone</b> — copy the pristine case from
+      <code>examples/run_dir/biocrust</code>; delete restart files and stale
+      history output so every episode cold-starts identically.</li>
+  <li><b>Localize parameters</b> — copy the shared
+      <code>input_data/ecosim_pftpar_*.nc</code> into the episode and repoint
+      <code>pft_file_in</code> in the namelist. The shared file is
+      <em>never</em> modified.</li>
+  <li><b>Absolutize paths</b> — rewrite relative <code>*_in</code> and
+      <code>prefix</code> namelist entries against the original run dir, since
+      the clone lives elsewhere in the tree.</li>
+  <li><b>Apply parameters</b> — mutate only the target PFT record
+      (<code>lich22</code> for the biocrust case) via
+      <code>ParamEditor.py</code> from the <code>ecosim-pftpar-editor</code>
+      skill; all other PFT records remain untouched.</li>
+  <li><b>Run the model</b> — invoke the executable with the namelist as
+      <code>argv[1]</code> (required by <code>drivers/ecosim/ecosim.F90</code>).</li>
+  <li><b>Extract targets</b> — run the
+      <code>ecosim-h0-target-extractor</code> skill script on the episode's
+      <code>h0</code> output (GPP, ET, LAI, biomass, canopy height, …).</li>
+  <li><b>Score</b> — reward = negative weighted normalized RMSE against the
+      observed targets in the case config.</li>
+</ol>
+
+<h2>2. Prerequisites</h2>
+
+<ul>
+  <li>Built executable: <code>local/bin/ecosim.f90.x</code>.</li>
+  <li>Python environment with <code>numpy</code>, <code>netCDF4</code>,
+      <code>pandas</code> (used by the skill scripts):
+      <pre><code>python3 -m venv calibration_tool/.venv
+calibration_tool/.venv/bin/pip install numpy netCDF4 pandas</code></pre></li>
+  <li>The <code>ecosim-agent/</code> submodule checked out alongside.</li>
+</ul>
+
+<h2>3. Running a calibration</h2>
+
+<pre><code># from the repository root
+calibration_tool/.venv/bin/python -m calibration_tool.run \
+    --case calibration_tool/cases/biocrust/config.json \
+    --budget 20 --agent random</code></pre>
+
+<p>The runner writes every evaluated parameter set, reward, and extracted
+target to <code>calibration_tool/runs/search_history.json</code> and prints
+the best result. Episode directories are pruned automatically to the last
+<code>keep_last_n</code>.</p>
+
+<h2>4. Configuring a case (<code>config.json</code>)</h2>
+
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>source_run_dir</code></td><td>Case directory to clone each episode from (relative to the case config).</td></tr>
+  <tr><td><code>ecosim_exe</code></td><td>Path to the built model executable.</td></tr>
+  <tr><td><code>python</code></td><td>Interpreter used for skill scripts (venv python with netCDF4).</td></tr>
+  <tr><td><code>pft_code</code></td><td>Six-character PFT record to calibrate, e.g. <code>lich22</code>.</td></tr>
+  <tr><td><code>parameters</code></td><td>List of PFT-parameter variable names with <code>bounds</code> [min, max] and optional <code>log</code> sampling. Actions outside bounds are rejected before any simulation is spent.</td></tr>
+  <tr><td><code>targets</code></td><td>Observation targets keyed by h0-extractor metric names (<code>annual_gpp</code>, <code>annual_et</code>, <code>midseason_lai</code>, …), each with <code>observed</code>, <code>weight</code>, and units in <code>note</code>.</td></tr>
+  <tr><td><code>timeout_s</code> / <code>keep_last_n</code></td><td>Per-run timeout and episode directory retention.</td></tr>
+</table>
+
+<h2>5. Extending the agent</h2>
+
+<p><code>RandomSearchAgent</code> is the reference benchmark: any smarter agent
+(Bayesian optimization / TPE surrogate, or an agentic loop that reads the
+sanity-check and target diagnostics as text observations and invokes skills)
+must beat it at equal simulation budget. An agent only needs two methods:</p>
+
+<pre><code>class MyAgent:
+    def __init__(self, env): ...
+    def run(self, budget):
+        # propose theta -> env.step(theta) -> update proposal
+        ...</code></pre>
+
+<h2>6. Current status and known limits</h2>
+
+<ul>
+  <li>End-to-end <code>step()</code> verified for the biocrust case: cloning,
+      path handling, parameter editing, model execution, and target extraction
+      all run; a 10-year simulation takes several minutes.</li>
+  <li>Target values in <code>cases/biocrust/config.json</code> are
+      <b>placeholders</b> equal to the baseline simulation — replace them with
+      real site observations before drawing any scientific conclusion.</li>
+  <li>The action space must contain only continuous, per-PFT numeric
+      parameters. Discrete configuration (PFT codes, Koppen settings, grid
+      mode) is fixed per case and intentionally excluded from calibration.</li>
+  <li>Each episode is an independent directory, so episodes can be executed in
+      parallel; <code>keep_last_n</code> pruning and the runs directory
+      placement must be respected when parallelizing.</li>
+</ul>
+
+<div class="warn"><b>Guardrails.</b> Never point <code>source_run_dir</code> at
+a directory containing results you cannot afford to lose: episodes delete
+restart and history files inside their own clone only, but the model executable
+writes outputs relative to its working directory. The framework never writes to
+the shared <code>input_data/</code> or to the original case directory.</div>
+
+</body>
+</html>

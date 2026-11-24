@@ -9,6 +9,10 @@ on: [workflow_dispatch, push, pull_request]
 jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ECOSIM_BUILD_DIR: ${{ github.workspace }}/build/Linux-x86_64-double-Release
+      TEST_RESULTS: /tmp/ecosim-tests-${{ github.run_id }}-${{ github.run_attempt }}
     
     steps:
 
@@ -26,10 +30,53 @@ jobs:
         submodules: recursive
     
     - name: ecosim-build
+      id: ecosim_build
       shell: bash
       run: |
         echo "Building EcoSIM"
-        bash build_EcoSIM.sh CC=`which gcc` CXX=`which g++` FC=`which gfortran`
+        mkdir -p "$TEST_RESULTS"
+        bash build_EcoSIM.sh CC="$(which gcc)" CXX="$(which g++)" FC="$(which gfortran)" \
+          2>&1 | tee "$TEST_RESULTS/build.log"
+
+    - name: Set up Python for simulation checks
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install simulation-check dependencies
+      id: test_dependencies
+      run: python3 -m pip install numpy netCDF4
+
+    - name: Smoke test (20 days)
+      if: ${{ !cancelled() && steps.ecosim_build.outcome == 'success' && steps.test_dependencies.outcome == 'success' }}
+      shell: bash
+      run: |
+        bash .agents/skills/ecosim-smoke-run/scripts/run_smoke.sh \
+          -b "$ECOSIM_BUILD_DIR" -d 20 -o "$TEST_RESULTS/smoke" \
+          2>&1 | tee "$TEST_RESULTS/smoke.log"
+
+    - name: Restart reproducibility (10 days, restart after day 5)
+      if: ${{ !cancelled() && steps.ecosim_build.outcome == 'success' && steps.test_dependencies.outcome == 'success' }}
+      shell: bash
+      run: |
+        bash .agents/skills/ecosim-restart-test/scripts/run_restart.sh \
+          -b "$ECOSIM_BUILD_DIR" -d 10 -s 120 -o "$TEST_RESULTS/restart" \
+          2>&1 | tee "$TEST_RESULTS/restart.log"
+
+    - name: Upload build and simulation diagnostics
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ecosim-ubuntu-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          ${{ env.TEST_RESULTS }}/**/*.log
+          ${{ env.TEST_RESULTS }}/**/summary.txt
+          ${{ env.TEST_RESULTS }}/**/summary.json
+          ${{ env.TEST_RESULTS }}/**/comparison.json
+          build/Linux-x86_64-double-Release/3rd-partylibs/*.log
+          build/Linux-x86_64-double-Release/CMakeFiles/CMakeConfigureLog.yaml
+        if-no-files-found: warn
+        retention-days: 7
 #
 #       continue-on-error: true
 #
@@ -55,6 +102,7 @@ jobs:
         dnf -qq -y install git
         dnf -qq -y install curl curl-devel
         dnf -qq -y install autoconf automake libtool libxml2-devel
+        dnf -qq -y install python3
 #        if/when system hdf5 is needed
 #        dnf install -y dnf-plugins-core
 #        dnf install -y epel-release

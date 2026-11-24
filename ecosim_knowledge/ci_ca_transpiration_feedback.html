@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ci/Ca and transpiration feedback in EcoSIM</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .equation, .note { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; overflow-wrap: anywhere; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Ci/Ca and transpiration feedback in EcoSIM</h1>
+  <p class="meta">Code-based interpretation · 11 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>The locally iterated internal CO₂ concentration does not directly update transpiration resistance. This alone does not demonstrate a missing physical feedback or a model error.</strong> EcoSIM already connects reference photosynthesis to stomatal resistance and couples transpiration to plant water status. The questions are whether its regulation rule captures the relevant physiological responses and whether canopy and leaf conductances are consistent.</p>
+
+  <h2>Reference ratio versus diagnosed ratio</h2>
+  <p>The prescribed PFT ratio <code>CanopyCi2CaRatio_pft</code> (FCO2) sets a reference concentration:</p>
+  <div class="equation">C<sub>i,0</sub> = χ<sub>0</sub> C<sub>a</sub></div>
+  <p>Here C<sub>a</sub> denotes the local canopy-air CO₂ value, <code>CanopyGasCO2_pft</code>. The routine can adjust this value relative to atmospheric CO₂ using canopy exchange. It stores the reference internal value in <code>LeafIntracellularCO2_pft</code>.</p>
+  <p>Actual internal CO₂ is subsequently diagnosed as the local variable <code>CO2X</code> during photosynthesis. Its iteration imposes a quasi-steady diffusion–fixation balance; it does not integrate a physical CO₂ storage equation in time.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a>, approximately lines 246–264; <a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a>, lines 163–185.</p>
+
+  <h2>How the reference state influences transpiration</h2>
+  <p>Transpiration does not directly use C<sub>i</sub>/C<sub>a</sub>. Instead, the prescribed ratio helps establish its baseline resistance through reference photosynthetic demand:</p>
+  <div class="equation">
+    A<sub>0</sub> = f(C<sub>i,0</sub>, light, temperature, nutrients)<br>
+    g<sub>sc,0</sub> ≈ A<sub>0</sub> / (C<sub>a</sub> − C<sub>i,0</sub>)
+  </div>
+  <p>The conductance equation is schematic: the implementation includes air concentration, canopy area and radiation factors, time conversion, resistance limits, and conversion between CO₂ and water-vapor resistance.</p>
+  <p><code>PhotoActivePFT</code> accumulates reference fixation as <code>CH2O</code> and uses it with <code>DiffCO2Atmos2Intracel_pft</code> to obtain <code>CanopyMinStomaResistH2O_pft</code>. Thus CO₂, light, temperature, and nutrient feedback already influence the resistance used for water loss.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a>, approximately lines 274–319 and 1036–1057.</p>
+
+  <h2>Hydraulic feedback is present</h2>
+  <p>During the canopy energy–water calculation, turgor modifies the baseline water-vapor resistance:</p>
+  <div class="equation">r<sub>s</sub> = r<sub>s,0</sub> + (r<sub>cuticle</sub> − r<sub>s,0</sub>) exp(−Ψ<sub>turgor</sub> / RCS)</div>
+  <p>Transpiration changes tissue water storage and canopy water potential. Turgor and resistance are recalculated, affecting the next transpiration estimate. Canopy temperature is also solved as part of this feedback.</p>
+  <p>The water-balance solver calls <code>StomatalDynamics</code> during its final convergence sequence, refreshing the reference photosynthesis and baseline resistance calculation. This is not a direct feedback from the photosynthesis solver’s converged <code>CO2X</code>.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, approximately lines 569–586; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, lines 815–820, 1048–1053, and 1101–1105.</p>
+
+  <h2>What the photosynthesis iteration solves</h2>
+  <p>For each illuminated leaf class, the photosynthesis routine constructs resistance from reference fixation and water stress. It then holds the resulting conductance fixed while adjusting internal CO₂ until:</p>
+  <div class="equation">A<sub>actual</sub>(C<sub>i</sub>) = g<sub>sc</sub> (C<sub>a</sub> − C<sub>i</sub>)</div>
+  <p>The biochemical side includes light and CO₂ limitations, nutrient feedback, and non-stomatal water-stress effects. The converged internal value is not written back to the canopy transpiration resistance.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a>, approximately lines 130–185, with an analogous C4 mesophyll iteration later in the module.</p>
+
+  <h2>Why feeding Ci back is not sufficient</h2>
+  <p>If conductance is simply recomputed from the converged assimilation and internal CO₂:</p>
+  <div class="equation">g<sub>sc,new</sub> = A<sub>actual</sub> / (C<sub>a</sub> − C<sub>i,actual</sub>) = g<sub>sc</sub></div>
+  <p>It recovers the conductance used in the original balance, up to numerical tolerance and provided the gradient is nonzero. This algebraic substitution supplies no additional physiological regulation.</p>
+  <p>A new feedback would require a further rule selecting stomatal opening, such as a guard-cell response to internal CO₂ or an objective balancing carbon gain and hydraulic cost. Merely inserting the iterated Ci value into a conductance reconstruction does not provide such a rule.</p>
+
+  <h2>Potential limitations and a useful audit</h2>
+  <p><strong>Interpretation:</strong> EcoSIM’s regulation is based on reference photosynthetic demand plus turgor, while actual stressed assimilation is diagnosed using the resulting leaf resistance. This could miss some stomatal adjustments to actual biochemical demand. Its importance and direction require testing; the code structure alone does not establish a transpiration bias.</p>
+  <p>A separate issue is scaling: transpiration uses an aggregated canopy resistance, while photosynthesis constructs resistances for individual leaf classes. Bounds, area factors, and aggregation can affect whether the two calculations imply compatible total conductances.</p>
+  <p>A useful next audit would compare area- and unit-consistent water-vapor and CO₂ conductances under the same light, temperature, CO₂, and water status, first for a uniform canopy and then for mixed sunlit and shaded leaves. It should distinguish scaling differences from the assumed stomatal regulation law.</p>
+  <p class="note"><strong>Conclusion:</strong> direct feedback from converged Ci to transpiration is absent, but photosynthetic and hydraulic feedbacks are present. Whether the main deficiency is regulation, aggregation, or neither remains an open diagnostic question—not an established bug.</p>
+
+  <h2>Related notes</h2>
+  <ul>
+    <li><a href="transpiration.html">Transpiration calculation</a></li>
+    <li><a href="canopy_water_potential.html">Canopy water potential and tissue water storage</a></li>
+    <li><a href="leaf_respiration.html">Leaf CO₂, compensation point, and respiration</a></li>
+  </ul>
+  <p class="meta">The current Ci_mesophyll_pft history output stores the reference internal concentration, not the locally converged CO2X. Source line numbers may shift as the code changes. No numerical conductance-consistency audit has been performed for this note.</p>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cyanobacteria in EcoSIM</title><style>
+:root{--ink:#203b3a;--muted:#56706d;--green:#086d61;--paper:#f3f6f2;--line:#ccdcd5;--light:#e3efe7;--amber:#87530b}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:48px 30px 75px}header{padding-bottom:28px;border-bottom:3px solid var(--green)}h1{font-size:clamp(2.4rem,6vw,3.8rem);line-height:1.08;letter-spacing:-.045em;margin:18px 0}h2{font-size:1.65rem;line-height:1.3;margin:0 0 18px}h3{line-height:1.35}.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:.8rem;color:var(--green);font-weight:750}.lead{font-size:1.2rem;max-width:850px}.meta,.source{font-size:.85rem;color:var(--muted)}a{color:var(--green);text-underline-offset:3px}nav{display:flex;gap:8px 22px;flex-wrap:wrap;margin-top:24px}nav a{font-size:.9rem}section{margin-top:44px;scroll-margin-top:22px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card,.metric{background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px;min-width:0}.card{border-top:4px solid var(--green)}.card h3{margin:5px 0 10px}.card p{margin:8px 0}.tag{font-weight:700;font-size:.8rem;color:var(--green)}code{font:.86em ui-monospace,monospace;overflow-wrap:anywhere}.formula{background:#1c3f3a;color:#fff;padding:20px 24px;border-radius:10px;font:14px/1.8 ui-monospace,monospace;overflow-x:auto}.formula pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}.note,.caveat{padding:18px 22px;border-radius:8px;background:var(--light);margin:22px 0}.caveat{background:#fff0d7;border-left:4px solid #ba801d}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.92rem}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--line)}th{background:var(--light)}td:first-child{min-width:150px}ol li{margin:12px 0}.sequence{counter-reset:step;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:24px 0}.sequence div{padding:18px;background:#e4eee8;border-radius:8px}.sequence b{display:block;color:var(--green)}.sequence b:before{counter-increment:step;content:counter(step) ' / ';font-size:.8rem}.network{background:white;border:1px solid var(--line);padding:22px;border-radius:10px}.network svg{width:100%;height:auto;display:block}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 30px;margin:24px 0}.controls label{font-size:.92rem}.controls input{display:block;width:100%;accent-color:var(--green);margin-top:10px}.controls output{font-weight:750}.results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.metric strong{display:block;font-size:1.85rem;line-height:1.3;color:var(--green)}.metric small{font-size:.83rem}.explorer{background:#e4eee8;padding:26px;border-radius:12px}.explorer h3{margin-top:0}.status{font-size:.95rem;min-height:3em}footer{border-top:1px solid var(--line);margin-top:45px;padding-top:18px;color:var(--muted);font-size:.85rem}@media(max-width:720px){main{padding:28px 18px 45px}.cards,.sequence,.controls,.results{grid-template-columns:1fr}.formula{padding:16px;font-size:12px}.explorer{padding:18px}.network{padding:8px}th,td{padding:10px}nav{gap:8px 15px}}@media print{body{background:white;font-size:10.5pt}main{max-width:none;padding:0}nav,.controls{display:none}section{margin-top:25px}.formula{background:#f1f1f1;color:#111}.card,.note,.caveat,.network,.metric,tr{break-inside:avoid}h2,h3{break-after:avoid}a{color:inherit}.explorer{background:#f2f2f2}header{border-bottom-width:1px}}
+
+:root{--ink:#173d46;--muted:#526e77;--green:#087e89;--paper:#f2f7f6;--line:#c6dcdd;--light:#e0f0ee}.formula{background:#173e48}.sequence div,.explorer{background:#e0efee}.cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}.number{font-variant-numeric:tabular-nums}a:focus-visible,input:focus-visible{outline:3px solid #c38626;outline-offset:4px}.equation{font-size:1.1rem;font-weight:650}.network{overflow:auto}.network svg{min-width:620px}.results{grid-template-columns:repeat(3,minmax(0,1fr))}summary{cursor:pointer;font-weight:700;color:var(--green)}details{margin:20px 0}caption{text-align:left;color:var(--muted);padding:10px 0}input[type=range]{min-height:24px}@media(max-width:720px){.cards.two,.results{grid-template-columns:1fr}.metric strong{font-size:1.5rem}}@media print{.formula{background:#eee;color:#111}.network svg{min-width:0}.explorer{break-inside:avoid}}
+</style></head><body><main>
+<header><div class="eyebrow">EcoSIM · Process knowledge</div>
+<h1>Cyanobacteria:<br>light, maintenance, and residual growth</h1>
+<p class="lead">EcoSIM represents cyanobacteria as mixotrophic microbes: they fix CO₂ using light, consume dissolved organic carbon and acetate, and can fix N₂. Photosynthetic fixation supplies maintenance first. Carbon left after respiratory costs is available for growth.</p>
+<p class="meta">Carbon/O₂ guide originally prepared 29 September 2026 · PAR documentation updated 30 September 2026 against <code>f0314ff4</code> · <code>solphys</code>. The light section reflects the incident-PAR and sequential shading implementation in <code>MicBGCAPI.F90</code>.</p>
+<nav aria-label="Contents"><a href="#overview">Overview</a><a href="#state">State &amp; initialization</a><a href="#light">Light &amp; environment</a><a href="#carbon">Carbon allocation</a><a href="#oxygen">Oxygen</a><a href="#nitrogen">N₂ fixation</a><a href="#nutrients">Nutrients &amp; turnover</a><a href="#diagnostics">Diagnostics</a><a href="#parameters">Parameters</a><a href="#explorer">Budget explorer</a><a href="#sources">Source map</a></nav></header>
+<section id="overview"><h2>1. Three coupled resources</h2>
+<div class="cards"><article class="card"><div class="tag">CARBON</div><h3>Two entry routes</h3><p>CO₂ fixation supplies photosynthate. DOC and acetate supply organic C. The organic donor pools are debited separately from photosynthetic input.</p></article><article class="card"><div class="tag">OXYGEN</div><h3>Production and consumption</h3><p>Photosynthetic O₂ supports respiration internally. Only the remaining demand competes for soil O₂; unused photosynthetic O₂ is exported.</p></article><article class="card"><div class="tag">NUTRITION</div><h3>Growth needs N and P</h3><p>N₂ fixation can supplement nitrogen uptake at a carbon cost. Phosphorus must still come from organic or mineral nutrient pools.</p></article></div>
+<div class="note"><strong>The central allocation rule:</strong> photosynthetic fixation is the maximum photosynthetic C supply, not a prescribed respiration flux. The code uses <code>min(maintenance demand, fixation)</code> for photosynthate-supported maintenance. It does <strong>not</strong> apply the organic-C respiration fraction <code>ENFX</code> to the remaining photosynthate.</div>
+<div class="network"><svg viewBox="0 0 960 300" role="img" aria-labelledby="flow-title flow-desc"><title id="flow-title">Cyanobacterial carbon and oxygen pathways</title><desc id="flow-desc">Light and dissolved carbon dioxide supply photosynthetic carbon. It first supports maintenance and then nitrogen fixation and growth. DOC and acetate supply organic metabolism. Photosynthetic oxygen supports respiration, and unused oxygen is released to the soil.</desc><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#087e89"/></marker></defs><g fill="#e0f0ee" stroke="#c6dcdd"><rect x="15" y="35" width="190" height="60" rx="9"/><rect x="290" y="35" width="230" height="60" rx="9"/><rect x="620" y="20" width="320" height="95" rx="9"/><rect x="15" y="210" width="190" height="60" rx="9"/><rect x="290" y="210" width="230" height="60" rx="9"/><rect x="620" y="210" width="320" height="60" rx="9"/></g><g font-family="system-ui,sans-serif" text-anchor="middle" fill="#173d46" font-size="20"><text x="110" y="72">Light + CO₂</text><text x="405" y="72">Photosynthetic C</text><text x="780" y="57">Maintenance first</text><text x="780" y="86" font-size="17">then N₂ fixation &amp; growth</text><text x="110" y="247">DOC + acetate</text><text x="405" y="247">Organic metabolism</text><text x="780" y="247">Respiration / O₂ exchange</text></g><g fill="none" stroke="#087e89" stroke-width="3" marker-end="url(#arrow)"><path d="M205 65H278"/><path d="M520 65H608"/><path d="M205 240H278"/><path d="M520 240H608"/><path d="M520 240L615 107"/><path d="M405 96V155H780V198"/></g><text x="420" y="143" font-family="system-ui,sans-serif" fill="#526e77" font-size="16">photosynthetic O₂</text></svg></div>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">CyanoBacteriaCatabolism</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">shared respiration and anabolic routines</a>.</p></section>
+<section id="state"><h2>2. Where cyanobacteria live in the model</h2>
+<p>The functional-group identifier is <code>mid_HeterMixtCynoBacter = 8</code>, with one guild by default. Cyanobacteria use the <strong>heterotrophic</strong> state and dispatch machinery despite their photosynthetic capability. The loop over <code>NGL</code> supports multiple guilds within each organic-matter complex <code>K</code>.</p>
+<p><code>mBiomeHeter(element, MID, K)</code> stores C, N, and P in three living compartments: kinetic, structural, and reserve. <code>MID</code> combines compartment and guild indices. Metabolic capacity uses <code>OMActHeter</code>, derived from kinetic C divided by its allocation fraction, rather than simply summing all three C pools. Nonpositive active biomass skips catabolism.</p>
+<div class="sequence"><div><b>Prepare</b>Stage active biomass, nutrient status, environment, competition, and maintenance demand.</div><div><b>Metabolize</b>Calculate photosynthesis and potential organic respiration; apply O₂ supply.</div><div><b>Allocate</b>Reserve maintenance, calculate N₂ fixation and donor-specific organic uptake.</div><div><b>Update</b>Update reserves, structural/kinetic biomass and residues; export gas and nutrient fluxes.</div></div>
+<h3>Initialization</h3><p><code>InoculateCyanoBacter</code> initializes cyanobacteria in litter (<code>L = 0</code>) and the first active soil layer (<code>L = NU</code>) for complexes with positive organic substrate. It distributes <code>CyanoInocC</code> using the compartment/complex allocation <code>OMCI(M,K)/KL</code>, divides among guilds, and assigns N and P from target ratios. By default it replaces those cyanobacterial pools; an optional argument permits addition.</p>
+<p><code>CyanoInocC</code> defaults to 0.01 g C m⁻² as declared in the parameter module. The separate <code>CyanoInoc_depth = 0.001 m</code> parameter is currently not consumed by the inoculation routine: it does not establish an explicit 1 mm living layer.</p>
+<p class="source">Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">group and guild definitions</a>; <a href="../f90src/Microbial_bgc/Layers_Micmodel/InitSOMBGCMod.F90">inoculation</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">active biomass and StageFuncGuild</a>.</p></section>
+<section id="light"><h2>3. Light, CO₂, water, and temperature set fixation</h2>
+<p>Let <code>I</code> be incident PAR at the layer’s upper interface in μmol photons m⁻² s⁻¹; <code>B</code> the nonnegative product of active C and the N/P stoichiometric multiplier; and <code>E</code> the growth environment multiplier. Carbon fluxes below share the model layer's mass-per-hour basis; they should not be read as per-individual rates or automatically as per-m² output.</p>
+<div class="formula"><pre>fPAR = max(0, α I (1 − β I) / (1 + γ I))
+fCO₂ = CCO2S / (CCO2S + CCKM)
+rphoto = fPAR × fCO₂ × E                       [h⁻¹]
+P = RCO2FixCyano = rphoto × B                  [C mass h⁻¹]
+
+α = 1.1 × 10⁻⁴ h⁻¹ per unit PAR
+β = 3.3 × 10⁻⁴ per unit PAR; γ = 1.5 × 10⁻³ per unit PAR
+E = WSensGroHeter × TSensGroHeter
+WSensGroHeter = exp[0.2 × max(PSISoilMatricP, −500)]</pre></div>
+<p>In darkness, fixation is zero. The empirical light function rises and then declines; its nonnegative clipping gives zero at and above roughly 3030 μmol photons m⁻² s⁻¹. This describes the coded parameterization. The CO₂ term is a concentration saturation response, not a separate cap on the available CO₂ mass within this routine. Temperature uses the common microbial growth response. Nutrient status multiplies capacity through <code>min(FCN,FCP)</code>, whose component multipliers are bounded between 0.5 and 1.</p>
+<h3>How PAR is passed through the column</h3>
+<p><code>MicrobeModel</code> processes the column from the surface downward. <code>WatsubMod</code> has already weighted the litter-covered and bare-soil PAR streams by their surface-cover fractions. Their sum, divided by cell area, supplies <code>PAR_RAD_incident</code> to <code>MicBGC1Layer</code>; the microbial caller does not apply those cover fractions again.</p>
+<div class="formula"><pre>A = cell area
+Iincident = (Slitter + Sbare) / A
+
+1. Run the current layer’s microbial biology using Iincident.
+2. Sum cyanobacterial C after that biological update: Bcyano.
+3. τ = k × layer thickness + k_cyanoC × Bcyano / A
+4. T = sfexp(−τ)                       [exponential transmission]
+
+Litter: Slitter,out = Slitter × T
+        Sbare,out  = Sbare             [bare-soil stream bypasses litter]
+Soil:   Slitter,out = Slitter × T
+        Sbare,out  = Sbare × T
+
+Inext = (Slitter,out + Sbare,out) / A</pre></div>
+<p>The streams <code>Slitter</code> and <code>Sbare</code> above denote the cell-total PAR contributions; division by <code>A</code> produces irradiance per unit area. Litter uses <code>k_litr = 250 m⁻¹</code>. Soil uses <code>CalcKSoilPAR</code>, which depends on organic C and texture and is bounded between 800 and 10,000 m⁻¹. Cyanobacterial self-shading uses <code>k_cyanoC = 0.1 m² g⁻¹ C</code>. The code evaluates transmission with the protected exponential <code>sfexp</code>.</p>
+<p><strong>The current layer receives incoming light before its own attenuation.</strong> Its updated cyanobacterial biomass then determines shading of deeper layers. This is the intended sequential surface-to-depth coupling. The nonnegative <code>PAR_RAD_vr</code> diagnostic records incident PAR for the active layer. Microbial biology still runs at night with zero PAR.</p>
+<h3>Incident, mean, and absorbed light are different quantities</h3>
+<p>For a single attenuating stream with upper-interface irradiance <code>I₀</code>, bottom transmission is <code>I₀ exp(−τ)</code>; the irradiance removed from that stream is <code>I₀[1−exp(−τ)]</code>. A layer mean under uniform exponential attenuation would instead be <code>I₀[1−exp(−τ)]/τ</code> (approaching <code>I₀</code> as τ approaches zero). The current microbial calculation uses incident irradiance, not either of these latter quantities.</p>
+<p>This represents cyanobacterial exposure at the layer’s upper interface. If cyanobacteria were instead represented as distributed throughout a thick layer, their exposure and nonlinear photosynthetic response would need a corresponding depth-distribution assumption. That is a modeling choice to assess for the application, rather than an error in the adopted surface-to-depth update.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">fPAR_func and catabolism</a>; <a href="../f90src/APIs/MicBGCAPI.F90">MicrobeModel incident PAR and sequential shading</a>; <a href="../f90src/Microbial_bgc/Layers_Micmodel/SoilPARAttenuationMod.F90">CalcKSoilPAR</a>; <a href="../f90src/Minimath/MiniMathMod.F90">sfexp</a>.</p></section>
+<section id="carbon"><h2>4. Maintenance first; growth is the residual</h2>
+<p>Maintenance demand <code>M</code> is calculated before catabolism from kinetic N and active structural N, with compartment factors, temperature, and a pH multiplier. Photosynthetic maintenance respiration is <code>Rph = min(M,P)</code>. If fixation cannot meet maintenance, organic respiration supplies the remaining requirement.</p>
+<div class="formula"><pre>pH multiplier = 1 + max(0, 0.25 × (6.5 − pH))
+M = RMOM × temperature response × pH multiplier
+    × [kinetic N × RMOMK(1) + active structural N × RMOMK(2)]
+
+Rph = min(M, P)
+Remaining maintenance demand = max(0, M − P)</pre></div>
+<h3>Potential organic respiration</h3>
+<p>DOC and acetate metabolism is downregulated as the photosynthetic rate rises. Its additional day/night factor is 0.1 with positive PAR and 0.01 in darkness. The classification depends on PAR, even if the high-light clamp makes fixation zero.</p>
+<div class="formula"><pre>f_low_photo = 0.006 / (rphoto + 0.006)          (1 in darkness)
+V = B × VMXO × E × f_low_photo × day/night factor
+
+Hd,pot = min(DOC pool × FOQC × ENFX,
+             V × CDOC/(CDOC + OQKM) × FOCA)
+Ha,pot = min(acetate pool × FOQA × EO2A,
+             V × CAcet/(CAcet + OQKA) × FOAA)
+Hpot = Hd,pot + Ha,pot
+wd = Hd,pot/Hpot; wa = Ha,pot/Hpot             (when Hpot &gt; 0)
+H = Hpot × oxygen limiter</pre></div>
+<p><code>FOCA/FOAA</code> describe the DOC/acetate composition of the dissolved substrate. <code>FOQC/FOQA</code> allocate donor pools using previous-hour guild/ecosystem demand, with a minimum <code>FMN</code> share; active-biomass fractions provide the fallback. These lagged, floored shares are not a simultaneous normalized allocation. <code>wd/wa</code>, stored as <code>FGOCP/FGOAP</code>, partition <strong>organic respiration only</strong>.</p>
+<h3>Convert respiration to actual donor withdrawal</h3>
+<p>For the simplest case without N₂ fixation, define organic maintenance <code>Mh = min(H,max(0,M−P))</code> and organic growth respiration <code>Hg = H−Mh</code>. Each donor retains its own respiration fraction:</p>
+<div class="formula"><pre>Ud = wd × (Mh + Hg/ENFX)                      DOC-C withdrawal
+Ua = wa × (Mh + Hg/EO2A)                      acetate-C withdrawal
+R  = Rph + H                                 gross primary respiration
+Utotal = P + Ud + Ua                          total C input
+G = Utotal − R                               net C gain before turnover
+CO₂ release = R − P                          negative = net uptake
+
+Carbon balance: G + CO₂ release − Ud − Ua = 0</pre></div>
+<p>Maintenance C is respired without earning growth-associated uptake. Organic growth respiration is converted to uptake through <code>ENFX</code> or <code>EO2A</code>; the uptake left after respiration enters microbial reserves. All photosynthetic fixation is credited to C input, including when maintenance consumes it completely. <code>DOMUptk4GrothHeter(C,...)</code> therefore includes photosynthetic C despite its name.</p>
+<div class="cards two"><article class="card"><h3>Photosynthesis alone</h3><p><code>P = 0.10</code>, <code>M = 0.04</code>: respiration is 0.04 and growth supply is 0.06. Net CO₂ release is −0.06. No extra <code>ENFX</code> charge is applied to that 0.06.</p></article><article class="card"><h3>Maintenance shortage</h3><p><code>P = 0.03</code>, <code>M = 0.05</code>, with no organic supply: photosynthate respiration is 0.03, new C gain is zero, and the 0.02 deficit enters the shared starvation calculation.</p></article></div>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">CalcRespMaintHeter</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">potential respiration</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">GatherHetertrophAnabolicFlux and biomass update</a>.</p></section>
+<section id="oxygen"><h2>5. Internal O₂ supply and signed external exchange</h2>
+<p>The code uses <code>q = 2.667</code> mass units of O₂ per unit C for the photosynthesis/respiration coupling. Photosynthetic O₂ first covers photosynthate respiration; the surplus can support organic respiration. Only the remaining positive demand enters the common soil O₂ uptake solver.</p>
+<div class="formula"><pre>S = q × max(0, P − Rph)                       internal O₂ surplus
+Dext = max(0, q × Hpot − S)                   external demand
+U = realized external uptake from the soil O₂ solver
+L = min(1, (U + S)/(q × Hpot))                when Hpot &gt; 0
+H = Hpot × L
+
+O₂ release = max(0, S − q × Hpot)
+O₂net = U − O₂ release                       positive = external uptake
+O₂net = q × (R − P)                          primary-metabolism identity</pre></div>
+<p><code>OxyLimterHeter</code> measures realized versus potential <strong>organic respiration</strong> after including internal O₂: 1 means unrestricted, and 0 means unsupported. Organic respiration can therefore continue without external O₂ uptake when photosynthesis supplies enough oxygen. It is not the ratio of signed net O₂ exchange to total gross demand.</p>
+<p>The generic uptake solver treats water-film diffusion, gas–liquid exchange, competition, and dissolved availability over transport substeps. Cyanobacterial O₂ production is handled outside that nonnegative uptake calculation. Unused production makes <code>RO2UptkHeter</code> negative and is also subtracted from <code>REcoUptkSoilO2M</code>, distributed across the hourly transport substeps. The transport interface retains that sign as gas production.</p>
+<p>Gross oxygen demand and consumption remain separate diagnostics. The nonnegative external demand retained in <code>RO2DmndHetert</code> is used for subsequent competition; it must not be replaced by signed net exchange. The identity above covers the primary pathway and the explicit N₂-fixation extension below. Shared biomass starvation and turnover are separate accounting steps.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">O₂ demand, limiter, and release</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">AerobicHeterO2Uptake</a>; <a href="../f90src/Transport/Nonsalt/InitNoSaltTransportMod.F90">gas flux routing</a>.</p></section>
+<section id="nitrogen"><h2>6. N₂ fixation spends available carbon and oxygen</h2>
+<p>Fixation responds to reserve N deficiency, dissolved N₂, and available metabolic capacity. For cyanobacteria, that capacity combines organic growth respiration with photosynthetic C left after maintenance. Consequently, <code>RGrowthRespHeter</code> in this branch includes unrespired photosynthate and is not itself a CO₂ emission.</p>
+<div class="formula"><pre>Hg = max(0, R − M)                           before additional N₂-fixation respiration
+Pg = max(0, P − Rph)
+A = Hg + Pg
+Q = max(0, reserve C × target N:C − reserve N) / EN2F(8)
+Ftrial = min[A × Q/(A + Q) × CZ2GS/(CZ2GS + ZFKM),
+             OMGR × reserve C]               when A is positive
+
+Forg = min(Hg, Ftrial)
+Fphoto = min(Pg, max(0, −O₂net)/q, max(0, Ftrial − Forg))
+F = Forg + Fphoto
+N₂-N fixation = F × EN2F(8)</pre></div>
+<p><code>Forg</code> redirects organic growth respiration already counted in <code>R</code>. It does not respire that carbon a second time. <code>Fphoto</code> is additional photosynthate respiration and is limited by both residual C and unused photosynthetic O₂; this stage does not call a second external O₂ uptake solve.</p>
+<p>The code adds <code>Fphoto</code> once to gross respiration and net CO₂ release, and adds <code>q × Fphoto</code> to net O₂ uptake and its substep budget. It updates <code>fPhotoR</code> accordingly. Donor withdrawals become <code>Ud = wd × [Mh + Forg + (Hg−Forg)/ENFX]</code> and the analogous acetate expression with <code>EO2A</code>. Thus organic C used for fixation earns no growth increment. Photosynthetic C gain is reduced by <code>Fphoto</code>. The later biomass update bypasses the generic extra fixation-respiration debit for cyanobacteria, avoiding double counting.</p>
+<p class="source">Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">GatherHeterotrophRespiration, GatherHetertrophAnabolicFlux, and heterotrophic biomass update</a>.</p></section>
+<section id="nutrients"><h2>7. Nutrients, reserve allocation, and losses</h2>
+<p>Organic N and P uptake accompanies organic C uptake, using dissolved substrate N:C and P:C ratios and the nutrient-status factors. Each is capped by its allocated DON or DOP pool. The shared mineral-nutrient routines provide NH₄, NO₃, and phosphate exchange, including band/nonband compartments. N₂ fixation supplements N; it supplies no phosphorus.</p>
+<p>Net assimilated C enters the reserve compartment along with associated N and P. Transfer from reserves to kinetic and structural biomass depends on <code>OMGR</code>, the growth environment multiplier, allocation fractions, and nutrient stoichiometry. Positive C input therefore does not imply that all of it immediately becomes active biomass.</p>
+<p>If realized respiration cannot cover maintenance, the remaining deficit drives the shared starvation pathway. Mortality and starvation redistribute C/N/P into recycled material and microbial residue pools; some recycled C is released as CO₂. These later terms must be included when comparing complete biomass and gas budgets. The cyanobacterial catabolic routine itself sets CH₄, acetate, and H₂ production to zero.</p>
+<p>The model represents functional-group metabolism and shared microbial pools. This implementation does not resolve individual cells, filament geometry, heterocysts, or explicit oxygen protection of nitrogenase.</p>
+<p class="source">Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">mineral nutrition, reserve allocation, starvation, and residue aggregation</a>.</p></section>
+<section id="diagnostics"><h2>8. Read the diagnostics by their equations</h2><div class="table-wrap"><table><caption>Internal variables for one guild and organic complex; not all are exposed as standalone history fields.</caption><thead><tr><th>Variable</th><th>Meaning in the cyanobacterial pathway</th></tr></thead><tbody>
+<tr><td><code>RCO2FixCyano</code></td><td>Gross photosynthetic C input, <code>P</code>.</td></tr>
+<tr><td><code>RespGrossHeter</code></td><td>Realized gross primary respiration, including added photosynthate respiration for N₂ fixation.</td></tr>
+<tr><td><code>RCO2ProdHeter</code></td><td>Already net of photosynthetic fixation for cyanobacteria: <code>R−P</code>. Negative denotes uptake.</td></tr>
+<tr><td><code>RO2UptkHeter</code></td><td>Signed external exchange: positive uptake, negative production.</td></tr>
+<tr><td><code>RO2Dmnd4RespHeter</code> / <code>RO2Uptk4RespHeter</code></td><td>Gross potential / actual respiratory O₂, including internally supplied oxygen. Used for aggregate limitation diagnostics.</td></tr>
+<tr><td><code>fPhotoR</code></td><td>Fraction of realized respiration supplied by photosynthate; updated after N₂ fixation.</td></tr>
+<tr><td><code>FGOCP</code> / <code>FGOAP</code></td><td>DOC / acetate fractions of organic respiration. Photosynthate is excluded from their denominator.</td></tr>
+<tr><td><code>DOMUptk4GrothHeter(C,...)</code></td><td>Total photosynthetic plus organic C input, including C later spent on maintenance.</td></tr>
+<tr><td><code>tRespGrossHeterUlm</code></td><td>Cyanobacterial contribution is <code>P + Hpot</code>: maximum respiratory C supply before allocation/O₂ limitation, not actual CO₂ output.</td></tr>
+<tr><td><code>ROQC4HeterMicrobAct</code></td><td>Activity proxy for substrate hydrolysis: potential organic capacity times the O₂ limiter, with DOC concentration unconstrained.</td></tr>
+</tbody></table></div><p>The API's <code>RCO2NetUptkMicb</code> uses positive uptake and therefore reverses the production sign during aggregation. <code>RO2UptkMicb</code> retains signed uptake. Check whether a requested output is a guild flux, an aggregate, or an area-normalized history variable before comparing magnitudes.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobeDiagTypes.F90">internal diagnostic types</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">aggregation</a>; <a href="../f90src/APIs/MicBGCAPI.F90">API exchange</a>.</p></section>
+<section id="parameters"><h2>9. Key parameters</h2><p>Values below are source defaults, not a claim about every case. Parameters read by <code>NitroPars</code> may be replaced by its input file; local constants in the cyanobacterial routine are hard-coded.</p><div class="table-wrap"><table><thead><tr><th>Parameter</th><th>Default</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>α, β, γ</code></td><td>1.1×10⁻⁴, 3.3×10⁻⁴, 1.5×10⁻³</td><td>Local light-response constants; units given in Section 3.</td></tr>
+<tr><td><code>K_low_photo</code></td><td>0.006 h⁻¹</td><td>Photosynthesis-dependent suppression of organic metabolism.</td></tr>
+<tr><td><code>f_cyno_heter</code></td><td>0.1 day / 0.01 dark</td><td>Local reduction of heterotrophic metabolic capacity.</td></tr>
+<tr><td><code>VMXO</code></td><td>0.125 h⁻¹</td><td>Maximum specific organic respiratory capacity before modifiers.</td></tr>
+<tr><td><code>OQKM / OQKA</code></td><td>12 / 12 g C m⁻³</td><td>DOC / acetate half-saturation concentrations.</td></tr>
+<tr><td><code>CCKM / ZFKM</code></td><td>0.15 g C m⁻³ / 0.14 g N m⁻³</td><td>Dissolved CO₂ / N₂ half-saturation concentrations.</td></tr>
+<tr><td><code>RMOM</code></td><td>0.010 g C g⁻¹ N h⁻¹</td><td>Specific maintenance respiration before modifiers.</td></tr>
+<tr><td><code>ENFX</code></td><td>75/(75+37.5) = 2/3</td><td>DOC growth-associated respiration fraction, not photosynthetic growth efficiency.</td></tr>
+<tr><td><code>EO2A</code></td><td>25/(25+33) ≈ 0.431</td><td>Acetate growth-associated respiration fraction.</td></tr>
+<tr><td><code>EN2F(8)</code></td><td>37.5/187.5 = 0.2 g N g⁻¹ C</td><td>N₂ fixation per carbon respiration allocated to fixation.</td></tr>
+<tr><td><code>OMGR</code></td><td>0.25 h⁻¹</td><td>Reserve mobilization/growth rate and reserve-C cap on fixation respiration.</td></tr>
+<tr><td><code>FMN</code></td><td>0.005</td><td>Minimum donor-competition share.</td></tr>
+<tr><td><code>k_litr / k_cyanoC</code></td><td>250 m⁻¹ / 0.1 m² g⁻¹ C</td><td>Litter attenuation and cyanobacterial self-shading in the column caller.</td></tr>
+</tbody></table></div><p class="source">Sources: <a href="../f90src/Modelpars/NitroPars.F90">kinetic and energy defaults</a>; <a href="../f90src/Modelpars/MicBGCPars.F90">group fixation yield</a>; <a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">local metabolic constants</a>.</p></section>
+<section id="explorer"><h2>10. Explore the primary carbon and O₂ budget</h2><div class="explorer"><h3>Change supply and maintenance</h3><p>This calculator implements the allocation algebra above, with default DOC/acetate respiration fractions. Inputs are arbitrary C mass h⁻¹ on a common spatial basis. Organic potential respiration is supplied after its donor cap. N₂ fixation, nutrient limitation, and biomass turnover are excluded. External O₂ fulfillment replaces the full soil transport solver.</p>
+<div class="controls">
+<label for="photo">Photosynthetic C, P: <output id="photo-v">0.100</output><input id="photo" type="range" min="0" max="0.2" step="0.001" value="0.1"></label>
+<label for="maint">Maintenance demand, M: <output id="maint-v">0.040</output><input id="maint" type="range" min="0" max="0.2" step="0.001" value="0.04"></label>
+<label for="organic">Potential organic respiration, Hpot: <output id="organic-v">0.020</output><input id="organic" type="range" min="0" max="0.2" step="0.001" value="0.02"></label>
+<label for="supply">External O₂ fulfillment: <output id="supply-v">100%</output><input id="supply" type="range" min="0" max="1" step="0.01" value="1"></label>
+<label for="docshare">DOC fraction of organic respiration: <output id="docshare-v">100%</output><input id="docshare" type="range" min="0" max="1" step="0.01" value="1"></label>
+</div><div class="results" aria-live="polite" aria-atomic="true">
+<div class="metric"><small>Net C gain before turnover</small><strong id="gain-result">0.07000</strong><small>C mass h⁻¹</small></div>
+<div class="metric"><small>Net CO₂ release (+) / uptake (−)</small><strong id="co2-result">−0.04000</strong><small>C mass h⁻¹</small></div>
+<div class="metric"><small>Net external O₂ uptake (+) / release (−)</small><strong id="o2-result">−0.10668</strong><small>O₂ mass h⁻¹</small></div>
+<div class="metric"><small>DOC + acetate withdrawal</small><strong id="donor-result">0.03000</strong><small>C mass h⁻¹</small></div>
+<div class="metric"><small>Unmet maintenance</small><strong id="deficit-result">0.00000</strong><small>C mass h⁻¹; starvation input</small></div>
+<div class="metric"><small>Organic respiration limiter</small><strong id="limiter-result">1.00000</strong><small>1 = unrestricted</small></div>
+</div><p class="status" id="budget-status">Carbon and primary O₂ budgets close.</p><noscript><p>JavaScript is disabled. The displayed values show P = 0.10, M = 0.04, Hpot = 0.02, and DOC-only organic metabolism.</p></noscript></div></section>
+<section id="sources"><h2>11. Source map and scope</h2><div class="table-wrap"><table><thead><tr><th>Source</th><th>What to inspect</th></tr></thead><tbody>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/CyanoBacteriaMod.F90">CyanoBacteriaMod.F90</a></td><td>Light response, photosynthetic maintenance, organic respiration, internal O₂ supply and net exchange.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a></td><td>Dispatch; N₂ fixation; donor withdrawal; reserve/biomass updates; nutrient and gas aggregation.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a></td><td>Maintenance, temperature/water response, competition, and external O₂ uptake.</td></tr>
+<tr><td><a href="../f90src/APIs/MicBGCAPI.F90">MicBGCAPI.F90</a></td><td>Layer forcing, PAR order, and exchanges with the rest of EcoSIM.</td></tr>
+<tr><td><a href="../f90src/Microbial_bgc/Layers_Micmodel/InitSOMBGCMod.F90">InitSOMBGCMod.F90</a></td><td>Initial cyanobacterial biomass and its compartment distribution.</td></tr>
+<tr><td><a href="../f90src/Modelpars/NitroPars.F90">NitroPars.F90</a> · <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a></td><td>Parameter defaults, group IDs, guilds, stoichiometry and energy coefficients.</td></tr>
+</tbody></table></div>
+<p>This guide follows the implemented equations and their current carbon/O₂ corrections. It separates the primary metabolic budget from subsequent starvation and residue processing; a complete ecosystem balance also needs transport and those shared updates. Related guides: <a href="nitrifiers.html">nitrifiers</a> and <a href="methanotrophs.html">methanotrophs</a>.</p></section>
+<footer>EcoSIM knowledge · Standalone, offline HTML · Source links are relative to <code>solphys/ecosim_knowledge/</code>. Equations use compact explanatory symbols; the source map identifies the corresponding implementation.</footer>
+</main><script>
+const ids=['photo','maint','organic','supply','docshare'];
+function updateBudget(){
+ const [p,m,hp,f,w]=ids.map(id=>Number(document.getElementById(id).value));
+ ids.forEach((id,i)=>document.getElementById(id+'-v').textContent=i<3?[p,m,hp][i].toFixed(3):Math.round([f,w][i-3]*100)+'%');
+ const q=2.667,etaD=2/3,etaA=25/58,rph=Math.min(p,m),s=q*(p-rph),d=Math.max(0,q*hp-s),u=d*f;
+ const l=hp>0?Math.min(1,(u+s)/(q*hp)):1,h=hp*l,r=rph+h,mh=Math.min(h,Math.max(0,m-p)),hg=h-mh;
+ const ud=w*(mh+hg/etaD),ua=(1-w)*(mh+hg/etaA),donor=ud+ua,g=p+donor-r,co2=r-p,o2=u-Math.max(0,s-q*hp),deficit=Math.max(0,m-r);
+ const vals={gain:g,co2:co2,o2:o2,donor:donor,deficit:deficit,limiter:l};
+ Object.entries(vals).forEach(([id,v])=>document.getElementById(id+'-result').textContent=(Math.abs(v)<5e-9?0:v).toFixed(5).replace('-','−'));
+ const residual=g+co2-donor,oxyResidual=o2-q*co2;
+ document.getElementById('budget-status').textContent='Carbon residual: '+residual.toExponential(1)+'; O₂ residual: '+oxyResidual.toExponential(1)+'. '+(deficit>1e-9?'Unmet maintenance would enter the model’s starvation calculation.':'Maintenance is supplied.');
+ return {g,co2,o2,donor,deficit,l,residual,oxyResidual};
+}
+ids.forEach(id=>document.getElementById(id).addEventListener('input',updateBudget));updateBudget();
+</script></body></html>

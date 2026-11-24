@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leaf CO₂ and respiration in EcoSIM</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .equation, .note { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #ccd8cf; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Leaf CO₂ and respiration in EcoSIM</h1>
+  <p class="meta">Code-based knowledge note · 11 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>EcoSIM’s C3 CO₂ compensation point accounts for photorespiratory carbon loss. Maintenance and growth respiration are calculated separately.</strong> A conceptual leaf respiration term, R<sub>d</sub>, can include respiration supporting both maintenance and growth; it should not be interpreted as maintenance respiration alone.</p>
+
+  <h2>Three processes to distinguish</h2>
+  <table>
+    <thead><tr><th>Process</th><th>Meaning</th><th>Representation in EcoSIM</th></tr></thead>
+    <tbody>
+      <tr><td>Photorespiration</td><td>Carbon loss associated with Rubisco oxygenation.</td><td>Included through the compensation-point correction in C3 fixation equations.</td></tr>
+      <tr><td>Maintenance respiration</td><td>Respiratory carbon expenditure supporting existing tissue.</td><td>Calculated separately using temperature and plant structural nitrogen.</td></tr>
+      <tr><td>Growth respiration</td><td>Respiratory carbon expenditure associated with producing new biomass.</td><td>Calculated separately with carbon and nutrient constraints and growth yields.</td></tr>
+    </tbody>
+  </table>
+  <p>See <a href="../f90src/Plant_bgc/PlantBranchMod.F90">PlantBranchMod.F90</a>, approximately lines 3129–3213, for shoot maintenance and growth respiration calculations. These are branch-level calculations, not a direct identification of a leaf-only R<sub>d</sub> variable.</p>
+
+  <h2>What the compensation point includes</h2>
+  <p>The C3 variable <code>CO2CompenPoint_node</code> is calculated as:</p>
+  <div class="equation">Γ* = ½ O₂ V<sub>o,max</sub> K<sub>c</sub> / (V<sub>c,max</sub> K<sub>o</sub>)</div>
+  <p>Here O₂ is dissolved oxygen concentration; V<sub>o,max</sub> and V<sub>c,max</sub> describe Rubisco oxygenation and carboxylation capacities; K<sub>c</sub> and K<sub>o</sub> are their kinetic constants. The code applies separate temperature responses to the two capacities. No mitochondrial respiration term appears in this calculation.</p>
+  <p>Thus Γ* represents the CO₂ concentration at which carboxylation balances photorespiratory CO₂ release, excluding other respiration. The asterisk makes that distinction explicit; the EcoSIM variable name itself does not include it. Source: <a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a>, lines 433–440.</p>
+
+  <h2>How R<sub>d</sub> relates to growth respiration</h2>
+  <p>A conceptual leaf carbon-exchange equation is:</p>
+  <div class="equation">A<sub>net</sub> = V<sub>c</sub> − ½ V<sub>o</sub> − R<sub>d</sub></div>
+  <p>In this notation, R<sub>d</sub> denotes non-photorespiratory leaf respiration. It can include respiration supporting both maintenance and growth. It is not synonymous with growth respiration alone, nor with maintenance respiration alone.</p>
+  <p>At dissolved CO₂ concentration C = Γ*, the carboxylation and photorespiratory terms cancel. If R<sub>d</sub> is positive, total net leaf uptake is still negative: A<sub>net</sub> = −R<sub>d</sub>. Consequently, the compensation point for total net exchange differs from Γ*.</p>
+  <p class="note"><strong>Implementation qualification:</strong> R<sub>d</sub> above is explanatory notation, not an explicit variable or subtraction in the inspected EcoSIM photosynthesis solver. EcoSIM handles maintenance and growth respiration in separate plant carbon calculations. Adding another R<sub>d</sub> subtraction without tracing those budgets could count respiration twice.</p>
+
+  <h2>Connection to internal CO₂ and photosynthesis</h2>
+  <p>EcoSIM sets a reference internal CO₂ value using the PFT trait:</p>
+  <div class="equation">C<sub>i,ref</sub> = (C<sub>i</sub>/C<sub>a</sub>)<sub>PFT</sub> C<sub>a</sub></div>
+  <p>This is <code>LeafIntracellularCO2_pft</code>, derived from <code>CanopyCi2CaRatio_pft</code> (the FCO2 trait). During C3 photosynthesis, a local value <code>CO2X</code> is adjusted until biochemical fixation approximately matches stomatal CO₂ supply:</p>
+  <div class="equation">A<sub>biochemical</sub>(C<sub>i</sub>) ≈ g<sub>CO₂</sub>(C<sub>a</sub> − C<sub>i</sub>)</div>
+  <p>The solver converts gaseous internal CO₂ into dissolved CO₂ using solubility, C = S(T)C<sub>i</sub>, and calculates:</p>
+  <div class="equation">
+    A<sub>c</sub> = V<sub>c,max</sub> max(0, C − Γ*) / (C + K<sub>m</sub>)<br>
+    A<sub>j</sub> = J max(0, C − Γ*) / (ELEC3 C + 10.5 Γ*)
+  </div>
+  <p>The smaller rate determines fixation after water-stress, nutrient-feedback, and scaling factors. This fixation already includes the photorespiratory correction, but the local calculation does not explicitly subtract R<sub>d</sub>. Higher internal CO₂ increases fixation with a saturating response when other conditions are fixed; stronger fixation can also draw internal CO₂ down when stomatal supply is fixed.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a>, line 260; <a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a>, lines 130–185. C4 mesophyll fixation uses a related balance with PEP carboxylation and a separate bundle-sheath calculation; the Γ* formula discussed above is the Rubisco/C3 compensation point.</p>
+
+  <h2>Output interpretation</h2>
+  <p><code>Ci_mesophyll_pft</code> is populated from the reference <code>LeafIntracellularCO2_pft</code>, rather than the locally converged <code>CO2X</code>. It therefore does not directly report the water-stressed internal CO₂ used by the local photosynthesis calculation. Source: <a href="../f90src/IOutils/HistDataType.F90">HistDataType.F90</a>, approximately line 4854.</p>
+  <p class="meta">Source line numbers may shift as the code changes. This note summarizes the inspected implementation and distinguishes conceptual notation from explicit model variables.</p>
+</body>
+</html>

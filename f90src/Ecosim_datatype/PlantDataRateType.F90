@@ -1,5 +1,6 @@
 module PlantDataRateType
-
+  ! Description:
+  ! Store plant exchange rates, accumulated diagnostics and restart transfer state.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
   use ElmIDMod
@@ -8,6 +9,7 @@ module PlantDataRateType
   implicit none
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
+
 
   real(r8),target,allocatable :: CanopyGrosRCO2_pft(:,:,:)                       !canopy autotrophic respiraiton, [gC d-2 h-1]
   real(r8),target,allocatable ::  Eco_NEE_col(:,:)                               !total canopy net CO2 exchange, [g d-2 h-1]
@@ -26,9 +28,14 @@ module PlantDataRateType
   real(r8),target,allocatable ::  RootH2PO4DmndBand_pvr(:,:,:,:,:)               !root uptake of H2PO4 band, [g d-2 h-1]
   real(r8),target,allocatable ::  RootH1PO4DmndSoil_pvr(:,:,:,:,:)               !HPO4 demand in non-band by each root population, [g d-2 h-1]
   real(r8),target,allocatable ::  RootH1PO4DmndBand_pvr(:,:,:,:,:)               !HPO4 demand in band by each root population, [g d-2 h-1]
-  real(r8),target,allocatable ::  LeafElmntRemobFlx_brch(:,:,:,:,:)              !element translocated from leaf during senescence, [g d-2 h-1]
-  real(r8),target,allocatable ::  PetolShethChemElmRemobFlx_brch(:,:,:,:,:)         !element translocated from sheath during senescence, [g d-2 h-1]
+  real(r8),target,allocatable ::  LeafElmntRemobFlx_brch(:,:,:,:,:)              !cached remobilizable leaf element mass, [g d-2]
+  real(r8),target,allocatable :: LeafSenescInitialElms_brch(:,:,:,:,:) !initial senescing leaf C/N/P mass; -1 means unset, [g d-2]
+  real(r8),target,allocatable ::  PetolShethChemElmRemobFlx_brch(:,:,:,:,:)         !cached remobilizable sheath element mass, [g d-2]
+  real(r8),target,allocatable :: PetolSenescInitialElms_brch(:,:,:,:,:) !initial senescing sheath/petiole C/N/P mass; -1 means unset, [g d-2]
   real(r8),target,allocatable ::  GrossCO2Fix_pft(:,:,:)                         !total gross CO2 fixation, [g d-2 h-1]
+  real(r8),target,allocatable :: GPP_DaySum_col(:,:) !current day's accumulated GPP, [g C d-2]
+  real(r8),target,allocatable :: GPP_PrevDay_col(:,:) !previous completed day's GPP; zero until available, [g C d-2]
+  integer,target,allocatable :: GPP_DayHours_col(:,:) !hours accumulated; partial startup days are not promoted, [-]
   real(r8),target,allocatable ::  GrossCO2Fix_CumYr_pft(:,:,:)                   !cumulative total gross CO2 fixation, [g d-2 ]
   real(r8),target,allocatable ::  LitrfallElms_pft(:,:,:,:)                  !total plant element LitrFall , [g d-2 ]
   real(r8),target,allocatable ::  PlantN2Fix_CumYr_pft(:,:,:)                    !total plant N2 fixation, [g d-2 ]
@@ -38,6 +45,7 @@ module PlantDataRateType
   real(r8),target,allocatable ::  LitrfalStrutElms_CumYr_pft(:,:,:,:)            !plant element LitrFall, [g d-2 h-1]
   real(r8),target,allocatable ::  LitrfallElms_pvr(:,:,:,:,:,:,:)            !plant LitrFall element, [g d-2 h-1]
   real(r8),target,allocatable ::  NetPrimProduct_pft(:,:,:)                      !Hourly net primary productivity, [g d-2 h-1]
+  real(r8),target,allocatable :: PTSHTR_pft(:,:,:)                               !root-shoot coupling conductance, [h-1]
   real(r8),target,allocatable ::  cumNPP_pft(:,:,:)                              !cumulative net primary productivity, [g d-2]
   real(r8),target,allocatable ::  ETCanopy_CumYr_pft(:,:,:)                      !total transpiration  <0 into atmosphere, [m d-2]
   real(r8),target,allocatable ::  CanopyRespC_CumYr_pft(:,:,:)                   !total autotrophic respiration, [g d-2 ]
@@ -82,10 +90,12 @@ module PlantDataRateType
   real(r8),target,allocatable ::  RootUptk_Nmin_cumYr_pft(:,:,:)                 !pft cumulative mineral N uptake, [gN d-2]
   real(r8),target,allocatable ::  RootUptk_Pmin_cumYr_pft(:,:,:)                 !pft cumulative mineral P uptake, [gP d-2]
   real(r8),target,allocatable ::  TPlantRootH2OUptake_col(:,:)                   !total root H2O uptake, [m3 d-2 h-1]
-  real(r8),target,allocatable ::  TWaterPlantRoot2Soil_vr(:,:,:)                 !current step vertical root water uptake profile, [m3 H2O d-2 h-1]
-  real(r8),target,allocatable ::  TWaterPlantRoot2SoilPrev_vr(:,:,:)             !previous step vertical root water uptake profile, [m3 H2O d-2 h-1]
-  real(r8),target,allocatable ::  THeatPlantRoot2SoilPrev_vr(:,:,:)              !previous step vertical root heat uptake profile, [MJ d-2 h-1]
-  real(r8),target,allocatable ::  THeatLossRoot2Soil_vr(:,:,:)                      !vertically profile of root heat uptake, [MJ d-2]
+  ! Accepted hourly exchanges, signed positive from plant to soil. ATS reads
+  ! these unchanged; the native soil solver apportions them over its substeps.
+  real(r8),target,allocatable ::  TWaterPlantRoot2Soil_vr(:,:,:)                 !accepted root water profile [m3/cell/h]
+  real(r8),target,allocatable ::  TWaterPlantRoot2SoilPrev_vr(:,:,:)             !root water actually applied to soil this hour [m3/cell/h]
+  real(r8),target,allocatable ::  THeatPlantRoot2SoilPrev_vr(:,:,:)              !matching applied root donor enthalpy [MJ/cell/h]
+  real(r8),target,allocatable ::  THeatLossRoot2Soil_vr(:,:,:)                   !matching accepted donor enthalpy profile [MJ/cell/h]
   real(r8),target,allocatable ::  THeatRootRelease_col(:,:)                      !total root heat relase, [MJ d-2 h-1]
   real(r8),target,allocatable ::  trcg_air2root_flx_vr(:,:,:,:)                  !total internal root gas flux , [g d-2 h-1]
   real(r8),target,allocatable ::  trcg_root_vr(:,:,:,:)                          !total root internal gas flux, [g d-2 h-1]
@@ -183,8 +193,13 @@ module PlantDataRateType
   allocate(RootH1PO4DmndSoil_pvr(jroots,JZ,JP,JY,JX));RootH1PO4DmndSoil_pvr=0._r8
   allocate(RootH1PO4DmndBand_pvr(jroots,JZ,JP,JY,JX));RootH1PO4DmndBand_pvr=0._r8
   allocate(LeafElmntRemobFlx_brch(NumPlantChemElms,MaxNumBranches,JP,JY,JX)); LeafElmntRemobFlx_brch=0._r8
+  allocate(LeafSenescInitialElms_brch(NumPlantChemElms,MaxNumBranches,JP,JY,JX)); LeafSenescInitialElms_brch=-1._r8
   allocate(PetolShethChemElmRemobFlx_brch(NumPlantChemElms,MaxNumBranches,JP,JY,JX)); PetolShethChemElmRemobFlx_brch=0._r8
+  allocate(PetolSenescInitialElms_brch(NumPlantChemElms,MaxNumBranches,JP,JY,JX)); PetolSenescInitialElms_brch=-1._r8
   allocate(GrossCO2Fix_pft(JP,JY,JX));    GrossCO2Fix_pft=0._r8
+  allocate(GPP_DaySum_col(JY,JX)); GPP_DaySum_col=0._r8
+  allocate(GPP_PrevDay_col(JY,JX)); GPP_PrevDay_col=0._r8
+  allocate(GPP_DayHours_col(JY,JX)); GPP_DayHours_col=0
   allocate(GrossCO2Fix_CumYr_pft(JP,JY,JX)); GrossCO2Fix_CumYr_pft=0._r8
   allocate(LitrfalStrutElms_CumYr_pft(NumPlantChemElms,JP,JY,JX));    LitrfalStrutElms_CumYr_pft=0._r8
   allocate(PlantN2Fix_CumYr_pft(JP,JY,JX));   PlantN2Fix_CumYr_pft=0._r8
@@ -195,6 +210,7 @@ module PlantDataRateType
   allocate(LitrfallElms_pvr(NumPlantChemElms,jsken,1:NumOfPlantLitrCmplxs,0:JZ,JP,JY,JX));LitrfallElms_pvr=0._r8
   allocate(NetPrimProduct_pft(JP,JY,JX));     NetPrimProduct_pft=0._r8
   allocate(cumNPP_pft(JP,JY,JX)); cumNPP_pft=0._r8
+  allocate(PTSHTR_pft(JP,JY,JX)); PTSHTR_pft=0._r8
   allocate(ETCanopy_CumYr_pft(JP,JY,JX));    ETCanopy_CumYr_pft=0._r8
   allocate(CanopyRespC_CumYr_pft(JP,JY,JX));    CanopyRespC_CumYr_pft=0._r8
   allocate(EcoHavstElmnt_CumYr_pft(NumPlantChemElms,JP,JY,JX));    EcoHavstElmnt_CumYr_pft=0._r8
@@ -299,6 +315,7 @@ module PlantDataRateType
   subroutine DestructPlantRates
   use abortutils, only : destroy
   implicit none
+  call destroy(PTSHTR_pft)
   call destroy(TotBegVegE_pft)
   call destroy(TotEndVegE_pft)
   call destroy(trcs_deadroot2soil_vr)
@@ -326,8 +343,13 @@ module PlantDataRateType
   call destroy(RootH1PO4DmndSoil_pvr)
   call destroy(RootH1PO4DmndBand_pvr)
   call destroy(LeafElmntRemobFlx_brch)
+  call destroy(LeafSenescInitialElms_brch)
   call destroy(PetolShethChemElmRemobFlx_brch)
+  call destroy(PetolSenescInitialElms_brch)
   call destroy(GrossCO2Fix_pft)
+  call destroy(GPP_DaySum_col)
+  call destroy(GPP_PrevDay_col)
+  call destroy(GPP_DayHours_col)
   call destroy(GrossCO2Fix_CumYr_pft)
   call destroy(LitrfalStrutElms_CumYr_pft)
   call destroy(PlantN2Fix_CumYr_pft)

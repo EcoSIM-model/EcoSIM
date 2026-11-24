@@ -1,4 +1,5 @@
 module PlantTraitTableMod
+  ! Own PFT parameter tables read from the plant-trait NetCDF input.
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use GridConsts,    only: NumLeafInclinationClasses
   implicit none
@@ -21,7 +22,9 @@ module PlantTraitTableMod
   integer, target, allocatable :: iPlant2ndGrothPattern_tab(:)
   integer, target, allocatable :: iPlantGrainType_tab(:)
   integer, target, allocatable :: Myco_tab(:)
-  real(r8), target, allocatable :: PlantInitThermoAdaptZone_pft_tab(:)
+  real(r8), target,allocatable :: enh_cyto_tab(:)
+  real(r8), target,allocatable :: StalkAxialResist_tab(:)
+  real(r8), target, allocatable :: PlantInitThermoAdaptZone_tab(:)
   real(r8), target, allocatable :: VmaxRubCarboxyRef_tab(:)
   real(r8), target, allocatable :: VmaxRubOxyRef_tab(:)
   real(r8), target, allocatable :: VmaxPEPCarboxyRef_tab(:)
@@ -34,6 +37,10 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: SpecChloryfilAct_tab(:)
   integer , target, allocatable :: iPlantSnowIntercepType_tab(:)
   real(r8), target, allocatable :: LeafChl2Protein_tab(:)
+  real(r8), target, allocatable :: rNCDeadCRoot_tab(:)
+  real(r8), target, allocatable :: rNCLiveCRoot_tab(:)
+  real(r8), target, allocatable :: rPCDeadCRoot_tab(:)
+  real(r8), target, allocatable :: rPCLiveCRoot_tab(:)  
   real(r8), target, allocatable :: fChlMesophyll_tab(:)           !fraction of cholorophyll in mesophyll cells
   real(r8), target, allocatable :: MorphogenBase_tab(:)           !baseline morphogen signal, [%]
   real(r8), target, allocatable :: CanopyCi2CaRatio_pft_tab(:)
@@ -66,14 +73,17 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: SeedWidth2LenRatio_tab(:)
   real(r8), target, allocatable :: GrainFillRate25C_tab(:)
   real(r8), target, allocatable :: StandingDeadInitC_tab(:)
+  real(r8), target, allocatable :: StemMassDensity_tab(:)
   real(r8), target, allocatable :: Root1stMaxRadius_tab(:)
   real(r8), target, allocatable :: Root2ndMaxRadius_tab(:)
   real(r8), target, allocatable :: RootPorosity_tab(:)
   real(r8), target, allocatable :: NonstCMinCon2InitRoot_tab(:)
+  real(r8), target, allocatable :: AlphaVesselAxialResist_tab(:)
+  real(r8), target, allocatable :: RootVesselRadius_tab(:)
   real(r8), target, allocatable :: RootRadialResist_tab(:)
-  real(r8), target, allocatable :: RootAxialResist_tab(:)
   real(r8), target, allocatable :: ShutRutNonstElmntConducts_tab(:)
-  real(r8), target, allocatable :: RootBranchFreq_tab(:)
+  real(r8), target, allocatable :: FineRootBranchFreq_tab(:)
+  real(r8), target, allocatable :: MediumRootBranchFreq_tab(:)
   real(r8), target, allocatable :: VmaxNH4Root_tab(:)
   real(r8), target, allocatable :: KmNH4Root_tab(:)
   real(r8), target, allocatable :: CMinNH4Root_tab(:)
@@ -121,6 +131,12 @@ module PlantTraitTableMod
   real(r8), target, allocatable :: rPCGrain_tab(:)
   real(r8), target, allocatable :: rPCRootr_tab(:)
   real(r8), target, allocatable :: rPCNoduler_tab(:)
+  integer , target, allocatable :: irootType_tab(:)
+  real(r8), target, allocatable :: MeanSecondaryAxisLength_tab(:) !MFRUTL: prescribed mean secondary axis length [m]
+  real(r8), target, allocatable :: CanopyNonstOMConc_tab(:) !CCPOLT: prescribed canopy nonstructural C+N+P concentration [g gC-1]
+  real(r8), target, allocatable :: RootNonstOMConc_tab(:) !RTNSC: prescribed root nonstructural C+N+P concentration [g gC-1]
+  real(r8), target, allocatable :: LeafProteinDensity_tab(:) !LFPRTC: prescribed protein C per leaf area [gC protein m-2 leaf]
+  real(r8), target, allocatable :: CanopyHeightLive_tab(:)
   character(len=10),allocatable :: pftss_tab(:)               !pft trait record name, including short pft-type name and koppen climate zone code
   character(len=40),allocatable :: pft_long_tab(:)            !long pft-type name
   character(len=4), allocatable :: pft_short_tab(:)           !short pft-type name
@@ -137,6 +153,10 @@ module PlantTraitTableMod
   integer, intent(in) :: nkopenclms      !total koppen climate code
   integer, intent(in) :: npfts           !total pft records, pft_short name + numerical koppen climate code
 
+  allocate(rNCDeadCRoot_tab(npfts)); rNCDeadCRoot_tab=0._r8
+  allocate(rPCDeadCRoot_tab(npfts)); rPCDeadCRoot_tab=0._r8
+  allocate(rNCLiveCRoot_tab(npfts)); rNCLiveCRoot_tab=0._r8
+  allocate(rPCLiveCRoot_tab(npfts)); rPCLiveCRoot_tab=0._r8  
   allocate(xylemPhi_max_tab(npfts)); xylemPhi_max_tab=0._r8
   allocate(xylemPhi_min_tab(npfts)); xylemPhi_min_tab=0._r8
   allocate(Radius95pctMature_tab(npfts)); Radius95pctMature_tab=0._r8
@@ -154,7 +174,7 @@ module PlantTraitTableMod
   allocate(iPlant2ndGrothPattern_tab(npfts)); iPlant2ndGrothPattern_tab=0
   allocate(iPlantGrainType_tab(npfts));iPlantGrainType_tab=0
   allocate(Myco_tab(npfts));Myco_tab=0
-  allocate(PlantInitThermoAdaptZone_pft_tab(npfts));PlantInitThermoAdaptZone_pft_tab=0.0_r8
+  allocate(PlantInitThermoAdaptZone_tab(npfts));PlantInitThermoAdaptZone_tab=0.0_r8
   allocate(VmaxRubCarboxyRef_tab(npfts));VmaxRubCarboxyRef_tab=0.0_r8
   allocate(VmaxRubOxyRef_tab(npfts));VmaxRubOxyRef_tab=0.0_r8
   allocate(VmaxPEPCarboxyRef_tab(npfts));VmaxPEPCarboxyRef_tab=0.0_r8
@@ -162,6 +182,8 @@ module PlantTraitTableMod
   allocate(XKO2_tab(npfts));XKO2_tab=0.0_r8
   allocate(RootMatureAge_tab(npfts)); RootMatureAge_tab=0._r8
   allocate(Km4PEPCarboxy_tab(npfts));Km4PEPCarboxy_tab=0.0_r8
+  allocate(enh_cyto_tab(npfts)); enh_cyto_tab=0._r8
+  allocate(StalkAxialResist_tab(npfts)); StalkAxialResist_tab=0._r8
   allocate(LeafRubisco2Protein_tab(npfts));LeafRubisco2Protein_tab=0.0_r8
   allocate(LeafPEP2Protein_tab(npfts));LeafPEP2Protein_tab=0.0_r8
   allocate(SpecChloryfilAct_tab(npfts));SpecChloryfilAct_tab=0.0_r8
@@ -197,15 +219,18 @@ module PlantTraitTableMod
   allocate(SeedCMass_tab(npfts));SeedCMass_tab=0._r8
   allocate(SeedWidth2LenRatio_tab(npfts)); SeedWidth2LenRatio_tab=0._r8
   allocate(GrainFillRate25C_tab(npfts));GrainFillRate25C_tab=0._r8
+  allocate(StemMassDensity_tab(npfts)); StemMassDensity_tab=0._r8
   allocate(StandingDeadInitC_tab(npfts));StandingDeadInitC_tab=0._r8
   allocate(Root1stMaxRadius_tab(npfts));Root1stMaxRadius_tab=0._r8
   allocate(Root2ndMaxRadius_tab(npfts));Root2ndMaxRadius_tab=0._r8
   allocate(RootPorosity_tab(npfts));RootPorosity_tab=0._r8
   allocate(NonstCMinCon2InitRoot_tab(npfts));NonstCMinCon2InitRoot_tab=0._r8
+  allocate(AlphaVesselAxialResist_tab(npfts)); AlphaVesselAxialResist_tab=0._r8
+  allocate(RootVesselRadius_tab(npfts));  RootVesselRadius_tab=0._r8
   allocate(RootRadialResist_tab(npfts));RootRadialResist_tab=0._r8
-  allocate(RootAxialResist_tab(npfts));RootAxialResist_tab=0._r8
   allocate(ShutRutNonstElmntConducts_tab(npfts));ShutRutNonstElmntConducts_tab=0._r8
-  allocate(RootBranchFreq_tab(npfts));RootBranchFreq_tab=0._r8
+  allocate(FineRootBranchFreq_tab(npfts));FineRootBranchFreq_tab=0._r8
+  allocate(MediumRootBranchFreq_tab(npfts)); MediumRootBranchFreq_tab=0._r8
   allocate(VmaxNH4Root_tab(npfts));VmaxNH4Root_tab=0._r8
   allocate(KmNH4Root_tab(npfts));KmNH4Root_tab=0._r8
   allocate(CMinNH4Root_tab(npfts));CMinNH4Root_tab=0._r8
@@ -253,6 +278,12 @@ module PlantTraitTableMod
   allocate(rPCGrain_tab(npfts));rPCGrain_tab=0._r8
   allocate(rPCRootr_tab(npfts));rPCRootr_tab=0._r8
   allocate(rPCNoduler_tab(npfts));rPCNoduler_tab=0._r8
+  allocate(irootType_tab(npfts));irootType_tab=0
+  allocate(MeanSecondaryAxisLength_tab(npfts));MeanSecondaryAxisLength_tab=0._r8
+  allocate(CanopyNonstOMConc_tab(npfts));CanopyNonstOMConc_tab=0._r8
+  allocate(RootNonstOMConc_tab(npfts));RootNonstOMConc_tab=0._r8
+  allocate(LeafProteinDensity_tab(npfts));LeafProteinDensity_tab=0._r8
+  allocate(CanopyHeightLive_tab(npfts));CanopyHeightLive_tab=0._r8
   allocate(pftss_tab(npfts))
   allocate(pft_long_tab(npft))
   allocate(pft_short_tab(npft))
@@ -268,7 +299,7 @@ module PlantTraitTableMod
   Subroutine DestructPlantTraitTable()
   use abortutils, only : destroy
   implicit none
-
+  call destroy(StemMassDensity_tab)
   call destroy(xylemPhi_max_tab)
   call destroy(xylemPhi_min_tab)
   call destroy(Radius95pctMature_tab)
@@ -286,7 +317,7 @@ module PlantTraitTableMod
   call destroy(iPlant2ndGrothPattern_tab)
   call destroy(iPlantGrainType_tab)
   call destroy(Myco_tab)
-  call destroy(PlantInitThermoAdaptZone_pft_tab)
+  call destroy(PlantInitThermoAdaptZone_tab)
   call destroy(VmaxRubCarboxyRef_tab)
   call destroy(VmaxRubOxyRef_tab)
   call destroy(VmaxPEPCarboxyRef_tab)
@@ -310,6 +341,8 @@ module PlantTraitTableMod
   call destroy(TCChill4Seed_tab)
   call destroy(VRNLI_tab)
   call destroy(VRNXI_tab)
+  call destroy(StalkAxialResist_tab)
+  call destroy(enh_cyto_tab)
   call destroy(rLen2WidthLeaf_tab)
   call destroy(NonstCMinConc2InitBranch_tab)
   call destroy(GROUPX_tab)
@@ -334,10 +367,12 @@ module PlantTraitTableMod
   call destroy(Root2ndMaxRadius_tab)
   call destroy(RootPorosity_tab)
   call destroy(NonstCMinCon2InitRoot_tab)
+  call destroy(AlphaVesselAxialResist_tab)
+  call destroy(RootVesselRadius_tab)
   call destroy(RootRadialResist_tab)
-  call destroy(RootAxialResist_tab)
   call destroy(ShutRutNonstElmntConducts_tab)
-  call destroy(RootBranchFreq_tab)
+  call destroy(FineRootBranchFreq_tab)
+  call destroy(MediumRootBranchFreq_tab)
   call destroy(VmaxNH4Root_tab)
   call destroy(KmNH4Root_tab)
   call destroy(CMinNH4Root_tab)
@@ -359,6 +394,10 @@ module PlantTraitTableMod
   call destroy(GrainBiomGrowthYld_tab)
   call destroy(RootBiomGrosYld_tab)
   call destroy(NoduGrowthYield_tab)
+  call destroy(rNCDeadCRoot_tab)
+  call destroy(rPCDeadCRoot_tab)
+  call destroy(rNCLiveCRoot_tab)
+  call destroy(rPCLiveCRoot_tab)
   call destroy(rNCLeaf_tab)
   call destroy(rNCSheath_tab)
   call destroy(rNCStalk_tab)
@@ -385,6 +424,12 @@ module PlantTraitTableMod
   call destroy(rPCGrain_tab)
   call destroy(rPCRootr_tab)
   call destroy(rPCNoduler_tab)
+  call destroy(irootType_tab)
+  call destroy(MeanSecondaryAxisLength_tab)
+  call destroy(CanopyNonstOMConc_tab)
+  call destroy(RootNonstOMConc_tab)
+  call destroy(LeafProteinDensity_tab)
+  call destroy(CanopyHeightLive_tab)
   end Subroutine DestructPlantTraitTable
 
   end module PlantTraitTableMod

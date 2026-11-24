@@ -1,9 +1,10 @@
 module readiMod
+! Description:
 !!
 ! code to read site, topographic data
 !
   use data_kind_mod,    only: r8 => DAT_KIND_R8
-  use abortutils,       only: endrun
+  use abortutils,       only: endrun,iulog
   use fileUtil,         only: open_safe, check_read
   use minimathmod,      only: isclose,   AZMAX1, safe_adb
   use MiniFuncMod,      only: GetDayLength
@@ -172,6 +173,89 @@ module readiMod
 
 !------------------------------------------------------------------------------------------
 
+  subroutine read_aerosol_vars(loc,varname,var_val)
+  implicit none
+  integer, intent(in) :: loc
+  character(len=*), intent(in) :: varname
+  real(r8), intent(out) :: var_val
+  type(Var_desc_t) :: vardesc
+  logical :: readvar
+
+  call check_var(grid_nfid, varname, vardesc, readvar)
+  if(readvar)then
+    !Read the optional bioaerosol carbon fraction.
+    call ncd_getvar(grid_nfid,varname,loc,var_val)
+  else
+    var_val=0._r8
+  endif
+
+  end subroutine read_aerosol_vars
+
+!------------------------------------------------------------------------------------------
+  subroutine ReadVanGenuchtenProfile(ntp,NY,NX)
+  !
+  ! Description:
+  ! Read layer parameters on the FC/WP volume basis. Alpha must declare pressure
+  ! or head units; convert head-based coefficients using the model gravity factor.
+  use netcdf, only: nf90_global,nf90_inq_varid,nf90_inquire_attribute,nf90_get_att,nf90_noerr,nf90_char
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  implicit none
+  integer, intent(in) :: ntp     ! topographic-unit record in the input dataset [-]
+  integer, intent(in) :: NY,NX   ! source grid row and column [-]
+  type(Var_desc_t) :: vardesc
+  logical :: found
+  integer :: variable,status,attribute_type,attribute_length,L
+  real(r8) :: alpha_factor
+  character(len=64) :: units
+  character(len=*), parameter :: subname='ReadVanGenuchtenProfile'
+
+  call PrintInfo('beg '//subname)
+  associate(handle => grid_nfid%fh)
+  if(allocated(VGThetaR_vr))then
+    call check_var(grid_nfid,'VG_THETA_R',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_THETA_R')
+    call ncd_getvar(grid_nfid,'VG_THETA_R',ntp,VGThetaR_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_ALPHA',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_ALPHA')
+    call ncd_getvar(grid_nfid,'VG_ALPHA',ntp,VGAlpha_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_N',vardesc,found)
+    if(.not.found)call endrun('van_genuchten requires grid variable VG_N')
+    call ncd_getvar(grid_nfid,'VG_N',ntp,VGN_vr(1:JZ,NY,NX))
+    call check_var(grid_nfid,'VG_L',vardesc,found)
+    VGL_vr(1:JZ,NY,NX)=.5_r8
+    if(found)call ncd_getvar(grid_nfid,'VG_L',ntp,VGL_vr(1:JZ,NY,NX))
+
+
+    call check_ret(nf90_inq_varid(handle,'VG_ALPHA',variable),subname)
+    status=nf90_inquire_attribute(handle,variable,'units',xtype=attribute_type,len=attribute_length)
+    if(status/=nf90_noerr)call endrun('VG_ALPHA requires explicit units: MPa-1, m-1, or cm-1')
+    if(attribute_type/=nf90_char.or.attribute_length>len(units))call endrun('Invalid VG_ALPHA units attribute')
+    units=''
+    call check_ret(nf90_get_att(handle,variable,'units',units),subname)
+
+    select case(trim(adjustl(units)))
+    case('MPa-1','MPa^-1','1/MPa')
+      alpha_factor=1._r8
+    case('m-1','m^-1','1/m')
+      alpha_factor=1._r8/mGravAccelerat
+    case('cm-1','cm^-1','1/cm')
+      alpha_factor=100._r8/mGravAccelerat
+    case default
+      write(iulog,*) 'Unsupported VG_ALPHA units: ',trim(units)
+      call endrun('VG_ALPHA requires explicit units: MPa-1, m-1, or cm-1')
+    end select
+    do L=1,JZ
+      if(ieee_is_finite(VGAlpha_vr(L,NY,NX)))then
+        if(ABS(VGAlpha_vr(L,NY,NX))>huge(1._r8)/alpha_factor)call endrun('VG_ALPHA unit conversion overflows')
+        VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L,NY,NX)*alpha_factor
+      endif
+    enddo
+  endif
+  end associate
+  call PrintInfo('end '//subname)
+  end subroutine ReadVanGenuchtenProfile
+!------------------------------------------------------------------------------------------
+
   subroutine readsiteNC(NHW,NHE,NVN,NVS)
 
   implicit none
@@ -184,6 +268,7 @@ module readiMod
   integer :: IETYPG
   integer :: ierr,jj,loc
   integer :: iWaterTabelMode
+  real(r8) :: fMoss,fLich,fLiveMB,fDeadMB,fDeadNMB,fDOM
 !
 ! READ SITE DATA
 !
@@ -233,6 +318,13 @@ module readiMod
   call ncd_getvar(grid_nfid,'DHI',loc,DHI(1:NHE))
   call ncd_getvar(grid_nfid,'DVI',loc,DVI(1:NVS))
 
+  call read_aerosol_vars(loc,'fAeroDOM',fDOM)
+  call read_aerosol_vars(loc,'fAeroDeadMB',fDeadMB)
+  call read_aerosol_vars(loc,'fAeroLiveMB',fLiveMB)
+  call read_aerosol_vars(loc,'fAeroMoss',fMoss)
+  call read_aerosol_vars(loc,'fAeroLich',fLich)
+  call read_aerosol_vars(loc,'fAeroDeadNMB',fDeadNMB)
+
   if(lverb)then
     write(*,*)'read site data file: ',DATA1(1)
     write(*,'(40A)')('-',ll=1,40)
@@ -271,23 +363,32 @@ module readiMod
   
   D9895: DO NX=NHW,NHE
     D9890: DO NY=NVN,NVS
-      ALAT_col(NY,NX)             = ALATG
-      PBOT_col(NY,NX)             = PBOT_col(NY,NX)*exp(-ALT_col(NY,NX)/hpresc)
-      ALTI_col(NY,NX)             = ALTIG
-      ATCAI_col(NY,NX)            = ATCAG
-      IDWaterTable_col(NY,NX)     = iWaterTabelMode
-      OXYE_col(NY,NX)             = ao2_ppm
-      Z2GE_col(NY,NX)             = an2_ppm
-      CO2EI_col(NY,NX)            = aco2_ppm
-      CH4E_col(NY,NX)             = ach4_ppm
-      Z2OE_col(NY,NX)             = an2o_ppm
-      ARGE_col(NY,NX)             = arg_ppm
-      ZNH3E_col(NY,NX)            = anh3_ppm
-      KoppenClimZone_col(NY,NX)   = IETYPG
-      FlowDirIndicator_col(NY,NX) = grid_mode
-      NatWtblDepz_col(NY,NX)      = WTBLDepz_nat
-      WtblDepzTile_col(NY,NX)     = WTBLDepz_tile
-      WaterTBLSlope_col(NY,NX)    = DTBLGG
+      !Partition bioaerosol carbon among organic matter and live biomass.
+      f_aerosol_DOM_col(NY,NX)     = fDOM     !dissolved organic matter
+      f_aerosol_DeadMB_col(NY,NX)  = fDeadMB  !dead microbial biomass
+      f_aerosol_DeadNMB_col(NY,NX) = fDeadNMB !dead nonmicrobial biomass
+      f_aerosol_LiveMB_col(NY,NX)  = fLiveMB  !live microbial biomass
+      f_aerosol_MossB_col(NY,NX)   = fMoss    !live moss
+      f_aerosol_LichB_col(NY,NX)   = fLich    !live lichen
+
+      ALAT_col(NY,NX)                  = ALATG
+      AltitudeLandscape_col(NY,NX)     = ALTIG
+      PBOT_col(NY,NX)                  = PBOT_col(NY,NX)*exp(-AltitudeLandscape_col(NY,NX)/hpresc)
+      ATCAI_col(NY,NX)                 = ATCAG
+      TairKClimMean_col(NY,NX)         = ATCAG+273.15_r8
+      IDWaterTable_col(NY,NX)          = iWaterTabelMode
+      OXYE_col(NY,NX)                  = ao2_ppm
+      Z2GE_col(NY,NX)                  = an2_ppm
+      CO2EI_col(NY,NX)                 = aco2_ppm
+      CH4E_col(NY,NX)                  = ach4_ppm
+      Z2OE_col(NY,NX)                  = an2o_ppm
+      ARGE_col(NY,NX)                  = arg_ppm
+      ZNH3E_col(NY,NX)                 = anh3_ppm
+      KoppenClimZone_col(NY,NX)        = IETYPG
+      FlowDirIndicator_col(NY,NX)      = grid_mode
+      NaturalWaterTableDepz_col(NY,NX) = WTBLDepz_nat
+      TileWaterTableDepz_col(NY,NX)    = WTBLDepz_tile
+      WaterTable2GroundSlope_col(NY,NX)       = DTBLGG
 
       RechargNorthSurf_col(NY,NX) = RCHQNG
       RechargEastSurf_col(NY,NX)  = RCHQEG
@@ -305,10 +406,10 @@ module readiMod
       RechargRateWestWTBL_col(NY,NX)  = RCHGWUG      
       RechargBottom_col(NY,NX) = RCHGDG
 
-      DH_col(NY,NX)                = DHI(NX)
-      DV_col(NY,NX)                = DVI(NY)
-      CO2E_col(NY,NX)          = CO2EI_col(NY,NX)
-      H2GE_col(NY,NX)          = ah2_ppm
+      DH_col(NY,NX)   = DHI(NX)
+      DV_col(NY,NX)   = DVI(NY)
+      CO2E_col(NY,NX) = CO2EI_col(NY,NX)
+      H2GE_col(NY,NX) = ah2_ppm
 !
 !     CALCULATE MAXIMUM DAYLENTH FOR PLANT PHENOLOGY
 !
@@ -338,6 +439,9 @@ module readiMod
   integer :: NM(JY,JX),ntp,ntopus
   real(r8) :: dat1(1:JZ)
   real(r8) :: corrector,OrgVolFrac
+  real(r8) :: fAeroScalar
+  logical :: readvar_scalar
+  type(Var_desc_t) :: vardesc
 ! begin_execution
   associate(                            &
   k_woody_comp => micpar%k_woody_comp , &
@@ -357,6 +461,8 @@ module readiMod
 
   ntopus=get_dim_len(grid_nfid, 'ntopou')
   if(first_topou)ntopus=1
+  call check_var(grid_nfid, 'fAeroScalar', vardesc, readvar_scalar)
+  fAeroScalar=0._r8
   DO ntp=1,ntopus
     call ncd_getvar(grid_nfid, 'NH1', ntp, NH1)
     call ncd_getvar(grid_nfid, 'NV1', ntp, NV1)
@@ -365,6 +471,11 @@ module readiMod
     call ncd_getvar(grid_nfid, 'ASPX', ntp,ASPX) !clockwise degrees from north
     call ncd_getvar(grid_nfid, 'SL0', ntp,SL0)
     call ncd_getvar(grid_nfid, 'DPTHSX', ntp,initSnowDepth)
+    
+    if(readvar_scalar)then
+      !Read the optional bioaerosol carbon fraction.
+      call ncd_getvar(grid_nfid,'fAeroScalar',ntp,fAeroScalar)      
+    endif
 
 !
 ! OPEN AND READ SOIL FILE
@@ -375,6 +486,7 @@ module readiMod
 !
 !     SURFACE SLOPES AND ASPECTS
 !
+        fAeroScalar_col(NY,NX)=fAeroScalar
         ASP_col(NY,NX)       = ASPX
         SL_col(NY,NX)        = SL0
         SnowDepth_col(NY,NX) = initSnowDepth
@@ -408,11 +520,13 @@ module readiMod
     call ncd_getvar(grid_nfid, 'NL1'   ,ntp,NL1)
     call ncd_getvar(grid_nfid, 'NL2'   ,ntp,NL2)
     call ncd_getvar(grid_nfid, 'ISOILR',ntp,ISOILR_col(NV1,NH1))
-    
+
     NU_col(NV1,NH1) = NUI_col(NV1,NH1)    
     NK_col(NV1,NH1) = MaxNumRootLays_col(NV1,NH1)+1
-    NM(NV1,NH1) = MaxNumRootLays_col(NV1,NH1)+NL1
+    NM(NV1,NH1)     = MaxNumRootLays_col(NV1,NH1)+NL1
     
+    
+
 !  the extra soil layer below root zone cannot be greater than what is allowed
     NL2=min0(JZ-NM(NV1,NH1),NL2)
     NLI_col(NV1,NH1) = NM(NV1,NH1)+NL2
@@ -425,6 +539,7 @@ module readiMod
     call ncd_getvar(grid_nfid, 'WP', ntp,WiltPoint_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'SCNV', ntp,SatHydroCondVert_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'SCNH', ntp,SatHydroCondHrzn_vr(1:JZ,NV1,NH1))
+    call ReadVanGenuchtenProfile(ntp,NV1,NH1)
 
     call ncd_getvar(grid_nfid, 'CSAND',ntp,CSAND_vr(1:JZ,NV1,NH1))
     call ncd_getvar(grid_nfid, 'CSILT',ntp,CSILT_vr(1:JZ,NV1,NH1))
@@ -541,6 +656,12 @@ module readiMod
             if(SoiBulkDensityt0_vr(L,NY,NX).LE.ZERO)iPondBotLev_col(NY,NX)=L
             FieldCapacity_vr(L,NY,NX)     = FieldCapacity_vr(L,NV1,NH1)
             WiltPoint_vr(L,NY,NX)         = WiltPoint_vr(L,NV1,NH1)
+            if(allocated(VGThetaR_vr))then
+              VGThetaR_vr(L,NY,NX)=VGThetaR_vr(L,NV1,NH1)
+              VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L,NV1,NH1)
+              VGN_vr(L,NY,NX)=VGN_vr(L,NV1,NH1)
+              VGL_vr(L,NY,NX)=VGL_vr(L,NV1,NH1)
+            endif
             SatHydroCondVert_vr(L,NY,NX)  = SatHydroCondVert_vr(L,NV1,NH1)
             SatHydroCondHrzn_vr(L,NY,NX)  = SatHydroCondHrzn_vr(L,NV1,NH1)
             CSAND_vr(L,NY,NX)             = CSAND_vr(L,NV1,NH1)
@@ -616,9 +737,9 @@ module readiMod
         if(lverb)then
           CALL Disp_topo_charc(NY,NX,NU_col(NY,NX),NM(NY,NX))
         endif
-!        RSC_vr(k_fine_comp,0,NY,NX)     = AMAX1(ppmc,RSC_vr(k_fine_comp,0,NY,NX))
-!        RSN_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.04E-06_r8,RSN_vr(k_fine_comp,0,NY,NX))
-!        RSP_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.004E-06_r8,RSP_vr(k_fine_comp,0,NY,NX))
+        RSC_vr(k_fine_comp,0,NY,NX)     = AMAX1(1.00E-06_r8,RSC_vr(k_fine_comp,0,NY,NX))
+        RSN_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.04E-06_r8,RSN_vr(k_fine_comp,0,NY,NX))
+        RSP_vr(k_fine_comp,0,NY,NX)     = AMAX1(0.004E-06_r8,RSP_vr(k_fine_comp,0,NY,NX))
 
         SatHydroCondVert_vr(0,NY,NX) = 10.0_r8*0.098_r8
         !
@@ -647,6 +768,12 @@ module readiMod
               SoiBulkDensityt0_vr(L,NY,NX) = SoiBulkDensityt0_vr(L+1,NY,NX)
               FieldCapacity_vr(L,NY,NX)    = FieldCapacity_vr(L+1,NY,NX)
               WiltPoint_vr(L,NY,NX)        = WiltPoint_vr(L+1,NY,NX)
+              if(allocated(VGThetaR_vr))then
+                VGThetaR_vr(L,NY,NX)=VGThetaR_vr(L+1,NY,NX)
+                VGAlpha_vr(L,NY,NX)=VGAlpha_vr(L+1,NY,NX)
+                VGN_vr(L,NY,NX)=VGN_vr(L+1,NY,NX)
+                VGL_vr(L,NY,NX)=VGL_vr(L+1,NY,NX)
+              endif
               SatHydroCondVert_vr(L,NY,NX) = SatHydroCondVert_vr(L+1,NY,NX)
               SatHydroCondHrzn_vr(L,NY,NX) = SatHydroCondHrzn_vr(L+1,NY,NX)
               CSAND_vr(L,NY,NX)            = CSAND_vr(L+1,NY,NX)
@@ -735,8 +862,8 @@ module readiMod
           SatHydroCondHrzn_vr(L,NY,NX) = 0.098_r8*SatHydroCondHrzn_vr(L,NY,NX)*FracSoiAsMicP_vr(L,NY,NX)
           CCLAY_vr(L,NY,NX)            = AZMAX1(1.0E+03_r8-(CSAND_vr(L,NY,NX)+CSILT_vr(L,NY,NX)))
           !convert from Kg to g C (C is input as kgC/Mg soil, N and P are input as g/Mg soil)
-          CSoilOrgM_vr(ielmc,L,NY,NX)  = CSoilOrgM_vr(ielmc,L,NY,NX)*1.0E+03_r8
-          COMLitrC_vr(L,NY,NX)         = COMLitrC_vr(L,NY,NX)*1.0E+03_r8   !convert from kg C to g C
+          CSoilOrgM_vr(ielmc,L,NY,NX)  = CSoilOrgM_vr(ielmc,L,NY,NX)*1.0E+03_r8  !from kg C to g C
+          COMLitrC_vr(L,NY,NX)         = COMLitrC_vr(L,NY,NX)*1.0E+03_r8         !from kg C to g C
           CORGCI_vr(L,NY,NX)           = CSoilOrgM_vr(ielmc,L,NY,NX)
           SoilFracAsMacPt0_vr(L,NY,NX) = SoilFracAsMacP_vr(L,NY,NX)
           ! soil texture is reported based on mass basis soley for mineral component of the soil

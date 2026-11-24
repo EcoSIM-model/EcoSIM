@@ -1,7 +1,11 @@
 set(PHYSDATA_SOURCES
  PhysPars.F90
+ WatsubDataMod.F90
+ SurfaceAirExchangeMod.F90
+ AtmosCompositionMod.F90
  HydroThermData.F90
  SoilPhysParaMod.F90
+ SoilFaceMappingMod.F90
 )
 include(add_ecosim_library)
 add_ecosim_library(PhysData ${PHYSDATA_SOURCES})

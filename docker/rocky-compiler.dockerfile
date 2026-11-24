@@ -10,6 +10,7 @@ RUN dnf -y update && dnf -y install --allowerasing \
     gcc \
     gcc-c++ \
     gcc-gfortran \
+    zip \
     git \
     cmake \
     vim-enhanced \

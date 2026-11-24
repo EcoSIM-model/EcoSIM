@@ -1,7 +1,15 @@
 set(APIS_SOURCES
+  PlantColumnTransferMod.F90
+  PlantStateTransferMod.F90
+  PlantCanopyTransferMod.F90
+  PlantRootTransferMod.F90
+  PlantRootAxisTransferMod.F90
+  PlantTraitsTransferMod.F90
 	PlantAPI.F90
   PlantCanAPI.F90
   PlantMod.F90
+  PlantPhaseWorkMod.F90
+  PlantHydraulicMod.F90
   MicBGCAPI.F90
   PlantAPI4Uptake.F90  
   GeochemAPI.F90
@@ -19,6 +27,7 @@ target_include_directories(APIs PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/DebugTools/    
   ${CMAKE_BINARY_DIR}/f90src/Modelpars/
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/ModelDiags/
   ${CMAKE_BINARY_DIR}/f90src/APIData/
   ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
   ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Box_Micmodel

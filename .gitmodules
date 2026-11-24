@@ -16,6 +16,6 @@
 [submodule "3rd-partylibs/c-blosc"]
 	path = 3rd-partylibs/c-blosc
 	url = https://github.com/jinyun1tang/c-blosc.git
-[submodule "python_tools"]
-	path = python_tools
-	url = https://github.com/jinyuntang/EcoSIM_python_tools.git
+[submodule "ecosim-agent"]
+	path = ecosim-agent
+	url = git@github.com:bioepic-data/ecosim-agent.git

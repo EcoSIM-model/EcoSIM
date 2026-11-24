@@ -7,6 +7,7 @@
   use SurfLitterDataType, only: XTillCorp_col
   use abortutils,         only: iulog
   use DebugToolMod,       only: PrintInfo
+  use DepositionMod,     only : ApplyBioAerosol
   use CanopyRadDataType
   use EcosimConst  
   use EcoSIMCtrlMod
@@ -39,10 +40,10 @@
   CHARACTER(LEN=*), PARAMETER :: MOD_FILENAME=&
   __FILE__
 
-  public :: day
+  public :: day, CompleteDailySetup
   contains
 
-  SUBROUTINE day(I,NHW,NHE,NVN,NVS)
+  SUBROUTINE day(I,NHW,NHE,NVN,NVS,DeferStateChanges)
 !
 !     THIS SUBROUTINE REINITIALIZES DAILY VARIABLES USED IN OTHER
 !     SUBROUTINES E.G. LAND MANAGEMENT
@@ -51,7 +52,9 @@
 
   integer, intent(in) :: I
   integer, intent(in) :: NHW,NHE,NVN,NVS
-  integer :: NN,N,M,NY,NX
+  logical, optional, intent(in) :: DeferStateChanges !true until the restart checkpoint is loaded
+  logical :: defer_updates
+  integer :: NY,NX
   real(r8) :: eot,leapday
   character(len=*), parameter :: subname='day'
 !     execution begins here
@@ -62,6 +65,8 @@
 !     CDATE=DDMMYYYY
 !
   call PrintInfo('beg '//subname)
+  defer_updates=.false.
+  if(present(DeferStateChanges))defer_updates=DeferStateChanges
   if(isLeap(iYearCurrent))then
     leapday=1._r8
   else
@@ -75,22 +80,48 @@
     ENDDO
   ENDDO    
 
-  call UpdateDailyAccumulators(I, NHW, NHE, NVN, NVS)
-
-  call TillageandIrrigationEvents(I, NHW, NHE, NVN, NVS)
-
-  if(ldo_sp_mode)call PrescribePhenologyInterp(I, NHW, NHE, NVN, NVS)
+  if(defer_updates)then
+    ! Reconstruct date-derived forcing while skipping actions on initial state.
+    call UpdateDailyAccumulators(I,NHW,NHE,NVN,NVS,StartNewDay=.false.)
+  else
+    call CompleteDailySetup(I,1,NHW,NHE,NVN,NVS)
+  endif
 
   call PrintInfo('end '//subname)
 
   END subroutine day
 
 !------------------------------------------------------------------------------------------     
-  subroutine UpdateDailyAccumulators(I, NHW, NHE, NVN, NVS)
+  subroutine CompleteDailySetup(I,J,NHW,NHE,NVN,NVS)
+  ! Run after checkpoint loading on the restart day; DAY uses J=1 normally.
+  implicit none
+  integer, intent(in) :: I,J,NHW,NHE,NVN,NVS !J is the first simulated hour, 1:24
+  character(len=*), parameter :: subname='CompleteDailySetup'
+  integer :: NY,NX
+  logical :: StartNewDay
+
+  call PrintInfo('beg '//subname)
+  StartNewDay=J==1
+  if(StartNewDay)then
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        call ApplyBioAerosol(I,12,NY,NX)
+      ENDDO
+    ENDDO
+  endif
+  call UpdateDailyAccumulators(I,NHW,NHE,NVN,NVS,StartNewDay)
+  call TillageandIrrigationEvents(I,NHW,NHE,NVN,NVS,RunIrrigation=StartNewDay)
+  if(ldo_sp_mode)call PrescribePhenologyInterp(I,NHW,NHE,NVN,NVS)
+  call PrintInfo('end '//subname)
+  end subroutine CompleteDailySetup
+!------------------------------------------------------------------------------------------
+
+  subroutine UpdateDailyAccumulators(I, NHW, NHE, NVN, NVS,StartNewDay)
 !     WRITE DAILY MAX MIN ACCUMULATORS FOR WEATHER VARIABLES
 
   implicit none
   integer, intent(in) :: I, NHW, NHE, NVN, NVS
+  logical, intent(in) :: StartNewDay !false for intraday reconstruction; preserve restored daily state
 
 !  real(r8) :: AZI
 !  REAL(R8) :: DEC
@@ -101,13 +132,14 @@
   D955: DO NX=NHW,NHE
     D950: DO NY=NVN,NVS
 
-      !     RESET ANNUAL FLUX ACCUMULATORS AT START OF ANNUAL CYCLE
-      !     ALAT=latitude +ve=N,-ve=S
-      !
-      HUDX_col(NY,NX)=0._r8
-      HUDN_col(NY,NX)=100.0_r8
-      TWIND_col(NY,NX)=0._r8
-      SeasonalNonstCDayAve_pft(:,NY,NX) = 0._r8
+      ! Reset daily accumulators only when beginning a new day. Intraday
+      ! reconstruction must preserve the partial sums restored from checkpoint.
+      if(StartNewDay)then
+        HUDX_col(NY,NX)=0._r8
+        HUDN_col(NY,NX)=100.0_r8
+        TWIND_col(NY,NX)=0._r8
+        SeasonalNonstCDayAve_pft(:,NY,NX) = 0._r8
+      endif
 !      PrecDaily_col(NY,NX)=0._r8
 !
 !
@@ -116,7 +148,7 @@
 !     DayLenthPrev,DLYN=daylength of previous,current day
 !     ALAT=latitude
 !
-      DayLenthPrev_col(NY,NX)=DayLensCurr_col(NY,NX)
+      if(StartNewDay)DayLenthPrev_col(NY,NX)=DayLensCurr_col(NY,NX)
 
       DayLensCurr_col(NY,NX)=GetDayLength(ALAT_col(NY,NX),I)
 !
@@ -177,6 +209,7 @@
 !     TDPRC,TDIRRI=change in precipitation,irrigation
 !     TDCN4,TDCNO=change in atm CO2,NH4,NO3 concn in precipitation
 !
+      if(StartNewDay)then
       D600: DO N=1,12
 !
 !     STEP CHANGES
@@ -207,23 +240,28 @@
           TDCNO(N,NY,NX)=TDCNO(N,NY,NX)+(DCNOR(N)-1.0_r8)/DazCurrYear
         ENDIF
       ENDDO D600
+      endif
     ENDDO D950
   ENDDO D955
   call PrintInfo('end '//subname)
   END subroutine UpdateDailyAccumulators
 !-----------------------------------------------------------------------------------------
 
-  subroutine TillageandIrrigationEvents(I, NHW, NHE, NVN, NVS)
+  subroutine TillageandIrrigationEvents(I, NHW, NHE, NVN, NVS,RunIrrigation)
   !
   implicit none
 
   integer, intent(in) :: I, NHW, NHE, NVN, NVS
+  logical, optional, intent(in) :: RunIrrigation !false on intraday restart; use the restored schedule
+  logical :: decide_irrigation
   integer :: NY,NX,J,L
   real(r8) :: TWP,TVW,TFZ
   real(r8) :: CORP,DIRRA1,DIRRA2,FW,FZ,RR
   character(len=*), parameter :: subname='TillageandIrrigationEvents'
 
   call PrintInfo('beg '//subname)
+  decide_irrigation=.true.
+  if(present(RunIrrigation))decide_irrigation=RunIrrigation
   D9995: DO NX=NHW,NHE
     D9990: DO NY=NVN,NVS
 !
@@ -243,7 +281,7 @@
       ENDIF
       !fraction of material not mixed
       XTillCorp_col(NY,NX)=1.0_r8-CORP
-!     WRITE(*,2227)'TILL',I,iSoilDisturbType_col(I,NY,NX),CORP,XTillCorp_col(NY,NX)
+!      WRITE(990,*)'TILL',I,iSoilDisturbType_col(I,NY,NX),CORP,XTillCorp_col(NY,NX)
 !2227  FORMAT(A8,2I4,12E12.4)
 !
 !     AUTOMATIC IRRIGATION IF SELECTED
@@ -260,10 +298,10 @@
 !     iIrrigOpt_col=flag for irrigation criterion,0=SWC,1=canopy water potential
 !     FIRRA_col=depletion of SWC from CIRRA_col to WP(iIrrigOpt_col=0),or minimum canopy
 !     water potential(iIrrigOpt_col=1), to trigger irrigation
-!     RR=total irrigation requirement
-!     RRIG=hourly irrigation amount applied in wthr.f
+!     RR=total irrigation requirement [m3 per cell]
+!     RRIG=hourly irrigation depth [m h-1]; WthrMod multiplies by cell area
 !
-      IF(Lirri_auto)THEN
+      IF(Lirri_auto_col(NY,NX) .and. decide_irrigation)THEN
       !automated irrigation
         IF(I.GE.IIRRA(1,NY,NX).AND.I.LE.IIRRA(2,NY,NX))THEN
           TFZ    = 0._r8
@@ -287,7 +325,8 @@
             RR=AZMAX1(TFZ-TVW)
             IF(RR.GT.0.0_r8)THEN
               D170: DO J=IIRRA(3,NY,NX),IIRRA(4,NY,NX)
-                RRIG(J,I,NY,NX)=RR/(IIRRA(4,NY,NX)-IIRRA(3,NY,NX)+1)
+                RRIG(J,I,NY,NX)=RR/(AREA_3D(3,NU_col(NY,NX),NY,NX) &
+                  *(IIRRA(4,NY,NX)-IIRRA(3,NY,NX)+1))
               ENDDO D170
               WDPTH(I,NY,NX)=DIRRA(2,NY,NX)
               WRITE(iulog,2222)'auto',iYearCurrent,I,IIRRA(3,NY,NX),IIRRA(4,NY,NX) &

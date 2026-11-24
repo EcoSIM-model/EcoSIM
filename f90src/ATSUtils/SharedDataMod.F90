@@ -1,4 +1,6 @@
 Module SharedDataMod
+  ! Description:
+  ! Hold the ATS environment, coupled fluxes, and EcoSIM surface exchange state.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use abortutils, only : destroy
@@ -14,6 +16,8 @@ Module SharedDataMod
 ! temporary data holder in ecosim
   real(r8) :: atm_n2, atm_o2,atm_co2,atm_ch4,atm_N2o,atm_H2,atm_NH3
   real(r8) :: heat_capacity, pressure_at_field_capacity, pressure_at_wilting_point
+  real(r8) :: wind_speed_ref_height = 3.0_r8
+  real(r8) :: soil_surface_roughness = 0.001_r8
   real(r8), allocatable :: a_MFrac(:,:,:)   !molecular fraction
   real(r8), allocatable :: a_csand(:,:)   !sand mass fraction
   real(r8), allocatable :: a_CSILT(:,:)   !silt mass fraction
@@ -41,6 +45,9 @@ Module SharedDataMod
   real(r8), allocatable :: a_SAI(:,:)       !Stem Area Index
   real(r8), allocatable :: a_VEG(:)       !Vegetation type
   real(r8), allocatable :: a_SALB(:)      !Snow Albedo
+  real(r8), allocatable :: a_POND0(:) ! ATS ponded depth [m], read-only for EcoSIM
+  real(r8), allocatable :: a_TSURF(:)     !ATS surface temperature [K]
+  real(r8), allocatable :: a_TCOND(:,:)   !ATS thermal conductivity [MW m-1 K-1]
   real(r8), allocatable :: a_ATKA(:)
   real(r8), allocatable :: a_WC(:,:)      !Soil water content
   real(r8), allocatable :: a_WC_rev(:,:)  !Soil water content testing
@@ -62,6 +69,7 @@ Module SharedDataMod
   real(r8), allocatable, target :: a_EvapLitr(:)     !litter evaporation
   real(r8), allocatable, target :: a_EvapSnow(:)     !water evaporation from snow
   real(r8), allocatable, target :: a_Sublim(:)       !water sublimation from snow
+  real(r8), allocatable, target :: a_PlantInit(:,:)  !prescribed phenology: 1 once the plant state of the column is initialized, else 0
   real(r8), allocatable :: a_TS(:,:)         !snow temperature (LS,L dimensions)
   real(r8), allocatable :: tairc(:)       !air temperature oC
   real(r8), allocatable :: uwind(:)       !wind speed, m/s
@@ -72,7 +80,9 @@ Module SharedDataMod
   real(r8), allocatable :: swrad(:)       !shortwave radiation,
   real(r8), allocatable :: column_area(:)       !column area
   real(r8), allocatable :: vpair(:)       !vapor pressure deficit
-  real(r8), allocatable :: surf_e_source(:) !surface energy source
+  real(r8), allocatable :: surf_e_source(:) !surface energy source [MJ m-2 per hour]
+  real(r8), allocatable :: surf_e_source_dtemperature(:) !radiation+sensible slope [MJ m-2 K-1 per hour]
+  real(r8), allocatable :: surf_e_source_temperature_ref(:) !surface temperature used for the source [K]
   real(r8), allocatable :: surf_w_source(:) !surface water source
   real(r8), allocatable :: surf_snow_depth(:) !snow depth source
   real(r8), allocatable :: a_CanSnow(:,:)    !canopy snow per PFT (num_pfts x num_columns)
@@ -85,6 +95,9 @@ Module SharedDataMod
   integer, allocatable :: a_PFT(:,:)
   integer :: NYS, I !total number of columns
   integer :: current_day, current_year
+  integer :: current_hour = 0              !hour of the day [0-23] starting at the call (from ATS)
+  real(r8) :: site_latitude = 40._r8       !site latitude [degrees] (from ATS)
+  real(r8) :: site_solar_noon = 12._r8     !hour of solar noon [h] (from ATS)
   integer :: num_pfts, num_components
   logical :: p_bool, a_bool, pheno_bool, microbe_bool
   character(len=512), public :: ecosim_pft_file_path = ""
@@ -123,6 +136,9 @@ Module SharedDataMod
     allocate(a_EvapLitr(ncol))
     allocate(a_EvapSnow(ncol))
     allocate(a_Sublim(ncol))
+    allocate(a_PlantInit(ncol,1)); a_PlantInit=0._r8
+    a_Transpiration=0._r8; a_EvapCan=0._r8; a_EvapGrnd=0._r8
+    a_EvapLitr=0._r8; a_EvapSnow=0._r8; a_Sublim=0._r8
     allocate(a_NU(ncol))
     allocate(a_NL(ncol))
     !allocate(a_ASP(ncells_per_col_))

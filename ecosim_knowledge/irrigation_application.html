@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoSIM · Irrigation application</title>
+<style>
+:root{--ink:#20352f;--green:#175b49;--muted:#60746b;--bg:#f7f9f5;--line:#dbe5dc;--tint:#eaf3ec;--blue:#286fba;--amber:#fff3da}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1100px;margin:auto;padding:44px 28px 70px}h1{font-size:clamp(32px,5vw,52px);line-height:1.12;letter-spacing:-1.2px;margin:16px 0}h2{font-size:25px;line-height:1.3;color:var(--green);margin:2.3em 0 .8em}h3{font-size:18px;color:var(--green)}p{max-width:95ch}.lead{font-size:20px;max-width:78ch}.eyebrow,.meta,.source{font-size:13px;color:var(--muted)}.eyebrow{font-weight:700;letter-spacing:2px;text-transform:uppercase}a{color:var(--green)}nav{display:flex;flex-wrap:wrap;gap:8px 20px;border-block:1px solid var(--line);padding:16px 0;margin:28px 0;font-size:14px}.cards,.split{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}.split{grid-template-columns:1fr 1fr}.card,.panel{background:white;padding:20px;border:1px solid var(--line);border-radius:12px;min-width:0}.card strong{display:block;color:var(--green)}.note,.eq{background:var(--tint);padding:16px 20px;border-radius:9px;margin:18px 0}.note.amber{background:var(--amber)}.eq{font:17px/1.9 "Cambria Math",Georgia,serif;overflow-x:auto}.source{margin:8px 0}code{font:13px/1.5 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}pre{background:white;border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;font-size:13px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{background:var(--tint)}.scroll,.chart-scroll{overflow-x:auto}.chart-scroll svg{min-width:640px}.flow{display:grid;grid-template-columns:1fr 35px 1.25fr 35px 1fr;align-items:center;gap:8px;margin:20px 0}.flow .arrow{text-align:center;font-size:27px;color:var(--green)}.flow .box{padding:18px;background:white;border:1px solid var(--line);border-radius:10px}.flow small{display:block;color:var(--muted);line-height:1.5}.flow .box strong{display:block}.flow .merge{display:grid;gap:10px}.flow .box.accent{background:var(--tint)}input{font:inherit;width:100%;max-width:120px;border:1px solid #a7bcb2;border-radius:5px;padding:6px;background:white;color:var(--ink)}input:focus{outline:2px solid var(--blue);outline-offset:2px}.controls{display:flex;gap:24px;flex-wrap:wrap;margin:20px 0}.controls label{display:flex;flex-direction:column;gap:5px;font-size:14px}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;margin:8px 0}.dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.metric{padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--tint)}.metric output{display:block;font-size:23px;font-weight:700}.metric span{font-size:12px;color:var(--muted)}svg{display:block;width:100%;height:auto}#input-error{color:#a12b20;min-height:25px;font-size:14px}li{margin:7px 0}footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px;margin-top:45px}details{margin-top:16px}summary{cursor:pointer;color:var(--green)}@media(max-width:750px){main{padding:26px 16px 50px}.cards,.split{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg)}.metrics{grid-template-columns:1fr 1fr}.scroll table{min-width:640px}}@media print{body{background:white}main{padding:0;max-width:none}nav{display:none}.card,.eq,.note,tr{break-inside:avoid}h2{break-after:avoid}input{border:0}a{color:inherit}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">EcoSIM process walkthrough</div>
+<h1>Irrigation application</h1>
+<p class="lead">EcoSIM builds an hourly water schedule for each cell, then sends that water through the surface precipitation pathway. Liquid nutrient concentrations, salt concentrations, pH, and the prescribed application depth share one set of values per day.</p>
+<p class="meta">Source-based description · 19 October 2026 · Standalone model pathway · Includes the current reader changes for multiple daily pulses.</p>
+<div class="cards">
+<div class="card"><strong>Hourly water</strong><code>RRIG(hour,day,NY,NX)</code><br>Depth rate in m h⁻¹. Same-day records can create separate pulses or add to overlapping hours.</div>
+<div class="card"><strong>Daily properties</strong><code>trcsalt_irrig_mole_conc_col(species,day,NY,NX)</code><br>Concentrations have no hour index. Same-day pulses must use identical prescribed chemistry and depth.</div>
+<div class="card"><strong>Surface delivery</strong>The active weather code sets subsurface irrigation to zero. The stored application-depth field does not currently select a buried injection layer.</div>
+</div>
+<nav aria-label="Contents"><a href="#path">Flow of information</a><a href="#scheduled">Scheduled irrigation</a><a href="#explorer">Pulse explorer</a><a href="#automatic">Automatic irrigation</a><a href="#water">Water and heat</a><a href="#tracers">Nutrients and salts</a><a href="#timing">Timing and restart</a><a href="#sources">Source map</a></nav>
+
+<section id="path"><h2>1 · From management records to surface fluxes</h2>
+<div class="flow" role="img" aria-label="Scheduled records and automatic daily decisions feed an hourly schedule; multiplying by area gives cell water volume rates, which feed canopy interception, snow, litter and soil, with tracer delivery following recipient water.">
+<div class="merge"><div class="box"><strong>Scheduled records</strong><small>Amount + date + hour interval<br>Daily chemistry and depth</small></div><div class="box"><strong>Automatic daily decision</strong><small>Soil-water deficit or canopy-water-potential criterion</small></div></div>
+<div class="arrow" aria-hidden="true">→</div><div class="box accent"><strong>Hourly schedule → cell water flux</strong><code>RRIG(J,I,NY,NX)</code><small>m h⁻¹ × cell area [m²]<br>= <code>IrrigSurface_col</code> [m³ h⁻¹]</small></div>
+<div class="arrow" aria-hidden="true">→</div><div class="box"><strong>Canopy and ground</strong><small>Interception → throughfall<br>Snow / litter / exposed soil<br>Recipient water × concentration → tracer input</small></div>
+</div>
+<p>Management selection is organized by topographic unit. Each unit supplies a rectangle, <code>NH1:NH2</code> and <code>NV1:NV2</code>, over which its selected input records are applied. A unit can cover several cells; the hourly and daily arrays remain indexed by cell. Automatic-irrigation eligibility is stored in <code>Lirri_auto_col(NY,NX)</code>.</p>
+<p class="source">Sources: <a href="../f90src/IOutils/ReadManagementMod.F90">ReadManagementMod</a>, <a href="../f90src/Modelforc/WthrMod.F90">WthrMod</a>.</p></section>
+
+<section id="scheduled"><h2>2 · Scheduled records: amounts become hourly depths</h2>
+<p>The soil-management NetCDF file selects an irrigation table through <code>irrigf</code>. A scheduled table contains up to 24 records, limited by <code>nirri</code>. This is a record-count limit for that selected table, not a limit of one event per day.</p>
+<pre>DDMMYYYY  RR  JST  JEN  WDPTHI  PHQX  CN4QX  CNOQX  CPOQX
+          CALQX  CFEQX  CCAQX  CMGQX  CNAQX  CKAQX  CSOQX  CCLQX</pre>
+<div class="scroll"><table><thead><tr><th>Input</th><th>Meaning</th><th>Units / convention</th></tr></thead><tbody>
+<tr><td><code>DDMMYYYY</code></td><td>Calendar date; converted to a day-of-year index.</td><td>Day, month, four-digit year; preserve leading zeros.</td></tr>
+<tr><td><code>RR</code></td><td>Total water depth in this record, distributed uniformly over its selected hours.</td><td>mm; nonnegative.</td></tr>
+<tr><td><code>JST, JEN</code></td><td>Inclusive first and last hourly indices.</td><td>1 ≤ JST ≤ JEN ≤ 24; an overnight application needs separate dated records.</td></tr>
+<tr><td><code>WDPTHI, PHQX</code></td><td>Prescribed application depth and pH.</td><td>m and dimensionless pH; one shared pair per day.</td></tr>
+<tr><td><code>CN4QX, CNOQX, CPOQX</code></td><td>Ammonium-N, nitrate-N, phosphate-P concentrations supplied to initialization.</td><td>g N m⁻³, g N m⁻³, g P m⁻³.</td></tr>
+<tr><td><code>CALQX … CCLQX</code></td><td>Al, Fe, Ca, Mg, Na, K, sulfate-S, and chloride concentrations.</td><td>g of the corresponding element m⁻³; sulfate is converted using S atomic mass (32), not SO₄ molecular mass.</td></tr>
+</tbody></table></div>
+<p>For record <i>e</i>, let <i>D</i><sub>e</sub> be its amount in mm and <i>n</i><sub>e</sub> = JEN<sub>e</sub> − JST<sub>e</sub> + 1. The reader constructs:</p>
+<div class="eq">q<sub>e,j</sub> = D<sub>e</sub> / (1000 n<sub>e</sub>) when JST<sub>e</sub> ≤ j ≤ JEN<sub>e</sub>; otherwise 0.<br>
+RRIG(j,i,NY,NX) = Σ<sub>e on day i</sub> q<sub>e,j</sub> &nbsp; [m h⁻¹].<br>
+Σ<sub>j=1…24</sub> RRIG(j,i) Δt = Σ<sub>e</sub> D<sub>e</sub> / 1000 &nbsp; [m], with Δt = 1 h.</div>
+<div class="note"><strong>Multiple pulses are supported.</strong> Overlapping records add their water amounts. Every positive-water record for the same cell and day must have identical pH, the three nutrient inputs, the eight salt inputs, and application depth. Conflicts stop the model with a diagnostic. Zero-water records are ignored and cannot replace another event’s daily properties. Different dates may use different properties.</div>
+<p>The compatibility check uses the converted numeric properties already stored for that cell and day. It also catches conflicts when another reader call has already populated the same cell/day. Blank records end the selected table; empty tables return without applying irrigation.</p>
+<p class="source">Source: <a href="../f90src/IOutils/ReadManagementMod.F90">ReadIrrigationFile</a>, including the current pulse-reader patch.</p></section>
+
+<section id="explorer"><h2>3 · Explore hourly pulses with one daily concentration</h2>
+<p>Edit the three records below. Colors show each record’s contribution; stacked colors indicate overlapping applications. This calculator illustrates schedule assembly and conservative solute input before interception, chemical speciation, or soil reactions.</p>
+<div class="panel">
+<div class="scroll"><table id="pulse-inputs"><thead><tr><th>Record</th><th>Amount [mm]</th><th>First hour</th><th>Last hour</th></tr></thead><tbody>
+<tr><td><span class="dot" style="background:#286fba"></span>A</td><td><input aria-label="Record A amount in millimeters" type="number" min="0" step="0.5" value="8"></td><td><input aria-label="Record A first hour" type="number" min="1" max="24" step="1" value="6"></td><td><input aria-label="Record A last hour" type="number" min="1" max="24" step="1" value="7"></td></tr>
+<tr><td><span class="dot" style="background:#16876f"></span>B</td><td><input aria-label="Record B amount in millimeters" type="number" min="0" step="0.5" value="6"></td><td><input aria-label="Record B first hour" type="number" min="1" max="24" step="1" value="12"></td><td><input aria-label="Record B last hour" type="number" min="1" max="24" step="1" value="12"></td></tr>
+<tr><td><span class="dot" style="background:#bd7834"></span>C</td><td><input aria-label="Record C amount in millimeters" type="number" min="0" step="0.5" value="6"></td><td><input aria-label="Record C first hour" type="number" min="1" max="24" step="1" value="7"></td><td><input aria-label="Record C last hour" type="number" min="1" max="24" step="1" value="8"></td></tr>
+</tbody></table></div>
+<div class="controls"><label>Cell area [m²]<input id="area" type="number" min="0.001" step="1" value="10"></label><label>Shared daily concentration [g m⁻³]<input id="concentration" type="number" min="0" step="1" value="14"></label></div>
+<p id="input-error" role="alert"></p>
+<div class="chart-scroll"><svg id="pulse-chart" viewBox="0 0 960 285" role="img" aria-labelledby="chart-title chart-description"><title id="chart-title">Hourly irrigation depth rates</title><desc id="chart-description">Three irrigation records, stacked by hour, with constant daily concentration.</desc><g id="chart-content"></g></svg></div>
+<div class="metrics" aria-live="polite"><div class="metric"><output id="total-depth">20 mm</output><span>Daily water depth</span></div><div class="metric"><output id="total-volume">0.200 m³</output><span>Cell water input</span></div><div class="metric"><output id="total-solute">2.800 g</output><span>Conservative solute input per cell</span></div><div class="metric"><output id="peak-rate">7.00 mm h⁻¹</output><span>Peak hourly rate</span></div></div>
+<p class="source">The concentration is constant across all bars; solute loading changes with the water rate. No rainfall or climate scaling is included. This is an explanatory calculator, not an EcoSIM simulation.</p>
+<noscript><p>The default records deliver 20 mm total. At 10 m² this is 0.2 m³; at 14 g m⁻³ it carries 2.8 g of conservative solute. Hour 7 receives 7 mm h⁻¹ from overlapping records A and C. Enable JavaScript to edit the chart.</p></noscript>
+</div></section>
+
+<section id="automatic"><h2>4 · Automatic irrigation: fill a diagnosed deficit</h2>
+<p>At daily setup, eligible columns are checked within their configured seasonal window. Automatic irrigation currently creates one continuous interval with a uniform hourly rate; the reader’s support for multiple scheduled records does not make automatic irrigation generate separate pulses.</p>
+<p>Let <i>z</i><sub>L</sub> be a layer-bottom depth, <i>z</i><sub>b</sub> the current topsoil upper boundary, and <i>d</i> the configured depletion depth. For layers whose upper boundary lies above <i>z</i><sub>b</sub> + <i>d</i>:</p>
+<div class="eq">f<sub>L</sub> = min[1, (z<sub>b</sub> + d − z<sub>L−1</sub>) / (z<sub>L</sub> − z<sub>L−1</sub>)]<br>
+θ*<sub>L</sub> = min[POROS<sub>L</sub>, θ<sub>WP,L</sub> + C (θ<sub>FC,L</sub> − θ<sub>WP,L</sub>)]<br>
+V* = Σ<sub>L</sub> f<sub>L</sub> θ*<sub>L</sub> V<sub>mic,L</sub> &nbsp; ↔ <code>TFZ</code><br>
+V<sub>WP</sub> = Σ<sub>L</sub> f<sub>L</sub> θ<sub>WP,L</sub> V<sub>mic,L</sub> &nbsp; ↔ <code>TWP</code><br>
+V<sub>stored</sub> = Σ<sub>L</sub> f<sub>L</sub> (V<sub>water,L</sub> + V<sub>ice,L</sub>) &nbsp; ↔ <code>TVW</code></div>
+<p><i>C</i> is <code>CIRRA_col</code>. Here <i>V</i><sub>mic,L</sub> is <code>VLSoilPoreMicP_vr</code>, the bulk layer volume associated with the micropore domain, not the water-filled pore volume. The three sums above have units of m³ per cell. Stored ice participates in the current water-deficit calculation.</p>
+<div class="scroll"><table><thead><tr><th>Criterion</th><th>Trigger</th></tr></thead><tbody>
+<tr><td>Soil water, <code>iIrrig_swc = 0</code></td><td>V<sub>stored</sub> &lt; V<sub>WP</sub> + F (V* − V<sub>WP</sub>), where F = <code>FIRRA_col</code>.</td></tr>
+<tr><td>Canopy water potential, <code>iIrrig_cwp = 1</code></td><td><code>PSICanPDailyMin_pft(1,NY,NX) &lt; FIRRA_col(NY,NX)</code>. The current implementation uses PFT index 1.</td></tr>
+</tbody></table></div>
+<p>After either trigger, the requested water volume and its hourly depth rate are:</p>
+<div class="eq">V<sub>request</sub> = max(0, V* − V<sub>stored</sub>) &nbsp; [m³ per cell]<br>
+RRIG(j,i) = V<sub>request</sub> / [A (j<sub>end</sub> − j<sub>start</sub> + 1)] &nbsp; [m h⁻¹], within the interval.</div>
+<p><i>A</i> is <code>AREA_3D(3,NU_col(NY,NX),NY,NX)</code>. Dividing by area here is essential: the hourly weather calculation multiplies by area once to recover cell-total volume. For example, a 3 m³ deficit in a 10 m² cell requests 0.3 m of water depth, not 3 m.</p>
+<details><summary>Automatic-input calendar convention still needs review</summary><p>The source documents automatic start/end fields as <code>DDMMHHHH</code> and uses the last four digits as a time, but also uses those digits for leap-year tests. A source TODO records that the documented format may be a typo. This document describes that ambiguity rather than resolving it. It is separate from the scheduled-record date format <code>DDMMYYYY</code>.</p></details>
+<p class="source">Sources: <a href="../f90src/Modelforc/DayMod.F90">TillageandIrrigationEvents</a>, <a href="../f90src/Modelconfig/ElmIDMod.F90">irrigation criterion identifiers</a>.</p></section>
+
+<section id="water"><h2>5 · Surface water and heat delivery</h2>
+<div class="eq">PRECII = RRIG(j,i) &nbsp; [m h⁻¹]; &nbsp; PRECUI = 0<br>
+Q<sub>irrig</sub> = A × PRECII = <code>IrrigSurface_col</code> &nbsp; [m³ h⁻¹]<br>
+Q<sub>liquid</sub> = Q<sub>rain</sub> + Q<sub>irrig</sub> = <code>PrecRainAndIrrig_col</code></div>
+<p>The canopy hydrology calculation uses the combined rain-plus-irrigation supply to diagnose interception and throughfall. The surface routine partitions liquid throughfall among snow-covered, litter-covered, and exposed-soil fractions. Rain and irrigation provenance is recovered using the incoming mixture:</p>
+<div class="eq">α<sub>irrig</sub> = Q<sub>irrig</sub> / (Q<sub>rain</sub> + Q<sub>irrig</sub>) when the denominator is positive; otherwise 0.<br>
+Q<sub>irrig→snow</sub> = α<sub>irrig</sub> Q<sub>liquid throughfall→snow</sub><br>
+Q<sub>irrig→litter</sub> = α<sub>irrig</sub> Q<sub>liquid throughfall→litter</sub><br>
+Q<sub>irrig→soil</sub> = α<sub>irrig</sub> Q<sub>liquid throughfall→soil</sub></div>
+<p>These rates are exported as <code>Irrig2SnowSurf_col</code>, <code>Irrig2LitRSurf_col</code>, and <code>Irrig2SoilSurf_col</code>. They describe recipient delivery after canopy partitioning, so their sum need not equal gross irrigation when canopy interception retains water.</p>
+<p>Liquid throughfall also carries sensible heat using atmospheric air temperature in the precipitation heat terms. The basic form is <i>c</i><sub>w</sub> T<sub>air</sub> Q [MJ h⁻¹], with additional pathway scalars where present, followed by multiplication by the ground substep duration. Irrigation has no separate prescribed water-temperature input in this active path. The resulting changes in soil moisture can subsequently affect plant uptake, transpiration, and surface evaporation.</p>
+<div class="note amber"><strong>Stored depth versus active routing.</strong> <code>WDPTH</code> is retained, checked for same-day compatibility, and written to restart files. However, the <code>WDPTH</code>-based surface/subsurface branch in <code>CalcRadiation</code> is commented out. The active code sends all scheduled and automatic irrigation to the surface; a positive depth value alone does not implement subsurface drip delivery.</div>
+<p class="source">The <code>CorrectClimate</code> routine contains an irrigation multiplier <code>TDIRI</code>, but its call in the current <code>PrepHourlyWeather</code> is commented out. The active equations above therefore do not apply that multiplier.</p>
+<p>Related explanations: <a href="ground_surface_energy_and_water.html">ground-surface water and energy</a>, <a href="canopy_energy_and_transpiration.html">canopy energy and transpiration</a>, and <a href="ecosim_surface_runoff.html">surface runoff</a>.</p></section>
+
+<section id="tracers"><h2>6 · Constant daily concentrations, variable hourly loading</h2>
+<div class="scroll"><table><thead><tr><th>Field</th><th>Time representation</th><th>Role</th></tr></thead><tbody>
+<tr><td><code>RRIG(J,I,NY,NX)</code></td><td>Hour × day × cell</td><td>Prescribed water depth rate [m h⁻¹].</td></tr>
+<tr><td><code>PHQ(I,NY,NX)</code></td><td>Day × cell</td><td>Prescribed irrigation-water pH.</td></tr>
+<tr><td><code>NH4_irrig_mole_conc</code>, <code>NO3_irrig_mole_conc</code>, phosphate arrays</td><td>Day × cell</td><td>Aqueous nutrient concentrations used by transport.</td></tr>
+<tr><td><code>trcsalt_irrig_mole_conc_col(s,I,NY,NX)</code></td><td>Species × day × cell</td><td>Aqueous salt concentrations [mol m⁻³]. Some declaration comments still carry mass-concentration units; the reader’s division by atomic mass establishes the molar basis.</td></tr>
+<tr><td><code>WDPTH(I,NY,NX)</code></td><td>Day × cell</td><td>Prescribed application depth [m]; see active-routing limitation above.</td></tr>
+</tbody></table></div>
+<p>The reader converts elemental mass concentrations to molar concentrations: for example, <code>CN4QX/14</code>, <code>CPOQX/31</code>, and <code>CCAQX/40</code>. Annual chemistry initialization in <code>StarteMod</code> then equilibrates the input solution, including ammonium/ammonia and phosphate species. Thus, delivered species concentrations may differ from the unequilibrated input values. Gas concentration arrays have a separate column-only representation; they should not be interpreted as hourly prescribed chemistry.</p>
+<p>For a conservative species <i>s</i> sent to recipient <i>r</i>, transport uses:</p>
+<div class="eq">Δn<sub>s,r</sub> = Q<sub>irrig→r</sub> C<sub>s,i</sub> Δt<sub>ground</sub> &nbsp; [mol]<br>
+Δm<sub>s,r</sub> = Δn<sub>s,r</sub> M<sub>s</sub> &nbsp; [g], when a mass-based tracer pool is used.</div>
+<p>The recipient exports are rates; <code>dts_HeatWatTP</code> supplies the ground substep duration in hours. Salt inputs enter snow, litter, and soil via their corresponding water exports. Nutrient pathways additionally apply the model’s band/non-band partition where required. Constant <i>C</i><sub>s,i</sub> therefore does not imply a constant hourly nutrient flux: the load follows water delivery.</p>
+<p>For example, before speciation or reaction, two 12 mm pulses at the same prescribed elemental concentration of 14 g m⁻³ carry a total of 0.024 × 14 = <strong>0.336 g m⁻²</strong>. Changing the concentration of only the second pulse is not representable by the daily-property arrays and is rejected by the reader.</p>
+<p class="source">Sources: <a href="../f90src/Ecosim_mods/StarteMod.F90">StarteMod</a>, <a href="../f90src/Transport/Salt/TranspSaltMod.F90">salt input to litter and soil</a>, <a href="../f90src/Transport/Salt/IngridTranspMod.F90">salt input to snow</a>, <a href="../f90src/Transport/Nonsalt/InitNoSaltTransportMod.F90">nutrient deposition</a>.</p></section>
+
+<section id="timing"><h2>7 · Annual inputs, daily decisions, hourly application</h2>
+<ol><li><strong>Annual preparation:</strong> reset irrigation forcing arrays and eligibility, then read the selected management records. Chemistry initialization prepares the prescribed solution.</li>
+<li><strong>Daily setup:</strong> scheduled pulses are already in <code>RRIG</code>; automatic columns may construct the current day’s schedule from restored/current water state.</li>
+<li><strong>Hourly forcing:</strong> select <code>RRIG(J,I,NY,NX)</code>, convert depth rate to cell volume rate, and combine irrigation with rain.</li>
+<li><strong>Ground substeps:</strong> partition water and associated heat; deliver nutrients and salts with the same recipient water rates.</li></ol>
+<p>For intraday continuation, <code>RRIG_day</code> and <code>WDPTH_day</code> preserve the current day’s schedule and prescribed depth. The automatic decision is not rerun partway through the day. At a midnight restart, daily setup makes the new automatic decision after loading soil state. Eligibility and prescribed chemistry are reconstructed from management inputs. Legacy intraday automatic-irrigation checkpoints without the saved schedule/depth fields are rejected; a midnight checkpoint is required.</p>
+<p class="source">Sources: <a href="../f90src/IOutils/readsmod.F90">annual forcing reset</a>, <a href="../f90src/Modelforc/DayMod.F90">CompleteDailySetup</a>, <a href="../drivers/ecosim/EcoSIMAPI.F90">restart/daily calling order</a>, <a href="../f90src/IOutils/RestartMod.F90">restartnc_daily_irrigation</a>.</p></section>
+
+<section id="sources"><h2>8 · Source map and interpretation</h2>
+<div class="scroll"><table><thead><tr><th>Source</th><th>Relevant routines / arrays</th></tr></thead><tbody>
+<tr><td><a href="../f90src/IOutils/ReadManagementMod.F90">ReadManagementMod.F90</a></td><td><code>ReadManagementFiles</code>, <code>ReadIrrigationFile</code>: rectangle selection, input conversion, pulse addition, shared-property validation.</td></tr>
+<tr><td><a href="../f90src/Ecosim_datatype/IrrigationDataType.F90">IrrigationDataType.F90</a></td><td>Hourly water, daily solution properties, eligibility, and recipient-transfer arrays.</td></tr>
+<tr><td><a href="../f90src/Modelforc/DayMod.F90">DayMod.F90</a></td><td><code>TillageandIrrigationEvents</code>: trigger tests, deficit volume, area-normalized automatic schedule.</td></tr>
+<tr><td><a href="../f90src/Modelforc/WthrMod.F90">WthrMod.F90</a></td><td><code>CalcRadiation</code>, <code>SummaryClimateForc</code>: active surface routing and area multiplication.</td></tr>
+<tr><td><a href="../f90src/HydroTherm/CanopyPhys/CanopyHydroMod.F90">CanopyHydroMod.F90</a></td><td>Rain-plus-irrigation interception and throughfall.</td></tr>
+<tr><td><a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90">SurfPhysMod.F90</a></td><td><code>PartitionPrecip</code>: recipient water rates and precipitation heat.</td></tr>
+<tr><td><a href="../f90src/IOutils/RestartMod.F90">RestartMod.F90</a></td><td>Current-day schedule persistence and intraday compatibility checks.</td></tr>
+</tbody></table></div>
+<p>This walkthrough describes implemented equations and the current working-tree reader. It distinguishes gross irrigation from throughfall and infiltration, and prescribed daily chemistry from species produced by initialization. It does not establish an irrigation efficiency factor or represent sub-hour pulses: the prescribed water schedule has hourly resolution.</p></section>
+<footer>EcoSIM knowledge document · Self-contained HTML; the interactive calculator runs locally without network dependencies. Companion: <a href="surface_energy_and_evapotranspiration.html">surface energy and evapotranspiration</a>.</footer>
+</main>
+<script>
+'use strict';
+const COLORS=['#286fba','#16876f','#bd7834'];
+function calculatePulses(events,area,concentration){
+ if(!Number.isFinite(area)||area<=0||!Number.isFinite(concentration)||concentration<0)throw Error('Use a positive cell area and a nonnegative concentration.');
+ const series=events.map(([amount,start,end])=>{
+  if(![amount,start,end].every(Number.isFinite)||amount<0||!Number.isInteger(start)||!Number.isInteger(end)||start<1||end>24||start>end)throw Error('Each record needs a nonnegative amount and integer hours satisfying 1 ≤ first ≤ last ≤ 24.');
+  return Array.from({length:24},(_,h)=>(h+1>=start&&h+1<=end)?amount/(end-start+1):0);
+ });
+ const hourly=Array.from({length:24},(_,h)=>series.reduce((sum,event)=>sum+event[h],0));
+ const depth=hourly.reduce((sum,x)=>sum+x,0),volume=depth/1000*area;
+ return {series,hourly,depth,volume,solute:volume*concentration,peak:Math.max(...hourly)};
+}
+function update(){
+ try{
+  const events=[...document.querySelectorAll('#pulse-inputs tbody tr')].map(row=>[...row.querySelectorAll('input')].map(input=>input.valueAsNumber));
+  const r=calculatePulses(events,document.getElementById('area').valueAsNumber,document.getElementById('concentration').valueAsNumber);
+  document.getElementById('input-error').textContent='';
+  document.getElementById('total-depth').textContent=r.depth.toFixed(2)+' mm';
+  document.getElementById('total-volume').textContent=r.volume.toFixed(3)+' m³';
+  document.getElementById('total-solute').textContent=r.solute.toFixed(3)+' g';
+  document.getElementById('peak-rate').textContent=r.peak.toFixed(2)+' mm h⁻¹';
+  const x0=58,y0=225,w=876,h=180,step=w/24,max=Math.max(1,r.peak)*1.15;
+  let svg='<text x="58" y="22" fill="#60746b" font-size="13">Water depth rate [mm h⁻¹]</text>';
+  for(let t=0;t<=4;t++){const v=max*t/4,y=y0-v/max*h;svg+=`<line x1="${x0}" x2="${x0+w}" y1="${y}" y2="${y}" stroke="#dbe5dc"/><text x="49" y="${y+4}" text-anchor="end" font-size="12" fill="#60746b">${v.toFixed(1)}</text>`;}
+  for(let j=0;j<24;j++){
+   let total=0;
+   r.series.forEach((series,k)=>{const v=series[j];if(v>0){const y=y0-(total+v)/max*h;svg+=`<rect x="${x0+j*step+4}" y="${y}" width="${step-8}" height="${v/max*h}" fill="${COLORS[k]}"><title>Record ${'ABC'[k]}, hour ${j+1}: ${v.toFixed(3)} mm h⁻¹; total ${r.hourly[j].toFixed(3)}</title></rect>`;}total+=v;});
+   svg+=`<text x="${x0+(j+.5)*step}" y="247" text-anchor="middle" font-size="12" fill="#60746b">${j+1}</text>`;
+  }
+  svg+='<text x="496" y="275" text-anchor="middle" font-size="13" fill="#60746b">Model hour index (inclusive intervals, 1–24)</text>';
+  document.getElementById('chart-content').innerHTML=svg;
+  document.getElementById('chart-description').textContent=`Daily total ${r.depth.toFixed(2)} millimeters; peak hourly rate ${r.peak.toFixed(2)} millimeters per hour. Colors identify the three records.`;
+ }catch(error){
+  document.getElementById('input-error').textContent=error.message;
+  document.getElementById('chart-content').innerHTML='';
+  ['total-depth','total-volume','total-solute','peak-rate'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('chart-description').textContent='Invalid inputs; correct the highlighted input message to display the schedule.';
+ }
+}
+document.querySelectorAll('input').forEach(input=>input.addEventListener('input',update));
+update();
+</script>
+</body></html>

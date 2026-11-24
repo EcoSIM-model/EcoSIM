@@ -1,0 +1,179 @@
+netcdf biocrust_pft_mgmt {
+dimensions:
+	ntopou = 1 ;
+	year = 1 ;
+	maxpfts = 5 ;
+	maxpmgt = 24 ;
+	nchar1 = 10 ;
+	ncharmgnt = 128 ;
+variables:
+	int NH1(ntopou) ;
+	int NV1(ntopou) ;
+	int NH2(ntopou) ;
+	int NV2(ntopou) ;
+	int NZ(ntopou) ;
+	int year(year) ;
+	short nmgnts(year, ntopou, maxpfts) ;
+		nmgnts:_FillValue = -9999s ;
+	char pft_type(year, ntopou, maxpfts, nchar1) ;
+	char pft_pltinfo(year, ntopou, maxpfts, ncharmgnt) ;
+	char pft_mgmt(year, ntopou, maxpfts, maxpmgt, ncharmgnt) ;
+	int pft_dflag ;
+
+// global attributes:
+		:description = "PFT input data created on 2026-09-16 09:18:35" ;
+data:
+
+ NH1 = 1 ;
+
+ NV1 = 1 ;
+
+ NH2 = 1 ;
+
+ NV2 = 1 ;
+
+ NZ = 2 ;
+
+ year = 2000 ;
+
+ nmgnts =
+  0, 0, _, _, _ ;
+
+ pft_type =
+  "lich22    ",
+  "moss22    ",
+  "",
+  "",
+  "" ;
+
+ pft_pltinfo =
+  "01012000 1.e-5 0.0 1.0E+04                                                                                                      ",
+  "01012000 1.e-5 0.0 1.0E+04                                                                                                      ",
+  "",
+  "",
+  "" ;
+
+ pft_mgmt =
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "" ;
+
+ pft_dflag = 0 ;
+}

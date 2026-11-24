@@ -15,6 +15,7 @@ add_ecosim_library(ATSUtils_mods ${ATSUTILS_MOD_SOURCES})
 
 target_include_directories(ATSUtils_mods  PRIVATE
    ${CMAKE_BINARY_DIR}/f90src/Utils/
+   ${CMAKE_BINARY_DIR}/f90src/DebugTools/
    ${CMAKE_BINARY_DIR}/f90src/Main/
    ${CMAKE_BINARY_DIR}/f90src/Minimath/
    ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
@@ -31,7 +32,6 @@ target_include_directories(ATSUtils_mods  PRIVATE
    ${CMAKE_BINARY_DIR}/f90src/HydroTherm/CanopyPhys/
    ${CMAKE_BINARY_DIR}/f90src/APIData/
    ${CMAKE_BINARY_DIR}/f90src/Ecosim_mods/
-   ${CMAKE_BINARY_DIR}/f90src/Prescribed_pheno/
    ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
    ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Box_Micmodel
    ${CMAKE_BINARY_DIR}/f90src/APIs/

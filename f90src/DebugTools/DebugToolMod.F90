@@ -19,9 +19,15 @@ implicit none
     module procedure DebugPrint_real_arrs
     module procedure DebugPrint_int
   end interface DebugPrint
-
+  public :: do_debug
 contains
 
+  pure function do_debug()result(ans)
+  implicit none
+  logical :: ans
+  
+  ans= lverb
+  end function do_debug
   !-----------------------------------------------------------------------
     subroutine PrintInfo(message)
     implicit none
@@ -53,7 +59,7 @@ contains
    implicit none
    real(r8), intent(in) :: vals(:)
    integer :: nvars
-   character(len=256) :: fmt
+
    nvars=size(vals)
    
    if(.not.lverb)return

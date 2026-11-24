@@ -1,5 +1,5 @@
 set(PLANT_DRIVER_SOURCES
-  PlantMod.F90
+  PlantTestMod.F90
 )
 
 include(add_ecosim_library)

@@ -1,13 +1,17 @@
 module SoilPhysDataType
+  ! Description:
+  ! Own soil physical properties, radiation fields and surface-exchange diagnostics.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
+  use EcoSIMCtrlMod, only: soil_hydraulic_scheme,VanGenuchtenSchemeName
 implicit none
 
   save
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
 
-  real(r8),target,allocatable ::  SLOPE_col(:,:,:)                             !slope	in four directions, [o]
+  real(r8),target,allocatable :: PAR_RAD_vr(:,:,:)                             !vertically-resolved PAR radiation,  [umol photon m-2 s-1]
+  real(r8),target,allocatable ::  SLOPE_col(:,:,:)                             !tan(slope angle): 0=magnitude, 1=EW, 2=NS; 3=-1 vertical, [-]
   real(r8),target,allocatable ::  SoilSurfDepZ_col(:,:)                        !depth of soil surface, [m]
   real(r8),target,allocatable ::  FieldCapacity_vr(:,:,:)                      !water contents at field capacity,[m3 d-2]
   real(r8),target,allocatable ::  WiltPoint_vr(:,:,:)                          !water contents at wilting point,[m3 d-2]
@@ -24,6 +28,10 @@ implicit none
   real(r8),target,allocatable ::  PSD_vr(:,:,:)                                !log (soil porosity /water content at field capacity),[-]
   real(r8),target,allocatable ::  FCD_vr(:,:,:)                                !log water content at field capacity,[-]
   real(r8),target,allocatable ::  SRP_vr(:,:,:)                                !shape parameter for water desorption,[-]
+  real(r8),target,allocatable :: VGThetaR_vr(:,:,:)                            ! residual liquid content [m3 m-3 micropore soil], (0:JZ,JY,JX)
+  real(r8),target,allocatable :: VGAlpha_vr(:,:,:)                             ! inverse pressure scale [MPa-1], (0:JZ,JY,JX)
+  real(r8),target,allocatable :: VGN_vr(:,:,:)                                 ! van Genuchten exponent [-], (0:JZ,JY,JX)
+  real(r8),target,allocatable :: VGL_vr(:,:,:)                                 ! Mualem pore-connectivity exponent [-], (0:JZ,JY,JX)
   real(r8),target,allocatable ::  FSLOPE_2DH(:,:,:)                            !fraction of slope in 1 and 2,[-]
   REAL(R8),target,allocatable ::  VLMicPt0_col(:,:,:)                          !initial total soil micropore porosity,	[m3 d-2]
   REAL(R8),target,allocatable ::  LOGPSIAtSat(:,:)                             !log water potential at saturation,	[MPa]
@@ -34,13 +42,15 @@ implicit none
   real(r8),target,allocatable ::  VHeatCapSolidSoil_vr(:,:,:)                  !soil solid heat capacity, [MPa m-3 K-1]
   real(r8),target,allocatable ::  VHeatCapMineralSoil_vr(:,:,:)                !mineral soil heat capacity, [MPa m-3 K-1]
   real(r8),target,allocatable ::  ActiveLayDepZ_col(:,:)                       !active layer depth of a permafrost soil, [m]
-  real(r8),target,allocatable ::  CondGasXSurf_col(:,:)                        !gas conductance for soil-atmosphere exchange, [m/h]
+  real(r8),target,allocatable ::  CondGasXSurf_col(:,:)                        !H2O-reference diagnostic of the soil-to-atmosphere gas network [m/h]
   real(r8),target,allocatable ::  HBAconst_vr(:,:,:)                           !A factor degraded root stress, for the the Hardin & Black method with OM, [sqrt(MPa)]
   real(r8),target,allocatable ::  HBAMin_vr(:,:,:)                             !A factor of mineral soil for the Hardin & Black method without OM, [sqrt(MPa)] 
 !----------------------------------------------------------------------
 
 contains
   subroutine InitSoilPhysData
+  ! Description:
+  ! Allocate physical state, including scheme-specific parameters only when selected.
 
   implicit none
   allocate(SoilSurfDepZ_col(JY,JX)); SoilSurfDepZ_col=0._r8
@@ -59,7 +69,15 @@ contains
   allocate(LOGWiltPoint_vr(0:JZ,JY,JX));    LOGWiltPoint_vr=0._r8
   allocate(PSD_vr(0:JZ,JY,JX));    PSD_vr=0._r8
   allocate(FCD_vr(0:JZ,JY,JX));    FCD_vr=0._r8
+  allocate(PAR_RAD_vr(0:JZ,JY,JX)); PAR_RAD_vr=0._r8
   allocate(SRP_vr(0:JZ,JY,JX));    SRP_vr=0._r8
+
+  if(soil_hydraulic_scheme==VanGenuchtenSchemeName)then
+    allocate(VGThetaR_vr(0:JZ,JY,JX));VGThetaR_vr=-1._r8
+    allocate(VGAlpha_vr(0:JZ,JY,JX));VGAlpha_vr=-1._r8
+    allocate(VGN_vr(0:JZ,JY,JX));VGN_vr=-1._r8
+    allocate(VGL_vr(0:JZ,JY,JX));VGL_vr=.5_r8
+  endif
   allocate(FSLOPE_2DH(2,JY,JX));    FSLOPE_2DH=0._r8
   allocate(VLMicPt0_col(0:JZ,JY,JX));  VLMicPt0_col=0._r8
   allocate(LOGPSIAtSat(JY,JX));       LOGPSIAtSat=0._r8
@@ -77,6 +95,8 @@ contains
 
 !----------------------------------------------------------------------
   subroutine DestructSoilPhysData
+  ! Description:
+  ! Release physical state and any allocated scheme-specific parameters.
   use abortutils, only : destroy
   implicit none
   call destroy(HBAMin_vr)
@@ -97,7 +117,12 @@ contains
   call destroy(LOGWiltPoint_vr)
   call destroy(PSD_vr)
   call destroy(FCD_vr)
+  call destroy(PAR_RAD_vr)
   call destroy(SRP_vr)
+  if(allocated(VGThetaR_vr))call destroy(VGThetaR_vr)
+  if(allocated(VGAlpha_vr))call destroy(VGAlpha_vr)
+  if(allocated(VGN_vr))call destroy(VGN_vr)
+  if(allocated(VGL_vr))call destroy(VGL_vr)
   call destroy(FSLOPE_2DH)
   call destroy(VLMicPt0_col)
   call destroy(LOGPSIAtSat)

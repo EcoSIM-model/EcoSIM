@@ -292,9 +292,9 @@ module GeochemAPI
   trcp_RChem_soil_vr(idsp_AlPO4B,L,NY,NX)         = solflx%TRChem_AlPO4_precip_band_soil
   trcp_RChem_soil_vr(idsp_FePO4B,L,NY,NX)         = solflx%TRChem_FePO4_precip_band_soil
   trcp_RChem_soil_vr(idsp_CaHPO4B,L,NY,NX)        = solflx%TRChem_CaHPO4_precip_band_soil
-  trcp_RChem_soil_vr(idsp_ApatiteBand,L,NY,NX)            = solflx%TRChem_apatite_precip_band_soil
+  trcp_RChem_soil_vr(idsp_ApatiteBand,L,NY,NX)    = solflx%TRChem_apatite_precip_band_soil
   trcp_RChem_soil_vr(idsp_CaH4P2O8B,L,NY,NX)      = solflx%TRChem_CaH4P2O8_precip_band_soil
-  TProd_CO2_geochem_soil_vr(L,NY,NX)              = solflx%TRChem_CO2_gchem_soil*catomw
+  TProd_CO2_geochem_soil_vr(L,NY,NX)              = solflx%TRChem_CO2_gchem_soil
   if(salt_model)then
     trcSalt_RGeoChem_flx_vr(idsalt_Al,L,NY,NX)        = solflx%TRChem_Al_3p_soil
     trcSalt_RGeoChem_flx_vr(idsalt_Fe,L,NY,NX)        = solflx%TRChem_Fe_3p_soil

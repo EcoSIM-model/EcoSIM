@@ -1,18 +1,24 @@
 module EcoSIMAPI
-  use timings,          only: start_timer,         end_timer
-  use data_kind_mod,    only: yearIJ_type
+  ! Description:
+  ! Advance standalone EcoSIM physical and biogeochemical processes. Plant
+  ! hydraulics supply current root transfers before soil transport; full plant
+  ! growth and nutrient processes retain their original post-hydrology ordering.
+  use timings,          only: start_timer, end_timer, timer_stamp_type
+  use data_kind_mod,    only: r8 => DAT_KIND_R8,yearIJ_type
   use MicBGCAPI,        only: MicrobeModel,        MicAPI_Init,              MicAPI_cleanup
   use TracerIDMod,      only: ids_NO2B,            ids_NO2,                  idg_O2
-  use EcosysWarmingMod, only: check_warming_dates, apply_soil_cable_warming, config_soil_warming
+  use EcosysWarmingMod, only: check_warming_year, apply_soil_cable_warming, config_soil_warming
   use ErosionMod,       only: erosion
   use Hour1Mod,         only: hour1
   use abortutils,       only: iulog
   use RedistMod,         only: redist
   use GeochemAPI,        only: soluteModel
-  use PlantMod,          only: PlantModel
+  use PlantMod,          only: PlantModel, UpdateDailyGPP
+  use PlantHydraulicMod, only: PlantHydraulicModel
   use TranspNoSaltMod,   only: TranspNoSalt
   use TranspSaltMod,     only: TranspSalt
   use WatsubMod,         only: watsub
+  use GridConsts,        only: JY,JX
   use PlantMgmtDataType, only: NP_col
   use FireMod,           only: config_fire
   use EcoSIMSolverPar,   only: oscal_test
@@ -21,7 +27,8 @@ module EcoSIMAPI
   use SoilWaterDataType
   use EcoSIMCtrlMod  
   use BalancesMod  
-  use SoilDiagsMod  
+  use SoilDiagsMod 
+  use MLDataDiagMod 
 implicit none
   private
   character(len=*), parameter :: mod_filename = &
@@ -29,15 +36,17 @@ implicit none
   public :: AdvanceModelOneYear
   public :: readnamelist
   public :: regressiontest,write_modelconfig
-  logical :: do_timing
+  public :: do_timing, do_timing_detail
+  logical :: do_timing, do_timing_detail
 contains
 
   subroutine Run_EcoSIM_one_step(yearIJ,NHW,NHE,NVN,NVS)
-
+  ! Description:
+  ! Advance one hourly physical step followed by the enabled BGC processes.
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
   integer, intent(in) :: NHW,NHE,NVN,NVS
-  real(r8) :: t1
+  type(timer_stamp_type) :: t1
   character(len=*), parameter :: subname='Run_EcoSIM_one_step'
 
   call PrintInfo('beg '//subname)
@@ -51,7 +60,7 @@ contains
   !   CALCULATE SOIL ENERGY BALANCE, WATER AND HEAT FLUXES IN 'WATSUB'
   !
   if(do_timing)call start_timer(t1)
-  CALL WATSUB(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
+  call WATSUB(yearIJ,NHW,NHE,NVN,NVS,PlantHydraulicModel)
   if(do_timing)call end_timer('WAT',t1)
   !
   !   CALCULATE SOIL BIOLOGICAL TRANSFORMATIONS IN 'NITRO'
@@ -60,15 +69,20 @@ contains
     if(do_timing)call start_timer(t1)
     CALL MicrobeModel(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
     if(do_timing)call end_timer('NIT',t1)
+    
+    if(lmicrobeMLdiag)call MLDataDiag(yearIJ,NHW,NHE,NVN,NVS)
   endif
   !
   !   UPDATE PLANT biogeochemistry
   !
-  if(plant_model .and. (.not.ldo_radiation_test))then
+  if(plant_model.and..not.ldo_radiation_test.and..not.ldo_sp_mode)then
     if(do_timing)call start_timer(t1)  
     call PlantModel(yearIJ,NHW,NHE,NVN,NVS)
     if(do_timing)call end_timer('PlantModel',t1)    
   endif
+
+  call UpdateDailyGPP(yearIJ%J,NHW,NHE,NVN,NVS, &
+    plant_model .and. .not.ldo_radiation_test .and. .not.ldo_sp_mode)
 
   !
   !   CALCULATE SOLUTE EQUILIBRIA IN 'SOLUTE'
@@ -114,10 +128,12 @@ contains
   if(do_timing)call end_timer('REDIST',t1)
 334   FORMAT(A8)
 
+  if(do_timing)call start_timer(t1)
   call DiagSoilGasPressure(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)    
 
-  call EndCheckBalances(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
+  call EndCheckBalances(yearIJ,NHW,NHE,NVN,NVS)
 
+  if(do_timing)call end_timer('Diagnostics',t1)
   call PrintInfo('end '//subname)
   end subroutine Run_EcoSIM_one_step
 ! ----------------------------------------------------------------------
@@ -133,6 +149,7 @@ contains
   use EcoSIMHistMod  , only : DATAC
   use readsmod       , only : clim_var  
   use MicrobeConfigMod,only : ReadMicrobeNamelist
+  use SoilHydraulicSchemeMod, only: InitializeSoilHydraulicScheme
   use HistFileMod
   implicit none
   character(len=*), parameter :: mod_filename = &
@@ -155,14 +172,26 @@ contains
     num_of_simdays,lverbose,num_microbial_guilds,transport_on,column_mode,&
     do_instequil,salt_model, pft_file_in,grid_file_in,pft_mgmt_in, clm_factor_in,&
     clm_hour_file_in,clm_day_file_in,soil_mgmt_in,forc_periods,NCYC_LITR,NCYC_SNOW,&
-    NPXS,NPYS,continue_run,restart_out,lsoilCompaction,&
+    NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,use_ecosys_drainage,soil_hydraulic_scheme,&
+    clm_hour_file_in,clm_day_file_in,soil_mgmt_in,soil_mgmt_use_model_year,forc_periods,NCYC_LITR,NCYC_SNOW,&
+    NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,&
     finidat,restartFileFullPath,brnch_retain_casename,plant_model,microbial_model,&
     soichem_model,atm_ghg_in,aco2_ppm,ao2_ppm,an2_ppm,ach4_ppm,anh3_ppm,&
     snowRedist_model,disp_planttrait,iErosionMode,grid_mode,atm_ch4_fix,atm_n2o_fix,&
-    atm_co2_fix,first_topou,first_pft,fixWaterLevel,arg_ppm,idebug_day,idebug_year,ldo_sp_mode,iverblevel,&
+    atm_co2_fix,first_topou,first_pft,fixWaterLevel,arg_ppm,idebug_day,idebug_year,ldo_sp_mode,sp_phenol_in,iverblevel,&
     ldo_radiation_test,ldo_transpt_bubbling,plantOM4Heat,micpar_file_in,iselect_plantZ,llignification
-  namelist /ecosim/hist_nhtfrq,hist_mfilt,hist_fincl1,hist_fincl2,hist_yrclose, &
-    do_budgets,ref_date,start_date,do_timing,warming_exp,fixClime,FireEvents,oscal_test
+! --- Jing Tao ---
+! guard_floor_dying_stand is appended to this group so ONE binary serves both arms of the
+! verification, instead of needing a second build with the default flipped. It mirrors
+! lmicrobeMLdiag below, which is likewise an EcoSIMCtrlMod logical surfaced through /ecosim/.
+! DEFAULT-OFF IS PRESERVED BY THE READ ITSELF: a Fortran namelist read does not require every
+! group member to be present, so the 14,849 R3 runfiles written before this variable existed
+! simply leave it at its .false. initialiser. No existing case file needs rewriting, and a run
+! against an old runfile is bit-for-bit unchanged. To enable it, add one line to the runfile:
+!     guard_floor_dying_stand = .true.
+  namelist /ecosim/hist_nhtfrq,hist_mfilt,hist_fincl1,hist_fincl2,hist_fincl3,hist_yrclose, lmicrobeMLdiag,&
+    do_budgets,ref_date,start_date,do_timing,do_timing_detail,warming_exp,fixClime,FireEvents,oscal_test,&
+    lcoarseroot,guard_floor_dying_stand
 
   logical :: laddband
   namelist /bbgcforc/do_bgcforc_write,do_year,do_doy,laddband,do_layer,&
@@ -176,6 +205,7 @@ contains
   integer :: year0
 
   do_timing    = .false.
+  do_timing_detail = .false.
   continue_run = .false.
   NPXS         = 30   !number of cycles per hour for water, heat, solute flux calcns
   NPYS         = 10   !number of cycles per NPX for gas flux calculations
@@ -187,12 +217,14 @@ contains
   NCYC_SNOW             = 20
   grid_mode             = 3
   iErosionMode          = -1
+  lmicrobeMLdiag        = .false.
   restart_out           = .false.
   do_budgets            = .false.
   plant_model           = .true.
   soichem_model         = .true.
   microbial_model       = .true.
-  llignification        = .true.
+  llignification        = .false.
+  lcoarseroot           = .false.
   disp_planttrait       = .false.
   ref_date              = '18000101000000'   !place holder for future
   start_date            = '18000101000000'   !start date of the simulation, differ from the forcing date
@@ -210,6 +242,9 @@ contains
   do_year              = -1
   do_doy               = 0
   do_layer             = 1
+  LMacPoreOff          = .false.
+  use_ecosys_drainage  = .false.
+  soil_hydraulic_scheme = DefaultSoilHydraulicScheme
   salt_model           = .false.
   laddband             = .false.
   do_regression_test   = .false.
@@ -226,7 +261,9 @@ contains
   clm_hour_file_in   = ''
   clm_day_file_in    = ''
   soil_mgmt_in       = 'NO'
+  soil_mgmt_use_model_year = .false. ! legacy default; opt in for dated schedules
   atm_ghg_in         = ''
+  sp_phenol_in       = ''
   aco2_ppm           = 280._r8
   ach4_ppm           = 1.144_r8
   an2o_ppm           = 0.270_r8
@@ -314,6 +351,7 @@ contains
     clim_var%Atm_kPa   = Atm_kPa
   endif
 
+  call InitializeSoilHydraulicScheme()
   call ReadMicrobeNamelist(nml_buffer)
 
 end subroutine readnamelist
@@ -325,20 +363,20 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
 ! THIS IS THE MAIN SUBROUTINE FROM WHICH ALL OTHERS ARE CALLED
 !
   use data_kind_mod,   only: r8 => DAT_KIND_R8
-  use DayMod,          only: day
+  use DayMod,          only: day, CompleteDailySetup
   use StarteMod,       only: starte
   use StartqMod,       only: startq
-  use StartsMod,       only: starts
+  use StartsMod,       only: starts,InitControlParms
   use WthrMod,         only: PrepHourlyWeather
   use RestartMod,      only: restFile
   use PlantInfoMod,    only: ReadPlantInfo
   use readsmod,        only: ReadClimSoilForcing
   use YearMod,         only: SetAnnualAccumlators
-  use timings,         only: init_timer,         start_timer, end_timer, end_timer_loop
+  use timings,         only: end_timer_loop, flush_timer_detail
   use ForcWriterMod,   only: do_bgcforc_write,   WriteBBGCForc
   use HistDataType,    only: hist_ecosim
   use HistFileMod,     only: hist_update_hbuf,   hist_htapes_wrapup
-  use ClimReadMod,     only: read_soil_warming_Tref
+  use ClimReadMod,     only: read_soil_warming_Tref, ReadAtmosComposition
   use EcoSIMCtrlMod
   use GridConsts
   use EcoSIMCtrlDataType
@@ -351,15 +389,21 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
   logical, intent(out) :: nlend
   character(len=*), parameter :: mod_filename = &
   __FILE__
-  real(r8) :: t1
+  type(timer_stamp_type) :: t1
+  type(timer_stamp_type) :: step_stamp
+  type(timer_stamp_type) :: setup_stamp
   type(yearIJ_type) :: yearIJ  
 
   character(len=*), parameter :: subname='AdvanceModelOneYear'
   integer :: I,J
+  integer :: NX,NY
+  integer :: NP_previous(JY,JX)
   integer :: idaz
   character(len=14) :: ymdhs
   logical :: rstwr, lnyr
   logical :: lverb0
+  logical :: DeferDailySetup
+  logical :: RefreshRainChem
 
 ! begin_execution
 !
@@ -370,7 +414,7 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
   call PrintInfo('beg '//subname)
   is_first_year=frectyp%yearacc.EQ.0
 
-  if(do_timing)call init_timer(outdir)
+  if(do_timing)call start_timer(setup_stamp)
 
   !temporary set up for setting mass balance check
   IBEGIN=1;ISTART=1;ILAST=0
@@ -379,45 +423,79 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
 
   iYearCurrent=frectyp%yearcur
 
+  !  Initialize controlling parameters
+  if(do_timing)call start_timer(t1)
+  call InitControlParms
+  if(do_timing)call end_timer('InitControlParms',t1)
+
+  ! Read annual atmospheric mixing ratios before STARTS converts them to mass concentrations.
+  if(do_timing)call start_timer(t1)
+  call ReadAtmosComposition(iYearCurrent,NHW,NHE,NVN,NVS)
+  if(do_timing)call end_timer('ReadAtmosComposition',t1)
+
   IF(ymdhs(1:4)==frectyp%ymdhs0(1:4))THEN
     
+    if(do_timing)call start_timer(t1)
     CALL STARTS(NHW,NHE,NVN,NVS)
+    if(do_timing)call end_timer('STARTS',t1)
 !
 !   RECOVER VALUES OF ALL SOIL STATE VARIABLES FROM EARLIER RUN
-!   IN 'ROUTS' IF NEEDED
+!   IN 'ROUTS' IF NEEDED      
   ENDIF  
 !
   if(plant_model)then
     !plant information is read in every year, but the active flags
     !are set using the checkpoint file.
+    NP_previous=NP_col
+    if(do_timing)call start_timer(t1)
     call ReadPlantInfo(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
+    if(do_timing)call end_timer('ReadPlantInfo',t1)
   endif
 
-  CALL ReadClimSoilForcing(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
+  if(do_timing)call start_timer(t1)
+  CALL ReadClimSoilForcing(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS,RefreshRainChem)
+  if(do_timing)call end_timer('ReadClimSoilForcing',t1)
 
 ! INITIALIZE ALL PLANT VARIABLES IN 'STARTQ'
 !
-  IF(ymdhs(1:4)==frectyp%ymdhs0(1:4) .and. plant_model)THEN
+  if(ldo_sp_mode)then
+    ! Prescribed PFT slots can appear in any forcing year. Initialize only
+    ! newly named slots; existing canopies retain their water and root state.
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        call STARTQ(NX,NX,NY,NY,NP_previous(NY,NX)+1,NP_col(NY,NX))
+      ENDDO
+    ENDDO
+  ELSEIF(ymdhs(1:4)==frectyp%ymdhs0(1:4) .and. plant_model)THEN
     !initialize by year
+    if(do_timing)call start_timer(t1)
     CALL STARTQ(NHW,NHE,NVN,NVS,1,JP)
+    if(do_timing)call end_timer('STARTQ',t1)
   ENDIF
 
-  if(ymdhs(1:4)==frectyp%ymdhs0(1:4) .and. soichem_model)then
-    ! INITIALIZE ALL SOIL CHEMISTRY VARIABLES IN 'STARTE'
-    ! This is done done every year, because tracer concentrations
-    ! in rainfall vary every year. In a more reasonable way, e.g.,
-    ! when coupled to atmospheric chemistry code, it should be done by
-    ! hour
-    CALL STARTE(NHW,NHE,NVN,NVS)
+  if(soichem_model)then
+    ! Refresh irrigation chemistry after annual management reading; process
+    ! rainfall only when its raw inputs were reloaded. Soil initialization
+    ! remains restricted to the first cold-start year within STARTE.
+    if(do_timing)call start_timer(t1)
+    CALL STARTE(NHW,NHE,NVN,NVS,RefreshRainChem)
+    if(do_timing)call end_timer('STARTE',t1)
   endif
 
-  if(check_warming_dates(iYearCurrent,1,1))then
+  !load the reference whenever any day of the year is warmed, not only when Jan 1 is
+  if(check_warming_year(iYearCurrent))then
+    if(do_timing)call start_timer(t1)
     call read_soil_warming_Tref(iYearCurrent,NHW,NHE,NVN,NVS)    
+    if(do_timing)call end_timer('ReadSoilWarmingTref',t1)
   endif
   lverb0      = lverb
   DazCurrYear = etimer%get_days_cur_year()
   yearIJ%year = frectyp%yearcur
   
+  if(do_timing)call end_timer('AnnualSetup',setup_stamp)
+  ! Keep setup out of the per-timestep detail records.
+  if(do_timing)call flush_timer_detail()
+
   DO I  = 1, DazCurrYear
     call DebugPrint("beg step",I*1000)
     yearIJ%I=I
@@ -430,9 +508,16 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
     !   UPDATE DAILY VARIABLES SUCH AS MANAGEMENT INPUTS
     !
     
-    CALL DAY(I,NHW,NHE,NVN,NVS)
+    if(do_timing)call start_timer(t1)
+    associate(RestartPending => frectyp%lskip_loop)
+      DeferDailySetup=RestartPending .and. (is_restart() .or. is_branch())
+    end associate
+    CALL DAY(I,NHW,NHE,NVN,NVS,DeferStateChanges=DeferDailySetup)
+    if(do_timing)call end_timer('DAY',t1)
     
+    if(do_timing)call start_timer(t1)
     call SetAnnualAccumlators(I, NHW, NHE, NVN, NVS)
+    if(do_timing)call end_timer('SetAnnualAccumlators',t1)
 
     DO J=1,24
       yearIJ%J=J
@@ -442,10 +527,42 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
       if(ymdhs==frectyp%ymdhs0)then
         frectyp%lskip_loop=.false.        
         if(is_restart() .or. is_branch())then
+          if(do_timing)call start_timer(t1)
           call restFile(flag='read')
-          if (j==1)call SetAnnualAccumlators(I, NHW, NHE, NVN, NVS)
+          if(do_timing)call end_timer('RestartRead',t1)
+          ! A January checkpoint precedes the new year's plant-management read.
+          ! Restore last year's state first, then apply this year's slot counts,
+          ! planting records and traits, as in an uninterrupted annual transition.
+          if(I==1 .and. J==1)then
+            call ReadAtmosComposition(iYearCurrent,NHW,NHE,NVN,NVS)
+            if(plant_model)then
+              NP_previous=NP_col
+              if(do_timing)call start_timer(t1)
+              call ReadPlantInfo(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS)
+              if(do_timing)call end_timer('ReadPlantInfo',t1)
+              if(ldo_sp_mode)then
+                DO NX=NHW,NHE
+                  DO NY=NVN,NVS
+                    call STARTQ(NX,NX,NY,NY,NP_previous(NY,NX)+1,NP_col(NY,NX))
+                  ENDDO
+                ENDDO
+              endif
+            endif
+            ! Checkpoints also contain the previous year's soil-management
+            ! state. Re-read the annual schedule against the restored geometry.
+            call ReadClimSoilForcing(frectyp%yearcur,frectyp%yearclm,NHW,NHE,NVN,NVS,RefreshRainChem)
+            if(soichem_model)call STARTE(NHW,NHE,NVN,NVS,RefreshRainChem)
+          endif
+          call CompleteDailySetup(I,J,NHW,NHE,NVN,NVS)
+          if (j==1)then
+            if(do_timing)call start_timer(t1)
+            call SetAnnualAccumlators(I, NHW, NHE, NVN, NVS)
+            if(do_timing)call end_timer('SetAnnualAccumlators',t1)
+          endif
 
+          if(do_timing)call start_timer(t1)
           call SummarizeTracerMass(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)          
+          if(do_timing)call end_timer('SummarizeTracerMass',t1)
         endif
       endif
       if(frectyp%lskip_loop)then
@@ -456,30 +573,43 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
     !   UPDATE HOURLY VARIABLES IN 'HOUR1'
     !   set up climate forcing for the new hour
 
+      if(do_timing)call start_timer(step_stamp)
       if(do_timing)call start_timer(t1)
       call PrepHourlyWeather(yearIJ%I,yearIJ%J,NHW,NHE,NVN,NVS)
       if(do_timing)call end_timer('WTHR',t1)
 
+      if(do_timing)call start_timer(t1)
       call Run_EcoSIM_one_step(yearIJ,NHW,NHE,NVN,NVS)
+      if(do_timing)call end_timer('EcoSIMOneStep',t1)
 
-      if(do_timing)call end_timer_loop()
-            
+      if(do_timing)call start_timer(t1)
       call hist_ecosim%hist_update(yearIJ%I,yearIJ%J,bounds)
+      if(do_timing)call end_timer('HistUpdate',t1)
 
+      if(do_timing)call start_timer(t1)
       call hist_update_hbuf(bounds)
+      if(do_timing)call end_timer('HistUpdateHbuf',t1)
 
+      if(do_timing)call start_timer(t1)
       call etimer%update_time_stamp()
 
       nlend=etimer%its_time_to_exit()
       rstwr=etimer%its_time_to_write_restart(nlend)
       lnyr=etimer%its_a_new_year()
+      if(do_timing)call end_timer('ClockUpdate',t1)
 
+      if(do_timing)call start_timer(t1)
       call hist_htapes_wrapup( rstwr, nlend, bounds, lnyr )
+      if(do_timing)call end_timer('HistoryIO',t1)
       
       if(rstwr)then
         
+        if(do_timing)call start_timer(t1)
         call restFile(flag='write')
+        if(do_timing)call end_timer('RestartWrite',t1)
       endif      
+      if(do_timing)call end_timer('Timestep',step_stamp)
+      if(do_timing)call end_timer_loop()
       call DebugPrint("end step",I*1000+J)
       if(nlend)exit
     END DO
@@ -490,7 +620,9 @@ subroutine AdvanceModelOneYear(NHW,NHE,NVN,NVS,nlend)
     if(frectyp%lskip_loop)cycle
 
     if(do_bgcforc_write)then
+      if(do_timing)call start_timer(t1)
       call WriteBBGCFORC(I,IYRR)
+      if(do_timing)call end_timer('WriteBBGCForc',t1)
     endif
     if(nlend)exit
   END DO
@@ -573,6 +705,8 @@ end subroutine regressiontest
 
 !------------------------------------------------------------------------------------------
   subroutine write_modelconfig()
+  ! Description:
+  ! Write the selected process controls and soil hydraulic scheme to the run setup file.
   use fileUtil, only : getavu, relavu, opnfil
   use readiMod
   implicit none
@@ -589,6 +723,9 @@ end subroutine regressiontest
     write(nu_cfg,*)'salt_model=',salt_model
     write(nu_cfg,*)'erosion_model=',erosion_model_status(iErosionMode)
     write(nu_cfg,*)'grid_mode=',GridConectionMode(grid_mode)
+    write(nu_cfg,*)'soil_mgmt_use_model_year=',soil_mgmt_use_model_year
+    write(nu_cfg,*)'soil_hydraulic_scheme=',trim(soil_hydraulic_scheme)
+    write(nu_cfg,*)'use_ecosys_drainage=',use_ecosys_drainage
     call relavu(nu_cfg)
   endif
   end subroutine write_modelconfig

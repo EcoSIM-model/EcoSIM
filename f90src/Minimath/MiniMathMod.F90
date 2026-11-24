@@ -17,7 +17,7 @@ module minimathmod
   public :: isclose         !test if two values a and b are close in magnitude
   public :: vapsat, vapsat0
   public :: isLeap,iisleap
-  public :: isnan
+  
   public :: AZMAX1,AZMIN1,AZMAX1t,AZMAX1d,AZMIN1d
   public :: GetMolAirPerm3
   public :: fSiLU
@@ -25,6 +25,7 @@ module minimathmod
   public :: fixEXConsumpFlux
   public :: yearday,isletter
   public :: dssign
+  public :: symmetric_flux_limiter
   public :: flux_mass_limiter
   public :: AZERO,AZERO1  
   public :: SubstrateLimit
@@ -34,6 +35,7 @@ module minimathmod
   public :: sfexp
   public :: Viscosity_H2O
   public :: VapMass2KPa
+  public :: attn_func
   public :: SubstrateDribbling  
   interface SubstrateDribbling
     module procedure SubstrateDribbling_vec
@@ -42,6 +44,7 @@ module minimathmod
   interface AZMAX1
     module procedure AZMAX1_s
     module procedure AZMAX1_d
+    module procedure AZMAX1_v
   end interface AZMAX1
 
   interface AZMIN1
@@ -56,14 +59,6 @@ module minimathmod
 
   contains
 
-   pure function isnan(a)result(ans)
-   implicit none
-   real(r8), intent(in) :: a
-   logical :: ans
-
-   ans=(a/=a)
-   return
-   end function isnan
 !------------------------------------------------------------------------------------------
 
    pure function safe_adb(a,b)result(ans)
@@ -169,6 +164,19 @@ module minimathmod
   real(r8) :: ans  !(kPa)
   ans=0.61_r8*EXP(5360.0_r8*(3.661E-03_r8-1.0_r8/tempK))
   end function vapsat0
+
+!------------------------------------------------------------------------------------------
+  pure function attn_func(tau)result(attn)
+  implicit none
+  real(r8), intent(in) :: tau
+  real(r8) :: attn
+
+  if (tau < 1.e-6_r8) then
+    attn = 1._r8 - 0.5_r8*tau + tau*tau/6._r8
+  else
+    attn = (1._r8-sfexp(-tau))/tau
+  endif  
+  end function attn_func
 
 !------------------------------------------------------------------------------------------
 
@@ -324,6 +332,21 @@ module minimathmod
   ans=AMAX1(0.0_r8,val1,val2)
 
   end function AZMAX1_d
+!------------------------------------------------------------------------------------------
+
+  pure function AZMAX1_v(val1)result(ans)
+  implicit none
+  real(r8), dimension(:), intent(in) :: val1
+  
+  real(r8) :: ans(size(val1))
+  integer :: jj, sz
+  sz = size(val1)
+  DO jj=1,sz
+    ans(jj)=AMAX1(0.0_r8,val1(jj))
+  enddo
+
+  end function AZMAX1_v
+
 
 !------------------------------------------------------------------------------------------
 
@@ -526,6 +549,18 @@ module minimathmod
 
 ! ----------------------------------------------------------------------
 
+  pure elemental function symmetric_flux_limiter(flux,reference_flux)result(ans)
+  ! Bound flux to [-abs(reference_flux),abs(reference_flux)]. Both arguments
+  ! have the same units. The reference sign does not change the bounds;
+  ! the flux retains its direction. Donor mass availability is handled separately.
+  implicit none
+  real(r8), intent(in) :: flux,reference_flux
+  real(r8) :: ans
+
+  ans=MIN(ABS(reference_flux),MAX(-ABS(reference_flux),flux))
+  end function symmetric_flux_limiter
+!------------------------------------------------------------------------------------------
+
   function flux_mass_limiter(flux,massa,massb)result(ans)
   !
   !limit flux by massa and massb 
@@ -610,7 +645,10 @@ module minimathmod
   end subroutine SubstrateDribbling_scal
 !------------------------------------------------------------------------
   subroutine SubstrateDribbling_vec(n1,n2,demand_flux,dribbling_flx,y)
-
+  
+  !
+  !computing the dribbling flux to meet the non-negative requirement of 
+  !variable y
   implicit none
   integer, intent(in) :: n1,n2
   real(r8), intent(in) :: demand_flux(n1:n2)  !consumption/demand flux
@@ -663,9 +701,9 @@ module minimathmod
   real(r8), intent(in) :: a
   real(r8) :: ans
 
-  if(a>30._r8)then
-    ans=1.e14_r8 !return a large number
-  elseif(a<-30)then
+  if(a>35._r8)then
+    ans=1.e15_r8 !return a large number
+  elseif(a<-35._r8)then
     ans=1.e-15_r8
   else
     ans=exp(a)

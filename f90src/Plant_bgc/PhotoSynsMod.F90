@@ -4,7 +4,13 @@ module PhotoSynsMod
   use PlantBGCPars
   use minimathmod, only : AZMAX1
   use PlantMathFuncMod
-  use PlantAPIData
+  use PlantAPICommonData
+  use PlantSiteAPIData, only : plt_site
+  use PlantPhotosynthesisAPIData, only : plt_photo
+  use PlantRadiationAPIData, only : plt_rad
+  use PlantMorphologyAPIData, only : plt_morph
+  use PlantPhenologyAPIData, only : plt_pheno
+  use PlantBiomassAPIData, only : plt_biom
 implicit none
   private
   character(len=*),private, parameter :: mod_filename = &
@@ -63,6 +69,8 @@ implicit none
     RadTotPARAbsorption_zsec      => plt_rad%RadTotPARAbsorption_zsec         ,& !input  :total incoming PAR absorbed, [umol m-2 s-1]
     TAU_DirectSunSha              => plt_rad%TAU_DirectSunSha                 ,& !input  :fraction of radiation transmitted by canopy layer, [-]
     TAU_DirectSunLit              => plt_rad%TAU_DirectSunLit                 ,& !input  :fraction of radiation intercepted by canopy layer, [-]
+    CO2Intra_pft                  => plt_photo%CO2Intra_pft                   ,& !inoput :leaf-area-weighted intracellular CO2 sum, [umol mol-1 m2 d-2]
+    CO2IntraScal_pft              => plt_photo%CO2IntraScal_pft               ,& !inoput :intracellular CO2 leaf-area weight, [m2 d-2]
     CH2OSunlit_pft                => plt_photo%CH2OSunlit_pft                 ,& !inoput :carbon fixation by sun-lit leaf, [gC d-2 h-1]
     CH2OSunsha_pft                => plt_photo%CH2OSunsha_pft                  & !inoput :carbon fixation by sun-shaded leaf, [gC d-2 h-1]
   )
@@ -182,7 +190,11 @@ implicit none
                       exit
                     ENDIF
                   ENDDO D225
+
                   clscal=LeafEffArea_zsec(N,L,K,NB,NZ)*TAU_Rad
+                  CO2Intra_pft(NZ)=CO2Intra_pft(NZ)+CO2X*clscal
+                  CO2IntraScal_pft(NZ)=CO2IntraScal_pft(NZ)+clscal
+
                   CH2OClmt = CH2OClmt+VGROX*cfscal*clscal
                   CH2OLlmt = CH2OLlmt+EGROX*cfscal*clscal
                   
@@ -261,6 +273,8 @@ implicit none
     ZERO                          => plt_site%ZERO                            ,& !input  :threshold zero for numerical stability, [-]
     RadDifPARAbsorption_zsec      => plt_rad%RadDifPARAbsorption_zsec         ,& !input  :diffuse incoming PAR, [umol m-2 s-1]
     RadTotPARAbsorption_zsec      => plt_rad%RadTotPARAbsorption_zsec         ,& !input  :direct incoming PAR, [umol m-2 s-1]
+    CO2Intra_pft                  => plt_photo%CO2Intra_pft                   ,& !inoput :leaf-area-weighted intracellular CO2 sum, [umol mol-1 m2 d-2]
+    CO2IntraScal_pft              => plt_photo%CO2IntraScal_pft               ,& !inoput :intracellular CO2 leaf-area weight, [m2 d-2]
     TAU_DirectSunSha              => plt_rad%TAU_DirectSunSha                 ,& !input  :fraction of radiation transmitted by canopy layer, [-]
     TAU_DirectSunLit              => plt_rad%TAU_DirectSunLit                 ,& !input  :fraction of radiation intercepted by canopy layer, [-]
     CH2OSunlit_pft                => plt_photo%CH2OSunlit_pft                 ,& !inoput :carbon fixation by sun-lit leaf, []
@@ -380,6 +394,9 @@ implicit none
                     ENDIF
                   ENDDO D125
                   clscal=LeafEffArea_zsec(N,L,K,NB,NZ)*TAU_Rad
+                  CO2Intra_pft(NZ)=CO2Intra_pft(NZ)+CO2X*clscal
+                  CO2IntraScal_pft(NZ)=CO2IntraScal_pft(NZ)+clscal
+
                   CH2OClmt = CH2OClmt+VGROX*cfscal*clscal
                   CH2OLlmt = CH2OLlmt+EGROX*cfscal*clscal
                   !
@@ -499,6 +516,7 @@ implicit none
             ELSEIF(iPlantPhotosynsType_pft(NZ).EQ.ic3_photo.AND.Vmax4RubiscoCarboxy_node(K,NB,NZ).GT.0.0_r8)THEN
 
               call ComputeGPP_C3(I,J,K,NB,NZ,PsiCan4Photosyns,Stomata_Stress,CH2O3(K),CH2OClmt,CH2OLlmt)
+
               CO2F    = CO2F+CH2O3(K)
               CH2O    = CH2O+CH2O3(K)
               CH2OClm = CH2OClm+CH2OClmt

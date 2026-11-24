@@ -13,8 +13,8 @@ implicit none
   logical, public :: use_fire =.false.
   integer, parameter :: max_fire_events=20
   integer :: fire_years(max_fire_events)
-  integer :: num_fire_events
-  integer :: fire_event_loc
+  integer :: num_fire_events=0
+  integer :: fire_event_loc=1
   character(len=21) :: fire_files(max_fire_events)
 
   public :: config_fire
@@ -24,7 +24,7 @@ implicit none
   subroutine config_fire(FireEvents)
   !
   !configure fire set up
-  !FireEvents should be of format: 'year1:file1;year2:file2'
+  !FireEvents should be of format: 'year1/file1;year2/file2'
   !where year1 is a four character string specifies year
   !and file1 specifies the fire specifics
   implicit none
@@ -35,12 +35,18 @@ implicit none
   character(len=30):: fire_event
 
   !initialization
+  use_fire=.false.
   num_fire_events =0
+  fire_event_loc=1
+  if(len_trim(FireEvents)<5)return
   if(FireEvents(5:5)/='/')return
    
   pair_start = 1  
   ! Split by semicolons and process each pair
-  do while (pair_start <= len_trim(FireEvents) .and. num_fire_events < max_fire_events)
+  do while (pair_start <= len_trim(FireEvents))
+    if(num_fire_events>=max_fire_events)then
+      call endrun('Too many fire events in '//trim(mod_filename),__LINE__)
+    endif
     ! Find next semicolon or end of string
     pair_end = index(FireEvents(pair_start:), ';')
         
@@ -67,6 +73,11 @@ implicit none
       write(msg,*) 'Error: Invalid year in pair: ', trim(fire_event)
       call endrun(trim(msg)//' in file '//trim(mod_filename),__LINE__)                  
     end if
+    if(num_fire_events>0)then
+      if(fire_years(num_fire_events+1)<=fire_years(num_fire_events))then
+        call endrun('Fire event years must be strictly increasing in '//trim(mod_filename),__LINE__)
+      endif
+    endif
         
     ! Extract filename
     fire_files(num_fire_events + 1) = trim(fire_event(colon_pos+1:))
@@ -103,8 +114,15 @@ implicit none
   character(len=21), intent(out) :: fire_event_entry  !retrieved fire_event
   logical :: fire_yesno
 
-  
-  !test if do fire current year
+  fire_yesno=.false.
+  fire_event_entry=''
+  ! Skip events before the current run/restart year. Keep indexed accesses
+  ! inside the bounds test; Fortran does not guarantee short-circuit .and.
+  do while(fire_event_loc<=num_fire_events)
+    if(fire_years(fire_event_loc)>=year_model)exit
+    fire_event_loc=fire_event_loc+1
+  enddo
+  if(fire_event_loc>num_fire_events)return
   fire_yesno=(fire_years(fire_event_loc)==year_model)
 
   !move to the next fire event

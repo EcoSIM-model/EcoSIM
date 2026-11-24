@@ -1,0 +1,64 @@
+! Dryland derivative: NH3Band + NO3Band are the only fertilizer N forms.
+! Annual N totals match the updated dryland example; see README.md for rates.
+&regression_test
+ cells   =           0
+/
+
+&ecosim
+case_name='dryland_band_only'
+prefix='../../inputs/dryland_band_only/'
+do_regression_test=.false.
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
+grid_file_in='../../../examples/inputs/dryland_maize/dryland_grid_20230221.nc'
+pft_mgmt_in='../../../examples/inputs/dryland_maize/dryland_pft_20230509.nc'
+soil_mgmt_in='../../inputs/dryland_band_only/dryland_band_only_soilmgmt_20261110.nc'
+clm_hour_file_in='../../../examples/inputs/dryland_maize/dryland_clm_20230203.nc'
+micpar_file_in='../../../input_data/MicrobePars.20261021.nc'
+clm_factor_in='NO'
+atm_ghg_in='../../../input_data/fatm_hist_GHGs_1750-2025.nc'
+atm_co2_fix     = 370.
+lverbose        = .false.
+grid_mode       = 1
+plant_model     = .true.
+microbial_model = .true.
+llignification=.true.
+disp_planttrait = .true.
+!set up output variable lists
+!set up the first year of simulation
+start_date  = '20010101000000'
+!idebug_day=256
+lsoilCompaction=.false.
+continue_run=.false.
+!set up simulation periods, spinup starts at 1, ends at 2, with 3 cycles, regular starts at 4, ends at 5.
+forc_periods=2001,2006,3,2001,2002,0,2001,2006,0
+hist_fincl1='dCAN_GPP_CLIM_pft','dCAN_GPP_eLIM_pft','VSPore_vr','Root_N_FIX_col','RootLen_pft','RLeafAppear_pft','RNodeAppear_pft',
+  'NH4_vr','NO3_vr','Root_C_pft','GRAIN_C_pft','SHOOT_C_pft','VmaxNH4Root_pvr','VmaxNO3Root_pvr','ShootNodeNumber_pft',
+  'VcMax25C_RUBISCO_pft','VcMax25C_PEP_pft','VoMax25C_RUBISCO_pft','JMax25C_photo_pft','cumN_FIXED_pft',
+  'RootLDS_pvr','RootKond2H2O_pvr','Uptk_N_CumYr_FLX_pft','Growth_Stage_pft','UPTK_NH4_FLX_pft','UPTK_NO3_FLX_pft',
+  'EXUD_CumYr_N_FLX_pft','CH2OSunlit_pft','CH2OSunsha_pft','PARSunlit_pft','PARSunsha_pft','RUB_ACTVN_pft','Num_Leaves_pft',
+  'LeafChlC_pft','LeafC4ChlC_pft','SLA_pft','CAN_GPP_pft','TFN_Carboxy_pft','TFN_eTranspt_pft','Root1st_AxesNumL_pvr','RootC_2nd_pvr',
+  'MycoPop_pvr','RootPop_pvr','Root1stRadius_pvr','RootNutUptk_fProtC_pvr','RootProteinC_pvr','ShootRoot_XFER_C_pft','RootNonstC_pvr',
+  'RootSinkWeight_pvr','RootPenitStress_vr','Root2ndSinkWeight_pvr','Root1stSinkWeight_pvr','ShootRoot_XFER_N_pft','AMENDED_N_col','NH3_cumerr_col','NH3_gas_ppmv_vr','NH3w_conc_vr','NH3_SEMIS_FLX_col'
+
+!set up solvers
+NPXS=30,30,30   !number of cycles per hour for water,heat,solute flux calcns
+NPYS=10,10,10   !number of cycles per NPX for gas flux calcns
+NCYC_LITR=30
+NCYC_SNOW=20
+!set up output frequency
+hist_mfilt=3650
+hist_nhtfrq=-24
+/
+&bbgcforc
+/
+
+!namelist for timer
+&ecosim_time
+rest_opt='nyears'  !'ndays','nmonths','nyears'
+rest_frq=1
+delta_time=3600.
+stop_option='nyears' !run by nyears, nmonths, ndays,
+stop_n=6           !this shall overwrite what is set in forc_periods
+diag_frq=1
+diag_opt='nsteps'
+/

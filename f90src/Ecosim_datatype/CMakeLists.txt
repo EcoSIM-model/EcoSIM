@@ -31,6 +31,7 @@ set(ECOSIM_DATATYPE_SOURCES
   IrrigationDataType.F90
   SedimentDataType.F90
   BalanceCheckDataType.F90
+  MLDataDiagType.F90
 )
 
 #include_directories(${CMAKE_BINARY_DIR}/f90src/Utils/)

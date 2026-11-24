@@ -1,11 +1,20 @@
 module RootGasMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
-  use minimathmod,   only: safe_adb, vapsat, AZMAX1, AZMIN1,fixEXConsumpFlux,isclose
+  use minimathmod,   only: safe_adb, vapsat, AZMAX1, AZMIN1
+  use minimathmod,   only: fixEXConsumpFlux,isclose, symmetric_flux_limiter, SubstrateDribbling
+  use EcoSIMCtrlMod, only : lcoarseroot
   use DebugToolMod
   use EcosimConst
   use EcoSIMSolverPar
   use UptakePars
-  use PlantAPIData
+  use PlantAPICommonData
+  use PlantSiteAPIData, only : plt_site
+  use PlantMorphologyAPIData, only : plt_morph
+  use PlantPhenologyAPIData, only : plt_pheno
+  use PlantSoilChemistryAPIData, only : plt_soilchem
+  use PlantBiomassAPIData, only : plt_biom
+  use PlantBGCRatesAPIData, only : plt_bgcr
+  use PlantRootBGCAPIData, only : plt_rbgc
   use TracerIDMod
   implicit none
 
@@ -24,6 +33,10 @@ module RootGasMod
   !the other gases undergo physical exchange according to different water volumes inside/outside the roots.
   !O2 uptake includes that from inside the root through diffusion, and that directly from the soil through transpiration+diffusion.
   !CO2 is first released into roots, then diffuse into soil and atmosphere 
+  !
+  !The O2 transport for mycorrhizae needs some revision. Currently, they only get oxygen from soil. However, in saturated soil,
+  !they get oxygen mostly from the roots that are linked parenchyma. Therefore, the current model tends to underestimate mycorrhizae
+  !biomass for saturated soils.
   implicit none
   integer , intent(in) :: I,J,N,L,NZ
   real(r8), intent(in) :: FineRootRadius(jroots,JZ1),FracPRoot4Uptake(jroots,JZ1,JP1)
@@ -39,7 +52,7 @@ module RootGasMod
 
   !local variables
   logical :: chkActiveUptk
-  integer :: M,MX  
+  integer :: M,MX,NR
   real(r8) :: B,C
   real(r8) :: trcg_rootml_loc(idg_beg:idg_NH3)     !vol gaseous mass volatile in roots
   real(r8) :: trcs_rootml_loc(idg_beg:idg_NH3)     !vol aqueous mass volatile in roots
@@ -60,9 +73,13 @@ module RootGasMod
   real(r8) :: RTVLWA  !root H2O vol for NH4
   real(r8) :: RTVLWB  !root H2O vol for NH4B
   real(r8) :: RGasTranspFlxPrev(idg_beg:idg_NH3)       !diagnosed increment gas flux
-  real(r8) :: ROXYLX
+  real(r8) :: ROXYLX                         !prescribed dissolved O2 removal per substep (negative for supply)
+  real(r8) :: O2AqueousForcing,O2GasForcing   !accepted forcing for the current substep
+  real(r8) :: SoilCO2Debt                     !unfunded aqueous CO2 withdrawal in the local predictor, [gC d-2]
+  real(r8) :: O2PhaseExchangeRate            !soil gas-water relaxation coefficient
+  real(r8) :: O2SoilUptakeRequested          !soil uptake before the donor-budget limit
   real(r8) :: RGas_DisolvSoil_flx(idg_beg:idg_end)     !gas dissolution into aqueous concentration in soil
-  real(r8) :: RTCR1,RTCR2
+  real(r8) :: RTCR1,RTCR2,fMedium,SurvivingFineRootLength
   real(r8) :: RTCRA                                    !root conductance scalar for gas transport between atmosphere and root inner space [m]
   real(r8) :: RTARRX
   real(r8) :: RootCO2Prod_tscaled                      !root CO2 gas efflux due to root respiration at time step for gas flux calculations
@@ -75,7 +92,6 @@ module RootGasMod
   real(r8) :: RSoilSolute2Roots(idg_beg:idg_end)       !root uptake of aqueous volatile from soil to inside roots
   real(r8) :: RDXAqueous(idg_beg:idg_end)              !maximum fluxes can be taken by roots
   real(r8) :: RDFAqueous(idg_beg:idg_end)
-  real(r8) :: RUPOST   !total oyxgen uptake from soil by roots and other processes
   real(r8) :: RUPNTX  !total uptake of NH4 from soil into roots
   real(r8) :: Root_gas2sol_flx(idg_beg:idg_NH3)    !gas dissolution into aqueous phase of the volatile tracers in roots
   real(r8) :: trcg_air2root_flx_loc(idg_beg:idg_NH3)   !diffusion flux of gas from atmosphere to inside roots
@@ -88,16 +104,17 @@ module RootGasMod
   real(r8) :: trcg_rootml_beg(idg_beg:idg_NH3)
   real(r8) :: trcs_rootml_beg(idg_beg:idg_NH3)
   real(r8) :: dtrc_err(idg_beg:idg_NH3)
-  real(r8) :: X,tcopy,trcs0
+  real(r8) :: X,trcs0,RTCRM,condC,condM
   real(r8) :: ZH3PA,ZH3PB,ZH3GA,ZH3GB
   real(r8) :: oscal=1._r8        !assuming O2 is close to half saturation constant
   integer  :: idg
   
 !     begin_execution
   associate(                                                                 &
+    RootSoilCO2Debt_vr           => plt_rbgc%RootSoilCO2Debt_vr            ,& !output :residual predictor debt for paired soil mass/debt handoff, [gC d-2]
     RootStrutElms_pft            => plt_biom%RootStrutElms_pft              ,& !input  :plant root structural element mass, [g d-2]
     ZERO4Groth_pft               => plt_biom%ZERO4Groth_pft                 ,& !input  :threshold zero for plang growth calculation, [-]
-    PlantPopuLive_pft          => plt_site%PlantPopuLive_pft            ,& !input  :plant population, [d-2]
+    PlantPopuLive_pft            => plt_site%PlantPopuLive_pft              ,& !input  :plant population, [d-2]
     CumSoilThickMidL_vr          => plt_site%CumSoilThickMidL_vr            ,& !input  :depth to middle of soil layer from surface of grid cell, [m]
     AtmGasc                      => plt_site%AtmGasc                        ,& !input  :atmospheric gas concentrations, [g m-3]
     ZEROS                        => plt_site%ZEROS                          ,& !input  :threshold zero for numerical stability,[-]
@@ -128,14 +145,21 @@ module RootGasMod
     RootPoreVol_pvr              => plt_morph%RootPoreVol_pvr               ,& !input  :root layer volume air, [m2 d-2]
     RootAbsorbLenPerPlant_pvr    => plt_morph%RootAbsorbLenPerPlant_pvr     ,& !input  :root layer length per plant, [m p-1]
     Root2ndXNumL_rpvr            => plt_morph%Root2ndXNumL_rpvr             ,& !input  :root layer number axes, [d-2]
+    Root2ndLen_rpvr              => plt_morph%Root2ndLen_rpvr               ,& !input  :population fine-root length per structural axis, [m]
+    RootMyco2ndStrutElms_rpvr    => plt_biom%RootMyco2ndStrutElms_rpvr      ,& !input  :fine-root structural C/N/P per axis, [g]
+    NumStructuralRootAxes_pft    => plt_morph%NumStructuralRootAxes_pft     ,& !input  :number of active structural-root groups, [-]
     Root2ndRadius_rpvr           => plt_morph%Root2ndRadius_rpvr            ,& !input  :root layer diameter secondary axes, [m]
     RootRaidus_rpft              => plt_morph%RootRaidus_rpft               ,& !input  :root internal radius, [m]
     RootVH2O_pvr                 => plt_morph%RootVH2O_pvr                  ,& !input  :root space volume occupied by water in each layer, [m2 d-2]   
     RootPorosity_pft             => plt_morph%RootPorosity_pft              ,& !input  :root porosity, [m3 m-3]
     Root1stXNumL_pvr             => plt_morph%Root1stXNumL_pvr              ,& !input  :root layer number primary axes, [d-2]
     NGTopRootLayer_pft           => plt_morph%NGTopRootLayer_pft            ,& !input  :soil layer at planting depth, [-]
+    RootMediumXNum_pvr           => plt_morph%RootMediumXNum_pvr            ,& !inoput :Number of medium size root axes in layer, [d-2]    
     Root1stTransptArea_pvr       => plt_morph%Root1stTransptArea_pvr        ,& !input  :transport area by 1st order root, [-] 
+    RootFineFrac2Med_rpvr        => plt_morph%RootFineFrac2Med_rpvr         ,& !fine-axis-count-weighted medium-root routing by category, [-]
+    RootMedTransptArea_pvr       => plt_morph%RootMedTransptArea_pvr        ,& !input  :transport area by medisum size roots, [-]
     MainBranchNum_pft            => plt_morph%MainBranchNum_pft             ,& !input  :number of main branch,[-]
+    RootMediumLength_pvr         => plt_morph%RootMediumLength_pvr          ,& !input  :within layer mean length for medium size root axes, [m d-2]              
     RootO2Uptk_pvr               => plt_rbgc%RootO2Uptk_pvr                 ,& !inoput :aqueous O2 flux from roots to root water, [g d-2 h-1]
     RAutoRootO2Limter_rpvr       => plt_rbgc%RAutoRootO2Limter_rpvr         ,& !inoput :O2 constraint to root respiration (0-1), [-]
     REcoUptkSoilO2M_vr           => plt_rbgc%REcoUptkSoilO2M_vr             ,& !inoput :total O2 sink, [g d-2 t-1]
@@ -152,9 +176,10 @@ module RootGasMod
   )
   
   call PrintInfo('beg '//subname)
+  SoilCO2Debt=0._r8
 
   chkActiveUptk=RootRespPotent_pvr(N,L,NZ).GT.ZERO4Groth_pft(NZ) .AND. RootVH2O_pvr(N,L,NZ).GT.ZERO4Groth_pft(NZ) .AND. FOXYX.GT.ZERO4Uptk_pft(NZ)
-
+!  if(N.eq.1)write(9340,*)I*1000+J/24.,L,chkActiveUptk,RootStrutElms_pft(ielmc,NZ),FracSoiLayByPrimRoot_pvr(L,NZ)
   IF(.not.chkActiveUptk)THEN    
     !root not active, add CO2 to soil
     RootCO2Ar2Soil_pvr(L,NZ)       = RootCO2Ar2Soil_pvr(L,NZ)-RootCO2AutorX_pvr(N,L,NZ)
@@ -186,14 +211,14 @@ module RootGasMod
     RTVLWB = RootVH2O_pvr(N,L,NZ)*trcs_VLN_vr(ids_NH4B,L)
 
     DO idg=idg_beg,idg_NH3
-      if(idg==idg_CO2 .or. idg==idg_O2)then
+      if(idg.eq.idg_CO2 .or. idg.eq.idg_O2)then
         RGasTranspFlxPrev(idg)  = RGasTranspFlxPrev_vr(idg,L)*dts_gas*FOXYX    
       else
         RGasTranspFlxPrev(idg)  = 0._r8
       endif
     ENDDO
     
-    ROXYLX                = -RO2AquaSourcePrev_vr(L)*FOXYX*dts_gas   !>0 into dissolved phase
+    ROXYLX                = -RO2AquaSourcePrev_vr(L)*FOXYX*dts_gas   !positive removal from dissolved phase
     RootOxyDemandPerPlant = RootO2Dmnd4Resp_pvr(N,L,NZ)*dts_gas/PlantPopuLive_pft(NZ)*oscal
     !
     !     GASEOUS AND AQUEOUS DIFFUSIVITIES IN ROOT AND SOIL
@@ -222,18 +247,46 @@ module RootGasMod
     IF(RootStrutElms_pft(ielmc,NZ).GT.ZERO4Groth_pft(NZ) .AND. FracSoiLayByPrimRoot_pvr(L,NZ).GT.ZERO)THEN
       !primary roots conductance scalar[m]
       RTCR1 = AMAX1(PlantPopuLive_pft(NZ),Root1stXNumL_pvr(L,NZ))*Root1stTransptArea_pvr(N,L,NZ)/CumSoilThickMidL_vr(L)
-      !secondary roots conductance scalar, [m]
-      RTCR2 = (Root2ndXNumL_rpvr(N,L,NZ)*PICON*Root2ndRadius_rpvr(N,L,NZ)**2)/(FracSoiLayByPrimRoot_pvr(L,NZ)*Root2ndEffLen4uptk_rpvr(N,L,NZ))
-      
-      IF(RTCR2.GT.RTCR1)THEN
-        !consider the relationship between primary and secondary roots as serial, so the resistance adds up
-        RTCRA = RTCR1*RTCR2/(RTCR1+RTCR2)
-      ELSE
+      !
+      RTCRM = 0._r8
+      fMedium = 0._r8
+      ! Absent or disabled medium roots leave the direct primary-fine pathway.
+      if(lcoarseroot .and. RootMediumLength_pvr(L,NZ).GT.0._r8 .and. RootMediumXNum_pvr(L,NZ).GT.0._r8)then
+        fMedium = RootFineFrac2Med_rpvr(N,L,NZ)
+        if(RootMedTransptArea_pvr(N,L,NZ).GT.0._r8)then
+          RTCRM=RootMediumXNum_pvr(L,NZ)*RootMedTransptArea_pvr(N,L,NZ)/RootMediumLength_pvr(L,NZ)
+        endif
+      endif
+
+      SurvivingFineRootLength = 0._r8
+      DO NR=1,NumStructuralRootAxes_pft(NZ)
+        if(RootMyco2ndStrutElms_rpvr(ielmc,N,L,NR,NZ).GT.ZERO4Groth_pft(NZ))then
+          SurvivingFineRootLength = SurvivingFineRootLength+AZMAX1(Root2ndLen_rpvr(N,L,NR,NZ))
+        endif
+      ENDDO
+
+      RTCR2 = 0._r8
+      if(Root2ndXNumL_rpvr(N,L,NZ).GT.0._r8 .and. Root2ndEffLen4uptk_rpvr(N,L,NZ).GT.0._r8)then
+        RTCR2 = (Root2ndXNumL_rpvr(N,L,NZ)*PICON*Root2ndRadius_rpvr(N,L,NZ)**2) &
+          /(FracSoiLayByPrimRoot_pvr(L,NZ)*Root2ndEffLen4uptk_rpvr(N,L,NZ))
+      endif
+      if(Root2ndXNumL_rpvr(N,L,NZ).GT.0._r8 .or. SurvivingFineRootLength.GT.0._r8)then
+        ! A zero count alone does not prove that fine-root tissue is absent.
+        ! Keep the fine-root pathway closed if surviving tissue has no conducting axes.
+        condC = RTCR2*(1._r8-fMedium)
+        condM = SeriesConductance(RTCR2*fMedium,RTCRM)
+        RTCRA = SeriesConductance(RTCR1,condC+condM)
+      elseif(RTCRM.GT.0._r8)then
+        ! Neither fine-root axes nor surviving length: retain the primary-medium pathway.
+        RTCRA = SeriesConductance(RTCR1,RTCRM)
+      else
+        ! Primary roots themselves retain a gas pathway when lateral roots are absent.
         RTCRA = RTCR1
-      ENDIF
+      endif
     ELSE
       RTCRA=0.0_r8
     ENDIF
+
     !
     !     VARIABLES USED TO CALCULATE ROOT GAS TRANSFER
     !     BETWEEN AQUEOUS AND GASEOUS PHASES
@@ -271,7 +324,12 @@ module RootGasMod
       !
       !     AQUEOUS GAS DIFFUSIVITY THROUGH SOIL WATER TO ROOT
       !
-      if(isclose(VLWatMicPM_vr(M,L),0._r8))cycle
+      if(isclose(VLWatMicPM_vr(M,L),0._r8))then
+        ! Previous-hour respiration has already produced this CO2.
+        ! Route this hydrological substep's share directly to soil.
+        RootCO2Ar2Soil_pvr(L,NZ) = RootCO2Ar2Soil_pvr(L,NZ)+RootCO2Prod_tscaled*NPT
+        cycle
+      endif
       VLWatMicPMO = VLWatMicPM_vr(M,L)*FOXYX
       VLWatMicPMM = VLWatMicPM_vr(M,L)*FracPRoot4Uptake(N,L,NZ)
       VLsoiAirPMM = VLsoiAirPM_vr(M,L)*FracPRoot4Uptake(N,L,NZ)
@@ -294,31 +352,46 @@ module RootGasMod
         VOLWAqueous(idg_NH3B) = VOLWAqueous(idg_NH3B)*trcs_VLN_vr(ids_NH4B,L)
 
         do idg = idg_beg, idg_NH3
-          DifAqueVolatile(idg)=(THETM*SolDifc_tscaled(idg)+GasDifc_tscaled(idg)*POROQ*FracAirFilledSoilPoreM_vr(M,L)**2/(VLSoilMicP_vr(L)*GasSolbility_vr(idg,L)))*RTARRX
+          DifAqueVolatile(idg)=(THETM*SolDifc_tscaled(idg)+GasDifc_tscaled(idg) &
+            *POROQ*FracAirFilledSoilPoreM_vr(M,L)**2/(VLSoilMicP_vr(L)*GasSolbility_vr(idg,L)))*RTARRX
         enddo
-
-        
+        DifAqueVolatile(idg_NH3B) = DifAqueVolatile(idg_NH3)
         DifAqueVolatile(idg_NH3)  = DifAqueVolatile(idg_NH3)*trcs_VLN_vr(ids_NH4,L)
-        DifAqueVolatile(idg_NH3B) = DifAqueVolatile(idg_NH3)*trcs_VLN_vr(ids_NH4B,L)
+        DifAqueVolatile(idg_NH3B) = DifAqueVolatile(idg_NH3B)*trcs_VLN_vr(ids_NH4B,L)
 
         VOLPNH3  = VLsoiAirPMM*trcs_VLN_vr(ids_NH4,L)
         VOLPNH3B = VLsoiAirPMM*trcs_VLN_vr(ids_NH4B,L)
         !
         !     MASS FLOW OF GAS FROM SOIL TO ROOT AT SHORTER TIME STEP NPT
         !
-        !     ROXYLX=soil net O2 aqueous flux > 0
+        !     ROXYLX=prescribed soil aqueous O2 removal (negative for supply)
         !     VLWatMicPMM=micropore water volume
         !     RootVH2O_pvr,RootPoreVol_pvr=root aqueous,gaseous volume
         !     RMF*=soil convective solute flux:COS=CO2,OXS=O2,CHS=CH4,
         !     N2S=N2O,NHS=NH3 non-band,NHB=NH3 band,HGS=H2
         !
         D90: DO MX=1,NPT
-          tcopy=trc_solml_loc(idg_O2)
-          call fixEXConsumpFlux(trc_solml_loc(idg_O2),ROXYLX)
+          ! Apply external O2 forcing once, using fresh copies so a donor limit
+          ! in one substep does not reduce the prescribed forcing in later ones.
+          O2AqueousForcing=ROXYLX
+          O2GasForcing=RGasTranspFlxPrev(idg_O2)
+          call fixEXConsumpFlux(trc_solml_loc(idg_O2),O2AqueousForcing)
+          call fixEXConsumpFlux(trc_gasml_loc(idg_O2),O2GasForcing,-1)
           do idg=idg_beg,idg_end
-            if(idg==idg_O2)then
+            if(idg.eq.idg_O2)then
               trcaqu_conc_soi_loc(idg_O2)=AMIN1(AtmGasc(idg_O2)*GasSolbility_vr(idg_O2,L),&
                 AZMAX1(trc_solml_loc(idg_O2)/VLWatMicPMO))
+            elseif(idg.eq.idg_NH3)then
+              ! NH3 masses belong to separate nonband and fertilizer-band pools.
+              ! Use their own water volumes; conductance and transpiration already
+              ! carry the corresponding compartment fractions.
+              trcaqu_conc_soi_loc(idg)=0._r8
+              if(VLWatMicPMA.GT.0._r8) &
+                trcaqu_conc_soi_loc(idg)=AZMAX1(trc_solml_loc(idg)/VLWatMicPMA)
+            elseif(idg.eq.idg_NH3B)then
+              trcaqu_conc_soi_loc(idg)=0._r8
+              if(VLWatMicPMB.GT.0._r8) &
+                trcaqu_conc_soi_loc(idg)=AZMAX1(trc_solml_loc(idg)/VLWatMicPMB)
             else
               trcaqu_conc_soi_loc(idg)=AZMAX1(trc_solml_loc(idg)/VLWatMicPMM)
             endif            
@@ -454,72 +527,21 @@ module RootGasMod
             ENDIF
           ENDIF
 
-          !     GAS EXCHANGE BETWEEN GASEOUS AND AQUEOUS PHASES IN SOIL
-          !     DURING ROOT UPTAKE DEPENDING ON CONCENTRATION DIFFERENCES
-          !     CALCULATED FROM SOLUBILITIES, AND TRANSFER COEFFICIENTS
-          !     FROM 'WATSUB'
-          !     RSoilSolute2Roots=root aqueous gas uptake
-          !     ROXYLX=soil net O2 aqueous flux
+          ! Couple soil O2 uptake to donor-limited phase exchange. The pools
+          ! already include external forcing, so it must not enter the budget again.
+          O2PhaseExchangeRate=0._r8
+          if(FracAirFilledSoilPoreM_vr(M,L).GT.AirFillPore_Min) &
+            O2PhaseExchangeRate=FracPRoot4Uptake(N,L,NZ)*DiffusivitySolutEffM_vr(M,L)
+          O2SoilUptakeRequested=ROxySoil2Uptk
+          call LimitSoilOxygenUptake(trc_solml_loc(idg_O2),trc_gasml_loc(idg_O2), &
+            VOLWAqueous(idg_O2),VLsoiAirPMM,O2PhaseExchangeRate,ROxySoil2Uptk,RGas_DisolvSoil_flx(idg_O2))
 
-          !gas disolution into soil
-          IF(FracAirFilledSoilPoreM_vr(M,L).GT.AirFillPore_Min)THEN
-            DiffusivitySolutEffP         = FracPRoot4Uptake(N,L,NZ)*DiffusivitySolutEffM_vr(M,L)
-            RGas_DisolvSoil_flx(idg_CO2) = DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),trc_gasml_loc(idg_CO2))*VOLWAqueous(idg_CO2) &
-              -(AMAX1(ZEROS,trc_solml_loc(idg_CO2))-RSoilSolute2Roots(idg_CO2))*VLsoiAirPMM)/(VOLWAqueous(idg_CO2)+VLsoiAirPMM)
-
-            RUPOST                      = ROxySoil2Uptk+ROXYLX
-            RGas_DisolvSoil_flx(idg_O2) = DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),trc_gasml_loc(idg_O2))*VOLWAqueous(idg_O2) &
-              -(AMAX1(ZEROS,trc_solml_loc(idg_O2))-RUPOST)*VLsoiAirPMM)/(VOLWAqueous(idg_O2)+VLsoiAirPMM)
-
-            IF(N.EQ.ipltroot)THEN
-              DO idg=idg_beg,idg_NH3-1
-                if(idg/=idg_CO2 .and. idg/=idg_O2)then
-                  RGas_DisolvSoil_flx(idg)=DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),trc_gasml_loc(idg))*VOLWAqueous(idg) &
-                    -(AMAX1(ZEROS,trc_solml_loc(idg))-RSoilSolute2Roots(idg))*VLsoiAirPMM)/(VOLWAqueous(idg)+VLsoiAirPMM)
-                endif
-              ENDDO
-
-              IF(VOLWAqueous(idg_NH3)+VOLPNH3.GT.ZERO4Groth_pft(NZ))THEN
-                ZH3GA               = trc_gasml_loc(idg_NH3)*trcs_VLN_vr(ids_NH4,L)
-                RGas_DisolvSoil_flx(idg_NH3) = AMIN1(RSoilSolute2Roots(idg_NH3),AMAX1(-RSoilSolute2Roots(idg_NH3) &
-                  ,DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),ZH3GA)*VOLWAqueous(idg_NH3) &
-                  -(AMAX1(ZEROS,trc_solml_loc(idg_NH3))-RSoilSolute2Roots(idg_NH3))*VOLPNH3) &
-                  /(VOLWAqueous(idg_NH3)+VOLPNH3)))
-              ELSE
-                RGas_DisolvSoil_flx(idg_NH3)=0.0_r8
-              ENDIF
-
-              IF(VOLWAqueous(idg_NH3B)+VOLPNH3B.GT.ZERO4Groth_pft(NZ))THEN
-                ZH3GB                     = trc_gasml_loc(idg_NH3)*trcs_VLN_vr(ids_NH4B,L)
-                RGas_DisolvSoil_flx(idg_NH3B) = AMIN1(RSoilSolute2Roots(idg_NH3B),AMAX1(-RSoilSolute2Roots(idg_NH3B) &
-                  ,DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),ZH3GB)*VOLWAqueous(idg_NH3B)   &
-                  -(AMAX1(ZEROS,trc_solml_loc(idg_NH3B))-RSoilSolute2Roots(idg_NH3B))*VOLPNH3B)  &
-                  /(VOLWAqueous(idg_NH3B)+VOLPNH3B)))
-              ELSE
-                RGas_DisolvSoil_flx(idg_NH3B)=0.0_r8
-              ENDIF
-            ELSE
-              DO idg=idg_beg,idg_NH3
-                if(idg/=idg_CO2 .and. idg/=idg_O2)RGas_DisolvSoil_flx(idg)=0.0_r8
-              ENDDO
-            ENDIF
-          ELSE
-            RGas_DisolvSoil_flx(idg_beg:idg_end)=0.0_r8
-          ENDIF
-          !
-          !     UPDATE GASEOUS, AQUEOUS GAS CONTENTS AND CONCENTRATIONS
-          !     FROM GASEOUS-AQUEOUS EXCHANGE, SOIL GAS TRANSFERS
-          DO idg=idg_beg,idg_NH3
-            trc_gasml_loc(idg)  = trc_gasml_loc(idg)-RGas_DisolvSoil_flx(idg)+RGasTranspFlxPrev(idg)
-          ENDDO
-
-          trc_gasml_loc(idg_NH3)  = trc_gasml_loc(idg_NH3)-RGas_DisolvSoil_flx(idg_NH3B)
-          call fixEXConsumpFlux(trc_gasml_loc(idg_NH3),RGas_DisolvSoil_flx(idg_NH3B))
-
-          !aqueous concentrations in soil
-          DO idg=idg_beg,idg_end
-            trc_solml_loc(idg)=trc_solml_loc(idg)+RGas_DisolvSoil_flx(idg)-RSoilSolute2Roots(idg)
-          enddo
+          if(O2SoilUptakeRequested.GT.0._r8 .and. ROxySoil2Uptk.LT.O2SoilUptakeRequested)then
+            ! A negative inside-root uptake transfers soil O2 into root water.
+            ! Reduce that transfer with its soil supply; retain independent root supply.
+            if(ROxyRoot2Uptk.LT.0._r8)ROxyRoot2Uptk=ROxyRoot2Uptk*(ROxySoil2Uptk/O2SoilUptakeRequested)
+          endif
+          RSoilSolute2Roots(idg_O2)=ROxySoil2Uptk
           !
           !     GAS TRANSFER THROUGH ROOTS
           !
@@ -537,7 +559,7 @@ module RootGasMod
               if(idg/=idg_CO2 .and. idg/=idg_NH3 .and. idg/=idg_O2)then
                 trcs_maxRootml_loc(idg)=AZMAX1(trcs_rootml_loc(idg)+RSoilSolute2Roots(idg))
               endif
-              
+
               Root_gas2sol_flx(idg)=AMAX1(-trcs_maxRootml_loc(idg),DFGP*(AMAX1(ZERO4Groth_pft(NZ),trcg_rootml_loc(idg))*DisolvedGasVolume(idg) &
                 -trcs_maxRootml_loc(idg)*RootPoreVol_pvr(N,L,NZ))/(DisolvedGasVolume(idg)+RootPoreVol_pvr(N,L,NZ)))
 
@@ -551,8 +573,8 @@ module RootGasMod
           !
           !     UPDATE ROOT AQUEOUS, GASEOUS GAS CONTENTS AND CONCENTRATIONS'
           !     FOR ROOT AQUEOUS-GASEOUS, GASEOUS-ATMOSPHERE EXCHANGES
-          !          
-          !releas autotrophic respiration CO2 into roots
+          !
+          !Release autotrophic respiration CO2 into roots
           trcs_rootml_loc(idg_CO2) = trcs_rootml_loc(idg_CO2)+RootCO2Prod_tscaled
 
           DO idg=idg_beg,idg_NH3
@@ -564,18 +586,115 @@ module RootGasMod
 
             call fixEXConsumpFlux(trcg_rootml_loc(idg),trcg_air2root_flx_loc(idg),-1)
 
-            if(idg==idg_O2)then
-              !oxygen is consumed inside roots
-              call fixEXConsumpFlux(trcs_rootml_loc(idg),ROxyRoot2Uptk)   
-            else
+            if(idg.eq.idg_O2)then
+              ! Root withdrawal supports respiration and any reverse flow to soil.
+              ! Limit both together before crediting the soil compartment.
+              call LimitRootOxygenUptake(trcs_rootml_loc(idg),ROxyRoot2Uptk,ROxySoil2Uptk)
+            elseif(idg.NE.idg_NH3)then
               !non-O2 gases are added to the root inside.
               call fixEXConsumpFlux(trcs_rootml_loc(idg),RSoilSolute2Roots(idg),-1)
             endif
           ENDDO
 
-          !NH3 taken up from banded soil is added to inside root concentration          
-          call fixEXConsumpFlux(trcs_rootml_loc(idg_NH3),RSoilSolute2Roots(idg_NH3B),-1)
+          ! Both soil NH3 compartments exchange with the same root aqueous pool.
+          ! Include all inflows before sharing the donor budget among outflows.
+          call LimitRootAmmoniaExchange(trcs_rootml_loc(idg_NH3), &
+            RSoilSolute2Roots(idg_NH3),RSoilSolute2Roots(idg_NH3B))
+          RSoilSolute2Roots(idg_O2)=ROxySoil2Uptk
 
+          ! Soil phase exchange and pool updates use the accepted root transfers.
+          !     GAS EXCHANGE BETWEEN GASEOUS AND AQUEOUS PHASES IN SOIL
+          !     DURING ROOT UPTAKE DEPENDING ON CONCENTRATION DIFFERENCES
+          !     CALCULATED FROM SOLUBILITIES, AND TRANSFER COEFFICIENTS
+          !     FROM 'WATSUB'
+          !     RSoilSolute2Roots=root aqueous gas uptake
+          !     ROXYLX=soil net O2 aqueous flux
+
+          !gas dissolution into soil
+          IF(FracAirFilledSoilPoreM_vr(M,L).GT.AirFillPore_Min)THEN
+            DiffusivitySolutEffP         = FracPRoot4Uptake(N,L,NZ)*DiffusivitySolutEffM_vr(M,L)
+            RGas_DisolvSoil_flx(idg_CO2) = DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),trc_gasml_loc(idg_CO2))*VOLWAqueous(idg_CO2) &
+              -(AMAX1(ZEROS,trc_solml_loc(idg_CO2))-RSoilSolute2Roots(idg_CO2))*VLsoiAirPMM)/(VOLWAqueous(idg_CO2)+VLsoiAirPMM)
+
+
+            IF(N.EQ.ipltroot)THEN
+              DO idg=idg_beg,idg_NH3-1
+                if(idg/=idg_CO2 .and. idg/=idg_O2)then
+                  RGas_DisolvSoil_flx(idg)=DiffusivitySolutEffP*(AMAX1(ZERO4Groth_pft(NZ),trc_gasml_loc(idg))*VOLWAqueous(idg) &
+                    -(AMAX1(ZEROS,trc_solml_loc(idg))-RSoilSolute2Roots(idg))*VLsoiAirPMM)/(VOLWAqueous(idg)+VLsoiAirPMM)
+                endif
+              ENDDO
+
+              IF(VOLWAqueous(idg_NH3)+VOLPNH3.GT.ZERO4Groth_pft(NZ))THEN
+                ZH3GA               = trc_gasml_loc(idg_NH3)*trcs_VLN_vr(ids_NH4,L)
+                RGas_DisolvSoil_flx(idg_NH3) = DiffusivitySolutEffP &
+                  *(AMAX1(ZERO4Groth_pft(NZ),ZH3GA)*VOLWAqueous(idg_NH3) &
+                  -(AMAX1(ZEROS,trc_solml_loc(idg_NH3))-RSoilSolute2Roots(idg_NH3))*VOLPNH3) &
+                  /(VOLWAqueous(idg_NH3)+VOLPNH3)
+                ! Root efflux is negative; use its magnitude to bound phase exchange.
+                RGas_DisolvSoil_flx(idg_NH3) = symmetric_flux_limiter( &
+                  RGas_DisolvSoil_flx(idg_NH3),RSoilSolute2Roots(idg_NH3))
+              ELSE
+                RGas_DisolvSoil_flx(idg_NH3)=0.0_r8
+              ENDIF
+
+              IF(VOLWAqueous(idg_NH3B)+VOLPNH3B.GT.ZERO4Groth_pft(NZ))THEN
+                ZH3GB                     = trc_gasml_loc(idg_NH3)*trcs_VLN_vr(ids_NH4B,L)
+                RGas_DisolvSoil_flx(idg_NH3B) = DiffusivitySolutEffP &
+                  *(AMAX1(ZERO4Groth_pft(NZ),ZH3GB)*VOLWAqueous(idg_NH3B) &
+                  -(AMAX1(ZEROS,trc_solml_loc(idg_NH3B))-RSoilSolute2Roots(idg_NH3B))*VOLPNH3B) &
+                  /(VOLWAqueous(idg_NH3B)+VOLPNH3B)
+                ! Root efflux is negative; use its magnitude to bound phase exchange.
+                RGas_DisolvSoil_flx(idg_NH3B) = symmetric_flux_limiter( &
+                  RGas_DisolvSoil_flx(idg_NH3B),RSoilSolute2Roots(idg_NH3B))
+              ELSE
+                RGas_DisolvSoil_flx(idg_NH3B)=0.0_r8
+              ENDIF
+            ELSE
+              DO idg=idg_beg,idg_NH3
+                if(idg/=idg_CO2 .and. idg/=idg_O2)RGas_DisolvSoil_flx(idg)=0.0_r8
+              ENDDO
+            ENDIF
+          ELSE
+            RGas_DisolvSoil_flx(idg_beg:idg_end)=0.0_r8
+          ENDIF
+          ! Recalculate O2 phase exchange if the root donor reduced release to soil.
+          ! Positive soil uptake was already limited before the root budget update.
+          call LimitSoilOxygenUptake(trc_solml_loc(idg_O2),trc_gasml_loc(idg_O2), &
+            VOLWAqueous(idg_O2),VLsoiAirPMM,O2PhaseExchangeRate,ROxySoil2Uptk,RGas_DisolvSoil_flx(idg_O2))
+          RSoilSolute2Roots(idg_O2)=ROxySoil2Uptk
+          !
+          !     UPDATE GASEOUS, AQUEOUS GAS CONTENTS AND CONCENTRATIONS
+          !     FROM GASEOUS-AQUEOUS EXCHANGE, SOIL GAS TRANSFERS
+          idg=idg_CO2
+          ! Keep transport forcing fixed; bound dissolution by the net gas supply.
+          ! The accepted exchange also updates the aqueous pool below.
+          RGas_DisolvSoil_flx(idg)=MIN(RGas_DisolvSoil_flx(idg), trc_gasml_loc(idg)+RGasTranspFlxPrev(idg))
+          
+          DO idg=idg_beg,idg_NH3
+            if(idg.eq.idg_O2)then
+              ! O2 transport forcing was applied before the coupled budget solve.
+              trc_gasml_loc(idg)=trc_gasml_loc(idg)-RGas_DisolvSoil_flx(idg)
+            else
+              trc_gasml_loc(idg)=trc_gasml_loc(idg)-RGas_DisolvSoil_flx(idg)+RGasTranspFlxPrev(idg)
+            endif
+          ENDDO
+
+          call fixEXConsumpFlux(trc_gasml_loc(idg_NH3),RGas_DisolvSoil_flx(idg_NH3B))
+
+          !aqueous concentrations in soil
+          DO idg=idg_beg,idg_end
+            if(idg.eq.idg_CO2)then
+              ! Fixed transport can force outgassing beyond dissolved supply.
+              ! Carry that aqueous deficit through all M/MX substeps; subsequent
+              ! dissolution or root release repays it before restoring free CO2.
+              ! Aqueous mass minus debt retains the signed predictor budget.
+              call SubstrateDribbling(RSoilSolute2Roots(idg)-RGas_DisolvSoil_flx(idg), &
+                SoilCO2Debt,trc_solml_loc(idg))
+            else
+              trc_solml_loc(idg)=trc_solml_loc(idg)+RGas_DisolvSoil_flx(idg)-RSoilSolute2Roots(idg)
+            endif
+          enddo
           !
           !     ACCUMULATE SOIL-ROOT GAS EXCHANGE TO HOURLY TIME SCALE'
           !
@@ -592,7 +711,7 @@ module RootGasMod
           !
           ! ACCUMULATE SOIL-ROOT GAS EXCHANGE TO HOURLY TIME SCALE'
           !
-          ! RootO2Uptk_pvr=root O2 uptake from root
+          ! RootO2Uptk_pvr=root O2 uptake from root internal
           ! REcoUptkSoilO2M_vr=total O2 uptake from soil by all microbial,root popns
           ! Root CO2 emission includes actual CO2 production from respiration and flux exchange with soil
           RCO2Emis2Root_rpvr(N,L,NZ)   = RCO2Emis2Root_rpvr(N,L,NZ)+RootCO2Prod_tscaled+RSoilSolute2Roots(idg_CO2)
@@ -605,22 +724,26 @@ module RootGasMod
       ENDIF
     ENDDO D99
 
+    ! Export only outstanding debt, not every transient deficit. Each root/PFT
+    ! owns a separate soil share; the column handoff sums those final debts.
+    RootSoilCO2Debt_vr(L)=RootSoilCO2Debt_vr(L)+SoilCO2Debt
+
     DO idg=idg_beg,idg_NH3
       trcg_rootml_pvr(idg,N,L,NZ) = trcg_rootml_loc(idg)
       trcs_rootml_pvr(idg,N,L,NZ) = trcs_rootml_loc(idg)
 
       dtrc_err(idg)=trcg_rootml_beg(idg)+trcs_rootml_beg(idg)-trcg_rootml_loc(idg)-trcs_rootml_loc(idg) &
         +trcg_air2root_flx_pvr(idg,N,L,NZ)
-      if(idg==idg_O2)then
+      if(idg.eq.idg_O2)then
         dtrc_err(idg)=dtrc_err(idg)-RootO2Uptk_pvr(N,L,NZ)
-      elseif(idg==idg_CO2)then
+      elseif(idg.eq.idg_CO2)then
         dtrc_err(idg)=dtrc_err(idg)+RCO2Emis2Root_rpvr(N,L,NZ)
       else
         dtrc_err(idg)=dtrc_err(idg)+RootUptkSoiSol_pvr(idg,N,L,NZ)
       endif 
     ENDDO    
     dtrc_err(idg_NH3)=dtrc_err(idg_NH3)+RootUptkSoiSol_pvr(idg_NH3B,N,L,NZ)
-    
+
     !check mass conservation error
     !
     ! O2 CONSTRAINTS TO ROOT RESPIRATION DEPENDS UPON RATIO'
@@ -635,5 +758,92 @@ module RootGasMod
   call PrintInfo('end '//subname)
   end associate
   end subroutine RootSoilGasExchange
+!----------------------------------------------------------------------------------------------------
+  pure subroutine LimitRootOxygenUptake(aqueous_mass,root_uptake,soil_uptake)
+  ! Positive uptake withdraws O2 from the named donor. Negative soil uptake
+  ! is release from roots to soil; the sum of both uptakes is respiration.
+  ! Phase exchange has already supplied/removed O2 from root water.
+  implicit none
+  real(r8), intent(inout) :: aqueous_mass,root_uptake,soil_uptake
+  real(r8) :: requested
+
+  requested=root_uptake
+  if(requested.GT.0._r8)then
+    root_uptake=MIN(requested,MAX(0._r8,aqueous_mass))
+    if(soil_uptake.LT.0._r8)soil_uptake=soil_uptake*(root_uptake/requested)
+  endif
+  aqueous_mass=MAX(0._r8,aqueous_mass-root_uptake)
+  end subroutine LimitRootOxygenUptake
+!----------------------------------------------------------------------------------------------------
+  pure subroutine LimitRootAmmoniaExchange(aqueous_mass,nonband_uptake,band_uptake)
+  ! Positive flux enters roots. Both soil compartments share one aqueous donor
+  ! after root phase exchange, including incoming NH3 from either compartment.
+  ! Scale only outgoing transfers, preserving their relative shares and making
+  ! the accepted transfers independent of the order of the soil compartments.
+  implicit none
+  real(r8), intent(inout) :: aqueous_mass,nonband_uptake,band_uptake
+  real(r8) :: available,outgoing,scale
+
+  available=MAX(0._r8,aqueous_mass)+MAX(0._r8,nonband_uptake)+MAX(0._r8,band_uptake)
+  outgoing=-MIN(0._r8,nonband_uptake)-MIN(0._r8,band_uptake)
+  if(outgoing.GT.available)then
+    scale=available/outgoing
+    if(nonband_uptake.LT.0._r8)nonband_uptake=nonband_uptake*scale
+    if(band_uptake.LT.0._r8)band_uptake=band_uptake*scale
+  endif
+  aqueous_mass=MAX(0._r8,available+MIN(0._r8,nonband_uptake)+MIN(0._r8,band_uptake))
+  end subroutine LimitRootAmmoniaExchange
+!----------------------------------------------------------------------------------------------------
+  pure subroutine LimitSoilOxygenUptake(aqueous_mass,gas_mass,soluble_volume,air_volume, &
+    exchange_rate,uptake,exchange)
+  ! Masses, uptake and exchange are population totals for one gas substep.
+  ! Positive uptake consumes aqueous O2; positive exchange dissolves gaseous O2.
+  ! External forcing has already been applied to both donor pools.
+  implicit none
+  real(r8), intent(in) :: aqueous_mass,gas_mass,soluble_volume,air_volume,exchange_rate
+  real(r8), intent(inout) :: uptake
+  real(r8), intent(out) :: exchange
+  real(r8) :: aqueous,gas,a,b,total_volume,accessible_gas
+
+  aqueous      = MAX(0._r8,aqueous_mass)
+  gas          = MAX(0._r8,gas_mass)
+  a            = 0._r8
+  b            = 0._r8
+  total_volume = soluble_volume+air_volume
+
+  if(exchange_rate.GT.0._r8 .and. total_volume.GT.0._r8)then
+    a = exchange_rate*soluble_volume/total_volume
+    b = exchange_rate*air_volume/total_volume
+  endif
+
+  ! E(U)=a*gas-b*(aqueous-U). Requiring aqueous+E(U)-U >= 0
+  ! gives U <= aqueous+a*gas/(1-b), also bounded by total donor mass.
+  ! For b>=1 only the total-mass bound is needed for U>aqueous.
+  accessible_gas=gas
+  if(b.LT.1._r8)accessible_gas=gas*MIN(1._r8,a/(1._r8-b))
+  if(uptake.GT.0._r8)uptake=MIN(uptake,aqueous+accessible_gas)
+  exchange=a*gas-b*(aqueous-uptake)
+
+  ! Limit both directions of phase transfer to the corresponding donor pool.
+  exchange=MIN(gas,MAX(uptake-aqueous,exchange))
+
+  ! Protect against roundoff at the exhausted-aqueous boundary, using the same
+  ! addition order as the caller's aqueous+exchange-uptake update.
+  if(uptake.GT.0._r8)uptake=MIN(uptake,MAX(0._r8,aqueous+exchange))
+  end subroutine LimitSoilOxygenUptake
+!----------------------------------------------------------------------------------------------------
+  pure function SeriesConductance(a,b) result(g)
+  implicit none
+  real(r8), intent(in) :: a,b
+  real(r8) :: g,small,large
+
+  ! A closed segment closes its series pathway; avoid products and reciprocal overflow.
+  g = 0._r8
+  if(a.GT.0._r8 .and. b.GT.0._r8)then
+    small = MIN(a,b)
+    large = MAX(a,b)
+    g = small/(1._r8+small/large)
+  endif
+  end function SeriesConductance
   ![tail]
 end module RootGasMod

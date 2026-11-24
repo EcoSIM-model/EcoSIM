@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EcoSIM surface runoff — storage, routing and equations</title>
+<style>
+/* Layout: single reading column (~72ch) with wide figures/tables allowed to scroll in their own boxes */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --fg:#1b262e; --muted:#5a6a75; --rule:#d3dce1;
+  --accent:#1d6a98;   /* water */
+  --earth:#8a5627;    /* soil, tiles */
+  --codebg:#e9eff2; --soil:#e6dccd; --soilline:#c9b9a2; --wet:rgba(29,106,152,.16);
+  --ok:#2f7d4f; --warn:#a46a0a; --bad:#b3372f;
+  --f-display:"IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10171c; --surface:#151f26; --fg:#dbe4e9; --muted:#8fa0ab; --rule:#2a3943;
+  --accent:#6db3df; --earth:#d29a5e; --codebg:#1a2730; --soil:#2a241c; --soilline:#4a3f31; --wet:rgba(109,179,223,.18);
+  --ok:#6cc391; --warn:#e0a948; --bad:#ec7d73; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#10171c; --surface:#151f26; --fg:#dbe4e9; --muted:#8fa0ab; --rule:#2a3943;
+  --accent:#6db3df; --earth:#d29a5e; --codebg:#1a2730; --soil:#2a241c; --soilline:#4a3f31; --wet:rgba(109,179,223,.18);
+  --ok:#6cc391; --warn:#e0a948; --bad:#ec7d73; color-scheme:dark }
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:46rem;margin:0 auto;padding-inline:16px;padding-block:2.5rem 4rem;display:flex;flex-direction:column;gap:1.1rem}
+.wrap > *{min-width:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2rem;font-weight:600}
+h2{font-size:1.4rem;font-weight:600;margin-top:1.6rem;padding-top:1rem;border-top:1px solid var(--rule)}
+h3{font-size:1.1rem;font-weight:600;margin-top:.6rem}
+p,ul,ol{margin:0}
+ul,ol{padding-left:1.3rem;display:flex;flex-direction:column;gap:.35rem}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.9rem}
+.eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--codebg);padding:.05em .3em;border-radius:3px;overflow-wrap:anywhere}
+pre{margin:0}
+.eq{font-family:var(--f-mono);font-size:.86rem;line-height:1.55;background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--accent);padding:.8rem 1rem;overflow-x:auto;white-space:pre}
+.eq{tab-size:2}.mathbox{background:var(--surface);border:1px solid var(--rule);padding:1rem;overflow-x:auto}math{font-size:1.15rem}nav{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.9rem}section{display:flex;flex-direction:column;gap:1rem}svg{max-width:100%;height:auto}body{margin:0}.eq.tile{border-left-color:var(--earth)}
+.src{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+figure{margin:0;background:var(--surface);border:1px solid var(--rule);padding:.75rem}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem}
+svg text{font-family:var(--f-body);font-size:12.5px;fill:var(--fg)}
+svg .m{font-family:var(--f-mono);font-size:11.5px;fill:var(--muted)}
+.steps{counter-reset:s;list-style:none;padding-left:0}
+.steps > li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:.4rem}
+.steps > li::before{content:counter(s);font-family:var(--f-mono);color:var(--accent);font-weight:500}
+.steps > li > div{min-width:0}
+.chip{display:inline-block;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;padding:.1em .45em;border:1px solid currentColor;border-radius:3px;margin-right:.4rem;vertical-align:.1em}
+.c-bad{color:var(--bad)} .c-warn{color:var(--warn)} .c-ok{color:var(--ok)} .c-mut{color:var(--muted)}
+.issues{list-style:none;padding-left:0;gap:.8rem}
+.issues li{padding-left:.8rem;border-left:2px solid var(--rule)}
+.note{background:var(--surface);border:1px solid var(--rule);padding:.8rem 1rem}
+</style>
+</head>
+<body><main class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:.65rem">
+<div class="eyebrow">EcoSIM · surface hydrology · code and equations</div>
+<h1>How EcoSIM calculates surface runoff</h1>
+<p>EcoSIM calculates a potential mobile-water transfer, routes it between cells or across external boundaries, then reconciles runoff with surface liquid storage and heat. Runoff is an outcome of the surface storage and infiltration calculations; it is not a fixed fraction of rainfall.</p>
+<p class="meta">Reviewed 14 October 2026 against the current working tree based on <code>0cb20d7c</code>. This walkthrough covers the standard EcoSIM driver. Source and inputs were left unchanged. Calculations below are illustrative, not simulation results.</p>
+<nav aria-label="Sections"><a href="#storage">Stores</a><a href="#potential">Potential runoff</a><a href="#routing">Cell routing</a><a href="#boundary">Boundary exchange</a><a href="#accounting">Water and heat</a><a href="#example">Example</a><a href="#qualifications">Qualifications</a></nav>
+</header>
+<figure>
+<svg viewBox="0 0 700 275" role="img" aria-label="Surface runoff sequence: precipitation and melt feed surface liquid and ice, infiltration competes with runoff, a Manning-like calculation produces potential runoff, elevation routing and boundary exchange are followed by water and heat updates">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10z" style="fill:var(--accent)"/></marker></defs>
+<g style="fill:var(--surface);stroke:var(--rule)"><rect x="10" y="30" width="200" height="70" rx="5"/><rect x="250" y="30" width="200" height="70" rx="5"/><rect x="490" y="30" width="200" height="70" rx="5"/><rect x="250" y="150" width="200" height="80" rx="5"/><rect x="490" y="150" width="200" height="80" rx="5"/></g>
+<text x="110" y="55" text-anchor="middle">Rain, melt, evaporation</text><text x="110" y="78" text-anchor="middle">litter liquid and ice</text>
+<text x="350" y="55" text-anchor="middle">Water above retention</text><text x="350" y="78" text-anchor="middle">Manning-like potential R</text>
+<text x="590" y="55" text-anchor="middle">Route by elevation</text><text x="590" y="78" text-anchor="middle">neighbors and boundaries</text>
+<text x="350" y="175" text-anchor="middle">Infiltration / exchange</text><text x="350" y="199" text-anchor="middle">soil micro- and macropores</text>
+<text x="590" y="175" text-anchor="middle">Aggregate accepted flows</text><text x="590" y="199" text-anchor="middle">update surface water + heat</text>
+<g style="stroke:var(--accent);stroke-width:2;fill:none" marker-end="url(#arrow)"><path d="M210,65 H247"/><path d="M450,65 H487"/><path d="M590,100 V147"/><path d="M110,100 V190 H247"/></g>
+<text x="15" y="258" class="m">Water held in litter and surface depressions is distinguished from mobile water.</text>
+</svg>
+<figcaption>Conceptual pathways. In the actual substep loop, litter–soil exchange and freeze/thaw calculations precede potential runoff; neighbor routing precedes external-boundary routing. The model does not solve a continuous overland-flow PDE here.</figcaption>
+</figure>
+
+<section id="storage"><h2>1. Surface stores and two retention capacities</h2>
+<p>Layer 0 represents the litter/surface residue store. Let W be its liquid volume, I its ice volume, C_L its litter holding capacity, A₀ the layer-0 footprint and A the upper active layer footprint. Volumes are cell totals in m³; dividing by area gives metres of water depth. Ice is included as its stored volume in the mobile-water geometry, not multiplied by ice density there.</p>
+<div class="scroll"><table><thead><tr><th>Symbol</th><th>Code</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>W, I</td><td><code>VLWatMicP1_vr(0,…)</code>, <code>VLiceMicP1_vr(0,…)</code></td><td>Working surface liquid and ice volumes</td></tr>
+<tr><td>C_L</td><td><code>VWatLitRHoldCapcity_col</code></td><td>Water/ice volume retained in litter</td></tr>
+<tr><td>V_M, W_M</td><td><code>XVLMobileWaterLitR_col</code>, <code>XVLMobileWatMicP</code></td><td>Total mobile liquid + ice geometry, and mobile liquid portion</td></tr>
+<tr><td>C_H, C_S</td><td><code>VLWatHeldCapSurf_col</code>, <code>VWatStoreCapSurf_col</code></td><td>Surface depression capacity; capacity adjusted for the external table</td></tr>
+<tr><td>R</td><td><code>SurfRunoffPotentM_col(M,…)</code></td><td>Potential liquid-runoff volume per substep, before routing</td></tr>
+<tr><td>Δt, α</td><td><code>dts_HeatWatTP</code>, <code>dts_wat</code></td><td>Δt = 0.99999/NPH h; α = 0.99999 min(1,10Δt), the numerical transfer fraction</td></tr>
+</tbody></table></div>
+<pre class="eq">V_M = max(0, W + I − C_L)
+W_M = max(0, W − C_L W/(W + I))       when W + I &gt; numerical threshold
+      0                              otherwise
+φ_liquid = W_M/V_M                    evaluated only when V_M &gt; C_S</pre>
+<p>For a genuinely mobile store, φ_liquid is its liquid fraction. Ice can raise the geometric ponding depth, but only the liquid fraction contributes to this runoff transfer. Freeze/thaw is calculated separately.</p>
+<h3>Surface depression storage and external water table</h3>
+<pre class="eq">r₀ = SoilSurfRoughness_col
+S₀ = max(1.745×10⁻⁴, sin(land-slope angle))
+C_H = A · max(0.001, 0.112 r₀ + 3.10 r₀² − 0.012 r₀ S₀)
+C_S = max(C_H, A(z_surface − z_external))</pre>
+<p>Hour1 initializes r₀ = 0.020 m for soil; non-soil surfaces use the model’s ZW value. The empirical capacity expression has a minimum retention depth of 1 mm. An external table above the soil surface increases C_S to retain the corresponding ponded depth. C_L and C_S are different capacities: the code removes litter retention to obtain V_M, then compares that mobile store with C_S.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90">UpdateLitRBe4RunoffM / UpdateLitRAftRunoffM</a>; <a href="../f90src/Modelforc/Hour1Mod.F90">Hour1Mod: surface capacities</a>; <a href="../f90src/Ecosim_mods/StartsMod.F90">StartsMod: slope initialization</a>.</p>
+</section>
+
+<section id="potential"><h2>2. Potential runoff from excess storage</h2>
+<p><code>SurfLitrSoilWaterExchangeM</code> computes litter–soil exchange before <code>InfilSRFRoffPartitionM</code>. The latter estimates litter temperature, freeze/thaw and then potential runoff. Although its name mentions partitioning, the infiltration flux itself is computed in the preceding exchange routine.</p>
+<pre class="eq">If V_M ≤ C_S: R = 0 and runoff-velocity diagnostic = 0.
+Otherwise:
+  E = V_M − C_S                      excess mobile volume
+  d = E/A₀                          excess depth
+  R_h = d/2.828                     assumed hydraulic radius
+  ρ_surf = r₀ + ZD50 + V_litter/A₀  composite roughness term
+  v* = R_h^0.67 √S₀ / ρ_surf
+  Q* = v* d A · 3600Δt
+  W* = max(0, W + ΔW_thaw)
+  R  = min(Q*, αE, αW*) · φ_liquid</pre>
+<p>The exponent is <b>0.67</b> in the code, not exactly 2/3. ZD50 is a texture/organic-matter roughness contribution calculated in Hour1. The liquid limit uses W plus the calculated thaw increment; the geometric excess and liquid fraction come from the currently stored mobile-water fields. These quantities are not all refreshed to an identical final state at this point in the sweep.</p>
+<div class="note"><b>Interpret the Manning-like expression literally.</b> <code>GaucklerManningVelocity</code> returns R_h^0.67√S₀ and its comment labels velocity m s⁻¹. The caller divides by a roughness assembled from lengths and labels the result s⁻¹, then multiplies by depth and <em>plan area</em>. Conventional channel discharge instead uses velocity × flow cross-section. This page quotes Q* as implemented and does not silently identify the composite roughness with a standard Manning n or replace A with a flow width.</div>
+<p>Δt converts the calculation into a proposed substep volume. The two α limits restrict the proposal to a fraction of excess storage and available liquid. R is not yet the volume leaving the cell: face gates, direction weights and later corrections still apply.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90">SurfLitrSoilWaterExchangeM, InfilSRFRoffPartitionM, GaucklerManningVelocity</a>; <a href="../f90src/Modelforc/Hour1Mod.F90">composite roughness</a>.</p>
+</section>
+
+<section id="routing"><h2>3. Routing to neighboring cells</h2>
+<p><code>XGridsSurfRunoffM</code> considers four in-domain neighbors. Routing is based on surface-water elevation, not on a prescribed downstream direction alone. Let η_i = Z_i + V_M,i/A_i, where Z is <code>Altitude_col</code>. Direction weights are:</p>
+<pre class="eq">f_EW = |S_EW|/(|S_EW| + |S_NS|)
+f_NS = 1 − f_EW
+If both directional slopes are zero: f_EW = f_NS = 0.5.</pre>
+<p>For a source i above neighbor j, the amount that would equalize their surface-water elevations is derived from η_i − q/A_i = η_j + q/A_j:</p>
+<div class="mathbox"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><msub><mi>q</mi><mi>eq</mi></msub><mo>=</mo><mfrac><mrow><mo>(</mo><msub><mi>η</mi><mi>i</mi></msub><mo>−</mo><msub><mi>η</mi><mi>j</mi></msub><mo>)</mo><msub><mi>A</mi><mi>i</mi></msub><msub><mi>A</mi><mi>j</mi></msub></mrow><mrow><msub><mi>A</mi><mi>i</mi></msub><mo>+</mo><msub><mi>A</mi><mi>j</mi></msub></mrow></mfrac></math></div>
+<pre class="eq">If R_i is positive and η_i &gt; η_j:
+  q_i→j = f_N,i · min(q_eq, R_i)
+Otherwise: q_i→j = 0.</pre>
+<p>The weight is applied <b>after</b> the minimum. East and west share f_EW; north and south share f_NS. The routine does not debit R_i after a face transfer, so R_i is a proposal reused in neighbor tests rather than a running remaining budget. A separate donor-budget pass limits the sum of all outgoing faces before any cell water or heat change is accumulated. It has been reapplied at the user’s request after clarifying its treatment of one donor feeding multiple receivers.</p>
+<p>Positive internal transfer is stored in the receiving cell’s directional slot: east/south use its <code>iBehind</code> slot; west/north use its <code>iFront</code> slot. The receiver adds the transfer and the donor subtracts it. Internal exchanges redistribute water within the domain; only external exchanges change domain totals.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90">XGridsSurfRunoffM</a>; <a href="../f90src/Ecosim_mods/StartsMod.F90">FSLOPE_2DH initialization</a>.</p>
+</section>
+
+<section id="boundary"><h2>4. External runoff and runon</h2>
+<p><code>XBoundaryFlowM</code> calls <code>XBoundSurfaceRunoffM</code> only on an external lateral face at the upper active layer, with an enabled aspect/runoff flag, nonzero surface multiplier <code>RCHQ{N,E,S,W}G</code>, significant |R|, and its surface geometry/soil condition satisfied. This is separate from subsurface drainage.</p>
+<p>Let ξ = +1 for west/north, −1 for east/south/bottom (only lateral faces are used here), s_R the surface multiplier, ℓ_N the directional cell width, and z_s the surface depth coordinate. The boundary uses an extrapolated exterior elevation:</p>
+<pre class="eq">h₁ = V_M/A; h₂ = C_S/A
+η₁ = Z + h₁
+η₂ = Z + h₂ − ξ S_N ℓ_N
+z_pond = z_s − h₁                 depth increases downward
+
+Outflow branch: η₁ &gt; η₂ AND z_pond &lt; z_external
+  q_out = R f_N s_R              for the original positive R
+  face F = −ξ R f_N s_R
+
+Otherwise, if z_pond &gt; z_external (runon branch):
+  VX = min(0, (z_external − z_pond) A)
+  R ← α VX                      overwrite shared potential with a negative value
+  runoff velocity ← 0
+  face F = −ξ R f_N s_R
+
+Otherwise: F = 0.
+Column gain from this face: q_gain = ξF = −R f_N s_R.</pre>
+<p>Thus positive R means outward loss; negative R in the runon branch means inward gain. Runon is a depth-deficit relaxation toward the external water-table level, not a Manning velocity calculation. Equality of pond and external depths does not satisfy either water-table inequality. Both runoff and runon use the local litter temperature for heat.</p>
+<div class="note"><b>The caller gate matters.</b> A cell with zero potential runoff does not reach this boundary helper even if an external level could generate runon inside it. Conversely, one runon face overwrites R before subsequent faces are visited. These are implemented sequencing conditions; do not treat each face as an independent call with the original R.</div>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">XBoundaryFlowM</a>; <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90">XBoundSurfaceRunoffM</a>.</p>
+</section>
+
+<section id="accounting"><h2>5. Accepted water, heat, and output</h2>
+<ol class="steps"><li><div>Surface physics generates internal transfers and updates pre-runoff litter state. Watsub then processes external boundary transfers.</div></li><li><div><code>AggregateSurfRunoffFluxM</code> adds incoming slots and subtracts outgoing transfers to form a net liquid increment per cell. Before this accumulation, <code>LimitSurfaceRunoffM</code> applies one factor to all outgoing faces of each donor if their sum exceeds beginning-of-pass liquid minus a numerical margin. Paired heat and transport/cumulative face records are corrected together. Simultaneous inflow is not credited to the donor budget.</div></li><li><div><code>UpdateSurfaceAtM</code> calls <code>UpdateLitRAftRunoffM</code> where the snow-free fraction exceeds its threshold. Liquid storage and heat capacity are updated; mobile-water fields are recalculated.</div></li></ol>
+<pre class="eq">For an ordinary internal transfer q_i→j ≥ 0:
+  ΔW_i = −q_i→j; ΔW_j = +q_i→j
+  H_i→j = c_w T_litter,i q_i→j
+
+Donor projection, before cell accumulation:
+  O_i = sum of positive outward proposed transfers
+  B_i = max(0, W_i − tiny_wat)
+  scale_i = 1 if O_i ≤ B_i; otherwise B_i/O_i
+  outgoing accepted water and heat = scale_i × their proposals
+  transport export = accepted face water
+  hourly face accumulator += accepted − proposed
+
+Net cell transfer: ΔW_net = accepted incoming − accepted outgoing
+After-runoff liquid: W_new = max(0, W_old + ΔW_net)
+Ice is not advected by this liquid-runoff update.
+
+C_new = c_OM V_OM + c_w W_new + c_ice I
+T_new = (C_old T_old + ΔH_net)/C_new
+        when heat capacity exceeds the litter threshold;
+        otherwise the routine uses upper active-layer temperature.</pre>
+<p>c_w = 4.186 MJ m⁻³ K⁻¹ and temperature is in kelvin, so H is transferred energy in MJ. Snow redistribution and snowpack water/ice transport have their own routines and are outside this liquid-runoff formula.</p>
+<p>Hourly accumulators <code>TXGridSurfRunoff_2DH</code> and <code>THeatXGridBySurfRunoff_2DH</code> sum net cell gains; Redist copies them to <code>QRunSurf_col</code> and <code>HeatRunSurf_col</code>. Their implemented sign is <b>positive into the cell</b>, despite the runoff name. A positive internal inflow may be canceled by outflow elsewhere in the domain. Per-substep face transfers also feed transport/erosion-related arrays. The limiter synchronizes <code>QflxSurfRunoffM_2DH</code> with accepted face water and adjusts current-substep contributions to cumulative water/heat arrays while preserving earlier substeps.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SurfPhys/SurfPhysMod.F90">AggregateSurfRunoffFluxM, UpdateSurfaceAtM</a>; <a href="../f90src/HydroTherm/SurfPhys/SurfLitterPhysMod.F90">UpdateLitRAftRunoffM</a>; <a href="../f90src/Balances/RedistMod.F90">QRunSurf_col assignment</a>.</p>
+</section>
+
+<section id="example"><h2>6. Worked volume example</h2>
+<p>Prescribe A₀ = A = 1 m², W = 0.040 m³, I = 0, C_L = 0.010 m³ and C_S = 0.010 m³. Then V_M = 0.030 m³, φ_liquid = 1, E = 0.020 m³ and d = 0.020 m. Set S₀ = 0.01, composite roughness ρ_surf = 0.1, zero thaw, and NPH = 30.</p>
+<pre class="eq">R_h = 0.020/2.828 ≈ 0.007072
+v* = (0.020/2.828)^0.67 √0.01 / 0.1 ≈ 0.03624
+Q* ≈ 0.08698                 numerical value from the implemented expression
+αE ≈ 0.00666653 m³; αW* ≈ 0.0133331 m³
+R = 0.00666653 m³ ≈ 6.667 L per substep.</pre>
+<p>If an equal-area east neighbor is 0.004 m lower in surface-water elevation, q_eq = 0.004 × 1 × 1/(1 + 1) = 0.002 m³. With f_EW = 0.6, the routed transfer is 0.6 min(0.002,0.00666653) = <b>0.0012 m³ = 1.2 L</b>. The source loses and the neighbor gains 1.2 L before any later aggregate correction.</p>
+<p>At a qualifying external east boundary with s_R = 1 and no internal neighbor, the outward proposal is instead f_EW R ≈ <b>4.0 L</b>; the stored face sign is positive because ξ = −1, while the source’s net gain is negative. These are alternative routing examples, not simultaneous transfers through the same east face.</p>
+</section>
+
+<section id="qualifications"><h2>7. Interpretation and verification limits</h2>
+<ul>
+<li><b>Potential versus actual:</b> R is calculated before routing and is reused across neighbors. Actual liquid loss follows accepted, aggregated transfers and the storage update; do not report R as measured cell runoff.</li>
+<li><b>Geometry and roughness:</b> the Manning-like coefficient, hydraulic-radius divisor and plan-area conversion are specific to this implementation. Their physical units and grid-size scaling warrant separate evaluation; the comments are not dimensionally consistent enough to substitute a textbook formula silently.</li>
+<li><b>Substep ordering:</b> the per-cell sweep can mix newly processed fields with previous neighbor fields. All outgoing faces are finalized before cell gains are accumulated, avoiding the earlier north/west receiver-credit error. Several uphill donors can still collectively overshoot a depression’s water level even when individual transfers are bounded. A code TODO records adaptive timestep rejection/recomputation as a candidate remedy for that separate accuracy/stability concern; adaptive stepping is not implemented.</li>
+<li><b>Coupling:</b> internal surface routing is skipped in ATS coupling mode. External face iteration follows grid_mode; mode 3 does not visit lateral external runoff faces. That does not itself guard the standalone internal routing routine.</li>
+<li><b>Scope:</b> canopy throughfall, litter–soil infiltration, surface freeze/thaw and snow redistribution affect the available stores, but their complete energy/transport algorithms are separate from this runoff walkthrough.</li>
+</ul>
+<p>Verified by tracing the compiled SurfPhys/SurfLitterPhys routines and their Watsub/Hour1/Redist callers, checking the numerical example, and checking HTML structure and relative source links. The donor-budget implementation passed focused checks and a 19-case, 20-day smoke screen, was temporarily reverted during discussion, and has now been reapplied. Focused source-extracted checks passed again after reapplication. Adaptive stepping and the independent boundary-runon issue remain separate from this correction. Finite output alone would not validate the runoff formulation or its grid-size dependence.</p>
+<p>Related: <a href="watertable_modulated_water_exchange.html">water-table exchange equations</a> · <a href="ecosim_hydrology.html">EcoSIM hydrology overview</a>.</p>
+</section>
+
+</main></body></html>

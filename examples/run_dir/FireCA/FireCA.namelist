@@ -5,13 +5,13 @@
 &ecosim
 case_name='FireCA'   !g means maturity group change
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260303.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../inputs/FireCA/FireCA_grid_20250609.nc'
 pft_mgmt_in='../../inputs/FireCA/FireCA_pft_20250609.nc'
 clm_hour_file_in='../../inputs/FireCA/FireCA.clim.hour.1979-2010.nc'
 soil_mgmt_in='../../inputs/FireCA/FireCA_soilmgmt_20250609.nc'
 atm_ghg_in='../../../input_data/fatm_hist_GHGs_1750-2025.nc'
-FireEvents='1920/a_pmf,b_smf'    !should be in the format: year1/fire_event1;year2/fire_event2'
+FireEvents='1905/a_pmf,b_smf'    !should be in the format: year1/fire_event1;year2/fire_event2'
 lverbose=.false.
 llignification=.false.
 iVerbLevel=0
@@ -23,10 +23,11 @@ soichem_model=.true.
 !set up the first year of simulation
 start_date  = '19000101000000'
 grid_mode=1
+! Start from inputs; set true only after creating a valid rpointer.esim.
 continue_run=.false.
 !set up simulation periods, spinup starts at 1, ends at 2, with 3 cycles, regular starts at 4, ends at 5.
 forc_periods=1980,1989,10,1990,2010,1,2003,2008,0
-!ldebug_day=113
+!idebug_day=110
 
 !set up solvers
 NPXS=30,30,30      !number of cycles per hour for water,heat,solute flux calcns
@@ -34,8 +35,14 @@ NPYS=10,10,10      !number of cycles per NPX for gas flux calcns
 NCYC_LITR=20
 NCYC_SNOW=20
 !hist_fincl2 ='ECO_LE','ECO_HeatS','ECO_NEE_CO2','TEMP_vr'
-hist_fincl1='SSTORED_C_pft','cumFIRE_CO2_col','cumFIRE_CH4_col','dCAN_GPP_CLIM_pft','dCAN_GPP_eLIM_pft'
-
+hist_fincl1='ECO_RA_col','ECO_RH_col','ECO_NPP_col', 'Root_AR_col','ECO_HR_CO2_col','Root1stSinkWeight_pvr',
+  'TEMP_vr','rWatFLP_vr','BOTDEPZ_vr','tSOC_vr','RootC_vr','RootC_2nd_pvr','CanopyLAIZ_plyr','Root2ndSinkWeight_pvr',
+  'RUB_ACTVN_pft','RootNutUptk_fClim_pvr','RootNutUptk_fNlim_pvr','RootNutUptk_fPlim_pvr','RootNutUptk_fProtC_pvr',
+  'HR_CO2_vr','Root_OXYSTRESS_pvr','Decomp_OStress_vr','Decomp_OStress_LITR','GasXSurfConduct_col','CO2_DIF_FLX_col',
+  'CO2_PLTROOT_FLX_col','TreeRingRadius_pft','RootLDS_pvr','RootKond2H2O_pvr','Growth_Stage_pft','PSI_vr','MycoArbuBiomC_pft',
+  'VcMax25C_RUBISCO_pft','VoMax25C_RUBISCO_pft','JMax25C_photo_pft','ShootRoot_XFER_C_pft','ShootRoot_XFER_N_pft',
+  'MicPFlo_vr','MacPFlo_vr','dCAN_GPP_CLIM_pft','dCAN_GPP_eLIM_pft','RootNonstC_pvr','Root1stRadius_pvr','ShootRoot_XFER_C_pft',
+  'Root2nd_AxesNumL_pvr','Root1st_AxesNumL_pvr','RootShootCX_pvr'
 !set up output frequency
 hist_mfilt=3650 !,8760
 hist_nhtfrq=-24 !,-1
@@ -49,7 +56,7 @@ hist_nhtfrq=-24 !,-1
 rest_opt='nyears'  !'ndays','nmonths','nyears'
 rest_frq=1
 delta_time=3600.
-stop_n= 22            !this shall overwrite what is set in forc_periods
+stop_n= 7            !this shall overwrite what is set in forc_periods
 stop_option='nyears' !run by nyears, nmonths, ndays,
 diag_frq=1
 diag_opt='nsteps'

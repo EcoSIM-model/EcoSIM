@@ -1,6 +1,6 @@
 module RadiationDataMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
-  use PlantAPIData,  only: JP1, NumCanopyLayers1
+  use PlantAPICommonData,  only: JP1, NumCanopyLayers1
 implicit none
   character(len=*), private, parameter :: mod_filename = &
   __FILE__

@@ -14,6 +14,8 @@ module ATSStateRegistryMod
   ! the layout reported to ATS all loop over it. Adding, removing, reordering
   ! or resizing an entry changes the checkpoint layout, so bump kLayoutVersion.
   !
+  ! Description:
+  ! Register native carried state.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use, intrinsic :: iso_c_binding
   use EcoContainers_module, only : EcoSizes, EcoInternalState
@@ -68,10 +70,11 @@ contains
   use SoilWaterDataType,  only : VLWatMicP_vr, VLiceMicP_vr
   use SoilHeatDataType,   only : TKS_vr, VHeatCapacity_vr
   use CanopyDataType,     only : WatHeldOnCanopy_pft, &
-    LWRadCanGPrev_col, WatHeldOnCanopy_col, Transpiration_pft
+    LWRadCanGPrev_col, WatHeldOnCanopy_col, PSICanopy_pft, TKC_pft, TKCanopy_pft, &
+    ENGYX_pft, DeltaTKC_pft, CanopyBiomWater_pft, Transpiration_pft
   use ClimForcDataType,   only : TLEX_col, TSHX_col
   use SharedDataMod,      only : a_Transpiration, a_EvapCan, a_EvapGrnd, a_EvapLitr, &
-    a_EvapSnow, a_Sublim
+    a_EvapSnow, a_Sublim, a_PlantInit
   use MicrobialDataType,  only : mBiomeHeter_vr, mBiomeAutor_vr
   implicit none
   type(EcoSizes), intent(in) :: sizes
@@ -85,7 +88,7 @@ contains
   bind_arrays = bind
   ncol_bind = sizes%num_columns
   if (allocated(entries)) deallocate(entries)
-  allocate(entries(48))
+  allocate(entries(80))   ! capacity; new_entry stops the run if exceeded
   nentries = 0
 
   ! state carried between advances (checkpointed by ATS)
@@ -120,6 +123,25 @@ contains
     'surface litter (soil layer 0) heat capacity', VHeatCapacity_vr, 0, 1)
   call add3('canopy_water_pft', 'WatHeldOnCanopy_pft', 'm3 d-2', kRolePrivate, &
     'water held on the canopy per PFT', WatHeldOnCanopy_pft, 1, npft)
+  ! canopy snow (SnowOnCanopy_pft) is exchanged with ATS through
+  ! feedback%canopy_snow (a_CanSnow), so it is not registered here
+  ! Prescribed phenology plant water and energy state, carried between hours
+  ! (set at the first advance by InitPrescribedPlantState; the flag keeps a
+  ! restarted run from initializing it again)
+  call add2('plant_state_initialized', 'a_PlantInit', '-', kRolePrivate, &
+    'prescribed phenology: 1 once the plant state below has been initialized', a_PlantInit)
+  call add3('canopy_water_potential', 'PSICanopy_pft', 'MPa', kRolePrivate, &
+    'canopy total water potential per PFT', PSICanopy_pft, 1, npft)
+  call add3('plant_water', 'CanopyBiomWater_pft', 'm3 d-2', kRolePrivate, &
+    'water in the plant tissue (canopy dry matter) per PFT', CanopyBiomWater_pft, 1, npft)
+  call add3('canopy_temperature', 'TKC_pft', 'K', kRolePrivate, &
+    'canopy temperature after the energy iteration per PFT', TKC_pft, 1, npft)
+  call add3('canopy_temperature_start', 'TKCanopy_pft', 'K', kRolePrivate, &
+    'canopy temperature that starts the next energy iteration per PFT', TKCanopy_pft, 1, npft)
+  call add3('canopy_heat_storage', 'ENGYX_pft', 'MJ d-2', kRolePrivate, &
+    'canopy heat storage from the previous step per PFT', ENGYX_pft, 1, npft)
+  call add3('canopy_temperature_change', 'DeltaTKC_pft', 'K', kRolePrivate, &
+    'canopy minus air temperature from the previous step per PFT', DeltaTKC_pft, 1, npft)
   ! The next three are EcoSIM carry-over values, not fluxes for ATS to use:
   ! they are what EcoSIM needs from the previous step to start the next one.
   call add2('canopy_longwave_radiation', 'LWRadCanGPrev_col', 'MJ h-1', kRolePrivate, &
@@ -142,21 +164,22 @@ contains
       mBiomeAutor_vr, NumPlantChemElms, nAutorBioms, nlay)
   endif
 
-  ! EcoSIM-only outputs (visualized by ATS, not used by ATS physics)
-  !call add1('transpiration', 'a_Transpiration', 'm3 d-2 h-1', kRoleOutput, &
-  !  'transpiration summed over PFTs', a_Transpiration)
-  call add3('transpiration', 'Transpiration_pft', 'm3 d-2 h-1', kRoleOutput, &
-    'transpiration of individual PFTs', Transpiration_pft, 1, npft)
+  ! EcoSIM-only outputs (visualized by ATS, not used by ATS physics). Water vapor
+  ! terms use EcoSIM's air -> surface sign: <0 = water leaving to the air.
+  call add1('transpiration', 'a_Transpiration', 'm3 d-2 h-1', kRoleOutput, &
+    'transpiration summed over PFTs; <0 = water to air', a_Transpiration)
+  call add3('transpiration_pft', 'Transpiration_pft', 'm3 d-2 h-1', kRoleOutput, &
+    'transpiration of individual PFTs; <0 = water to air', Transpiration_pft, 1, npft)
   call add1('evaporation_canopy', 'a_EvapCan', 'm2 d-2 h-1', kRoleOutput, &
-    'negative of canopy evaporation summed over PFTs, this hour', a_EvapCan)
+    'canopy evaporation summed over PFTs, this hour; <0 = water to air', a_EvapCan)
   call add1('evaporation_ground', 'a_EvapGrnd', 'unannotated', kRoleOutput, &
-    'bare ground evaporation (TEvapXAir2Toplay_col)', a_EvapGrnd)
+    'top soil layer evaporation only, no snow evaporation/sublimation; <0 = water to air (TEvapXAir2Toplay_col)', a_EvapGrnd)
   call add1('evaporation_litter', 'a_EvapLitr', 'unannotated', kRoleOutput, &
-    'litter evaporation (TEvapXAir2LitR_col)', a_EvapLitr)
+    'litter evaporation; <0 = water to air (TEvapXAir2LitR_col)', a_EvapLitr)
   call add1('evaporation_snow', 'a_EvapSnow', 'm3 d-2 h-1', kRoleOutput, &
-    'evaporation from snow, last substep (EVAPW_col)', a_EvapSnow)
+    'evaporation from snow, this hour; <0 = water to air (EVAPW_col added over substeps)', a_EvapSnow)
   call add1('sublimation_snow', 'a_Sublim', 'm3 d-2 h-1', kRoleOutput, &
-    'sublimation from snow, last substep (EVAPS_col)', a_Sublim)
+    'sublimation from snow, this hour; <0 = water to air (EVAPS_col added over substeps)', a_Sublim)
   call add2('canopy_surface_water', 'WatHeldOnCanopy_col', 'm3 d-2', kRoleOutput, &
     'water held on the canopy, column total, this hour', WatHeldOnCanopy_col)
 

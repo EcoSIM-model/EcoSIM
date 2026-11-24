@@ -13,6 +13,7 @@ module ClimReadMod
   use EcoSIMCtrlMod
   use EcoSIMConfig
   use UnitMod, only : units
+  use DebugToolMod, only : PrintInfo
 implicit none
   private
 
@@ -43,7 +44,7 @@ implicit none
   end type atm_forc_type
   public :: ReadClim
   public :: ReadClimNC    !read climate data
-  public :: GetAtmGts
+  public :: ReadAtmosComposition
   public :: get_clm_years
   public :: read_soil_warming_Tref
   contains
@@ -715,12 +716,14 @@ implicit none
   integer , allocatable :: idatav(:)
   real(r8), allocatable ::fdatav(:)
   integer :: year,J,II,JJ,I,irec
-
+  integer, parameter :: iHourly=2
+  integer, parameter :: iDaily=1
+  
   IWTHR=get_forc_step_type(yeari)
   
   LYR=0
 
-  if(IWTHR==1)then
+  if(IWTHR==iDaily)then
    !open file
     call ncd_pio_openfile(clm_nfid, clm_day_file_in, ncd_nowrite)
 
@@ -731,7 +734,9 @@ implicit none
       if(year==yeari)exit
     enddo
     ngrid=get_dim_len(clm_nfid,'ngrid')
-
+    if(ngrid/=1)then
+      call endrun("ngrid > 1 in "//mod_filename,__LINE__)
+    endif
     allocate(idatav(ngrid))
     allocate(fdatav(ngrid))
     allocate(fdatam1(ngrid,366))
@@ -760,7 +765,15 @@ implicit none
     call ncd_getvar(clm_nfid,'CSORG',irec,fdatav); atmf%CSORG=fdatav(1)
     call ncd_getvar(clm_nfid,'CCLRG',irec,fdatav); atmf%CCLRG=fdatav(1)
     call ncd_getvar(clm_nfid,'IFLGW',irec,idatav); iFlagRaiseZ0GbyVeg=idatav(1)
-
+    
+    call check_var(clm_nfid, 'DRYDEPOC', vardesc, readvar)
+    if(readvar)then
+      !dry deposition is provided, now (year,day,ngrid)
+      call ncd_getvar(clm_nfid,'DRYDEPOC',irec,fdatam1)
+      DryDepoOMC(:) = fdatam1(:,1)  ! extract first (only) grid cell
+    else
+      DryDepoOMC=0._r8
+    endif
     !fill in day 366
     if (.not. isLeap(yeari))then
       I=365
@@ -776,8 +789,8 @@ implicit none
     deallocate(fdatav)
     deallocate(idatav)
 
-  elseif(IWTHR==2)then
-
+  elseif(IWTHR==iHourly)then
+    !hourly data
     call ncd_pio_openfile(clm_nfid, clm_hour_file_in, ncd_nowrite)
 
     nyears=get_dim_len(clm_nfid, 'year')
@@ -789,10 +802,13 @@ implicit none
     ! while the climate data may be for multiple grid, only the first grid of the data
     ! read is assigned to current climate arrays
     ngrid=get_dim_len(clm_nfid,'ngrid')
-
+    if(ngrid/=1)then
+      call endrun("ngrid > 1 in "//mod_filename,__LINE__)
+    endif
     allocate(fdatam(ngrid,24,366))
     allocate(idatav(ngrid))
     allocate(fdatav(ngrid))
+    allocate(fdatam1(ngrid,366))    
     I=365
     if(isleap(yeari))I=366
 
@@ -807,6 +823,15 @@ implicit none
       call ncd_getvar(clm_nfid,'PATM',irec,fdatam); call reshape2(PBOT_hrly,fdatam)
     else
       PBOT_hrly=1.01325E+02_r8
+    endif
+
+    call check_var(clm_nfid, 'DRYDEPOC', vardesc, readvar)
+    if(readvar)then
+      !dry deposition is provided, now (year,day,ngrid)
+      call ncd_getvar(clm_nfid,'DRYDEPOC',irec,fdatam1)
+      DryDepoOMC(:) = fdatam1(1,:)  ! extract first (only) grid cell
+    else
+      DryDepoOMC=0._r8
     endif
 
     call ncd_getvar(clm_nfid,'Z0G',irec,fdatav); atmf%Z0G=fdatav(1)
@@ -849,6 +874,7 @@ implicit none
     DO II=1,366
       DO JJ=1,24
         SWRad_hrly(JJ,II)=SWRad_hrly(JJ,II)*3600.e-6_r8  !convert from W/m2 to MJ/m^2/hour
+        RadLWClm(JJ,II)=RadLWClm(JJ,II)*3600.e-6_r8       !convert from W/m2 to MJ/m^2/hour
         WINDH(JJ,II)=WINDH(JJ,II)*3600._r8        !convert from m/s to m/hour
         RAINH(JJ,II)=RAINH(JJ,II)*1.e-3_r8        !convert into m hr^-1
       enddo
@@ -864,6 +890,7 @@ implicit none
     deallocate(fdatam)
     deallocate(fdatav)
     deallocate(idatav)
+    deallocate(fdatam1)    
   endif
   call ncd_pio_closefile(clm_nfid)
   end subroutine ReadClimNC
@@ -895,9 +922,9 @@ implicit none
   end subroutine reshape1
 
 
-!----------------------------------------------------------------------
+!------------------------------------------------------------------------------------------
 
-  subroutine GetAtmGts(yeari,NHW,NHE,NVN,NVS)
+  subroutine ReadAtmosComposition(yeari,NHW,NHE,NVN,NVS)
   !
   !DESCRIPTION
   !read in atmospheric concentrations for CO2, CH4, and N2O
@@ -909,15 +936,33 @@ implicit none
   real(r8) :: atm_ch4   !ppb
   real(r8) :: atm_n2o   !ppb
   type(file_desc_t) :: atm_ghg_nfid
-  integer :: iyear
-  real(r8) :: year,year0
+  integer :: iyear,ntime
+  real(r8) :: year0,yearN
+  character(len=512) :: msg
   INTEGER :: NY,NX,K
+  character(len=*), parameter :: subname='ReadAtmosComposition'
+
+  call PrintInfo('beg '//subname)
 
   call ncd_pio_openfile(atm_ghg_nfid, atm_ghg_in, ncd_nowrite)
 
-  iyear=1
-  call ncd_getvar(atm_ghg_nfid,'year',iyear,year0)
-  iyear=(yeari-int(year0))*12
+  iyear=0
+  if(atm_co2_fix<=0._r8 .or. atm_ch4_fix<=0._r8 .or. atm_n2o_fix<=0._r8)then
+    !time stamps are calendar_year+month/12: Jan of Y is Y+1/12, Dec of Y is Y+1
+    ntime=get_dim_len(atm_ghg_nfid,'time')
+    call ncd_getvar(atm_ghg_nfid,'year',1,year0)
+    call ncd_getvar(atm_ghg_nfid,'year',ntime,yearN)
+    if(nint((year0-int(year0))*12._r8)/=1)then
+      call endrun(subname//': first record of '//trim(atm_ghg_in)// &
+        ' is not January (expect year stamp = calendar_year+1/12)',__LINE__)
+    endif
+    iyear=(yeari-int(year0))*12
+    if(iyear<0 .or. iyear+12>ntime)then
+      write(msg,'(A,I0,A,I0,A,I0,A)')subname//': requested year ',yeari, &
+        ' is outside the full-year coverage ',int(year0),'-',nint(yearN)-1,' of'
+      call endrun(trim(msg)//' '//trim(atm_ghg_in),__LINE__)
+    endif
+  endif
 
   if(atm_co2_fix>0._r8)then
     atm_co2_mon=atm_co2_fix
@@ -951,10 +996,11 @@ implicit none
       Z2OE_col(NY,NX) =atm_n2o_mon(1)*1.e-3_r8  !ppb to ppm
     ENDDO
   ENDDO
-  end subroutine GetAtmGts
+  call PrintInfo('end '//subname)
+  end subroutine ReadAtmosComposition
 
 
-!-----------------------------------------------------------------------
+!------------------------------------------------------------------------------------------
   subroutine get_clm_years()
   !Description  
   !obtain the forcing year
@@ -1025,7 +1071,7 @@ implicit none
   !Description
   !read soil warming file
   use abortutils,      only: destroy
-  use EcosysWarmingMod, only: get_warming_fname
+  use EcosysWarmingMod, only: get_warming_fname, warming_hours_needed
   use GridMod,         only: get_col
   implicit none
   integer, intent(in) :: year
@@ -1047,6 +1093,13 @@ implicit none
   nlevs  = get_dim_len(ncid,'levsoi')
   ncol   = get_dim_len(ncid,'column')
   allocate(data(ncol,nlevs))
+
+  !hours missing from the file would leave zeros or the previous year's values in TKS_ref_vr
+  if(nsteps<warming_hours_needed(year))then
+    write(*,*)'read_soil_warming_Tref: ',trim(fname),' has ',nsteps,' hourly records, needs ', &
+      warming_hours_needed(year),' for year ',year
+    call endrun('read_soil_warming_Tref: too few hourly records in '//trim(fname),__LINE__)
+  endif
 
   !write(*,*)nsteps,nlevs,ncol
   do kk = 1,nsteps

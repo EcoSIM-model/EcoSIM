@@ -411,7 +411,7 @@ data:
 
  ALTIG = 351 ;
 
- ATCAG = 0.5 ;
+ ATCAG = 0.2 ;
 
  IDTBLG = 1 ;
 
@@ -515,11 +515,11 @@ data:
 
  NUI = 1 ;
 
- NJ = 13 ;
+ NJ = 9 ;
 
- NL1 = 0 ;
+ NL1 = 1 ;
 
- NL2 = 0 ;
+ NL2 = 1 ;
 
  ISOILR = 0 ;
 

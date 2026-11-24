@@ -20,7 +20,7 @@ module SoluteParMod
   real(r8), PARAMETER :: SPCAH=2.3E-31_r8                !equilibrium constant for hydroxyapatite,Ca5(PO4)3OH(s)=5Ca(2+)+3PO4(3-)+OH(-),[mol^8 m^-24]
   real(r8), PARAMETER :: SXOH2=4.5E-05_r8                !equilibrium constant for X-OH2(+)=X-OH+H(+),[mol m^-3]
   real(r8), PARAMETER :: SXOH1=1.1E-06_r8                !equilibrium constant for X-OH1=X-O(-)+H(+),[mol m^-3]
-  real(r8), PARAMETER :: SXH2P=2.0E+07_r8                !equilibrium constant for X-H2PO4+H2O=X-OH2(+)+H2PO4(-),[mol m^-3]
+  real(r8), PARAMETER :: SXH2P=2.0E+07_r8                !equilibrium constant for X-H2PO4+OH(-)=X-OH+H2PO4(-), dimensionless
   real(r8), PARAMETER :: SXH1P=2.0E+07_r8                !equilibrium constant for X-H1PO4(-)=X-OH+HPO4(2-),[mol m^-3]
   real(r8), PARAMETER :: DPCO2=4.2E-04_r8                !equilibrium constant for CO2 + H2O = HCO3(-) + H(+), [mol m^-3]
   real(r8), PARAMETER :: DPHCO=5.6E-08_r8                !equilibrium constant for HCO3(-)  = CO3(2-) + H(+), [mol m^-3]
@@ -35,7 +35,7 @@ module SoluteParMod
   real(r8), PARAMETER :: DPFE3=1.8E-05_r8                !equilibrium constant for Fe(OH)3(aq)=Fe(OH)2(+)+OH(-),[mol m^-3]
   real(r8), PARAMETER :: DPFE4=1.2E-05_r8                !equilibrium constant for Fe(OH)4(-)=Fe(OH)3(aq)+OH(-),[mol m^-^3]
   real(r8), PARAMETER :: DPFES=7.1E-02_r8                !equilibrium constant for Fe(SO4)(+)=Fe(3+)+SO4(2-),[mol m^-3]
-  real(r8), PARAMETER :: DPCAO=12.5_r8                   !equilibrium constant for Ca(OH)(-)=Ca(2+)+OH(-),[mol m^-3]
+  real(r8), PARAMETER :: DPCAO=12.5_r8                   !equilibrium constant for CaOH(+)=Ca(2+)+OH(-),[mol m^-3]
   real(r8), PARAMETER :: DPCAC=4.2E-02_r8                !equilibrium constant for CaCO3(aq)=Ca(2+)+CO3(2-),[mol m^-3]
   real(r8), PARAMETER :: DPCAH=13.5_r8                   !equilibrium constant for CaHCO3(+)=Ca(2+)+HCO3(-),[mol m^-3]
   real(r8), PARAMETER :: DPCAS=1.2_r8                    !equilibrium constant for CaSO4=Ca(2+)+SO4(2-),[mol m^-3]

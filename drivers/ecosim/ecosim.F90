@@ -19,7 +19,10 @@ PROGRAM main
   use RestartMod        , only : get_restart_date
   use ClimReadMod       , only : get_clm_years
   use EcosysWarmingMod   , only : config_soil_warming
-  use EcoSIMAPI         , only : AdvanceModelOneYear,readnamelist,regressiontest,write_modelconfig
+  use EcoSIMAPI         , only : AdvanceModelOneYear,readnamelist,regressiontest,write_modelconfig, &
+                              do_timing,do_timing_detail
+  use timings, only : init_timer,start_timer,end_timer,finalize_timer,timer_stamp_type,flush_timer_detail, &
+                              timer_launch_label
   use EcoSIMCtrlMod
   use EcoSIMCtrlDataType
   use EcoSIMHistMod
@@ -29,6 +32,8 @@ PROGRAM main
   character(len=*), parameter :: mod_filename = &
   __FILE__
 
+  type(timer_stamp_type) :: initialization_stamp
+  character(len=15) :: run_start_label
   integer :: NA(250),ND(250)
   integer :: NAX,NDX,NEX,NAY,NDY,NE,N,NTX,NT
   integer :: NHW,NVN,NHE,NVS
@@ -47,6 +52,7 @@ PROGRAM main
 !!
 ! begin_execution
 
+  run_start_label=timer_launch_label()
   is_dos=.false.
 !  open(111,file='fort11',status='unknown')
   write(iulog,*)'obtain working directory'
@@ -79,6 +85,11 @@ PROGRAM main
     outdir=trim(buf)//'/'//trim(case_name)//'_outputs/'
   endif
   call system('mkdir -p '//trim(outdir))
+
+  if(do_timing)then
+    call init_timer(outdir,do_timing_detail,run_start_label)
+    call start_timer(initialization_stamp)
+  endif
 
   read(start_date,'(I4)')year_ini
 
@@ -117,6 +128,11 @@ PROGRAM main
   !prepare climate forcing
   call get_clm_years()
   
+  if(do_timing)then
+    call end_timer('Initialization',initialization_stamp)
+    call flush_timer_detail()
+  endif
+
   IGO=0
 
 !  print*,frectyp%ymdhs0,yeari
@@ -154,5 +170,6 @@ PROGRAM main
     call regressiontest(trim(nmlfile),trim(case_name),NHW,NVN)
   endif
   call DestructEcoSIM
+  if(do_timing)call finalize_timer()
 !close(111)  
 END program main

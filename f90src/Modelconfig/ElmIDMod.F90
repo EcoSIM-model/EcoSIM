@@ -9,11 +9,13 @@ implicit none
   integer, parameter :: ielmn=2    !nitrogen element
   integer, parameter :: ielmp=3    !phosphorus element
   integer, parameter :: NumPlantChemElms=3   !totally three elements
-! biomass component ids for microbes
-  integer, parameter :: ibiom_kinetic = 1
-  integer, parameter :: ibiom_struct  = 2
-  integer, parameter :: ibiom_reserve = 3
-
+  ! IDS for microbial biomass components
+  integer, parameter :: iLbiom_kinetic = 1 !live kinetic biomass 
+  integer, parameter :: iLbiom_struct  = 2 !live structural biomas
+  integer, parameter :: iLbiom_reserve = 3 !live reserve biomass
+  
+  integer, parameter :: iDbiom_labile  = 1
+  integer, parameter :: iDbiom_recalc  = 2
 ! erosion model options
   integer, parameter :: ieros_noaction       = -1
   integer, parameter :: ieros_frzthawelv     = 0
@@ -141,12 +143,12 @@ implicit none
   integer, parameter :: iphotop_short  =1
   integer, parameter :: iphotop_long   =2
 
-  integer, parameter :: iembryotyp_Bryophytes   =0
-  integer, parameter :: iembryotyp_Pteridophytes=1
-  integer, parameter :: iembroytyp_Gymnosperms  =2
-  integer, parameter :: iembroytyp_Monocots     =3
-  integer, parameter :: iembroytyp_Eudicots     =4
-
+  integer, parameter :: iembryotyp_Bryophytes   =0   !small, non-vascular land plants, like moss
+  integer, parameter :: iembryotyp_Pteridophytes=1   !a vascular plant with xylem and phloem that reproduces by means of spores
+  integer, parameter :: iembroytyp_Gymnosperms  =2   !example: conifers, cycads, ginkgos, and gnetophytes, woody, perennial seed-producing plants, typically lacking the protective outer covering which surrounds the seeds in flowering plants
+  integer, parameter :: iembroytyp_Monocots     =3   !example: corn, grasses, wheat,onion, flowering plants whose seeds contain only one embryonic leaf, or cotyledon, they are angiosperms
+  integer, parameter :: iembroytyp_Eudicots     =4   !example: soybean, rose, flowering plants that have two seed leaves upon germination, they are angiosperms
+  
   integer, parameter :: isnowcept_bryophyte = 0
   integer, parameter :: isnowcept_grasses   = 1
   integer, parameter :: isnowcept_shrub     = 2

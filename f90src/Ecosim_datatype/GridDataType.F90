@@ -11,12 +11,10 @@ implicit none
   real(r8),target,allocatable ::  CumDepz2LayBottom_vr(:,:,:)        !depth to bottom of soil layer, [m]
   real(r8),target,allocatable ::  DLYR_3D(:,:,:,:)                   !thickness of soil layer, [m]
   real(r8),target,allocatable ::  DLYRI_3D(:,:,:,:)                  !thickness of soil layer in 3 directions, [m]
-  real(r8),target,allocatable ::  XDPTH_3D(:,:,:,:)                  !cross-sectional area / distance between adjacent grid cells, [m]
   real(r8),target,allocatable ::  SoilDepthMidLay_vr(:,:,:)          !depth to middle of soil layer, [m]
   real(r8),target,allocatable ::  CumSoilThickness_vr(:,:,:)         !depth to bottom of soil layer from  surface of grid cell, [m]
   real(r8),target,allocatable ::  CumSoilThickMidL_vr(:,:,:)         !depth to middle of soil layer from  surface of grid cell, [m]
   real(r8),target,allocatable ::  AREA_3D(:,:,:,:)                   !cross-sectional area,  [m2 d-2]
-  real(r8),target,allocatable ::  DIST_3D(:,:,:,:)                   !distance between adjacent layers:1=EW,2=NS,3=vertical, [m]
   integer,target,allocatable ::  NU_col(:,:)                         !soil surface layer number,[-]
   integer,target,allocatable ::  NUI_col(:,:)                        !initial soil surface layer number,[-]
   integer,target,allocatable ::  NLF_col(:,:)                        !id of the frozen layer, [-]
@@ -41,12 +39,10 @@ contains
   allocate(CumDepz2LayBottom_vr(0:JZ,JY,JX));  CumDepz2LayBottom_vr=0._r8
   allocate(DLYR_3D(3,0:JZ,JY,JX)); DLYR_3D=0._r8
   allocate(DLYRI_3D(3,0:JZ,JY,JX));DLYRI_3D=0._r8
-  allocate(XDPTH_3D(3,JZ,JY,JX));  XDPTH_3D=0._r8
   allocate(SoilDepthMidLay_vr(JZ,JY,JX));     SoilDepthMidLay_vr=0._r8
   allocate(CumSoilThickness_vr(0:JZ,JY,JX)); CumSoilThickness_vr=0._r8
   allocate(CumSoilThickMidL_vr(JZ,JY,JX));    CumSoilThickMidL_vr=0._r8
   allocate(AREA_3D(3,0:JZ,JY,JX)); AREA_3D=0._r8
-  allocate(DIST_3D(3,JD,JV,JH));   DIST_3D=0._r8
   allocate(NU_col(JY,JX));          NU_col=0
   allocate(NUI_col(JY,JX));         NUI_col=0
   allocate(MaxNumRootLays_col(JY,JX));          MaxNumRootLays_col=0
@@ -71,12 +67,10 @@ contains
   call destroy(CumDepz2LayBottom_vr)
   call destroy(DLYR_3D)
   call destroy(DLYRI_3D)
-  call destroy(XDPTH_3D)
   call destroy(SoilDepthMidLay_vr)
   call destroy(CumSoilThickness_vr)
   call destroy(CumSoilThickMidL_vr)
   call destroy(AREA_3D)
-  call destroy(DIST_3D)
   call destroy(NU_col)
   call destroy(NUI_col)
   call destroy(MaxNumRootLays_col)

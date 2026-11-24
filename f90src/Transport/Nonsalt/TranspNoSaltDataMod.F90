@@ -8,7 +8,7 @@ implicit none
   __FILE__
   real(r8), parameter :: tiny_p=1.e-3_r8
   real(r8), parameter :: XFRS=0.05_r8                             !maximum fraction of total soil volume to act as macropore for exchange with micropore
-  real(r8), Parameter :: VFLWX=0.5_r8                             !default outflow in water for micropore-macropore exchange
+  real(r8)  :: VFLWX=0.5_r8                             !default outflow in water for micropore-macropore exchange
   real(r8), allocatable :: errmass_fast(:,:,:)                    !fast transport mass error, [g d-2]
   real(r8), allocatable :: errmass_slow(:,:,:)                    !slow transport mass error, [g d-2]
   real(r8), allocatable :: trcg_AquaADV_Snow2Soil_flxM(:,:,:)     !gas advection flux from snow to top soil at iteration M, [g d-2]

@@ -80,16 +80,17 @@ module readsmod
 
 !------------------------------------------------------------------------------------------
 
-  SUBROUTINE ReadClimSoilForcing(yearc,yeari,NHW,NHE,NVN,NVS)
+  SUBROUTINE ReadClimSoilForcing(yearc,yeari,NHW,NHE,NVN,NVS,RefreshRainChem)
 !
 ! THIS SUBROUTINE read ALL SOIL AND PLANT MANAGEMENT INPUT FILES
 !
-  use ReadManagementMod, only : ReadManagementFiles,ReadFire
+  use ReadManagementMod, only : ReadSoilManagementForYear,ReadFire
   use EcoSIMCtrlMod, only : soil_mgmt_in
   implicit none
   integer, intent(in) :: yearc   !current model year
   integer, intent(in) :: yeari   !current data year
   integer, intent(in) :: NHW,NHE,NVN,NVS
+  logical, intent(out) :: RefreshRainChem !raw rainfall chemistry was reloaded
 
   character(len=*), parameter :: subname='ReadClimSoilForcing'
   CHARACTER(len=1) :: TTYPE
@@ -103,6 +104,7 @@ module readsmod
 
 ! begin_execution
   call PrintInfo('beg '//subname)
+  RefreshRainChem=.false.
 
   ICLM=0
   call ReadClimateCorrections(yeari)
@@ -169,13 +171,17 @@ module readsmod
   if(fixClime)then
     !set constatnt climate forcing
     call SetConstClimeForcing()
+    RefreshRainChem=.true.
   else
     IF(is_first_year)THEN
       L=1
     ELSE
       L=2
     ENDIF
-    if(yearhi/=yeari)call ReadClimateForc(yearc,yeari,L,NHW,NHE,NVN,NVS)
+    if(yearhi/=yeari)then
+      call ReadClimateForc(yearc,yeari,L,NHW,NHE,NVN,NVS)
+      RefreshRainChem=.true.
+    endif
   endif
   yearhi=yeari
 
@@ -184,6 +190,7 @@ module readsmod
 !
   D9980: DO NX=NHW,NHE
     D9985: DO NY=NVN,NVS
+      Lirri_auto_col(NY,NX) = .false.
       ROWSpaceNH4_col(NY,NX) = 0.0_r8
       ROWSpaceNO3Band_col(NY,NX) = 0.0_r8
       ROWSpacePO4_col(NY,NX) = 0.0_r8
@@ -198,6 +205,7 @@ module readsmod
         D35: DO N=1,3
           IYTYP(N,I,NY,NX)=0
         ENDDO D35
+        ExternalManureC_col(I,NY,NX)=0._r8
         FDPTH(I,NY,NX)=0.0_r8
       ENDDO D40
       D125: DO I=1,366
@@ -239,11 +247,12 @@ module readsmod
   endif
 
   IF(trim(soil_mgmt_in).NE.'NO')THEN
-    call ReadManagementFiles(yeari)
+    ! Soil events may follow the simulation calendar while climate still
+    ! cycles yeari. Fire, PFT scheduling, weather and GHG routing are unchanged.
+    call ReadSoilManagementForYear(yearc,yeari)
   ENDIF
   IMNG=1
 
-  call GetAtmGts(yearc,NHW,NHE,NVN,NVS)
   call PrintInfo('end '//subname)
   
   RETURN

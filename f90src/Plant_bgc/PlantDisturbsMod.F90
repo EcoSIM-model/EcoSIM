@@ -5,10 +5,24 @@ module PlantDisturbsMod
   use data_kind_mod,      only: r8 => DAT_KIND_R8, yearIJ_type
   use minimathmod,        only: isclose, AZMAX1
   use EcoSIMCtrlDataType, only: DazCurrYear
-  use PlantBalMod,        only: SumPlantBranchBiome,SumPlantBiomStates,SumRootBiome,CheckPlantBalanceZ
+  use PlantBalMod,        only: SumPlantBranchBiome,SumPlantBiomStates,SumRootBiome,CheckPlantBalanceZ,SumPlantBiome,SumLitfallBlg
+  use LitterFallMod, only : SetDeadPlant
+  use InitPlantMod,  only : InitPlantPhenoMorphoBio,InitRootMychorMorphoBio  
+  use PlantDebugMod
   use ElmIDMod
   use EcosimConst
-  use PlantAPIData
+  use PlantAPICommonData
+  use PlantSiteAPIData, only : plt_site
+  use PlantPhotosynthesisAPIData, only : plt_photo
+  use PlantMorphologyAPIData, only : plt_morph
+  use PlantPhenologyAPIData, only : plt_pheno
+  use PlantSoilChemistryAPIData, only : plt_soilchem
+  use PlantAllometryAPIData, only : plt_allom
+  use PlantBiomassAPIData, only : plt_biom
+  use PlantEnergyWaterAPIData, only : plt_ew
+  use PlantDisturbanceAPIData, only : plt_distb
+  use PlantBGCRatesAPIData, only : plt_bgcr
+  use PlantRootBGCAPIData, only : plt_rbgc
   use PlantBGCPars
   use PlantMathFuncMod
   use PlantDisturbByFireMod
@@ -24,7 +38,7 @@ module PlantDisturbsMod
 ! disturbance variables
   real(r8) :: CanopyNonstElmRemoval(NumPlantChemElms)
   real(r8) :: LeafElmntRemoval(NumPlantChemElms)
-  real(r8) :: FineNonleafElmntRemoval(NumPlantChemElms)
+  real(r8) :: PetoleShethElmntRemoval(NumPlantChemElms)
   real(r8) :: WoodyElmntRemoval(NumPlantChemElms)
   real(r8) :: StandeadElmntRemoval(NumPlantChemElms)
   real(r8) :: LeafElmnt2Litr(NumPlantChemElms)
@@ -56,9 +70,10 @@ module PlantDisturbsMod
   character(len=*), parameter :: subname='StageDisturbances'
 
   call PrintInfo('beg '//subname)
+  StandeadElmntRemoval(1:NumPlantChemElms)     = 0._r8
   CanopyNonstElmRemoval(1:NumPlantChemElms)    = 0._r8
   LeafElmntRemoval(1:NumPlantChemElms)         = 0._r8
-  FineNonleafElmntRemoval(1:NumPlantChemElms)  = 0._r8
+  PetoleShethElmntRemoval(1:NumPlantChemElms)  = 0._r8
   WoodyElmntRemoval(1:NumPlantChemElms)        = 0._r8
   LeafElmnt2Litr(1:NumPlantChemElms)           = 0._r8
   FineNonleafElmnt2Litr(1:NumPlantChemElms)    = 0._r8
@@ -77,6 +92,7 @@ module PlantDisturbsMod
   integer, intent(in) :: NZ
   integer :: K
   real(r8) ::  massroot1(NumPlantChemElms)
+  real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
   character(len=*), parameter :: subname='RemoveBiomByMgmt'
 
   !     TRANSFER ABOVE-GROUND C,N,P AT HARVEST OR DISTURBANCE
@@ -85,20 +101,21 @@ module PlantDisturbsMod
 
   !prepare for disturbance
   CALL SumPlantBiomStates(yearIJ,NZ,subname)
-
+  !
   call RemoveBiomByHarvest(yearIJ,NZ)
   !
   !     REDUCE OR REMOVE PLANT POPULATIONS DURING TILLAGE
   !
   call RemoveBiomByTillage(yearIJ,NZ)
+!  IF(NZ.EQ.2)call MassBalCheck(yearIJ,NZ,opt='exit',checktype='c',iut=992,info=subname//'1')  
   !
   call PrintInfo('end '//subname)
   end subroutine RemoveBiomByMgmt
 
 !----------------------------------------------------------------------------------------------------
   subroutine RemoveDeadAnnual(yearIJ,NZ)
-  use LitterFallMod, only : SetDeadPlant
-  use InitPlantMod,  only : InitPlantPhenoMorphoBio,InitRootMychorMorphoBio  
+  !
+  !remove annual plant biomass 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
@@ -133,7 +150,7 @@ module PlantDisturbsMod
     RootMyco2ndStrutElms_rpvr   => plt_biom%RootMyco2ndStrutElms_rpvr     ,& !input  :root layer element secondary axes, [g d-2]    
     RootMyco1stStrutElms_rpvr   => plt_biom%RootMyco1stStrutElms_rpvr     ,& !input  :root layer element primary axes, [g d-2]    
     NGTopRootLayer_pft          => plt_morph%NGTopRootLayer_pft           ,& !input  :soil layer at planting depth, [-]    
-    NumPrimeRootAxes_pft        => plt_morph%NumPrimeRootAxes_pft         ,& !input  :root primary axis number,[-]    
+    NumStructuralRootAxes_pft        => plt_morph%NumStructuralRootAxes_pft         ,& !input  :number of structural root axes,[-]    
     RootMycoNonstElms_rpvr      => plt_biom%RootMycoNonstElms_rpvr        ,& !inoput :root layer nonstructural element, [g d-2]    
     CanopyNonstElms_brch        => plt_biom%CanopyNonstElms_brch          ,& !inoput :branch nonstructural element, [g d-2]    
     Days4FalseBreak_pft         => plt_pheno%Days4FalseBreak_pft          ,& !inoput :accumulated days to singifying false break
@@ -144,13 +161,17 @@ module PlantDisturbsMod
 
   IF(iPlantPhenolPattern_pft(NZ).EQ.iplt_annual .and. checkDroughtDeciduos)THEN
     SeasonalNonstCDayAve_pft(NZ)=SeasonalNonstCDayAve_pft(NZ)+SeasonalNonstElms_pft(ielmc,NZ)/24._r8
-    if(eval_annual_false_break_death(yearIJ,NZ))then
-      Days4FalseBreak_pft(NZ)=Days4FalseBreak_pft(NZ)+1._r8
+    !Evaluate the completed daily mean and count consecutive qualifying days.
+    if(yearIJ%J.EQ.24)then
+      if(eval_annual_false_break_death(yearIJ,NZ))then
+        Days4FalseBreak_pft(NZ)=Days4FalseBreak_pft(NZ)+1
+      else
+        Days4FalseBreak_pft(NZ)=0
+      endif
     endif
     
-    if(Days4FalseBreak_pft(NZ).GE.Days2CallFalseBreak)then
+    if(yearIJ%J.EQ.24 .and. Days4FalseBreak_pft(NZ).GE.Days2CallFalseBreak)then
       !add CanopyNonstElms_brch to below ground litter at layer NGTopRootLayer_pft(NZ)
-      !call CheckPlantBalanceZ(yearIJ,NZ,subname)
 
       DO M=1,jsken
         DO  NB=1,NumOfBranches_pft(NZ)
@@ -169,15 +190,15 @@ module PlantDisturbsMod
           DO NE=1,NumPlantChemElms        
             DO N=1,Myco_pft(NZ)
               LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)=LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)+&
-              (sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumPrimeRootAxes_pft(NZ),NZ)) + &              
+              (sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ)) + &              
                 RootMycoNonstElms_rpvr(NE,N,L,NZ))*PlantElmAllocMat4Litr(NE,ifoliar,M,NZ)
-              drootLoss(NE) =drootLoss(NE)+(sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumPrimeRootAxes_pft(NZ),NZ)) + &              
+              drootLoss(NE) =drootLoss(NE)+(sum(RootMyco2ndStrutElms_rpvr(NE,N,L,1:NumStructuralRootAxes_pft(NZ),NZ)) + &              
                 RootMycoNonstElms_rpvr(NE,N,L,NZ))*PlantElmAllocMat4Litr(NE,ifoliar,M,NZ)
             ENDDO  
             LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)=LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)+&
-              (sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumPrimeRootAxes_pft(NZ),NZ))  &
+              (sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))  &
               +RootNodulStrutElms_rpvr(NE,L,NZ)+ RootNodulNonstElms_rpvr(NE,L,NZ))*PlantElmAllocMat4Litr(NE,ifoliar,M,NZ)            
-            drootLoss(NE) =drootLoss(NE)+(sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumPrimeRootAxes_pft(NZ),NZ))  &
+            drootLoss(NE) =drootLoss(NE)+(sum(RootMyco1stStrutElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))  &
               +RootNodulStrutElms_rpvr(NE,L,NZ)+ RootNodulNonstElms_rpvr(NE,L,NZ))*PlantElmAllocMat4Litr(NE,ifoliar,M,NZ)              
           ENDDO  
         ENDDO  
@@ -186,6 +207,7 @@ module PlantDisturbsMod
       call SetDeadPlant(yearIJ,NZ,NumOfBranches_pft(NZ))
       !
       plt_pheno%doReSeed_pft(NZ)=.FALSE.
+
       call InitPlantPhenoMorphoBio(NZ)
       !
       call InitRootMychorMorphoBio(NZ)
@@ -202,7 +224,7 @@ module PlantDisturbsMod
   integer, intent(in) :: NZ
   logical :: tokill
   associate(                                                           &
-    CanopyHeightLive_pft           => plt_morph%CanopyHeightLive_pft         , & !inoput :canopy height, [m]    
+    CanopyHeightLive_pft       => plt_morph%CanopyHeightLive_pft     , & !inoput :canopy height, [m]    
     SeasonalNonstCDayAve_pft   => plt_biom%SeasonalNonstCDayAve_pft  , & !input : daily average seasonal storage C for annual plant death check, [g d-2]
     ZERO4Groth_pft             => plt_biom%ZERO4Groth_pft            , & !input :threshold zero for plang growth calculation, [-]    
     Hours2LeafOut_brch         => plt_pheno%Hours2LeafOut_brch       , & !inoput:counter for mobilizing nonstructural C during spring leafout/dehardening, [h]    
@@ -254,7 +276,7 @@ module PlantDisturbsMod
       ENDIF
     ENDIF
   ELSEIF(iHarvstType_pft(NZ).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ).EQ.iharvtyp_herbivo)THEN
-    call RemoveStandDeadByGrazing(yearIJ%I,yearIJ%J,NZ,FracStdeadLeft,FHVSH)
+    call RemoveStandDeadByGrazing(yearIJ,NZ,FracStdeadLeft,FHVSH)
   ELSE
     FracStdeadLeft = 1.0_r8
     FHVSH          = 1.0_r8
@@ -277,6 +299,8 @@ module PlantDisturbsMod
   type(yearIJ_type), intent(in) :: yearIJ  
   integer , intent(in) :: NZ
   character(len=*), parameter :: subname='RemoveBiomassByDisturbance'
+  real(r8) :: tvegE(NumPlantChemElms),canopyE(NumPlantChemElms),RootE(NumPlantChemElms)
+  real(r8) :: tvegE1(NumPlantChemElms),canopyE1(NumPlantChemElms),RootE1(NumPlantChemElms)
 
 !     begin_execution
   associate(                                                      &
@@ -297,15 +321,15 @@ module PlantDisturbsMod
   !
   !     iHarvstType_pft=harvest type:0=none,1=grain,2=all above-ground
   !                       ,3=pruning,4=grazing,5=fire,6=herbivory
-  !
+  !    
   call RemoveBiomByMgmt(yearIJ,NZ)  
-  !
+  
   IF(iHarvstType_pft(NZ).GE.iharvtyp_none)THEN
     !
     CALL RemoveStandingDead(yearIJ,NZ)
     !
-    call PlantDisturbance(yearIJ,NZ)
-
+    call PlantShootDisturbance(yearIJ,NZ)
+  
     ZERO4Groth_pft(NZ)   = ZERO*PlantPopuLive_pft(NZ)
     ZERO4Uptk_pft(NZ)    = ZERO*PlantPopuLive_pft(NZ)/AREA3(NU)
     ZERO4LeafVar_pft(NZ) = ZERO*PlantPopuLive_pft(NZ)*1.0E+06_r8
@@ -316,12 +340,12 @@ module PlantDisturbsMod
   end subroutine RemoveBiomassByDisturbance
 
 !----------------------------------------------------------------------------------------------------
-  subroutine PlantDisturbance(yearIJ,NZ)
+  subroutine PlantShootDisturbance(yearIJ,NZ)
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
   integer, intent(in) :: NZ
 
-  character(len=*), parameter :: subname='PlantDisturbance'
+  character(len=*), parameter :: subname='PlantShootDisturbance'
 
   real(r8) :: NonstructElmntOffEcosystem(NumPlantChemElms)
   real(r8) :: LeafElmntOffEcosystem(NumPlantChemElms)
@@ -329,8 +353,10 @@ module PlantDisturbsMod
   real(r8) :: WoodyElmntOffEcosystem(NumPlantChemElms)
   real(r8) :: StandeadElmntOffEcosystem(NumPlantChemElms)
   real(r8) :: CanopyNonstElm2Litr(NumPlantChemElms)
-  real(r8) :: TotalElmnt2Litr(NumPlantChemElms)
-  real(r8) :: HarvestElmnt2Litr(NumPlantChemElms)
+  real(r8) :: TotalAbgElmnt2Litr(NumPlantChemElms)
+  real(r8) :: HarvestAbgElmnt2Litr(NumPlantChemElms)
+  real(r8) :: tvegE(NumPlantChemElms)
+  real(r8) :: tvegE1(NumPlantChemElms)
 
   call PrintInfo('beg '//subname)
   NonstructElmntOffEcosystem(1:NumPlantChemElms) = 0._r8
@@ -344,27 +370,27 @@ module PlantDisturbsMod
     LeafElmntOffEcosystem,FineNonleafElmOffEcosystem,WoodyElmntOffEcosystem,StandeadElmntOffEcosystem)
 
   !     TOTAL C,N,P REMOVAL FROM DISTURBANCE
-  call AbvgBiomRemovalByDisturb(yearIJ,NZ,CanopyNonstElm2Litr,HarvestElmnt2Litr,TotalElmnt2Litr)
+  call AbvgBiomRemovalByDisturb(yearIJ,NZ,CanopyNonstElm2Litr,HarvestAbgElmnt2Litr,TotalAbgElmnt2Litr)
   !
   !     ABOVE-GROUND LitrFall FROM HARVESTING
   !
-  call LiterfallByDisturbance(yearIJ,NZ,HarvestElmnt2Litr,TotalElmnt2Litr,CanopyNonstElm2Litr,&
+  call LiterfallByDisturbance(yearIJ,NZ,HarvestAbgElmnt2Litr,TotalAbgElmnt2Litr,CanopyNonstElm2Litr,&
     NonstructElmntOffEcosystem,LeafElmntOffEcosystem,FineNonleafElmOffEcosystem,&
     WoodyElmntOffEcosystem,StandeadElmntOffEcosystem)
 
   call PrintInfo('end '//subname)
-  end subroutine PlantDisturbance
+  end subroutine PlantShootDisturbance
 
 !----------------------------------------------------------------------------------------------------
-  subroutine LiterfallByDisturbance(yearIJ,NZ,HarvestElmnt2Litr,TotalElmnt2Litr,CanopyNonstElm2Litr,&
+  subroutine LiterfallByDisturbance(yearIJ,NZ,HarvestAbgElmnt2Litr,TotalAbgElmnt2Litr,CanopyNonstElm2Litr,&
     NonstructElmntOffEcosystem,LeafElmntOffEcosystem,FineNonleafElmOffEcosystem,&
     WoodyElmntOffEcosystem,StandeadElmntOffEcosystem)
 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
   integer , intent(in) :: NZ
-  real(r8), intent(in) :: HarvestElmnt2Litr(NumPlantChemElms)
-  real(r8), intent(in) :: TotalElmnt2Litr(NumPlantChemElms)
+  real(r8), intent(in) :: HarvestAbgElmnt2Litr(NumPlantChemElms)
+  real(r8), intent(in) :: TotalAbgElmnt2Litr(NumPlantChemElms)
   real(r8), intent(in) :: CanopyNonstElm2Litr(NumPlantChemElms)
   real(r8), intent(in) :: NonstructElmntOffEcosystem(NumPlantChemElms)
   real(r8), intent(in) :: LeafElmntOffEcosystem(NumPlantChemElms)
@@ -444,7 +470,7 @@ module PlantDisturbsMod
       !
     ELSE
       !
-      call AbvGrndLiterFallByFire(yearIJ%I,yearIJ%J,NZ,CanopyNonstElm2Litr,StandeadElmntOffEcosystem, &
+      call AbvGrndLiterFallByFire(yearIJ,NZ,CanopyNonstElm2Litr,StandeadElmntOffEcosystem, &
         FineNonleafElmOffEcosystem,LeafElmnt2Litr,LeafElmntOffEcosystem,NonstructElmntOffEcosystem,&
         WoodyElmntOffEcosystem,WoodyElmnt2Litr,StandeadElmnt2Litr,PetolShethElmntHarv2Litr,&
         FineNonleafElmnt2Litr,LeafElmntHarv2Litr,StandeadElmntHarv2Litr,WoodyElmntHarv2Litr)
@@ -458,8 +484,8 @@ module PlantDisturbsMod
     !     TCSN0,TZSN0,TPSN0=cumulative above-ground C,N,P LitrFall
     !
     DO NE=1,NumPlantChemElms
-      LitrfalStrutElms_CumYr_pft(NE,NZ)     = LitrfalStrutElms_CumYr_pft(NE,NZ)+TotalElmnt2Litr(NE)+HarvestElmnt2Litr(NE)
-      SurfLitrfalStrutElms_CumYr_pft(NE,NZ) = SurfLitrfalStrutElms_CumYr_pft(NE,NZ)+TotalElmnt2Litr(NE)+HarvestElmnt2Litr(NE)
+      LitrfalStrutElms_CumYr_pft(NE,NZ)     = LitrfalStrutElms_CumYr_pft(NE,NZ)+TotalAbgElmnt2Litr(NE)+HarvestAbgElmnt2Litr(NE)
+      SurfLitrfalStrutElms_CumYr_pft(NE,NZ) = SurfLitrfalStrutElms_CumYr_pft(NE,NZ)+TotalAbgElmnt2Litr(NE)+HarvestAbgElmnt2Litr(NE)
     ENDDO
   ENDIF
   call PrintInfo('beg '//subname)
@@ -467,29 +493,33 @@ module PlantDisturbsMod
   end subroutine LiterfallByDisturbance
 
 !----------------------------------------------------------------------------------------------------
-  subroutine AbvgBiomRemovalByDisturb(yearIJ,NZ,CanopyNonstElm2Litr,HarvestElmnt2Litr,TotalElmnt2Litr)
+  subroutine AbvgBiomRemovalByDisturb(yearIJ,NZ,CanopyNonstElm2Litr,HarvestAbgElmnt2Litr,TotalAbgElmnt2Litr)
   !
   !Description:
   !Loss of above ground biomass due to disturbance
   !
+  use InitPlantMod, only : ApplySeedBank
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
 
   integer , intent(in)  :: NZ
   real(r8), intent(in)  :: CanopyNonstElm2Litr(NumPlantChemElms)
-  real(r8), intent(out) :: HarvestElmnt2Litr(NumPlantChemElms)
-  real(r8), intent(out) :: TotalElmnt2Litr(NumPlantChemElms)
+  real(r8), intent(out) :: HarvestAbgElmnt2Litr(NumPlantChemElms)
+  real(r8), intent(out) :: TotalAbgElmnt2Litr(NumPlantChemElms)
   character(len=*), parameter :: subname='AbvgBiomRemovalByDisturb'
-  real(r8) :: TotalElmntRemoval(NumPlantChemElms)
+  real(r8) :: TotalAbgElmntRemoval(NumPlantChemElms) !total aboveground biomass removal
+  real(r8) :: RooTE1(NumPlantChemElms)
   integer :: NE,NR
 !     begin_execution
   associate(                                                       &  
     iHarvstType_pft         => plt_distb%iHarvstType_pft          ,& !input  :type of harvest,[-]    
     jHarvstType_pft         => plt_distb%jHarvstType_pft          ,& !input  :flag for stand replacing disturbance,[-]
     MaxNumRootAxes          => pltpar%MaxNumRootAxes              ,& !input  : maximum number root axes,[-]
+    PlantPopuLive_pft       => plt_site%PlantPopuLive_pft         ,& !input  :plant population, [d-2]    
     NU                      => plt_site%NU                        ,& !input  :current soil surface layer number, [-]
+    NumOfBranches_pft       => plt_morph%NumOfBranches_pft        ,& !input  :number of branches,[-]    
     MaxNumRootLays          => plt_site%MaxNumRootLays            ,& !input  :maximum root layer number,[-]
-    NumPrimeRootAxes_pft    => plt_morph%NumPrimeRootAxes_pft     ,& !input: root primary axis number,[-]  
+    NumStructuralRootAxes_pft    => plt_morph%NumStructuralRootAxes_pft     ,& !input: number of structural root axes,[-]  
     RootCRRadius0_rpvr      => plt_morph%RootCRRadius0_rpvr       ,& !inoput: initial radius of roots that may undergo secondary growth, [m]
     RootAge_rpvr            => plt_morph%RootAge_rpvr             ,& !inoput :root age,[h]
     SeasonalNonstElms_pft   => plt_biom%SeasonalNonstElms_pft     ,& !inoput :plant stored nonstructural element at current step, [g d-2]
@@ -504,8 +534,6 @@ module PlantDisturbsMod
   )
   call PrintInfo('beg '//subname)
   !
-  !     TotalElmntRemoval=total C,N,P removed
-  !     TotalElmnt2Litr=total C,N,P to litter
   !     iHarvstType_pft=harvest type:0=none,1=grain,2=all above-ground
   !                       ,3=pruning,4=grazing,5=fire,6=herbivory
   !     jHarvstType_pft=terminate PFT:0=no,1=yes,2=yes,but reseed
@@ -516,25 +544,15 @@ module PlantDisturbsMod
   ! need double check
   !
   DO NE=1,NumPlantChemElms
-    TotalElmntRemoval(NE)       = CanopyNonstElmRemoval(NE)+LeafElmntRemoval(NE)+FineNonleafElmntRemoval(NE)+WoodyElmntRemoval(NE)+StandeadElmntRemoval(NE)
-    TotalElmnt2Litr(NE)         = CanopyNonstElm2Litr(NE)+LeafElmnt2Litr(NE)+FineNonleafElmnt2Litr(NE)+WoodyElmnt2Litr(NE)+StandeadElmnt2Litr(NE)
-    HarvestElmnt2Litr(NE)       = LeafElmntHarv2Litr(NE)+PetolShethElmntHarv2Litr(NE)+WoodyElmntHarv2Litr(NE)+StandeadElmntHarv2Litr(NE)
+    TotalAbgElmntRemoval(NE) = CanopyNonstElmRemoval(NE)+LeafElmntRemoval(NE)+PetoleShethElmntRemoval(NE)+WoodyElmntRemoval(NE)+StandeadElmntRemoval(NE)
+    TotalAbgElmnt2Litr(NE)   = CanopyNonstElm2Litr(NE)+LeafElmnt2Litr(NE)+FineNonleafElmnt2Litr(NE)+WoodyElmnt2Litr(NE)+StandeadElmnt2Litr(NE)
+    HarvestAbgElmnt2Litr(NE) = LeafElmntHarv2Litr(NE)+PetolShethElmntHarv2Litr(NE)+WoodyElmntHarv2Litr(NE)+StandeadElmntHarv2Litr(NE)
   ENDDO
-
-  if(yearIJ%I>=225 .and. .false.)then
-    write(798,*)('-',NE=1,100)
-    write(798,*)yearIJ%I*1000+yearIJ%J/24.,NZ,TotalElmntRemoval(ielmc),TotalElmnt2Litr(ielmc),HarvestElmnt2Litr(ielmc)
-    NE=ielmc
-    write(798,*)'rm',CanopyNonstElmRemoval(NE),LeafElmntRemoval(NE),FineNonleafElmntRemoval(NE),WoodyElmntRemoval(NE),StandeadElmntRemoval(NE)
-    write(798,*)'st',plt_biom%ShootNonstElms_pft(NE,NZ),plt_biom%ShootLeafElms_pft(NE,NZ),plt_biom%ShootFineNonLeafElms_pft(NE,NZ),&
-      plt_biom%ShootWoodyElms_pft(NE,NZ),plt_biom%StandDeadStrutElms_pft(NE,NZ)
-    write(798,*)plt_biom%CanopyNonstElms_pft(NE,NZ),plt_biom%ShootNoduleElms_pft(NE,NZ)
-  endif
 
   IF(jHarvstType_pft(NZ).NE.jharvtyp_tmareseed .and. iHarvstType_pft(NZ).NE.iharvtyp_fire)THEN
    !not do harvest and reseed
     DO NE=1,NumPlantChemElms  
-      PlantElmDistLoss_pft(NE,NZ) = PlantElmDistLoss_pft(NE,NZ)+TotalElmntRemoval(NE)-TotalElmnt2Litr(NE)
+      PlantElmDistLoss_pft(NE,NZ) = PlantElmDistLoss_pft(NE,NZ)+TotalAbgElmntRemoval(NE)-TotalAbgElmnt2Litr(NE)
     ENDDO  
   ENDIF
   !
@@ -542,28 +560,40 @@ module PlantDisturbsMod
     !
     !     C,N,P REMOVED FROM GRAZING
     !  
-    CALL AbvgBiomRemovalByGrazing(yearIJ%I,yearIJ%J,NZ,TotalElmnt2Litr,TotalElmntRemoval)
+    CALL AbvgBiomRemovalByGrazing(yearIJ,NZ,TotalAbgElmnt2Litr,TotalAbgElmntRemoval)
     !
   ELSE
     ! 
     IF(iHarvstType_pft(NZ).EQ.iharvtyp_fire)THEN
       !
       !     C,N,P LOST AS GAS IF FIRE
-      !
-      call AbvgBiomRemovalByFire(yearIJ%I,yearIJ%J,NZ,TotalElmnt2Litr,TotalElmntRemoval)      
-      !
+      !      
+      call AbvgBiomRemovalByFire(yearIJ,NZ,TotalAbgElmnt2Litr,TotalAbgElmntRemoval)   
+
+      call SumRootBiome(yearIJ,NZ,RootE1)
+      
+      !dealing with rejuvenation
+      if(PlantPopuLive_pft(NZ).LE.0._r8)then
+
+        call ApplySeedBank(NZ,yearIJ%I,RootE1(ielmc))
+        !                
+        !if root biomass is significant, allow it to rejuvenate
+        if(RootE1(ielmc).LE.0._R8)call InitRootMychorMorphoBio(NZ)
+        !        
+      endif
+
     ELSE
       
       IF(jHarvstType_pft(NZ).EQ.jharvtyp_tmareseed)THEN
         !terminate and reseed
         
         DO NE=1,NumPlantChemElms
-          SeasonalNonstElms_pft(NE,NZ)=SeasonalNonstElms_pft(NE,NZ)+TotalElmntRemoval(NE)-TotalElmnt2Litr(NE)
+          SeasonalNonstElms_pft(NE,NZ)=SeasonalNonstElms_pft(NE,NZ)+TotalAbgElmntRemoval(NE)-TotalAbgElmnt2Litr(NE)
         ENDDO
         !other
       ELSE
         !harvested
-        if(plt_site%PlantPopuLive_pft(NZ).LE.0._r8)then
+        if(PlantPopuLive_pft(NZ).LE.0._r8)then
           DO NE=1,NumPlantChemElms  
             if(SeasonalNonstElms_pft(NE,NZ).GT.0._r8)then
               PlantElmDistLoss_pft(NE,NZ)  = PlantElmDistLoss_pft(NE,NZ)+SeasonalNonstElms_pft(NE,NZ)
@@ -572,7 +602,7 @@ module PlantDisturbsMod
           ENDDO
           NMaxRootBotLayer_pft(NZ) = 0
           NGTopRootLayer_pft(NZ)   = 0
-          NumPrimeRootAxes_pft(NZ) = 0
+          NumStructuralRootAxes_pft(NZ) = 0
           DO NR=1,MaxNumRootAxes
             RootSegBaseDepth_raxes(NR,NZ)         = 0._r8
             Root1stDepz_raxes(NR,NZ)              = 0._r8
@@ -582,13 +612,14 @@ module PlantDisturbsMod
         ENDIF
 
         DO NE=1,NumPlantChemElms
-          EcoHavstElmnt_CumYr_pft(NE,NZ) = EcoHavstElmnt_CumYr_pft(NE,NZ)+TotalElmntRemoval(NE)-TotalElmnt2Litr(NE)
-          EcoHavstElmnt_CumYr_col(NE)    = EcoHavstElmnt_CumYr_col(NE)+TotalElmntRemoval(NE)-TotalElmnt2Litr(NE)
+          EcoHavstElmnt_CumYr_pft(NE,NZ) = EcoHavstElmnt_CumYr_pft(NE,NZ)+TotalAbgElmntRemoval(NE)-TotalAbgElmnt2Litr(NE)
+          EcoHavstElmnt_CumYr_col(NE)    = EcoHavstElmnt_CumYr_col(NE)+TotalAbgElmntRemoval(NE)-TotalAbgElmnt2Litr(NE)
         ENDDO
-        Eco_NBP_CumYr_col=Eco_NBP_CumYr_col+TotalElmnt2Litr(ielmc)-TotalElmntRemoval(ielmc)
+        Eco_NBP_CumYr_col=Eco_NBP_CumYr_col+TotalAbgElmnt2Litr(ielmc)-TotalAbgElmntRemoval(ielmc)
       ENDIF
     ENDIF
   ENDIF
+  
   call PrintInfo('end '//subname)
   end associate
   end subroutine AbvgBiomRemovalByDisturb
@@ -632,7 +663,7 @@ module PlantDisturbsMod
     DO NE=1,NumPlantChemElms
       CanopyNonstElm2Litr(NE)   = CanopyNonstElmRemoval(NE)*FracAftHVST21     !non-structural
       LeafElmnt2Litr(NE)        = LeafElmntRemoval(NE)*FracAftHVST21          !leaf
-      FineNonleafElmnt2Litr(NE) = FineNonleafElmntRemoval(NE)*FracAftHVST22   !fine, non-woody, grain
+      FineNonleafElmnt2Litr(NE) = PetoleShethElmntRemoval(NE)*FracAftHVST22   !fine, non-woody, grain
       WoodyElmnt2Litr(NE)       = WoodyElmntRemoval(NE)*FracAftHVST23         !woody
       StandeadElmnt2Litr(NE)    = StandeadElmntRemoval(NE)*FracAftHVST24      !standing dead
     ENDDO
@@ -643,7 +674,7 @@ module PlantDisturbsMod
     DO NE=1,NumPlantChemElms
       CanopyNonstElm2Litr(NE)   = CanopyNonstElmRemoval(NE)
       LeafElmnt2Litr(NE)        = LeafElmntRemoval(NE)
-      FineNonleafElmnt2Litr(NE) = FineNonleafElmntRemoval(NE)-GrainHarvst(NE)*FracBiomHarvsted(iHarvst_col,iplthvst_finenonleaf,NZ)
+      FineNonleafElmnt2Litr(NE) = PetoleShethElmntRemoval(NE)-GrainHarvst(NE)*FracBiomHarvsted(iHarvst_col,iplthvst_finenonleaf,NZ)
       WoodyElmnt2Litr(NE)       = WoodyElmntRemoval(NE)
       StandeadElmnt2Litr(NE)    = StandeadElmntRemoval(NE)
     ENDDO
@@ -654,7 +685,7 @@ module PlantDisturbsMod
     DO NE=1,NumPlantChemElms
       CanopyNonstElm2Litr(NE)   = CanopyNonstElmRemoval(NE)*FracAftHVST21
       LeafElmnt2Litr(NE)        = LeafElmntRemoval(NE)*FracAftHVST21
-      FineNonleafElmnt2Litr(NE) = FineNonleafElmntRemoval(NE)*FracAftHVST22
+      FineNonleafElmnt2Litr(NE) = PetoleShethElmntRemoval(NE)*FracAftHVST22
       WoodyElmnt2Litr(NE)       = WoodyElmntRemoval(NE)*FracAftHVST23
       StandeadElmnt2Litr(NE)    = StandeadElmntRemoval(NE)*FracAftHVST24
     ENDDO
@@ -665,7 +696,7 @@ module PlantDisturbsMod
     DO NE=1,NumPlantChemElms
       CanopyNonstElm2Litr(NE)   = CanopyNonstElmRemoval(NE)*FracAftHVST21
       LeafElmnt2Litr(NE)        = LeafElmntRemoval(NE)*FracAftHVST21
-      FineNonleafElmnt2Litr(NE) = FineNonleafElmntRemoval(NE)*FracAftHVST22
+      FineNonleafElmnt2Litr(NE) = PetoleShethElmntRemoval(NE)*FracAftHVST22
       WoodyElmnt2Litr(NE)       = WoodyElmntRemoval(NE)*FracAftHVST23
       StandeadElmnt2Litr(NE)    = StandeadElmntRemoval(NE)*FracAftHVST24
     ENDDO
@@ -675,7 +706,7 @@ module PlantDisturbsMod
   ELSEIF(iHarvstType_pft(NZ).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ).EQ.iharvtyp_herbivo)THEN
 
     call ApplyBiomRemovalByGrazing(yearIJ%I,yearIJ%J,NZ,FracAftHVST21,FracAftHVST22,FracAftHVST23,FracAftHVST24,&
-      CanopyNonstElmRemoval,LeafElmntRemoval,FineNonleafElmntRemoval,WoodyElmntRemoval,StandeadElmntRemoval,&
+      CanopyNonstElmRemoval,LeafElmntRemoval,PetoleShethElmntRemoval,WoodyElmntRemoval,StandeadElmntRemoval,&
       CanopyNonstElm2Litr,LeafElmnt2Litr,FineNonleafElmnt2Litr,WoodyElmnt2Litr,StandeadElmnt2Litr)
     !
     !     REMOVALS BY FIRE
@@ -684,10 +715,10 @@ module PlantDisturbsMod
     !
   ELSEIF(iHarvstType_pft(NZ).EQ.iharvtyp_fire)THEN
 
-    call ApplyBiomRemovalByFire(yearIJ%I,yearIJ%J,NZ,&
+    call ShootBiomRemovalByFire(yearIJ%I,yearIJ%J,NZ,&
       FracAftHVST21,FracAftHVST22, FracAftHVST23, FracAftHVST24,&
       StandeadElmntRemoval,CanopyNonstElmRemoval,LeafElmntRemoval,WoodyElmntRemoval,&
-      FineNonleafElmntRemoval,CanopyNonstElm2Litr,NonstructElmntOffEcosystem,&
+      PetoleShethElmntRemoval,CanopyNonstElm2Litr,NonstructElmntOffEcosystem,&
       LeafElmntOffEcosystem,FineNonleafElmOffEcosystem,WoodyElmntOffEcosystem,&
       StandeadElmntOffEcosystem,LeafElmnt2Litr,FineNonleafElmnt2Litr,&
       WoodyElmnt2Litr,StandeadElmnt2Litr)
@@ -708,15 +739,16 @@ module PlantDisturbsMod
   real(r8) :: FracLeftThin
   real(r8) :: XHVST1
   REAL(R8) :: LeafLayerC_brch(NumCanopyLayers1,JP1,JP1)
-  real(r8) :: ARLFY !leaf area left after removal
-  real(r8) :: ARLFR  
+  real(r8) :: LeafArea2Remove !leaf area left after removal
+  real(r8) :: LeafAreaRemoved  
   real(r8) :: APSILT
-  real(r8) :: FHVSH
+  real(r8) :: FHVSH,fracL2rm
   real(r8) :: HarvestedLeafC,HarvestedShethC,HarvestedEarC,HarvestedGrainC,GrazedCanopyNonstC
   real(r8) :: HarvestedStalkC,HarvestedStalkRsrvC
   real(r8) :: HarvestedPetoleC
   real(r8) :: GrazedCanopyNoduleC
-  real(r8) :: dLitR,massroot1(NumPlantChemElms)
+  real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
+  real(r8) :: dLitR,dLitR0,massroot1(NumPlantChemElms),rootE(NumPlantChemElms),rootE1(NumPlantChemElms)
 
 !     begin_execution
   associate(                                                             &
@@ -729,7 +761,7 @@ module PlantDisturbsMod
     SolarNoonHour_col          => plt_site%SolarNoonHour_col            ,& !input  :time of solar noon, [h]
     ZEROS                      => plt_site%ZEROS                        ,& !input  :threshold zero for numerical stability,[-]
     AREA3                      => plt_site%AREA3                        ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
-    NumPrimeRootAxes_pft       => plt_morph%NumPrimeRootAxes_pft        ,& !input  :root primary axis number,[-]
+    NumStructuralRootAxes_pft       => plt_morph%NumStructuralRootAxes_pft        ,& !input  :number of structural root axes,[-]
     SapwoodBiomassC_brch       => plt_biom%SapwoodBiomassC_brch         ,& !input  :branch live stalk C, [gC d-2]
     StalkStrutElms_brch        => plt_biom%StalkStrutElms_brch          ,& !input  :branch stalk structural element mass, [g d-2]
     CanopyLeafSheathC_brch     => plt_biom%CanopyLeafSheathC_brch       ,& !input  :plant branch leaf + sheath C, [g d-2]
@@ -783,12 +815,13 @@ module PlantDisturbsMod
     !          iHarvstType_pft=3:reduction of clumping factor
     !          iHarvstType_pft=4 or 6:animal or insect biomass(g LM m-2),iHarvstType_pft=5:fire
     !     CanopyLeafArea_col,CanopyLeafAareZ_col=leaf area of combined canopy, canopy layer
-    !     ARLFR,ARLFY=leaf area harvested,remaining
+    !     LeafAreaRemoved,LeafArea2Remove=leaf area harvested,remaining
     !     ZL=height to bottom of each canopy layer
     !
     !neither grazing nor herbivory
     IF(iHarvstType_pft(NZ).NE.iharvtyp_grazing .AND. iHarvstType_pft(NZ).NE.iharvtyp_herbivo)THEN
-      !not terminate and reseed
+
+      !not terminate and reseed, including fire
       IF(jHarvstType_pft(NZ).NE.jharvtyp_tmareseed)THEN                
         PPX_pft(NZ)           = PPX_pft(NZ)*(1._r8-THIN_pft(NZ))
         PlantPopuLive_pft(NZ) = PlantPopuLive_pft(NZ)*(1._r8-THIN_pft(NZ))
@@ -809,24 +842,26 @@ module PlantDisturbsMod
 
       !remove leaf area
       IF(iHarvstType_pft(NZ).LE.iharvtyp_allabvg .AND. CanopyCutProxy_pft(NZ).LT.0.0_r8)THEN
-        !leaf area left in column
-        ARLFY = (1._r8-ABS(CanopyCutProxy_pft(NZ)))*CanopyLeafArea_col
-        ARLFR = 0._r8
-
+        !leaf area left in column, now CanopyCutProxy_pft is the fraction removed
+        LeafArea2Remove = ABS(CanopyCutProxy_pft(NZ))*CanopyLeafArea_col
+        LeafAreaRemoved = 0._r8
+        CanopyCutProxy_pft(NZ)=0._r8
         !find the cut height due to leaf area removal
-        D9875: DO L=1,NumCanopyLayers1
+        D9875: DO L=NumCanopyLayers1,1,-1
           IF(CanopyHeightZ_col(L).GT.CanopyHeightZ_col(L-1) & !canopy height L is meaningful
             .AND. CanopyLeafAareZ_col(L).GT.ZEROS           & !leaf area in L is meaningful
-            .AND. ARLFR.LT.ARLFY)THEN                         !
-            IF(ARLFR+CanopyLeafAareZ_col(L).GT.ARLFY)THEN     !if still has not reach the amount of remaining leaf area
-              !update the canopy height after cut
-              CanopyCutProxy_pft(NZ)=CanopyHeightZ_col(L-1)+((ARLFY-ARLFR)/CanopyLeafAareZ_col(L))&
-                *(CanopyHeightZ_col(L)-CanopyHeightZ_col(L-1))
+            .AND. LeafAreaRemoved.LT.LeafArea2Remove)THEN     !removal goal not met
+             
+            IF(LeafAreaRemoved+CanopyLeafAareZ_col(L).GE.LeafArea2Remove)THEN    
+              !reached the layer layer for removal
+              !fraction of layer L to be removed
+              fracL2rm= (LeafArea2Remove-LeafAreaRemoved)/CanopyLeafAareZ_col(L)
+              !cut criterion is converted into height
+              CanopyCutProxy_pft(NZ)=CanopyHeightZ_col(L)-fracL2rm*(CanopyHeightZ_col(L)-CanopyHeightZ_col(L-1))
+              EXIT
             ENDIF
-          ELSE
-            CanopyCutProxy_pft(NZ)=0._r8
           ENDIF
-          ARLFR=ARLFR+CanopyLeafAareZ_col(L)
+          LeafAreaRemoved=LeafAreaRemoved+CanopyLeafAareZ_col(L)
         ENDDO D9875
       ENDIF
       HarvestedLeafC      = 0._r8
@@ -844,11 +879,12 @@ module PlantDisturbsMod
         GrazedCanopyNonstC,HarvestedStalkC,HarvestedStalkRsrvC,HarvestedPetoleC,GrazedCanopyNoduleC,LeafLayerC_brch)
       !
     ENDIF
+
     !
     !     HARVEST REMOVAL FROM TOP TO BOTTOM OF CANOPY
-    call HarvestCanopy(yearIJ%I,yearIJ%J,NZ,HarvestedLeafC,LeafLayerC_brch)
+    call HarvestCanopy(yearIJ,NZ,HarvestedLeafC,LeafLayerC_brch)
 
-    CALL CutPlant(yearIJ%I,yearIJ%J,NZ,HarvestedPetoleC,GrazedCanopyNonstC,GrazedCanopyNoduleC,HarvestedShethC,HarvestedGrainC,HarvestedEarC,&
+    CALL CutPlant(yearIJ,NZ,HarvestedPetoleC,GrazedCanopyNonstC,GrazedCanopyNoduleC,HarvestedShethC,HarvestedGrainC,HarvestedEarC,&
       HarvestedStalkRsrvC,HarvestedStalkC)
 
     CanopyLeafSheathC_pft(NZ)     = 0._r8
@@ -876,28 +912,31 @@ module PlantDisturbsMod
     !          iHarvstType_pft=4 or 6:specific herbivory rate (g DM g-1 LM d-1)
     !     THETW=soil water concentration
     !     CORGC=SOC concentration
-    !     iSoilDisturbType_col=soil disturbance type 1-20:tillage,21=litter removal,22=fire,23-24=drainage
     !     EFIRE=combustion  of N,P relative to C
     !
     !
-    IF(iHarvstType_pft(NZ).NE.iharvtyp_grazing .AND. iHarvstType_pft(NZ).NE.iharvtyp_herbivo .AND. iHarvstType_pft(NZ).NE.iharvtyp_allabvg)THEN
+    IF(iHarvstType_pft(NZ).NE.iharvtyp_grazing .AND. iHarvstType_pft(NZ).NE.iharvtyp_herbivo & !not grazing/herbiory
+      .AND. iHarvstType_pft(NZ).NE.iharvtyp_allabvg)THEN !including belowgorund
       !
       FracLeftThin=1.0_r8-THIN_pft(NZ)
-      DO NR=1,NumPrimeRootAxes_pft(NZ)        
+      DO NR=1,NumStructuralRootAxes_pft(NZ)        
         DO NE=1,NumPlantChemElms
           RootMyco1stElm_raxs(NE,NR,NZ)=RootMyco1stElm_raxs(NE,NR,NZ)*FracLeftThin
         ENDDO        
       ENDDO
       !
+
       D3985: DO N=1,Myco_pft(NZ)
         D3980: DO L=NU,MaxNumRootLays
-          !
+          !          
           CALL RootRemovalLbyFire(yearIJ,N,L,NZ,FracLeftThin,XHVST1)
 
-          call HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1)
+          call HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1, &
+            PopulationThinning=iHarvstType_pft(NZ).NE.iharvtyp_fire .and. &
+              jHarvstType_pft(NZ).NE.jharvtyp_tmareseed)
+
         ENDDO D3980
       ENDDO D3985
-           
       !
       !     STORAGE LitrFall AND STATE VARIABLES DURING HARVESTING
       !
@@ -956,6 +995,7 @@ module PlantDisturbsMod
     TotalNodeNumNormByMatgrp_brch     => plt_pheno%TotalNodeNumNormByMatgrp_brch      ,& !output :normalized node number during vegetative growth stages, [-]
     ShootNodeNumAtInitFloral_brch     => plt_morph%ShootNodeNumAtInitFloral_brch      ,& !output :shoot node number at floral initiation, [-]
     TotReproNodeNumNormByMatrgrp_brch => plt_pheno%TotReproNodeNumNormByMatrgrp_brch  ,& !output :normalized node number during reproductive growth stages, [-]
+    dReproNodeNumNormByMatG_brch      => plt_pheno%dReproNodeNumNormByMatG_brch ,& !output :current hourly reproductive development increment, [h-1]
     doInitLeafOut_brch                => plt_pheno%doInitLeafOut_brch                 ,& !output :branch phenology flag, [-]
     HourFailGrainFill_brch            => plt_pheno%HourFailGrainFill_brch             ,& !output :flag to detect physiological maturity from grain fill, [-]
     LeafNumberAtFloralInit_brch       => plt_pheno%LeafNumberAtFloralInit_brch         & !output :leaf number at floral initiation, [-]
@@ -985,6 +1025,7 @@ module PlantDisturbsMod
     LeafNumberAtFloralInit_brch(NB,NZ)           = 0._r8
     TotalNodeNumNormByMatgrp_brch(NB,NZ)         = 0._r8
     TotReproNodeNumNormByMatrgrp_brch(NB,NZ)     = 0._r8
+    dReproNodeNumNormByMatG_brch(NB,NZ)          = 0._r8
     HourFailGrainFill_brch(NB,NZ)                = 0._r8
     iPlantCalendar_brch(ipltcal_Emerge,NB,NZ)    = I
     iPlantCalendar_brch(2:NumGrowthStages,NB,NZ) = 0
@@ -999,6 +1040,7 @@ module PlantDisturbsMod
           LeafNumberAtFloralInit_brch(NBX,NZ)        = 0._r8
           TotalNodeNumNormByMatgrp_brch(NBX,NZ)      = 0._r8
           TotReproNodeNumNormByMatrgrp_brch(NBX,NZ)  = 0._r8
+          dReproNodeNumNormByMatG_brch(NBX,NZ)       = 0._r8
           HourFailGrainFill_brch(NBX,NZ)             = 0._r8
           iPlantCalendar_brch(ipltcal_Emerge,NBX,NZ) = I
           D3015: DO M=2,NumGrowthStages
@@ -1014,14 +1056,15 @@ module PlantDisturbsMod
   end subroutine ResetCutBranch
 
 !----------------------------------------------------------------------------------------------------
-  subroutine BranchCutPlantStalk(I,J,NB,NZ,BranchLength,HarvestedStalkC,HarvestedStalkRsrvC)
+  subroutine CutBranchStalk(yearIJ,NB,NZ,BranchLength,HarvestedStalkC,HarvestedStalkRsrvC)
   implicit none
-  integer, intent(in) :: I,J,NB,NZ
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NB,NZ
   real(r8), intent(in) :: BranchLength     !branch stalk length subject to removal
   real(r8), intent(in) :: HarvestedStalkC  !harvested stalk C, [gC h-1]
   real(r8), intent(in) :: HarvestedStalkRsrvC   !harvested reserve C, [gC h-1]
 
-  character(len=*), parameter :: subname='BranchCutPlantStalk'
+  character(len=*), parameter :: subname='CutBranchStalk'
   integer :: NE,K  
   real(r8) :: FractionStalkMassLeft,FracHeightLeft
   real(r8) :: FracNodeLen4Cut       !fraction of node length subject to cut
@@ -1208,10 +1251,10 @@ module PlantDisturbsMod
   ENDDO
   call PrintInfo('end '//subname)
   end associate
-  end subroutine BranchCutPlantStalk
+  end subroutine CutBranchStalk
 
 !----------------------------------------------------------------------------------------------------
-  subroutine BranchCutReprodOrgans(I,J,NB,NZ,BranchLength,HarvestedShethC,HarvestedGrainC,HarvestedEarC)
+  subroutine CutBranchReprodOrgans(I,J,NB,NZ,BranchLength,HarvestedShethC,HarvestedGrainC,HarvestedEarC)
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   real(r8), intent(in) :: BranchLength
@@ -1219,7 +1262,7 @@ module PlantDisturbsMod
   real(r8), intent(in) :: HarvestedGrainC
   real(r8), intent(in) :: HarvestedEarC
 
-  character(len=*), parameter :: subname='BranchCutReprodOrgans'
+  character(len=*), parameter :: subname='CutBranchReprodOrgans'
   integer :: NE
   real(r8) :: FracGrainNotHvsted,FracShethGrainNotHvsted
   real(r8) :: FracHuskNotHvsted,FracEarNotHvsted,FracShethHuskNotHvsted,FracShethNotHvsted
@@ -1236,7 +1279,7 @@ module PlantDisturbsMod
     EarStrutElms_brch       => plt_biom%EarStrutElms_brch         ,& !inoput :branch ear structural chemical element mass, [g d-2]
     PotentialSeedSites_brch => plt_morph%PotentialSeedSites_brch  ,& !inoput :branch potential grain number, [d-2]
     SetNumberSeeds_brch       => plt_morph%SetNumberSeeds_brch        ,& !inoput :branch grain number, [d-2]
-    GrainSeedBiomCMean_brch => plt_allom%GrainSeedBiomCMean_brch  ,& !inoput :maximum grain C during grain fill, [g d-2]
+    SingleGrainMeanBiomC_brch => plt_allom%SingleGrainMeanBiomC_brch  ,& !inoput :potential carbon mass per grain, [gC seed-1]
     HuskStrutElms_brch      => plt_biom%HuskStrutElms_brch         & !inoput :branch husk structural element mass, [g d-2]
   )
 
@@ -1302,14 +1345,14 @@ module PlantDisturbsMod
   !
   !     HARVESTED REPRODUCTIVE C,N,P
   !
-  !     FineNonleafElmntRemoval=reproductive C,N,P removed
+  !     PetoleShethElmntRemoval=reproductive C,N,P removed
   !     WTHSKB,WTEARB,WTGRB=branch husk,ear,grain C mass
   !     WTHSBN,WTEABN,WTGRBN=branch husk,ear,grain N mass
   !     WTHSBP,WTEABP,WTGRBP=branch husk,ear,grain P mass
   !     GrainHarvst()=grain harvested
   !
   DO NE=1,NumPlantChemElms
-    FineNonleafElmntRemoval(NE)=FineNonleafElmntRemoval(NE)+(1._r8-FracShethHuskNotHvsted)*HuskStrutElms_brch(NE,NB,NZ)&
+    PetoleShethElmntRemoval(NE)=PetoleShethElmntRemoval(NE)+(1._r8-FracShethHuskNotHvsted)*HuskStrutElms_brch(NE,NB,NZ)&
       +(1._r8-FracShethNotHvsted)*EarStrutElms_brch(NE,NB,NZ)+(1._r8-FracShethGrainNotHvsted)*GrainStrutElms_brch(NE,NB,NZ)
 
     PetolShethElmntHarv2Litr(NE)=PetolShethElmntHarv2Litr(NE)+(FracShethHuskNotHvsted-FracHuskNotHvsted)*HuskStrutElms_brch(NE,NB,NZ) &
@@ -1328,10 +1371,11 @@ module PlantDisturbsMod
 
   PotentialSeedSites_brch(NB,NZ) = FracGrainNotHvsted*PotentialSeedSites_brch(NB,NZ)
   SetNumberSeeds_brch(NB,NZ)         = FracGrainNotHvsted*SetNumberSeeds_brch(NB,NZ)
-  GrainSeedBiomCMean_brch(NB,NZ) = FracGrainNotHvsted*GrainSeedBiomCMean_brch(NB,NZ)
+  ! Partial removal changes grain number, not the size potential of surviving grains.
+  IF(FracGrainNotHvsted.LE.0._r8) SingleGrainMeanBiomC_brch(NB,NZ) = 0._r8
   call PrintInfo('end '//subname)
   end associate
-  END subroutine BranchCutReprodOrgans
+  END subroutine CutBranchReprodOrgans
 
 !----------------------------------------------------------------------------------------------------
   subroutine CutBranchNonstructural(I,J,NB,NZ,LeafCafCut_brch,PetolShethCAfHvst_brch,LeafCB4Cut_brch,&
@@ -1387,10 +1431,15 @@ module PlantDisturbsMod
   ENDDO
 
   IF(iHarvstType_pft(NZ).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ).EQ.iharvtyp_herbivo)THEN
-    !Grazing
+    !Fallback for depleted C pools: remove reserves with the actual host tissue.
+    FrcLeafMassLeft=1._r8
+    IF(LeafCB4Cut_brch+PetolShethCB4Hvst_brch.GT.ZERO4Groth_pft(NZ))THEN
+      FrcLeafMassLeft=AZMAX1(AMIN1(1._r8,(LeafCafCut_brch+PetolShethCAfHvst_brch) &
+        /(LeafCB4Cut_brch+PetolShethCB4Hvst_brch)))
+    ENDIF
     call CutBranchNonstalByGrazing(I,J,NB,NZ,GrazedCanopyNonstC,CanopyNonstElmCopy_brch,&
       GrazedCanopyNoduleC,CanopyNodulNonstElmCopy_brch,CanopyNonstElmAfhvst_brch,CanopyNodulNonstElmAfhvst,&
-      CanopyNodulStrutElmAfhvst)  
+      CanopyNodulStrutElmAfhvst,FrcLeafMassLeft)
   ELSE
     IF(LeafCB4Cut_brch+PetolShethCB4Hvst_brch.GT.ZERO4Groth_pft(NZ))THEN
       FrcLeafMassLeft=AZMAX1(AMIN1(1.0_r8,(LeafCafCut_brch+PetolShethCAfHvst_brch)/(LeafCB4Cut_brch+PetolShethCB4Hvst_brch)))
@@ -1454,10 +1503,11 @@ module PlantDisturbsMod
   end subroutine CutBranchNonstructural
 
 !----------------------------------------------------------------------------------------------------
-  subroutine CutBranchSheathPetole(I,J,NB,NZ,HarvestedPetoleC,FracIntnodeNotHvsted,&
+  subroutine CutBranchSheathPetole(yearIJ,NB,NZ,HarvestedPetoleC,FracIntnodeNotHvsted,&
     FracNodeNotHvsted,BranchLength,PetolShethCAfHvst_brch,PetolShethCB4Hvst_brch)
   implicit none
-  integer, intent(in) :: I,J,NB,NZ
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NB,NZ
   real(r8), intent(in) :: HarvestedPetoleC
   real(r8), intent(inout) :: FracIntnodeNotHvsted(0:MaxNodesPerBranch1)
   real(r8), intent(inout) :: FracNodeNotHvsted(0:MaxNodesPerBranch1)  
@@ -1513,7 +1563,7 @@ module PlantDisturbsMod
     !     PetoleCRmved_brch=branch PetolSheth C mass removed
     !     PetolShethElmntNode_brch,WGSHN,WGSHP,PetoleProteinC_node=node PetolSheth C,N,P,protein mass
     !     FracIntnodeNotHvsted=fraction of internode layer mass not harvested
-    !     FineNonleafElmntRemoval=harvested PetolSheth C,N,P
+    !     PetoleShethElmntRemoval=harvested PetolSheth C,N,P
     !     PetolShethElmntHarv2Litr=harvested PetolSheth C,N,P to litter
     !     FWODB=C woody fraction in other organs:0=woody,1=non-woody
     !     FWODLN,FWODLP=N,P woody fraction in leaf:0=woody,1=non-woody
@@ -1540,7 +1590,7 @@ module PlantDisturbsMod
 
       DO NE=1,NumPlantChemElms
         FinePetoleMassE              = PetolShethElmntNode_brch(NE,K,NB,NZ)*FracPetolShethAlloc2Litr(NE,k_fine_comp)
-        FineNonleafElmntRemoval(NE)  = FineNonleafElmntRemoval(NE)+(1._r8-FracNodeNotHvsted(K))*FinePetoleMassE
+        PetoleShethElmntRemoval(NE)  = PetoleShethElmntRemoval(NE)+(1._r8-FracNodeNotHvsted(K))*FinePetoleMassE
         PetolShethElmntHarv2Litr(NE) = PetolShethElmntHarv2Litr(NE)+(FracNodeNotHvsted(K)-FracIntnodeNotHvsted(K))*FinePetoleMassE
 
         WoodyPetoleMassE        = PetolShethElmntNode_brch(NE,K,NB,NZ)*FracPetolShethAlloc2Litr(NE,k_woody_comp)
@@ -1593,13 +1643,14 @@ module PlantDisturbsMod
   end subroutine CutBranchSheathPetole
 
 !----------------------------------------------------------------------------------------------------
-  subroutine HarvestCanopy(I,J,NZ,HarvestedLeafC,LeafLayerC_brch)
+  subroutine HarvestCanopy(yearIJ,NZ,HarvestedLeafC,LeafLayerC_brch)
   !
   !Canopy harvest
   !from layer to branch and to leaf node
 
   implicit none
-  integer, intent(in) :: I,J,NZ
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NZ
   real(r8), intent(in):: HarvestedLeafC
   REAL(R8), intent(in) :: LeafLayerC_brch(NumCanopyLayers1,JP1,JP1)
 
@@ -1637,8 +1688,7 @@ module PlantDisturbsMod
   !     FracHeightLeft=fraction of canopy layer height not harvested
   !     FrcLeafMassLeft=fraction of canopy layer mass not harvested
   !     THIN_pft=iHarvstType_pft=0-3,5: fraction of population removed,
-  !          iHarvstType_pft=4 or 6:specific herbivory rate (g DM g-1 LM d-1)
-  !     FracBiomHarvsted(iHarvst_pft,1:4=fraction of leaf,non-foliar,woody, standing dead removed from PFT
+  !          iHarvstType_pft=4 or 6:specific herbivory rate (g DM g-1 LM d-1)  
   !
   D9865: DO L=NumCanopyLayers1,1,-1
     !neither grazing nor herbivory
@@ -1695,15 +1745,17 @@ module PlantDisturbsMod
         IF((iHarvstType_pft(NZ).NE.iharvtyp_grazing .AND. iHarvstType_pft(NZ).NE.iharvtyp_herbivo) &
           .OR. HvestedLeafCLayer_brch.GT.0.0_r8)THEN
 
-          !grazing or herbivory
-          IF(iHarvstType_pft(NZ).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ).EQ.iharvtyp_herbivo)THEN
+          !grazing or herbivory          
+          IF(iHarvstType_pft(NZ).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ).EQ.iharvtyp_herbivo)THEN            
             IF(LeafLayerElms_node(ielmc,L,K,NB,NZ).GT.HvestedLeafCLayer_brch)THEN
+              !leaf C in node is greater than harvest demand
               FrcLeafMassLeft=AZMAX1(AMIN1(1.0_r8,(LeafLayerElms_node(ielmc,L,K,NB,NZ)-HvestedLeafCLayer_brch) &
                 /LeafLayerElms_node(ielmc,L,K,NB,NZ)))
               FHVSH=FrcLeafMassLeft
             ELSE
-              FrcLeafMassLeft = 1.0_r8
-              FHVSH           = 1.0_r8
+              !leaf C in node is harvest demand
+              FrcLeafMassLeft = 0.0_r8
+              FHVSH           = 0.0_r8
             ENDIF
           ENDIF
           !
@@ -1749,15 +1801,16 @@ module PlantDisturbsMod
   end subroutine HarvestCanopy
 
 !----------------------------------------------------------------------------------------------------
-  subroutine StageBranch4Cut(I,J,NB,NZ,LeafCafCut_brch,LeafCB4Cut_brch,FracIntnodeNotHvsted,FracNodeNotHvsted)
+  subroutine CutBranchLeaves(yearIJ,NB,NZ,LeafCafCut_brch,LeafCB4Cut_brch,FracIntnodeNotHvsted,FracNodeNotHvsted)
 
   implicit none
-  integer, intent(in) :: I,J,NB,NZ
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NB,NZ
   real(r8), intent(out) :: LeafCafCut_brch,LeafCB4Cut_brch            !leaf C before and after cut
   real(r8), intent(out) :: FracIntnodeNotHvsted(0:MaxNodesPerBranch1)  
   real(r8), intent(out) :: FracNodeNotHvsted(0:MaxNodesPerBranch1)
 
-  character(len=*), parameter :: subname='StageBranch4Cut'
+  character(len=*), parameter :: subname='CutBranchLeaves'
   integer :: K,NE,L
   real(r8) :: ARLFG               !leaf area accumulator
   real(r8) :: FracIntnodeKHvsted
@@ -1860,13 +1913,14 @@ module PlantDisturbsMod
   ENDDO D9825
   call PrintInfo('end '//subname)
   end associate
-  end subroutine StageBranch4Cut    
+  end subroutine CutBranchLeaves    
 
 !----------------------------------------------------------------------------------------------------
-  subroutine CutPlant(I,J,NZ,HarvestedPetoleC,GrazedCanopyNonstC,GrazedCanopyNoduleC,HarvestedShethC,&
+  subroutine CutPlant(yearIJ,NZ,HarvestedPetoleC,GrazedCanopyNonstC,GrazedCanopyNoduleC,HarvestedShethC,&
     HarvestedGrainC,HarvestedEarC,HarvestedStalkRsrvC,HarvestedStalkC)
   implicit none
-  integer, intent(in) :: I,J,NZ
+  type(yearIJ_type), intent(in) :: yearIJ
+  integer, intent(in) :: NZ
   real(r8), intent(in) :: HarvestedPetoleC
   real(r8), intent(in) :: GrazedCanopyNonstC
   real(r8), intent(in) :: GrazedCanopyNoduleC
@@ -1877,15 +1931,22 @@ module PlantDisturbsMod
   real(r8), intent(in) :: HarvestedStalkC
 
   character(len=*), parameter :: subname='CutPlant'
-  integer :: NB
+  integer :: NB,I,J
   real(r8) :: FracNodeNotHvsted(0:MaxNodesPerBranch1),FracIntnodeNotHvsted(0:MaxNodesPerBranch1)
   real(r8) :: LeafCafCut_brch,PetolShethCAfHvst_brch,LeafCB4Cut_brch,PetolShethCB4Hvst_brch
   real(r8) :: VOLWPX,WVPLT  
   real(r8) :: BranchLength  !Branch node length subject to removal
   real(r8) :: FDM  
-  real(r8) :: watflx,VHeatCapCanopyPrev,CanopyMassC
+  real(r8) :: watflx,VHeatCapCanopyPrev,CanopyMassC,ThermalCarbon,StemArea,DeadCarbon
+  real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
   
+  call PrintInfo('beg '//subname)
   associate(                                                           &
+    WatHeldOnCanopy_pft        => plt_ew%WatHeldOnCanopy_pft, &
+    SnowOnCanopy_pft           => plt_ew%SnowOnCanopy_pft, &
+    CanopyStalkSurfArea_lbrch  => plt_morph%CanopyStalkSurfArea_lbrch, &
+    StandDeadSurfArea_pft      => plt_morph%StandDeadSurfArea_pft, &
+    StandDeadCompKElms_pft     => plt_biom%StandDeadCompKElms_pft, &
     TKC_pft                   => plt_ew%TKC_pft                       ,& !input  :canopy temperature, [K]
     PlantPopuLive_pft         => plt_site%PlantPopuLive_pft           ,& !input  :plant population, [d-2]
     jHarvstType_pft           => plt_distb%jHarvstType_pft            ,& !input  :flag for stand replacing disturbance,[-]
@@ -1894,37 +1955,39 @@ module PlantDisturbsMod
     PetolShethStrutElms_brch  => plt_biom%PetolShethStrutElms_brch    ,& !input  :branch sheath structural element, [g d-2]
     CanopyCutProxy_pft        => plt_distb%CanopyCutProxy_pft         ,& !input  :harvest cutting height (+ve) or fractional LAI removal (-ve), [m or -]
     PSICanopy_pft             => plt_ew%PSICanopy_pft                 ,& !input  :canopy total water potential, [Mpa]
+    SapwoodBiomassC_brch     => plt_biom%SapwoodBiomassC_brch      ,& !input  :remaining branch sapwood C, [gC d-2]
     CanopySapwoodC_pft        => plt_biom%CanopySapwoodC_pft          ,& !input  :canopy active stalk C, [g d-2]
     CanopyLeafSheathC_pft     => plt_biom%CanopyLeafSheathC_pft       ,& !input  :canopy leaf + sheath C, [g d-2]
     LeafStrutElms_brch        => plt_biom%LeafStrutElms_brch          ,& !input  :branch leaf structural element mass, [g d-2]
     CanopyHeightLive_pft      => plt_morph%CanopyHeightLive_pft       ,& !input  :canopy height, [m]
     iPlant2ndGrothPattern_pft => plt_pheno%iPlant2ndGrothPattern_pft  ,& !input  :plant expression of secondary growth, [-]                
     NumOfBranches_pft         => plt_morph%NumOfBranches_pft          ,& !input  :number of branches,[-]
+    StemSpecVolume_pft        => plt_morph%StemSpecVolume_pft         ,& !input  :stalk specific volume, [m3 gC-1]        
     iHarvstType_pft           => plt_distb%iHarvstType_pft            ,& !input  :type of harvest,[-]
     CanopyBiomWater_pft       => plt_ew%CanopyBiomWater_pft           ,& !inoput :canopy water content, [m3 d-2]
-    QCanopyWat2Dist_col       => plt_ew%QCanopyWat2Dist_col           ,& !inoput :canopy water +/- due to disturbance, [m3 H2O/d2]
+    QCanopyWatLoss2Dist_col       => plt_ew%QCanopyWatLoss2Dist_col           ,& !inoput :canopy water +/- due to disturbance, [m3 H2O/d2]
     VHeatCapCanopy_pft        => plt_ew%VHeatCapCanopy_pft            ,& !inoput :canopy heat capacity, [MJ d-2 K-1]
-    HeatCanopy2Dist_col       => plt_ew%HeatCanopy2Dist_col           ,& !inoput :canopy energy +/- due to disturbance, [MJ /d2]
+    CanopyHeatLoss2Dist_col   => plt_ew%CanopyHeatLoss2Dist_col       ,& !inoput :canopy energy +/- due to disturbance, [MJ /d2]
     QH2OLoss_lnds             => plt_site%QH2OLoss_lnds               ,& !inoput :total subsurface water loss flux over the landscape, [m3 d-2]
     H2OLoss_CumYr_col         => plt_ew%H2OLoss_CumYr_col             ,& !inoput :total subsurface water flux, [m3 d-2]
     CanopyLeafSheathC_brch    => plt_biom%CanopyLeafSheathC_brch      ,& !output :plant branch leaf + sheath C, [g d-2]
     isPlantBranchAlive_brch   => plt_pheno%isPlantBranchAlive_brch     & !output :flag to detect branch death, [-]
   )
-
-  call PrintInfo('beg '//subname)
+  I=yearIJ%I;J=yearIJ%J
+  
   D9835: DO NB=1,NumOfBranches_pft(NZ)
 
-    CALL StageBranch4Cut(I,J,NB,NZ,LeafCafCut_brch,LeafCB4Cut_brch,FracIntnodeNotHvsted,FracNodeNotHvsted)
-    
-    call CutBranchSheathPetole(I,J,NB,NZ,HarvestedPetoleC,FracIntnodeNotHvsted,FracNodeNotHvsted,BranchLength,PetolShethCAfHvst_brch,PetolShethCB4Hvst_brch)
+    CALL CutBranchLeaves(yearIJ,NB,NZ,LeafCafCut_brch,LeafCB4Cut_brch,FracIntnodeNotHvsted,FracNodeNotHvsted)
 
+    call CutBranchSheathPetole(yearIJ,NB,NZ,HarvestedPetoleC,FracIntnodeNotHvsted,FracNodeNotHvsted,BranchLength,PetolShethCAfHvst_brch,PetolShethCB4Hvst_brch)
+    
     call CutBranchNonstructural(I,J,NB,NZ,LeafCafCut_brch,PetolShethCAfHvst_brch,LeafCB4Cut_brch,PetolShethCB4Hvst_brch,GrazedCanopyNonstC,GrazedCanopyNoduleC)    
     !
     !     CUT STALKS
-    call BranchCutPlantStalk(I,J,NB,NZ,BranchLength,HarvestedStalkC,HarvestedStalkRsrvC)
+    call CutBranchStalk(yearIJ,NB,NZ,BranchLength,HarvestedStalkC,HarvestedStalkRsrvC)
     !
     !     CUT REPRODUCTIVE ORGANS FracHuskNotHvsted
-    call BranchCutReprodOrgans(I,J,NB,NZ,BranchLength,HarvestedShethC,HarvestedGrainC,HarvestedEarC)
+    call CutBranchReprodOrgans(I,J,NB,NZ,BranchLength,HarvestedShethC,HarvestedGrainC,HarvestedEarC)
     !
     !     REMAINING TOTAL BRANCH C,N,P AND LEAF, STALK AREA
     !
@@ -1940,19 +2003,6 @@ module PlantDisturbsMod
     !
     CanopyLeafSheathC_brch(NB,NZ)=AZMAX1(LeafStrutElms_brch(ielmc,NB,NZ)+PetolShethStrutElms_brch(ielmc,NB,NZ))
 
-    VOLWPX              = CanopyBiomWater_pft(NZ)
-    VHeatCapCanopyPrev  = VHeatCapCanopy_pft(NZ)
-    CanopyMassC         = AZMAX1(CanopyLeafSheathC_pft(NZ)+CanopySapwoodC_pft(NZ))
-    FDM                 = get_FDM(PSICanopy_pft(NZ))    !drymatter/water = fdm
-
-    CanopyBiomWater_pft(NZ) = 1.e-6_r8*CanopyMassC/FDM
-    watflx              = VOLWPX-CanopyBiomWater_pft(NZ)
-    QH2OLoss_lnds       = QH2OLoss_lnds+VOLWPX-CanopyBiomWater_pft(NZ)
-    H2OLoss_CumYr_col   = H2OLoss_CumYr_col+watflx
-
-    VHeatCapCanopy_pft(NZ) = cpw*(CanopyMassC*SpecStalkVolume+CanopyBiomWater_pft(NZ))
-    QCanopyWat2Dist_col    = QCanopyWat2Dist_col+watflx
-    HeatCanopy2Dist_col    = HeatCanopy2Dist_col+(VHeatCapCanopyPrev-VHeatCapCanopy_pft(NZ))*TKC_pft(NZ)
     !
     !     RESET PHENOLOGY, GROWTH STAGE IF STALKS ARE CUT
     !
@@ -1984,9 +2034,32 @@ module PlantDisturbsMod
       isPlantBranchAlive_brch(NB,NZ)=iFalse      
     endif
     
-  ENDDO D9835
-  call PrintInfo('end '//subname)
+  ENDDO D9835  
+  !Keep pre-harvest PFT totals fixed while allocating removal among branches.
+  !After all branches are cut, update canopy water and heat once per PFT.
+  VOLWPX                    = CanopyBiomWater_pft(NZ)
+  VHeatCapCanopyPrev        = VHeatCapCanopy_pft(NZ)
+  CanopyLeafSheathC_pft(NZ) = SUM(CanopyLeafSheathC_brch(1:NumOfBranches_pft(NZ),NZ))
+  CanopySapwoodC_pft(NZ)    = SUM(SapwoodBiomassC_brch(1:NumOfBranches_pft(NZ),NZ))
+  CanopyMassC               = AZMAX1(CanopyLeafSheathC_pft(NZ)+CanopySapwoodC_pft(NZ))
+  FDM                       = get_FDM(PSICanopy_pft(NZ))    !drymatter/water = fdm
+
+  CanopyBiomWater_pft(NZ) = 1.e-6_r8*CanopyMassC/FDM
+  watflx              = VOLWPX-CanopyBiomWater_pft(NZ)
+  QH2OLoss_lnds       = QH2OLoss_lnds+VOLWPX-CanopyBiomWater_pft(NZ)
+  H2OLoss_CumYr_col   = H2OLoss_CumYr_col+watflx
+
+  StemArea=SUM(CanopyStalkSurfArea_lbrch(:,1:NumOfBranches_pft(NZ),NZ))
+  ThermalCarbon=CanopyLeafSheathC_pft(NZ)+CanopyStemThermalCarbon(CanopySapwoodC_pft(NZ), &
+    StemArea,StemSpecVolume_pft(NZ))
+  DeadCarbon=CanopyStemThermalCarbon(SUM(StandDeadCompKElms_pft(ielmc,:,NZ)), &
+    StandDeadSurfArea_pft(NZ),StemSpecVolume_pft(NZ))
+  VHeatCapCanopy_pft(NZ)=cpo*gOC_to_m3_OM(ThermalCarbon+DeadCarbon) &
+    +cpw*(CanopyBiomWater_pft(NZ)+WatHeldOnCanopy_pft(NZ))+cps*SnowOnCanopy_pft(NZ)
+  QCanopyWatLoss2Dist_col = QCanopyWatLoss2Dist_col+watflx
+  CanopyHeatLoss2Dist_col = CanopyHeatLoss2Dist_col+(VHeatCapCanopyPrev-VHeatCapCanopy_pft(NZ))*TKC_pft(NZ)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CutPlant
 
 !----------------------------------------------------------------------------------------------------
@@ -2008,7 +2081,7 @@ module PlantDisturbsMod
     PlantElmAllocMat4Litr     => plt_soilchem%PlantElmAllocMat4Litr  ,& !input  :litter kinetic fraction, [-]
     RootMycoNonstElms_rpvr    => plt_biom%RootMycoNonstElms_rpvr     ,& !input  :root layer nonstructural element, [g d-2]
     THIN_pft                  => plt_distb%THIN_pft                  ,& !input  :thinning of plant population, [-]
-    NumPrimeRootAxes_pft      => plt_morph%NumPrimeRootAxes_pft      ,& !input  :root primary axis number,[-]
+    NumStructuralRootAxes_pft      => plt_morph%NumStructuralRootAxes_pft      ,& !input  :number of structural root axes,[-]
     DCORP                     => plt_distb%DCORP                     ,& !input  :soil mixing fraction with tillage, [-]
     FracRootElmAllocm         => plt_allom%FracRootElmAllocm         ,& !input  :C woody fraction in root,[-]
     k_fine_comp               => pltpar%k_fine_comp                  ,& !input  :fine litter complex id
@@ -2033,7 +2106,7 @@ module PlantDisturbsMod
       LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)=LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)+HarvestedBiomass(NE)
     ENDDO
 
-    DO NR=1,NumPrimeRootAxes_pft(NZ)
+    DO NR=1,NumStructuralRootAxes_pft(NZ)
       if(N==ipltroot)THEN
         DO NE=1,NumPlantChemElms
           HarvestedBiomass(NE)=XHVST1*PlantElmAllocMat4Litr(NE,icwood,M,NZ)*AZMAX1(RootMyco1stStrutElms_rpvr(NE,L,NR,NZ)) &
@@ -2103,35 +2176,44 @@ module PlantDisturbsMod
     DO L=NU,MaxNumRootLays
       call RootRemovalL4Annual(yearIJ,N,L,NZ,FracLeftThin,XHVST1)
 
-      call HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1)            
+      call HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1,PopulationThinning=.false.)
     ENDDO
   ENDDO
   call PrintInfo('end '//subname)
   end associate
   end subroutine TerminateRoots4Annuals
 !----------------------------------------------------------------------------------------------------
-  subroutine HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1)            
+  subroutine HarvstUpdateRootStateL(yearIJ,N,L,NZ,FracLeftThin,XHVST1,PopulationThinning)
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
 
   integer,  intent(in) :: N,L,NZ
-  real(r8), intent(in) :: FracLeftThin
-  real(r8), intent(in) :: XHVST1
+  real(r8), intent(in) :: FracLeftThin    !fraction of biomass remaining alive after removal
+  real(r8), intent(in) :: XHVST1          !fraction of biomass removed
+
+  logical, intent(in) :: PopulationThinning !whole plants removed, rather than damage to surviving roots
+  real(r8) :: FracGeometryLeft              !remaining per-axis/per-plant dimensions
 
   character(len=*), parameter :: subname='HarvstUpdateRootStateL'
   integer :: NE,NR,M
   associate(                                                          &
-    NumPrimeRootAxes_pft      => plt_morph%NumPrimeRootAxes_pft      ,& !input  :root primary axis number,[-]
+    NumStructuralRootAxes_pft => plt_morph%NumStructuralRootAxes_pft ,& !input  :number of structural root axes,[-]
     inonstruct                => pltpar%inonstruct                   ,& !input  :group id of plant nonstructural litter
     iroot                     => pltpar%iroot                        ,& !input  :group id of plant root litter
     iPlantNfixType_pft        => plt_morph%iPlantNfixType_pft        ,& !input  :N2 fixation type,[-]
     PlantElmAllocMat4Litr     => plt_soilchem%PlantElmAllocMat4Litr  ,& !input  :litter kinetic fraction, [-]
     k_fine_comp               => pltpar%k_fine_comp                  ,& !input  :fine litter complex id
     RootMyco1stStrutElms_rpvr => plt_biom%RootMyco1stStrutElms_rpvr  ,& !inoput :root layer element primary axes, [g d-2]
+    RootMediumStructElms_rpvr => plt_biom%RootMediumStructElms_rpvr  ,& !inoput :medium root structural C/N/P, [g d-2]
+    RootMedStruct_pvr         => plt_biom%RootMedStruct_pvr          ,& !output :layer medium root structural C/N/P, [g d-2]
+    RootMediumLength_rpvr     => plt_morph%RootMediumLength_rpvr     ,& !inoput :total medium root length, [m d-2]
+    RootMediumXNum_rpvr       => plt_morph%RootMediumXNum_rpvr       ,& !inoput :medium root axis count, [d-2]
+    RootMediumXNum_pvr        => plt_morph%RootMediumXNum_pvr        ,& !output :layer medium root axis count, [d-2]
+    RootMediumLength_pvr      => plt_morph%RootMediumLength_pvr      ,& !output :layer mean medium root length, [m]
     Root1stActStructElms_rpvr => plt_biom%Root1stActStructElms_rpvr  ,& !inoput :root layer active zone element in primary axes, [g d-2]
     Root1stLigStructElms_rpvr => plt_biom%Root1stLigStructElms_rpvr  ,& !inoput :root layer lignified zone element in primary axes, [g d-2]
     RootMyco2ndStrutElms_rpvr => plt_biom%RootMyco2ndStrutElms_rpvr  ,& !inoput :root layer element secondary axes, [g d-2]
-    Root1stLenPP_rpvr         => plt_morph%Root1stLenPP_rpvr         ,& !inoput :root layer length primary axes, [m d-2]
+    Root1stLenPP_rpvr         => plt_morph%Root1stLenPP_rpvr         ,& !inoput :primary root length per axis in soil layer, [m]
     Root2ndLen_rpvr           => plt_morph%Root2ndLen_rpvr           ,& !inoput :root layer length secondary axes, [m d-2]
     RootMycoNonstElms_rpvr    => plt_biom%RootMycoNonstElms_rpvr     ,& !inoput :root layer nonstructural element, [g d-2]
     Root2ndXNum_rpvr          => plt_morph%Root2ndXNum_rpvr          ,& !inoput :root layer number secondary axes, [d-2]
@@ -2155,35 +2237,55 @@ module PlantDisturbsMod
   !
   !     REDUCE ROOT STATE VARIABLES DURING HARVESTING
   !
-  !     XHVST,XHVSN,XHVSP=fraction of root C,N,P remaining after disturbance
-  !     WTRT1,WTRT1N,WTRT1P=primary root C,N,P mass in soil layer
-  !     WTRT2,WTRT2N,WTRT2P=secondary root C,N,P mass in soil layer
-  !     RTWT1,RTWT1N,RTWT1P=primary root C,N,P mass
-  !     Root1stLenPP_rpvr,Root2ndLen_rpvr=primary,secondary root length
-  !     RTN2=number of secondary root axes
-  !     CPOOLR,ZPOOLR,PPOOLR=non-structural C,N,P mass in root
-  !     RootMycoActiveBiomC_pvr, PopuRootMycoC_pvr=active,actual root C mass
-  !     RootProteinC_pvr=root protein C mass
-  !     RTN1,Root2ndXNumL_rpvr=number of primary,secondary root axes
   !     RootLenDensPerPlant_pvr,RootTotLenPerPlant_pvr=root length density,root length per plant
   !     RootVH2O_pvr,RootPoreVol_pvr=root or myco aqueous,gaseous volume
   !     RootSAreaPerPlant_pvr=root surface area per plant
   !     RootRespPotent_pvr,RootCO2EmisPot_pvr,RootCO2Autor_pvr unlimited by O2,nonstructural C
   !    
   call PrintInfo('beg '//subname)
-  if(N==ipltroot)then
-    DO NR=1,NumPrimeRootAxes_pft(NZ)
-      DO NE=1,NumPlantChemElms
-        RootMyco1stStrutElms_rpvr(NE,L,NR,NZ) = RootMyco1stStrutElms_rpvr(NE,L,NR,NZ)*FracLeftThin
+  ! Population totals below already account for the removed plants. Do not
+  ! shorten the roots of each survivor a second time. Complete removal still
+  ! clears geometry; tissue damage retains its layer-specific reduction.
+  FracGeometryLeft=FracLeftThin
+  IF(PopulationThinning .and. FracLeftThin.GT.0._r8)FracGeometryLeft=1._r8
+
+  if(N.EQ.ipltroot)then
+    DO NR=1,NumStructuralRootAxes_pft(NZ)
+      DO NE=1,NumPlantChemElms        
+        RootMediumStructElms_rpvr(NE,L,NR,NZ) = RootMediumStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
         Root1stActStructElms_rpvr(NE,L,NR,NZ) = Root1stActStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
         Root1stLigStructElms_rpvr(NE,L,NR,NZ) = Root1stLigStructElms_rpvr(NE,L,NR,NZ)*FracLeftThin
+        RootMyco1stStrutElms_rpvr(NE,L,NR,NZ) = Root1stActStructElms_rpvr(NE,L,NR,NZ)+Root1stLigStructElms_rpvr(NE,L,NR,NZ)
       ENDDO
-      Root1stLenPP_rpvr(L,NR,NZ)  = Root1stLenPP_rpvr(L,NR,NZ)*FracLeftThin        
+      !Thin total length and axis count together; surviving root radius is unchanged.
+      RootMediumLength_rpvr(L,NR,NZ) = RootMediumLength_rpvr(L,NR,NZ)*FracLeftThin
+      RootMediumXNum_rpvr(L,NR,NZ)   = RootMediumXNum_rpvr(L,NR,NZ)*FracLeftThin
+      Root1stLenPP_rpvr(L,NR,NZ)  = Root1stLenPP_rpvr(L,NR,NZ)*FracGeometryLeft
     ENDDO
+    call plt_morph%RefreshMediumRootMeanLength(NZ)
+    !Refresh layer totals once for plant roots, not again for mycorrhizae.
+    DO NE=1,NumPlantChemElms
+      RootMedStruct_pvr(NE,L,NZ)=SUM(RootMediumStructElms_rpvr(NE,L,1:NumStructuralRootAxes_pft(NZ),NZ))
+    ENDDO
+    ! Per-group counts can include axes reserved for growth initiation.
+    ! Rebuild transport totals from surviving medium-root tissue only.
+    RootMediumXNum_pvr(L,NZ)=0._r8
+    RootMediumLength_pvr(L,NZ)=0._r8
+    DO NR=1,NumStructuralRootAxes_pft(NZ)
+      IF(RootMediumStructElms_rpvr(ielmc,L,NR,NZ).GT.0._r8 .and. &
+         RootMediumLength_rpvr(L,NR,NZ).GT.0._r8 .and. &
+         RootMediumXNum_rpvr(L,NR,NZ).GT.0._r8)THEN
+        RootMediumXNum_pvr(L,NZ)=RootMediumXNum_pvr(L,NZ)+RootMediumXNum_rpvr(L,NR,NZ)
+        RootMediumLength_pvr(L,NZ)=RootMediumLength_pvr(L,NZ)+RootMediumLength_rpvr(L,NR,NZ)
+      ENDIF
+    ENDDO
+    IF(RootMediumXNum_pvr(L,NZ).GT.0._r8)THEN
+      RootMediumLength_pvr(L,NZ)=RootMediumLength_pvr(L,NZ)/RootMediumXNum_pvr(L,NZ)
+    ENDIF
     Root1stXNumL_pvr(L,NZ)        = Root1stXNumL_pvr(L,NZ)*FracLeftThin      
   ENDIF
 
-  D3960: DO NR=1,NumPrimeRootAxes_pft(NZ)
+  D3960: DO NR=1,NumStructuralRootAxes_pft(NZ)
     DO NE=1,NumPlantChemElms
       RootMyco2ndStrutElms_rpvr(NE,N,L,NR,NZ) = RootMyco2ndStrutElms_rpvr(NE,N,L,NR,NZ)*FracLeftThin
     ENDDO
@@ -2199,14 +2301,13 @@ module PlantDisturbsMod
   PopuRootMycoC_pvr(N,L,NZ)       = PopuRootMycoC_pvr(N,L,NZ)*FracLeftThin
   RootProteinC_pvr(N,L,NZ)        = RootProteinC_pvr(N,L,NZ)*FracLeftThin
   Root2ndXNumL_rpvr(N,L,NZ)       = Root2ndXNumL_rpvr(N,L,NZ)*FracLeftThin
-  RootTotLenPerPlant_pvr(N,L,NZ)  = RootTotLenPerPlant_pvr(N,L,NZ)*FracLeftThin
-  RootLenDensPerPlant_pvr(N,L,NZ) = RootLenDensPerPlant_pvr(N,L,NZ)*FracLeftThin
+  RootTotLenPerPlant_pvr(N,L,NZ)  = RootTotLenPerPlant_pvr(N,L,NZ)*FracGeometryLeft
+  RootLenDensPerPlant_pvr(N,L,NZ) = RootLenDensPerPlant_pvr(N,L,NZ)*FracGeometryLeft
   RootPoreVol_pvr(N,L,NZ)         = RootPoreVol_pvr(N,L,NZ)*FracLeftThin
   RootVH2O_pvr(N,L,NZ)            = RootVH2O_pvr(N,L,NZ)*FracLeftThin
-  RootSAreaPerPlant_pvr(N,L,NZ)   = RootSAreaPerPlant_pvr(N,L,NZ)*FracLeftThin
+  RootSAreaPerPlant_pvr(N,L,NZ)   = RootSAreaPerPlant_pvr(N,L,NZ)*FracGeometryLeft
   RootRespPotent_pvr(N,L,NZ)      = RootRespPotent_pvr(N,L,NZ)*FracLeftThin
   RootCO2EmisPot_pvr(N,L,NZ)      = RootCO2EmisPot_pvr(N,L,NZ)*FracLeftThin
-  RootCO2Autor_pvr(N,L,NZ)        = RootCO2Autor_pvr(N,L,NZ)*FracLeftThin
   !
   !     NODULE LitrFall AND STATE VARIABLES DURING HARVESTING
   !
@@ -2216,7 +2317,7 @@ module PlantDisturbsMod
   !     WTNDL,WTNDLN,WTNDLP=bacterial C,N,P mass
   !     CPOOLN,ZPOOLN,PPOOLN=nonstructural C,N,P in bacteria
   !
-  IF(is_plant_N2fix(iPlantNfixType_pft(NZ)).AND.N.EQ.ipltroot)THEN
+  IF(N.EQ.ipltroot .and. is_plant_N2fix(iPlantNfixType_pft(NZ)) .AND. is_root_N2fix(iPlantNfixType_pft(NZ)))THEN
     DO NE=1,NumPlantChemElms
       D3395: DO M=1,jsken
         LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)=LitrfallElms_pvr(NE,M,k_fine_comp,L,NZ)+ &

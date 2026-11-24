@@ -36,8 +36,9 @@ module PlantDisturbMod
   implicit none
   integer, intent(in) :: I, J
   integer, intent(in) :: NHW,NHE,NVN,NVS
-  integer :: NX,NY,NZ,nn,nx1,NY1
-  real(r8) :: WTSHTZ  !total canopy C that is subject to grazing/herbivory
+  integer :: NX,NY,NZ,nx1,NY1
+  real(r8) :: TotalShootC4Grazing  !total canopy C that is subject to grazing/herbivory
+  real(r8) :: GrazingArea !total area of active cells in the grazing section [m2]
 !     begin_execution
 
   D2995: DO NX=NHW,NHE
@@ -47,25 +48,27 @@ module PlantDisturbMod
 !     iHarvstType_pft=harvest type:0=none,1=grain,2=all above-ground
 !                       ,3=pruning,4=grazing,5=fire,6=herbivory
 !     LSG=landscape grazing section number
-!     WTSHTZ,AvgCanopyBiomC2Graze_pft=total,average biomass in landscape grazing section
+!     AvgCanopyBiomC2Graze_pft=section mean biomass density times local cell area
 !       different pft can undergo different treatment/disturbance
         IF(iHarvstType_pft(NZ,I,NY,NX).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ,I,NY,NX).EQ.iharvtyp_herbivo)THEN
-          WTSHTZ = 0
-          NN     = 0
+          TotalShootC4Grazing = 0
+          GrazingArea = 0._r8
           D1995: DO NX1=NHW,NHE
             D1990: DO NY1=NVN,NVS
               !when grazing occurs, it occurs to the same plant species over all grids of the landscape
               IF(LSG_pft(NZ,NY1,NX1).EQ.LSG_pft(NZ,NY,NX))THEN
                 IF(IsPlantActive_pft(NZ,NY1,NX1).EQ.iTrue)THEN
-                  WTSHTZ = WTSHTZ+ShootElms_pft(ielmc,NZ,NY1,NX1)
-                  NN     = NN+1
+                  TotalShootC4Grazing = TotalShootC4Grazing+ShootElms_pft(ielmc,NZ,NY1,NX1)
+                  GrazingArea = GrazingArea+AREA_3D(3,NU_col(NY1,NX1),NY1,NX1)
                 ENDIF
               ENDIF
             ENDDO D1990
           ENDDO D1995
 
-          IF(NN.GT.0)THEN
-            AvgCanopyBiomC2Graze_pft(NZ,NY,NX)=WTSHTZ/NN
+          IF(GrazingArea.GT.0._r8)THEN
+            ! Keep cell-total units: the downstream local/mean biomass ratio
+            ! then compares densities, without counting local area twice.
+            AvgCanopyBiomC2Graze_pft(NZ,NY,NX)=TotalShootC4Grazing/GrazingArea*AREA_3D(3,NU_col(NY,NX),NY,NX)
           ELSE
             AvgCanopyBiomC2Graze_pft(NZ,NY,NX)=ShootElms_pft(ielmc,NZ,NY,NX)
           ENDIF

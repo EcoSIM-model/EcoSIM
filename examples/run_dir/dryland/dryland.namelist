@@ -6,12 +6,12 @@
 case_name='dryland_maize'
 prefix='../../inputs/dryland_maize/'
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20260303.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../../examples/inputs/dryland_maize/dryland_grid_20230221.nc'
 pft_mgmt_in='../../../examples/inputs/dryland_maize/dryland_pft_20230509.nc'
 soil_mgmt_in='../../../examples/inputs/dryland_maize/dryland_soilmgmt_20230210.nc'
 clm_hour_file_in='../../../examples/inputs/dryland_maize/dryland_clm_20230203.nc'
-micpar_file_in='../../../input_data/MicrobePars.20260211.nc'
+micpar_file_in='../../../input_data/MicrobePars.20261021.nc'
 clm_factor_in='NO'
 atm_ghg_in='../../../input_data/fatm_hist_GHGs_1750-2025.nc'
 atm_co2_fix     = 370.
@@ -19,11 +19,12 @@ lverbose        = .false.
 grid_mode       = 1
 plant_model     = .true.
 microbial_model = .true.
+llignification=.true.
 disp_planttrait = .true.
 !set up output variable lists
 !set up the first year of simulation
 start_date  = '20010101000000'
-!idebug_day=288
+!idebug_day=256
 lsoilCompaction=.false.
 continue_run=.false.
 !set up simulation periods, spinup starts at 1, ends at 2, with 3 cycles, regular starts at 4, ends at 5.

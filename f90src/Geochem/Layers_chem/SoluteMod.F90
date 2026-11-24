@@ -509,6 +509,47 @@ module SoluteMod
 
 !------------------------------------------------------------------------------------------
 
+  subroutine UpdateFertilizerBandDepth(L,NY,NX,DepthChange,BandDepth,BandThickness,BandWidth)
+  ! Update band geometry in meters; this routine does not move or remove nutrient mass.
+  implicit none
+  integer, intent(in) :: L,NY,NX
+  real(r8), intent(in) :: DepthChange
+  real(r8), intent(inout) :: BandDepth,BandThickness(:),BandWidth(:)
+  character(len=*), parameter :: subname='UpdateFertilizerBandDepth'
+  real(r8) :: MinChange,MaxChange,AppliedChange,Excess
+
+  call PrintInfo('beg '//subname)
+  !
+  ! The redistribution stencil reaches only one adjacent layer. Limit movement
+  ! to its available thickness/capacity so large steps cannot overfill or empty
+  ! that neighbor. NU:NL are active soil bounds; indices outside them are not
+  ! destinations for band geometry, even when allocated in the arrays.
+  MinChange=-BandThickness(L)
+  if(L>NU_col(NY,NX))MinChange=MinChange-BandThickness(L-1)
+  MaxChange=DLYR_3D(3,L,NY,NX)-BandThickness(L)
+  if(L<NL_col(NY,NX))MaxChange=MaxChange &
+    +AMAX1(0._r8,DLYR_3D(3,L+1,NY,NX)-BandThickness(L+1))
+  AppliedChange=AMAX1(MinChange,AMIN1(MaxChange,DepthChange))
+  !
+  ! Use the same limited change for total depth and layer thickness.
+  BandDepth        = BandDepth+AppliedChange
+  BandThickness(L) = BandThickness(L)+AppliedChange
+  if(BandThickness(L)>DLYR_3D(3,L,NY,NX))then
+    Excess=BandThickness(L)-DLYR_3D(3,L,NY,NX)
+    if(L<NL_col(NY,NX))then
+      BandThickness(L+1) = BandThickness(L+1)+Excess
+      BandWidth(L+1)     = BandWidth(L)
+    endif
+    BandThickness(L)=DLYR_3D(3,L,NY,NX)
+  elseif(BandThickness(L)<=0._r8)then
+    if(L>NU_col(NY,NX))BandThickness(L-1)=BandThickness(L-1)+BandThickness(L)
+    BandThickness(L) = 0._r8
+    BandWidth(L)     = 0._r8
+  endif
+  call PrintInfo('end '//subname)
+  end subroutine UpdateFertilizerBandDepth
+
+!------------------------------------------------------------------------------------------
   subroutine UpdateNH3FertilizerBandinfo(L,NY,NX,FLWD)
   implicit none
   integer, intent(in) :: L,NY,NX
@@ -541,18 +582,9 @@ module SoluteMod
 !     DPNH4,DPNHB=total,layer NH4 fertilizer band depth
 !
       IF(CumDepz2LayBottom_vr(L,NY,NX).GE.BandDepthNH4_col(NY,NX))THEN
-        DPFLW                        = FLWD+DWNH4
-        BandDepthNH4_col(NY,NX)      = BandDepthNH4_col(NY,NX)+DPFLW
-        BandThicknessNH4_vr(L,NY,NX) = BandThicknessNH4_vr(L,NY,NX)+DPFLW
-        IF(BandThicknessNH4_vr(L,NY,NX).GT.DLYR_3D(3,L,NY,NX))THEN
-          BandThicknessNH4_vr(L+1,NY,NX) = BandThicknessNH4_vr(L+1,NY,NX)+(BandThicknessNH4_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX))
-          BandWidthNH4_vr(L+1,NY,NX)     = BandWidthNH4_vr(L,NY,NX)
-          BandThicknessNH4_vr(L,NY,NX)   = DLYR_3D(3,L,NY,NX)
-        ELSEIF(BandThicknessNH4_vr(L,NY,NX).LT.0.0)THEN
-          IF(L>1)BandThicknessNH4_vr(L-1,NY,NX) = BandThicknessNH4_vr(L-1,NY,NX)+BandThicknessNH4_vr(L,NY,NX)
-          BandThicknessNH4_vr(L,NY,NX)   = 0._r8
-          BandWidthNH4_vr(L,NY,NX)       = 0._r8
-        ENDIF
+        DPFLW=FLWD+DWNH4
+        call UpdateFertilizerBandDepth(L,NY,NX,DPFLW,BandDepthNH4_col(NY,NX), &
+          BandThicknessNH4_vr(:,NY,NX),BandWidthNH4_vr(:,NY,NX))
       ENDIF
 !
 !     FRACTION OF SOIL LAYER OCCUPIED BY NH4 BAND
@@ -645,19 +677,9 @@ module SoluteMod
 !     DPPO4,DPPOB=total,layer H2PO4 fertilizer band depth
 !
       IF(CumDepz2LayBottom_vr(L,NY,NX).GE.BandDepthPO4_col(NY,NX))THEN
-        DPFLW                        = FLWD+DWPO4
-        BandDepthPO4_col(NY,NX)      = BandDepthPO4_col(NY,NX)+DPFLW
-        BandThicknessPO4_vr(L,NY,NX) = BandThicknessPO4_vr(L,NY,NX)+DPFLW
-        IF(BandThicknessPO4_vr(L,NY,NX).GT.DLYR_3D(3,L,NY,NX))THEN
-          BandThicknessPO4_vr(L+1,NY,NX) = BandThicknessPO4_vr(L+1,NY,NX)+(BandThicknessPO4_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX))
-          BandWidthPO4_vr(L+1,NY,NX)     = BandWidthPO4_vr(L,NY,NX)
-          BandThicknessPO4_vr(L,NY,NX)   = DLYR_3D(3,L,NY,NX)
-        ELSEIF(BandThicknessPO4_vr(L,NY,NX).LT.0.0_r8)THEN
-          !make sure it is not touching the litter layer
-          if(L/=1)BandThicknessPO4_vr(L-1,NY,NX)=BandThicknessPO4_vr(L-1,NY,NX)+BandThicknessPO4_vr(L,NY,NX)
-          BandThicknessPO4_vr(L,NY,NX) = 0._r8
-          BandWidthPO4_vr(L,NY,NX)     = 0._r8
-        ENDIF
+        DPFLW=FLWD+DWPO4
+        call UpdateFertilizerBandDepth(L,NY,NX,DPFLW,BandDepthPO4_col(NY,NX), &
+          BandThicknessPO4_vr(:,NY,NX),BandWidthPO4_vr(:,NY,NX))
       ENDIF
 !
 !     FRACTION OF SOIL LAYER OCCUPIED BY PO4 BAND
@@ -874,18 +896,9 @@ module SoluteMod
 !     BandDepthNO3_col,DPNOB=total,layer NO3 fertilizer band depth
 !
       IF(CumDepz2LayBottom_vr(L,NY,NX).GE.BandDepthNO3_col(NY,NX))THEN
-        DPFLW                        = FLWD+DWNO3
-        BandDepthNO3_col(NY,NX)      = BandDepthNO3_col(NY,NX)+DPFLW
-        BandThicknessNO3_vr(L,NY,NX) = BandThicknessNO3_vr(L,NY,NX)+DPFLW
-        IF(BandThicknessNO3_vr(L,NY,NX).GT.DLYR_3D(3,L,NY,NX))THEN
-          BandThicknessNO3_vr(L+1,NY,NX) = BandThicknessNO3_vr(L+1,NY,NX)+(BandThicknessNO3_vr(L,NY,NX)-DLYR_3D(3,L,NY,NX))
-          BandWidthNO3_vr(L+1,NY,NX)     = BandWidthNO3_vr(L,NY,NX)
-          BandThicknessNO3_vr(L,NY,NX)   = DLYR_3D(3,L,NY,NX)
-        ELSEIF(BandThicknessNO3_vr(L,NY,NX).LT.0.0)THEN
-          BandThicknessNO3_vr(L-1,NY,NX) = BandThicknessNO3_vr(L-1,NY,NX)+BandThicknessNO3_vr(L,NY,NX)
-          BandThicknessNO3_vr(L,NY,NX)   = 0._r8
-          BandWidthNO3_vr(L,NY,NX)       = 0._r8
-        ENDIF
+        DPFLW=FLWD+DWNO3
+        call UpdateFertilizerBandDepth(L,NY,NX,DPFLW,BandDepthNO3_col(NY,NX), &
+          BandThicknessNO3_vr(:,NY,NX),BandWidthNO3_vr(:,NY,NX))
       ENDIF
 !
 !     FRACTION OF SOIL LAYER OCCUPIED BY NO3 BAND
@@ -941,6 +954,8 @@ module SoluteMod
   subroutine UpdateSurfResidueSolute(NX,NY)
   implicit none
   integer, intent(in) :: NY,NX
+  character(len=*), parameter :: subname='UpdateSurfResidueSolute'
+
   real(r8) :: Al_3p_aque_mole_conc,CALX,Ca_2p_aque_mole_conc,CaX_conc
   real(r8) :: CCEC0,CO3_2e_aque_mole_conc
   real(r8) :: Fe_3p_aque_mole_conc,CFEX
@@ -961,9 +976,11 @@ module SoluteMod
   real(r8) :: H2PO4_1e_FePO4_dissol_flx,RXN4,XNH4_mole_conc
   real(r8) :: RHP1,RHP2,RN3S,RN4S,RFertReleaz_NH4,RFertReleaz_Urea
   real(r8) :: RFertReleaz_NH3,RFertReleaz_Urea2SoilNH3,RFertReleaz_NO3
-!     begin_execution
-!     BKVL=litter mass
-!
+
+  !     begin_execution
+  !     BKVL=litter mass
+  !
+  call PrintInfo('beg '//subname)
   IF(VLWatMicPM_vr(NPH,0,NY,NX).GT.ZEROS2(NY,NX))THEN
     BulkSoilMass=VLSoilMicPMass_vr(0,NY,NX)
 !
@@ -1171,8 +1188,10 @@ module SoluteMod
 !
     DP                     = DPH2P
     S0                     = H1PO4_2e_aque_mole_conc+H_1p_aque_mole_conc+DP
-    S1                     = AZMAX1(S0**2-4.0*(H1PO4_2e_aque_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_aque_mole_conc))
-    H2PO4_e_to_HPO4_2e_flx = TSL*(S0-SQRT(S1))
+    ! Keep small positive discriminants: concentration cutoffs do not apply to squares.
+    ! Use a sum of nonnegative terms and 4*(B*C-K*A)/(S0+sqrt(D)) to avoid cancellation.
+    S1                     = MAX(0._r8,(H1PO4_2e_aque_mole_conc-H_1p_aque_mole_conc)**2+2._r8*DP*(H1PO4_2e_aque_mole_conc+H_1p_aque_mole_conc)+DP**2+4._r8*DP*H2PO4_1e_aque_mole_conc)
+    H2PO4_e_to_HPO4_2e_flx = TSL*(4._r8*((H1PO4_2e_aque_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_aque_mole_conc)/(S0+SQRT(S1))))
 !
 !     EQUILIBRIUM X-CA CONCENTRATION FROM CEC, GAPON COEFFICIENTS
 !     AND CATION CONCENTRATIONS
@@ -1194,10 +1213,10 @@ module SoluteMod
     CALX     = AMAX1(ZERO,Al_3p_aque_mole_conc)**0.333_r8
     CFEX     = AMAX1(ZERO,Fe_3p_aque_mole_conc)**0.333_r8
     CaX_conc = AMAX1(ZERO,Ca_2p_aque_mole_conc)**0.500_r8
-!
-!     EQUILIBRIUM X-CA CONCENTRATION FROM CEC AND CATION
-!     CONCENTRATIONS
-!
+    !
+    !     EQUILIBRIUM X-CA CONCENTRATION FROM CEC AND CATION
+    !     CONCENTRATIONS
+    !
     XCAX=CCEC0/(1.0_r8+GKC4_vr(NU_col(NY,NX),NY,NX)*NH4_1p_aque_mole_conc/CaX_conc &
       +GKCH_vr(NU_col(NY,NX),NY,NX)*H_1p_aque_mole_conc/CaX_conc &
       +GKCA_vr(NU_col(NY,NX),NY,NX)*CALX/CaX_conc &
@@ -1288,6 +1307,7 @@ module SoluteMod
       trcn_RprodChem_soil_vr(ids_H2PO4,0,NY,NX)   = trcn_RprodChem_soil_vr(ids_H2PO4,0,NY,NX)*patomw
 
 !9989  FORMAT(A8,2I4,12E12.4)
+  call PrintInfo('end '//subname)
   end subroutine UpdateSurfResidueSolute
 
 END module SoluteMod

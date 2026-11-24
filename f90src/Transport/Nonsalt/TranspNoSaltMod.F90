@@ -96,8 +96,9 @@ module TranspNoSaltMod
         trcs_mass_litr_beg(idg,NY,NX)=trcs_solml_vr(idg,0,NY,NX)
         trcs_mass_snow_beg(idg,NY,NX)=0._r8
         trcs_mass_soil_beg(idg,NY,NX)=0._r8
-        
-        DO L=1,nsnol_col(NY,NX)
+
+        ! First-snow tracer mass exists before SnowpackLayering updates nsnol.
+        DO L=1,JS
           trcs_mass_snow_beg(idg,NY,NX)=trcs_mass_snow_beg(idg,NY,NX)+trcg_solsml_snvr(idg,L,NY,NX)
         ENDDO
         
@@ -166,7 +167,7 @@ module TranspNoSaltMod
 
         mass_litr = trcs_solml_vr(idg,0,NY,NX)
         mass_snow = 0._r8
-        DO L=1,nsnol_col(NY,NX)
+        DO L=1,JS
           mass_snow=mass_snow+trcg_solsml_snvr(idg,L,NY,NX)
         ENDDO        
 
@@ -210,7 +211,7 @@ module TranspNoSaltMod
             write(121,*)'mass sno,litr,soil       =',mass_snow,mass_litr,mass_soil
             write(121,*)'Delta mass sno, litr,soil=',mass_snow-trcs_mass_snow_beg(idg,NY,NX),mass_litr-trcs_mass_litr_beg(idg,NY,NX), &
               mass_soil-trcs_mass_soil_beg(idg,NY,NX)
-            write(121,*)'mass snow                =',trcg_solsml_snvr(idg,1:nsnol_col(NY,NX),NY,NX)  
+            write(121,*)'mass snow                =',trcg_solsml_snvr(idg,1:JS,NY,NX)
             write(121,*)'------------------------------------------------------------------------------'            
             write(121,*)'dif to litr              =',AtmGasDiff2Litr_flx_col(idg,NY,NX)
             write(121,*)'wet dep to litr.         =',Gas_WetDepo2Litr_col(idg,NY,NX)
@@ -319,6 +320,7 @@ module TranspNoSaltMod
 ! NPG=NPG=NPH*NPT,number of cycles per hour for gas flux calculations, 
 ! dt_GasCyc=1.0_r8/NPT, number of cycles for gas flux calculations for 1 iteration in NPH,
 
+  VFLWX=1._r8/NPH
   DO M=1,NPH
     
     !transport without reaction rates, update trcs_solml2_vr
@@ -352,9 +354,41 @@ module TranspNoSaltMod
   implicit none
   integer, intent(in) :: I,J,NHE,NHW,NVS,NVN
   integer :: NY,NX,K
+  integer :: n, nitrogen_ids(6), phosphorus_ids(4)
+  real(r8) :: surface_n, surface_p
+
+  nitrogen_ids=[ids_NH4,ids_NO3,ids_NO2,ids_NH4B,ids_NO3B,ids_NO2B]
+  phosphorus_ids=[ids_H1PO4,ids_H2PO4,ids_H1PO4B,ids_H2PO4B]
   
   DO NX=NHW,NHE
     DO  NY=NVN,NVS
+      ! Accepted transport ledgers are signed gains; these inorganic
+      ! diagnostics are signed exports (positive out, negative in).
+      ! Preserve the legacy carbon grouping: CO2 + CH4, including lateral
+      ! and bottom gas-phase transport in the subsurface total.
+      HydroSufDICFlx_col(NY,NX)=HydroSufDICFlx_col(NY,NX) &
+        -GasHydroSurfLoss_flx_col(idg_CO2,NY,NX)-GasHydroSurfLoss_flx_col(idg_CH4,NY,NX)
+      HydroSubsDICFlx_col(NY,NX)=HydroSubsDICFlx_col(NY,NX) &
+        -GasHydroSubsLoss_flx_col(idg_CO2,NY,NX)-GasHydroSubsLoss_flx_col(idg_CH4,NY,NX)
+
+      ! DIN excludes N2/N2O. The NH3 subsurface ledger already includes
+      ! NH3B and fast gas transport; do not add those contributions twice.
+      surface_n=-GasHydroSurfLoss_flx_col(idg_NH3,NY,NX)
+      HydroSubsDINFlx_col(NY,NX)=HydroSubsDINFlx_col(NY,NX)-GasHydroSubsLoss_flx_col(idg_NH3,NY,NX)
+      do n=1,size(nitrogen_ids)
+        HydroSubsDINFlx_col(NY,NX)=HydroSubsDINFlx_col(NY,NX)-trcnuts_hydrloss_flx_col(nitrogen_ids(n),NY,NX)
+        if(n<=3)surface_n=surface_n-trcn_SurfRunoff_flx_col(nitrogen_ids(n),NY,NX) &
+          -trcn_SnowDrift_flx_col(nitrogen_ids(n),NY,NX)
+      enddo
+      surface_p=0._r8
+      do n=1,size(phosphorus_ids)
+        HydroSubsDIPFlx_col(NY,NX)=HydroSubsDIPFlx_col(NY,NX)-trcnuts_hydrloss_flx_col(phosphorus_ids(n),NY,NX)
+        if(n<=2)surface_p=surface_p-trcn_SurfRunoff_flx_col(phosphorus_ids(n),NY,NX) &
+          -trcn_SnowDrift_flx_col(phosphorus_ids(n),NY,NX)
+      enddo
+      ! Add this hour only; these two fields retain their annual resets.
+      HydroSufDINFlx_CumYr_col(NY,NX)=HydroSufDINFlx_CumYr_col(NY,NX)+surface_n
+      HydroSufDIPFlx_CumYr_col(NY,NX)=HydroSufDIPFlx_CumYr_col(NY,NX)+surface_p
       DO K=1,jcplx
         HydroSufDONFlx_col(NY,NX) = HydroSufDONFlx_col(NY,NX)+DOM_SurfRunoff_flx_col(idom_don,K,NY,NX)
         HydroSufDOPFlx_col(NY,NX) = HydroSufDOPFlx_col(NY,NX)+DOM_SurfRunoff_flx_col(idom_dop,K,NY,NX)
@@ -375,15 +409,16 @@ module TranspNoSaltMod
   end subroutine SummaryFluxes
 !------------------------------------------------------------------------------------------
   subroutine PassSlow2FastIterationM(I,J,M,NHE,NHW,NVS,NVN)
+  ! Stage slow-substep states and species coefficients for fast gas subcycles.
   implicit none
   integer, intent(in) :: I,J
   integer, intent(in) :: M
   integer, intent(in) :: NHE,NHW,NVS,NVN
   character(len=*), parameter :: subname='PassSlow2FastIterationM'
   integer :: NY,NX,L,N
-  real(r8) :: PARGM
 
   call PrintInfo('beg '//subname)
+  WaterFlow2SoilMM_3D=(WaterFlow2MicPM_3D(M,:,:,:,:)+WaterFlow2MacPM_3D(M,:,:,:,:))*dt_GasCyc
 
   DO NX=NHW,NHE
     DO  NY=NVN,NVS
@@ -392,20 +427,13 @@ module TranspNoSaltMod
       !
       ! PARG=boundary layer conductance above soil surface from watsub.f
       !
-      PARGM                       = CondGasXSnowM_col(M,NY,NX)*dt_GasCyc
-      PARGas_CefMM(idg_CO2,NY,NX) = PARGM*0.74_r8
-      PARGas_CefMM(idg_CH4,NY,NX) = PARGM*1.04_r8
-      PARGas_CefMM(idg_O2,NY,NX)  = PARGM*0.83_r8
-      PARGas_CefMM(idg_N2,NY,NX)  = PARGM*0.86_r8
-      PARGas_CefMM(idg_N2O,NY,NX) = PARGM*0.74_r8
-      PARGas_CefMM(idg_NH3,NY,NX) = PARGM*1.02_r8
-      PARGas_CefMM(idg_H2,NY,NX)  = PARGM*2.08_r8
-      PARGas_CefMM(idg_AR,NY,NX)  = PARGM*0.72_r8
+      ! Species dependence was assembled in the molecular film/pore segments;
+      ! aerodynamic transport stays common to gases. Apply only the subcycle time.
+      PARGas_CefMM(:,NY,NX) = CondGasXSnowM_col(:,M,NY,NX)*dt_GasCyc
 
       VLWatMicPXA_vr(0,NY,NX)          = natomw*VLWatMicPM_vr(M,0,NY,NX)
 
       L=NU_col(NY,NX)
-      WaterFlow2SoilMM_3D(3,L,NY,NX)     = (WaterFlow2MicPM_3D(M,3,L,NY,NX)+WaterFlow2MacPM_3D(M,3,L,NY,NX))*dt_GasCyc
       tScalReductVLsoiAirPMM_vr(L,NY,NX) = ReductVLsoiAirPM_vr(M,L,NY,NX)*dt_GasCyc
 
       VLWatMicPMA_vr(L,NY,NX)          = VLWatMicPM_vr(M,L,NY,NX)*trcs_VLN_vr(ids_NH4,L,NY,NX)
@@ -418,9 +446,6 @@ module TranspNoSaltMod
 
       DO L=NU_col(NY,NX)+1,NL_col(NY,NX)
         tScalReductVLsoiAirPMM_vr(L,NY,NX) = ReductVLsoiAirPM_vr(M,L,NY,NX)*dt_GasCyc
-        DO N=FlowDirIndicator_col(NY,NX),3
-          WaterFlow2SoilMM_3D(N,L,NY,NX)=(WaterFlow2MicPM_3D(M,N,L,NY,NX)+WaterFlow2MacPM_3D(M,N,L,NY,NX))*dt_GasCyc
-        ENDDO
 
         VLWatMicPMA_vr(L,NY,NX) = VLWatMicPM_vr(M,L,NY,NX)*trcs_VLN_vr(ids_NH4,L,NY,NX)
         VLWatMicPMB_vr(L,NY,NX) = VLWatMicPM_vr(M,L,NY,NX)*trcs_VLN_vr(ids_NH4B,L,NY,NX)

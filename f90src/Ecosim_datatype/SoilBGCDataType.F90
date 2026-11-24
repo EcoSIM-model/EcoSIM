@@ -48,10 +48,13 @@ implicit none
   real(r8),target,allocatable ::  SurfGasEmiss_flx_col(:,:,:)         !surface gas flux, including diffusion, ebullition, wet deposition and plant transp, [g d-2 h-1]
   real(r8),target,allocatable ::  SurfGasEmiss_all_flx_col(:,:,:)     !surface gas flux, including diffusion, ebullition, wet deposition, plant transp and disturbance, [g d-2 h-1]
   real(r8),target,allocatable ::  GasHydroLoss_flx_col(:,:,:)         !hydrological loss of volatile tracers, [g d-2 h-1]
+  real(r8),target,allocatable ::  trcnuts_hydrloss_flx_col(:,:,:)     !hydrological loss of nutrients, [g d-2 h-1]
   real(r8),target,allocatable ::  GasHydroSubsLoss_flx_col(:,:,:)     !subsurface hydrological loss of volatile tracers, [g d-2 h-1]
   real(r8),target,allocatable ::  GasHydroSurfLoss_flx_col(:,:,:)     !surface hydrological loss of volatile tracers, [g d-2 h-1]
   real(r8),target,allocatable ::  AmendC_CumYr_flx_col(:,:)           !total C amendment, [g d-2]
   real(r8),target,allocatable ::  GasHydroLoss_cumflx_col(:,:,:)     !cumulative hydrological loss of volatile tracers, [g d-2]
+  REAL(R8),target,allocatable :: Hydroloss_NH4_cumflx_col(:,:)       !cumulative hydrological loss of NH3, [gN d-2]
+  real(r8),target,allocatable :: Hydroloss_NO3_cumflx_col(:,:)       !cumulative hydrological loss of NO3, [gN d-2]
   real(r8),target,allocatable ::  FertN_Flx_CumYr_col(:,:)           !total fertilizer N amendment, [g d-2]
   real(r8),target,allocatable ::  FerP_Flx_CumYr_col(:,:)             !total fertilizer P amendment, [g d-2]
   real(r8),target,allocatable ::  HydroSufDOCFlx_col(:,:)            !total surface DOC flux, [g d-2]
@@ -64,12 +67,15 @@ implicit none
   real(r8),target,allocatable ::  tXPO4_col(:,:)                     !total soil precipited P, [g d-2]
   real(r8),target,allocatable ::  RootResp_CumYr_col(:,:)            !total soil autotrophic respiration, [g d-2]
   real(r8),target,allocatable ::  SedmErossLoss_CumYr_col(:,:)       !total sediment subsurface flux, [Mg d-2]
-  real(r8),target,allocatable ::  HydroSufDICFlx_col(:,:)            !total surface DIC flux, [g d-2]
-  real(r8),target,allocatable ::  HydroSubsDICFlx_col(:,:)           !total subsurface DIC flux, [g d-2]
-  real(r8),target,allocatable ::  HydroSufDINFlx_CumYr_col(:,:)      !total surface DIN flux, [g d-2]
-  real(r8),target,allocatable ::  HydroSubsDINFlx_col(:,:)           !total subsurface DIN flux, [g d-2]
-  real(r8),target,allocatable ::  HydroSufDIPFlx_CumYr_col(:,:)      !total surface DIP flux, [g d-2]
-  real(r8),target,allocatable ::  HydroSubsDIPFlx_col(:,:)           !total subsurface DIP flux, [g d-2]
+  ! Inorganic export diagnostics: positive out, negative in; grid-cell totals.
+  ! Legacy DIC groups CO2 + CH4 + carbonate species; subsurface also includes
+  ! lateral/bottom gas transport. Geochemical conversion is recorded separately.
+  real(r8),target,allocatable ::  HydroSufDICFlx_col(:,:)            !hourly carbon export, [gC h-1]
+  real(r8),target,allocatable ::  HydroSubsDICFlx_col(:,:)           !hourly carbon export, [gC h-1]
+  real(r8),target,allocatable ::  HydroSufDINFlx_CumYr_col(:,:)      !annual NH3/NH4/NO2/NO3 export, [gN]
+  real(r8),target,allocatable ::  HydroSubsDINFlx_col(:,:)           !hourly NH3/NH4/NO2/NO3 export, [gN h-1]
+  real(r8),target,allocatable ::  HydroSufDIPFlx_CumYr_col(:,:)      !annual phosphate export, [gP]
+  real(r8),target,allocatable ::  HydroSubsDIPFlx_col(:,:)           !hourly phosphate export, [gP h-1]
   real(r8),target,allocatable ::  StandingDeadStrutElms_col(:,:,:)   !total standing dead C, [g d-2]
   real(r8),target,allocatable ::  ZDRAIN_col(:,:)                    !total N drainage below root zone, [g d-2]
   real(r8),target,allocatable ::  PDRAIN_col(:,:)                    !total P drainage below root zone, [g d-2]
@@ -205,7 +211,8 @@ implicit none
   allocate(PH_vr(0:JZ,JY,JX));PH_vr(0:JZ,JY,JX)=0._r8
   allocate(CEC_vr(JZ,JY,JX));CEC_vr(JZ,JY,JX)=0._r8
   allocate(AEC_vr(JZ,JY,JX));AEC_vr(JZ,JY,JX)=0._r8
-
+  allocate(Hydroloss_NH4_cumflx_col(JY,JX)); Hydroloss_NH4_cumflx_col = 0._r8
+  allocate(Hydroloss_NO3_cumflx_col(JY,JX)); Hydroloss_NO3_cumflx_col = 0._R8
   allocate(REcoUptkSoilO2M_vr(60,0:JZ,JY,JX));REcoUptkSoilO2M_vr=0._r8
   allocate(GasHydroLoss_cumflx_col(idg_beg:idg_NH3,JY,JX)); GasHydroLoss_cumflx_col=0._r8
   allocate(GasHydroLoss_flx_col(idg_beg:idg_NH3,JY,JX)); GasHydroLoss_flx_col=0._r8
@@ -213,6 +220,7 @@ implicit none
   allocate(SurfGasEmiss_all_flx_col(idg_beg:idg_NH3,JY,JX)); SurfGasEmiss_all_flx_col=0._r8
   allocate(GasDiff2Surf_flx_col(idg_beg:idg_NH3,JY,JX)); GasDiff2Surf_flx_col=0._r8
   allocate(GasHydroSubsLoss_flx_col(idg_beg:idg_NH3,JY,JX)); GasHydroSubsLoss_flx_col=0._r8
+  allocate(trcnuts_hydrloss_flx_col(ids_nuts_beg:ids_nuts_end,JY,JX)); trcnuts_hydrloss_flx_col=0._r8
   allocate(GasHydroSurfLoss_flx_col(idg_beg:idg_NH3,JY,JX)); GasHydroSurfLoss_flx_col=0._r8
   allocate(AmendC_CumYr_flx_col(JY,JX));       AmendC_CumYr_flx_col=0._r8
   allocate(FertN_Flx_CumYr_col(JY,JX));      FertN_Flx_CumYr_col=0._r8
@@ -291,6 +299,7 @@ implicit none
 
   implicit none
 
+  call destroy(trcnuts_hydrloss_flx_col)
   call destroy(trcs_solml_dribBeg_col)
   call destroy(ROQC4HeterMicActCmpK_vr)
   call destroy(RHydrolysisScalCmpK_vr)
@@ -389,6 +398,8 @@ implicit none
   call destroy(GasHydroSubsLoss_flx_col)
   call destroy(GasHydroSurfLoss_flx_col)
   call destroy(GasHydroLoss_cumflx_col)
+  call destroy(Hydroloss_NH4_cumflx_col)
+  call destroy(Hydroloss_NO3_cumflx_col)
   call destroy(trcs_VLN_vr)
   call destroy(trcg_ebu_flx_vr)
   call destroy(trcg_DisolEvap_Atm2Litr_flx)

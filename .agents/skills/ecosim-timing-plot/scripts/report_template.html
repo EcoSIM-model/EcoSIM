@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EcoSIM Timing Report</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --page: #f5f4f1; --text: #0b0b0b; --text-2: #52514e;
+  --muted: #898781; --grid: #e1e0d9; --line: #d3d1c9;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19; --page: #111110; --text: #ffffff; --text-2: #c3c2b7;
+    --muted: #898781; --grid: #2c2c2a; --line: #3a3a37;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1a1a19; --page: #111110; --text: #ffffff; --text-2: #c3c2b7;
+  --muted: #898781; --grid: #2c2c2a; --line: #3a3a37;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.sub, .note { color: var(--text-2); }
+.note { font-size: 12.5px; margin: 4px 0 12px; }
+.files { color: var(--muted); font-size: 12px; word-break: break-all; margin-bottom: 20px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.tile, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.tile { padding: 12px 14px; }
+.tile .k { color: var(--text-2); font-size: 12px; }
+.tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card { padding: 16px; margin-bottom: 20px; position: relative; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 4px 0 8px; font-size: 12.5px; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+svg .lbl { fill: var(--text-2); font-size: 12px; }
+svg .val { fill: var(--text); font-size: 11.5px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.grid line { stroke: var(--grid); stroke-width: 1; }
+.axis { stroke: var(--line); stroke-width: 1; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none; white-space: nowrap; z-index: 2;
+  font-variant-numeric: tabular-nums; }
+.tip b { font-weight: 600; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.tip i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--text-2); font-weight: 600; }
+.empty { color: var(--text-2); padding: 12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>__TITLE__ — runtime profile</h1>
+  <div class="sub">Wall-clock seconds from EcoSIM's timing output (<code>do_timing</code>, <code>do_timing_detail</code>).</div>
+  <div class="files" id="files"></div>
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Total time per region</h2>
+    <div class="note">Regions are inclusive: <b>Timestep</b> contains the per-hour regions, so bars and percentages overlap and do not sum to the run time.</div>
+    <div id="bars"></div>
+    <details><summary>Table view</summary><div class="tablewrap" id="summaryTable"></div></details>
+  </section>
+
+  <section class="card" id="stepCard">
+    <h2>Seconds per timestep</h2>
+    <div class="note" id="stepNote"></div>
+    <div id="stepChart"></div>
+  </section>
+
+  <section class="card" id="regionCard">
+    <h2>Seconds per timestep, by region</h2>
+    <div class="note" id="regionNote"></div>
+    <div class="legend" id="regionLegend"></div>
+    <div id="regionChart"></div>
+    <details><summary>Table view</summary><div class="tablewrap" id="regionTable"></div></details>
+  </section>
+</main>
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById('payload').textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  const SLOTS = ['--s1','--s2','--s3','--s4','--s5','--s6','--s7'];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt = s => {
+    if (s == null) return '–';
+    if (s === 0) return '0 s';
+    const a = Math.abs(s);
+    if (a >= 3600) return (s / 3600).toFixed(2) + ' h';
+    if (a >= 60) return (s / 60).toFixed(2) + ' min';
+    if (a >= 1) return s.toFixed(a >= 100 ? 0 : 2) + ' s';
+    if (a >= 1e-3) return (s * 1e3).toFixed(a >= 0.1 ? 0 : 2) + ' ms';
+    return (s * 1e6).toFixed(1) + ' µs';
+  };
+  const el = (tag, attrs, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+  const niceMax = v => {
+    if (!(v > 0)) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    const m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  };
+
+  // Header
+  document.getElementById('files').innerHTML =
+    'summary: ' + esc(D.summaryFile) + (D.detailFile ? '<br>detail: ' + esc(D.detailFile) : '<br>detail: none');
+  const byName = Object.fromEntries(D.summary.map(r => [r.name || r.timer, r]));
+  const ts = byName['Timestep'];
+  const tiles = [['Whole run', fmt(D.runSeconds)]];
+  if (ts) {
+    tiles.push(['Timesteps', ts.calls.toLocaleString()]);
+    tiles.push(['Mean per timestep', fmt(ts.mean)]);
+    tiles.push(['Timesteps, share of run', ts.percent.toFixed(1) + '%']);
+  }
+  if (byName['Initialization']) tiles.push(['Initialization', fmt(byName['Initialization'].total)]);
+  document.getElementById('tiles').innerHTML = tiles.map(([k, v]) =>
+    '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>').join('');
+
+  // Shared tooltip
+  function makeTip(card) {
+    let tip = card.querySelector('.tip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.className = 'tip';
+      card.appendChild(tip);
+    }
+    return {
+      show(html, x, y) {
+        tip.innerHTML = html; tip.style.display = 'block';
+        const cw = card.clientWidth, tw = tip.offsetWidth;
+        tip.style.left = Math.max(4, Math.min(x + 14, cw - tw - 4)) + 'px';
+        tip.style.top = (y + 14) + 'px';
+      },
+      hide() { tip.style.display = 'none'; }
+    };
+  }
+  const local = (evt, card) => {
+    const r = card.getBoundingClientRect();
+    return [evt.clientX - r.left, evt.clientY - r.top];
+  };
+
+  // Charts are drawn at the host's pixel width so text stays legible on phones.
+  const widthOf = host => Math.max(300, Math.floor(host.clientWidth));
+  const renders = [];
+
+  // Summary bars (single series -> slot 1)
+  function bars() {
+    const rows = [...D.summary].sort((a, b) => b.total - a.total);
+    const host = document.getElementById('bars');
+    host.textContent = '';
+    const card = host.closest('.card');
+    const tip = makeTip(card);
+    const W = widthOf(host), narrow = W < 560;
+    const rowH = 26, labW = narrow ? 104 : 150, valW = narrow ? 112 : 150, top = 20;
+    const H = top + rows.length * rowH + 22;
+    const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img',
+      'aria-label': 'Total wall seconds per timer region'}, host);
+    const plotW = W - labW - valW;
+    const xmax = niceMax(Math.max(...rows.map(r => r.total), D.runSeconds || 0));
+    const g = el('g', {class: 'grid'}, svg);
+    const nx = narrow ? 2 : 4;
+    for (let i = 0; i <= nx; i++) {
+      const x = labW + plotW * i / nx;
+      el('line', {x1: x, x2: x, y1: top, y2: H - 20}, g);
+      el('text', {x, y: H - 6, 'text-anchor': i === nx ? 'end' : i ? 'middle' : 'start'}, svg).textContent = fmt(xmax * i / nx);
+    }
+    if (D.runSeconds) {
+      const x = labW + plotW * D.runSeconds / xmax;
+      el('line', {x1: x, x2: x, y1: top, y2: H - 20, stroke: 'var(--text-2)', 'stroke-dasharray': '3 3'}, svg);
+      el('text', {x, y: top - 6, 'text-anchor': 'end', class: 'lbl'}, svg).textContent = 'whole run ' + fmt(D.runSeconds);
+    }
+    rows.forEach((r, i) => {
+      const y = top + i * rowH;
+      const w = Math.max(1, plotW * r.total / xmax);
+      el('text', {x: labW - 8, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: 'lbl'}, svg).textContent = r.timer;
+      el('rect', {x: labW, y: y + 5, width: w, height: rowH - 10, rx: 4, fill: 'var(--s1)'}, svg);
+      el('text', {x: labW + w + 6, y: y + rowH / 2 + 4, class: 'val'}, svg).textContent =
+        fmt(r.total) + ' · ' + r.percent.toFixed(1) + '%';
+      const hit = el('rect', {x: 0, y, width: W, height: rowH, fill: 'transparent'}, svg);
+      hit.addEventListener('mousemove', e => {
+        const [x, yy] = local(e, card);
+        tip.show('<b>' + esc(r.timer) + '</b><br>total ' + fmt(r.total) + ' (' + r.percent.toFixed(2) +
+          '% of run)<br>' + r.calls.toLocaleString() + ' calls · mean ' + fmt(r.mean) +
+          '<br>min ' + fmt(r.min) + ' · max ' + fmt(r.max), x, yy);
+      });
+      hit.addEventListener('mouseleave', tip.hide);
+    });
+    document.getElementById('summaryTable').innerHTML = '<table><thead><tr><th>Region</th><th>Calls</th>' +
+      '<th>Total</th><th>Mean</th><th>Min</th><th>Max</th><th>% of run</th></tr></thead><tbody>' +
+      rows.map(r => '<tr><td>' + esc(r.timer) + '</td><td>' + r.calls.toLocaleString() + '</td><td>' +
+        fmt(r.total) + '</td><td>' + fmt(r.mean) + '</td><td>' + fmt(r.min) + '</td><td>' + fmt(r.max) +
+        '</td><td>' + r.percent.toFixed(2) + '</td></tr>').join('') + '</tbody></table>';
+  }
+  renders.push(bars);
+
+  // Line chart with crosshair tooltip
+  function lineChart(host, starts, width, series, opts) {
+    host.textContent = '';
+    const card = host.closest('.card');
+    const tip = makeTip(card);
+    const W = widthOf(host), narrow = W < 560;
+    const H = opts.height || 260, L = 64, R = opts.endLabels && !narrow ? 130 : 16, T = 10, B = 30;
+    const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': opts.label}, host);
+    const n = starts.length;
+    const x0 = starts[0], x1 = starts[n - 1] + width;
+    const ymax = niceMax(Math.max(...series.flatMap(s => s.mean.filter(v => v != null)), 0));
+    const X = s => L + (W - L - R) * (x1 > x0 ? (s - x0) / (x1 - x0) : 0.5);
+    const Y = v => T + (H - T - B) * (1 - v / ymax);
+    const g = el('g', {class: 'grid'}, svg);
+    const ny = Math.abs(ymax / Math.pow(10, Math.floor(Math.log10(ymax))) - 2.5) < 1e-9 ? 5 : 4;
+    for (let i = 0; i <= ny; i++) {
+      const y = Y(ymax * i / ny);
+      el('line', {x1: L, x2: W - R, y1: y, y2: y}, g);
+      el('text', {x: L - 8, y: y + 4, 'text-anchor': 'end'}, svg).textContent = fmt(ymax * i / ny);
+    }
+    el('line', {x1: L, x2: W - R, y1: H - B, y2: H - B, class: 'axis'}, svg);
+    const span = x1 - x0, raw = span / (narrow ? 2 : 5);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    const dx = [1, 2, 2.5, 5, 10].map(m => m * mag).find(v => v >= raw) || 10 * mag;
+    for (let s = Math.ceil(x0 / dx) * dx; s <= x1 + 1e-9; s += dx) {
+      const x = X(s);
+      el('text', {x, y: H - 10, 'text-anchor': x > W - R - 30 ? 'end' : x < L + 30 ? 'start' : 'middle'}, svg)
+        .textContent = (s === x0 ? 'step ' : '') + Math.round(s).toLocaleString();
+    }
+    const mid = i => starts[i] + (width - 1) / 2;
+    const ends = [];
+    series.forEach(s => {
+      let d = '', pen = false;
+      s.mean.forEach((v, i) => {
+        if (v == null) { pen = false; return; }
+        d += (pen ? 'L' : 'M') + X(mid(i)).toFixed(1) + ' ' + Y(v).toFixed(1);
+        pen = true;
+      });
+      el('path', {d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round'}, svg);
+      for (let i = n - 1; i >= 0; i--) if (s.mean[i] != null) { ends.push({s, y: Y(s.mean[i])}); break; }
+    });
+    if (opts.endLabels && !narrow) {
+      ends.sort((a, b) => a.y - b.y);
+      let last = -Infinity;
+      ends.forEach(e => {
+        const y = Math.max(e.y, last + 13);
+        last = y;
+        el('text', {x: W - R + 8, y: y + 4, class: 'lbl'}, svg).textContent = e.s.name;
+      });
+    }
+    const cross = el('line', {y1: T, y2: H - B, stroke: 'var(--muted)', 'stroke-width': 1, visibility: 'hidden'}, svg);
+    const dots = series.map(s => el('circle', {r: 4, fill: s.color, stroke: 'var(--surface)', 'stroke-width': 2,
+      visibility: 'hidden'}, svg));
+    const hit = el('rect', {x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent'}, svg);
+    hit.addEventListener('mousemove', e => {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const s = x0 + (x1 - x0) * (p.x - L) / (W - L - R);
+      const i = Math.max(0, Math.min(n - 1, Math.floor((s - x0) / width)));
+      cross.setAttribute('x1', X(mid(i))); cross.setAttribute('x2', X(mid(i)));
+      cross.setAttribute('visibility', 'visible');
+      series.forEach((ser, k) => {
+        const v = ser.mean[i];
+        dots[k].setAttribute('visibility', v == null ? 'hidden' : 'visible');
+        if (v != null) { dots[k].setAttribute('cx', X(mid(i))); dots[k].setAttribute('cy', Y(v)); }
+      });
+      const range = width > 1 ? 'steps ' + starts[i].toLocaleString() + '–' + (starts[i] + width - 1).toLocaleString()
+                              : 'step ' + starts[i].toLocaleString();
+      const rows = series.map(ser => ({ser, v: ser.mean[i], m: ser.max[i]}))
+        .sort((a, b) => (b.v || 0) - (a.v || 0))
+        .map(r => '<div class="row"><i style="background:' + r.ser.color + '"></i>' + esc(r.ser.name) + ': <b>' +
+          fmt(r.v) + '</b>' + (width > 1 ? ' (max ' + fmt(r.m) + ')' : '') + '</div>').join('');
+      const [cx, cy] = local(e, card);
+      tip.show('<b>' + range + '</b>' + (width > 1 ? ' · mean per step' : '') + rows, cx, cy);
+    });
+    hit.addEventListener('mouseleave', () => {
+      tip.hide(); cross.setAttribute('visibility', 'hidden');
+      dots.forEach(d => d.setAttribute('visibility', 'hidden'));
+    });
+  }
+
+  const det = D.detail;
+  const binText = det && det.binWidth > 1
+    ? 'Each point is the mean over ' + det.binWidth.toLocaleString() + ' consecutive steps; the tooltip also shows the bin maximum. '
+    : '';
+  const draw = () => renders.forEach(f => f());
+  let pending;
+  window.addEventListener('resize', () => { clearTimeout(pending); pending = setTimeout(draw, 150); });
+  if (!det || !det.steps) {
+    draw();
+    const msg = '<div class="empty">No per-step detail file. Rerun with <code>do_timing_detail=.true.</code> to record time-&lt;run-start&gt;.txt.</div>';
+    document.getElementById('stepChart').innerHTML = msg;
+    document.getElementById('regionCard').style.display = 'none';
+    return;
+  }
+  const color = k => 'var(' + SLOTS[k] + ')';
+  document.getElementById('stepNote').textContent = binText +
+    det.steps.toLocaleString() + ' steps recorded (step ' + det.firstStep + '–' + det.lastStep + '). ' +
+    'Spikes usually mark history or restart writes.';
+  if (det.timestep) {
+    renders.push(() => lineChart(document.getElementById('stepChart'), det.binStarts, det.binWidth,
+      [{name: 'Timestep', color: color(0), mean: det.timestep.mean, max: det.timestep.max}],
+      {label: 'Wall seconds per timestep', height: 220}));
+  } else {
+    document.getElementById('stepChart').innerHTML = '<div class="empty">No "Timestep" region in the detail file.</div>';
+  }
+  const regions = det.regions.map((r, k) => ({name: r.name, color: color(k), mean: r.mean, max: r.max}));
+  document.getElementById('regionNote').textContent = binText +
+    'Top ' + regions.length + ' regions by total time, excluding Timestep. Steps where a region did not run count as zero.' +
+    (det.omitted.length ? ' Not plotted: ' + det.omitted.join(', ') + '.' : '');
+  document.getElementById('regionLegend').innerHTML = regions.map(r =>
+    '<span><i style="background:' + r.color + '"></i>' + esc(r.name) + '</span>').join('');
+  if (regions.length) {
+    renders.push(() => lineChart(document.getElementById('regionChart'), det.binStarts, det.binWidth, regions,
+      {label: 'Wall seconds per timestep by region', height: 320, endLabels: regions.length <= 4}));
+  }
+  draw();
+  const stat = r => {
+    const v = r.mean.filter(x => x != null), m = r.max.filter(x => x != null);
+    return {mean: v.reduce((a, b) => a + b, 0) / (v.length || 1), peak: Math.max(...m, 0)};
+  };
+  document.getElementById('regionTable').innerHTML = '<table><thead><tr><th>Region</th><th>Mean per step</th>' +
+    '<th>Peak step</th></tr></thead><tbody>' + regions.map(r => {
+      const s = stat(r);
+      return '<tr><td>' + esc(r.name) + '</td><td>' + fmt(s.mean) + '</td><td>' + fmt(s.peak) + '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    (Object.keys(det.setup).length ? '<p class="note">Setup records (step −1): ' +
+      Object.entries(det.setup).map(([k, v]) => esc(k) + ' ' + fmt(v)).join(' · ') + '</p>' : '');
+})();
+</script>
+</body>
+</html>

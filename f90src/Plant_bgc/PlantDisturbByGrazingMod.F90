@@ -1,9 +1,15 @@
 module PlantDisturbByGrazingMod
-  use data_kind_mod, only : r8 => DAT_KIND_R8
+  use data_kind_mod, only : r8 => DAT_KIND_R8,yearIJ_type
   use minimathmod, only : isclose,AZMAX1
   use ElmIDMod
   use EcosimConst
-  use PlantAPIData
+  use PlantAPICommonData
+  use PlantSiteAPIData, only : plt_site
+  use PlantMorphologyAPIData, only : plt_morph
+  use PlantPhenologyAPIData, only : plt_pheno
+  use PlantBiomassAPIData, only : plt_biom
+  use PlantDisturbanceAPIData, only : plt_distb
+  use PlantBGCRatesAPIData, only : plt_bgcr
   use PlantBGCPars
 implicit none
   private
@@ -25,10 +31,10 @@ contains
 ![header]
 !------------------------------------------------------------------------------------------
 
-  subroutine AbvgBiomRemovalByGrazing(I,J,NZ,TotalElmnt2Litr,TotalElmntRemoval)
+  subroutine AbvgBiomRemovalByGrazing(yearIJ,NZ,TotalElmnt2Litr,TotalElmntRemoval)
   
   implicit none
-  integer, intent(in) :: I,J
+  type(yearIJ_type), intent(in) :: yearIJ
   integer, intent(in) :: NZ
   real(r8), intent(in) :: TotalElmntRemoval(NumPlantChemElms)  
   real(r8), intent(in) :: TotalElmnt2Litr(NumPlantChemElms)  
@@ -74,9 +80,9 @@ contains
 
 !------------------------------------------------------------------------------------------
 
-  subroutine RemoveStandDeadByGrazing(I,J,NZ,FracStdeadLeft,FHVSH)
+  subroutine RemoveStandDeadByGrazing(yearIJ,NZ,FracStdeadLeft,FHVSH)
   implicit none
-  integer,  intent(in) :: I,J
+  type(yearIJ_type), intent(in) :: yearIJ
   integer,  intent(in) :: NZ
   real(r8), intent(out) :: FracStdeadLeft  !fraction of remaining C after harvest
   real(r8), intent(out) :: FHVSH  !
@@ -97,8 +103,8 @@ contains
     FracStdeadLeft   = AZMAX1(1._r8-HarvestedStdeadC/StandDeadStrutElms_pft(ielmc,NZ))
     FHVSH  = FracStdeadLeft
   ELSE
-    FracStdeadLeft=1.0_r8
-    FHVSH=1.0_r8
+    FracStdeadLeft = 1.0_r8
+    FHVSH          = 1.0_r8
   ENDIF
   end associate  
   end subroutine RemoveStandDeadByGrazing
@@ -221,7 +227,7 @@ contains
     AvgCanopyBiomC2Graze_pft    => plt_biom%AvgCanopyBiomC2Graze_pft     &
   )
   !
-  !     AvgCanopyBiomC2Graze_pft=average biomass in landscape grazing section
+  !     AvgCanopyBiomC2Graze_pft=section mean shoot C density times local cell area
   !     HVST=iHarvstType_pft=0-2:>0=cutting height,<0=fraction of LAI removed
   !          iHarvstType_pft=3:reduction of clumping factor
   !          iHarvstType_pft=4 or 6:animal or insect biomass(g LM m-2),iHarvstType_pft=5:fire
@@ -232,6 +238,7 @@ contains
   !     CCPOLP=nonstructural C concentration in canopy
   !     CanopyNoduleNonstCConc_pft=nonstructural C concentration in canopy nodules
   ! 24. has unit of hour, 0.45 is biomass C fraction
+  ! Both shoot C and its section mean are scaled to this cell area.
   IF(AvgCanopyBiomC2Graze_pft(NZ).GT.ZERO4Groth_pft(NZ))THEN
     TotPhytomassRemoved=CanopyCutProxy_pft(NZ)*THIN_pft(NZ)*0.45_r8/24.0_r8 &
       *AREA3(NU)*ShootElms_pft(ielmc,NZ)/AvgCanopyBiomC2Graze_pft(NZ)
@@ -315,6 +322,7 @@ contains
   !     GrazingUnMetLeafC=grazing requirement unmet by stalk,reserve
   !
   TotStalkC=StalkStrutElms_pft(ielmc,NZ)+StalkRsrvElms_pft(ielmc,NZ)
+
   IF(TotStalkC.GT.GrazedPhytoStalkC_pft+GrazingUnMetLeafC)THEN
     GrazingDmndStalkC = GrazedPhytoStalkC_pft*StalkStrutElms_pft(ielmc,NZ)/TotStalkC+GrazingUnMetLeafC
     GrazedDmndStalkC  = AMIN1(StalkStrutElms_pft(ielmc,NZ),GrazingDmndStalkC)
@@ -398,20 +406,21 @@ contains
 
   subroutine CutBranchNonstalByGrazing(I,J,NB,NZ,GrazedCanopyNonstC,CanopyNonstElmCopy_brch,&
     GrazedCanopyNoduleC,CanopyNodulNonstElmCopy_brch,CanopyNonstElmAfhvst_brch,CanopyNodulNonstElmAfhvst,&
-    CanopyNodulStrutElmAfhvst)
+    CanopyNodulStrutElmAfhvst,FracLeafSheathLeft)
   implicit none
   integer, intent(in)   :: I,J
   integer, intent(in)   :: NB,NZ
   real(r8), intent(in)  :: GrazedCanopyNonstC
   real(r8), intent(in)  :: CanopyNonstElmCopy_brch(NumPlantChemElms)
   real(r8), intent(in)  :: GrazedCanopyNoduleC
+  real(r8), intent(in)  :: FracLeafSheathLeft !fraction of branch leaf/sheath C remaining after grazing
   real(r8), intent(in)  :: CanopyNodulNonstElmCopy_brch(NumPlantChemElms)
   REAL(R8), intent(out) :: CanopyNonstElmAfhvst_brch(NumPlantChemElms)        !canopy nonstructural element after harvest
   REAL(R8), intent(out) :: CanopyNodulNonstElmAfhvst(NumPlantChemElms)   !canopy nodule nonstrucal element after harvest
   real(r8), intent(out) :: CanopyNodulStrutElmAfhvst(NumPlantChemElms)  !canopy nodule structural element after harvest
   real(r8) :: HarvestedCanopyNoduleC
   real(r8) :: HarvestedCanopyNonstC_brch
-  real(r8) :: FracSheath_brch  
+  real(r8) :: FracSheath_brch,fracHavested  
   integer  :: NE
   associate(                                                         &
     CanopyLeafSheathC_pft     => plt_biom%CanopyLeafSheathC_pft,     &
@@ -424,34 +433,41 @@ contains
   )
   IF(CanopyLeafSheathC_pft(NZ).GT.ZERO4LeafVar_pft(NZ))THEN
     FracSheath_brch=AZMAX1(CanopyLeafSheathC_brch(NB,NZ))/CanopyLeafSheathC_pft(NZ)
+    !
+    !there is nonstructural carbon pool to remove
     IF(CanopyNonstElms_brch(ielmc,NB,NZ).GT.ZERO4Groth_pft(NZ))THEN
       HarvestedCanopyNonstC_brch  = AZMAX1(GrazedCanopyNonstC)*FracSheath_brch
       CanopyNonstElmAfhvst_brch(ielmc) = AZMAX1(CanopyNonstElmCopy_brch(ielmc)-HarvestedCanopyNonstC_brch)
+      fracHavested=AMIN1(HarvestedCanopyNonstC_brch/CanopyNonstElmCopy_brch(ielmc),1._R8)
       DO NE=2,NumPlantChemElms
-        CanopyNonstElmAfhvst_brch(NE)=CanopyNonstElmCopy_brch(NE)*(1._r8-HarvestedCanopyNonstC_brch/CanopyNonstElms_brch(ielmc,NB,NZ))
+        CanopyNonstElmAfhvst_brch(NE)=CanopyNonstElmCopy_brch(NE)*(1._r8-fracHavested)
       ENDDO
     ELSE
-      CanopyNonstElmAfhvst_brch(:)=0._r8
+      !Depleted C does not imply that the remaining N/P reserves were grazed.
+      CanopyNonstElmAfhvst_brch(:)=CanopyNonstElmCopy_brch(:)*FracLeafSheathLeft
     ENDIF
 
     IF(CanopyNodulNonstElms_brch(ielmc,NB,NZ).GT.ZERO4Groth_pft(NZ))THEN
       HarvestedCanopyNoduleC=AZMAX1(GrazedCanopyNoduleC)*FracSheath_brch
       CanopyNodulNonstElmAfhvst(ielmc)=AZMAX1(CanopyNodulNonstElmCopy_brch(ielmc)-HarvestedCanopyNoduleC)
+      fracHavested=AMIN1(HarvestedCanopyNoduleC/CanopyNodulNonstElmCopy_brch(ielmc),1._R8)
       DO NE=2,NumPlantChemElms
-        CanopyNodulNonstElmAfhvst(NE)=CanopyNodulNonstElmCopy_brch(NE)*AZMAX1(1._r8-HarvestedCanopyNoduleC/CanopyNodulNonstElms_brch(ielmc,NB,NZ))
+        CanopyNodulNonstElmAfhvst(NE)=CanopyNodulNonstElmCopy_brch(NE)*(1._r8-fracHavested)
       ENDDO
-
+      
       DO NE=1,NumPlantChemElms
-        CanopyNodulStrutElmAfhvst(NE)=CanopyNodulStrutElms_brch(NE,NB,NZ)*(1._r8-HarvestedCanopyNoduleC/CanopyNodulNonstElmCopy_brch(NE))
+        CanopyNodulStrutElmAfhvst(NE)=CanopyNodulStrutElms_brch(NE,NB,NZ)*(1._r8-fracHavested)
       ENDDO
     ELSE
-      CanopyNodulNonstElmAfhvst(:)=0._r8
-      CanopyNodulStrutElmAfhvst(:)=0._r8
+      !Use host tissue removal when nodule C cannot define a removal fraction.
+      CanopyNodulNonstElmAfhvst(:)=CanopyNodulNonstElmCopy_brch(:)*FracLeafSheathLeft
+      CanopyNodulStrutElmAfhvst(:)=CanopyNodulStrutElms_brch(:,NB,NZ)*FracLeafSheathLeft
     ENDIF
   ELSE
-    CanopyNonstElmAfhvst_brch(:)      = 0._r8
-    CanopyNodulNonstElmAfhvst(:) = 0._r8
-    CanopyNodulStrutElmAfhvst(:) = 0._r8
+    !A missing canopy allocation denominator must not manufacture removal.
+    CanopyNonstElmAfhvst_brch(:)=CanopyNonstElmCopy_brch(:)*FracLeafSheathLeft
+    CanopyNodulNonstElmAfhvst(:)=CanopyNodulNonstElmCopy_brch(:)*FracLeafSheathLeft
+    CanopyNodulStrutElmAfhvst(:)=CanopyNodulStrutElms_brch(:,NB,NZ)*FracLeafSheathLeft
   ENDIF
   end associate
   end subroutine CutBranchNonstalByGrazing

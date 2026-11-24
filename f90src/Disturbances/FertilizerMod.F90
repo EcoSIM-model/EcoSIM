@@ -2,7 +2,8 @@ module FertilizerMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use EcoSIMCtrlMod, only: lverb
   use DebugToolMod,  only: PrintInfo
-  use abortutils,    only: iulog
+  use abortutils,    only: iulog,endrun
+  use EcoSIMConfig,  only : NumMicbAFunGrupsPerCmplx,NumMicbHFunGrupsPerCmplx
   use SurfLitterDataType
   use EcoSimSumDataType
   use FertilizerDataType
@@ -38,14 +39,18 @@ implicit none
 
   integer :: NX,NY
   real(r8) :: OFC(2),OFN(2),OFP(2)
-  integer :: LFDPTH = 0
+  integer :: LFDPTH
+  logical :: UreaLayers(0:JZ),NitrifierLayers(0:JZ)
+  character(len=*), parameter :: subname='ApplyFertilizerAtNoon'
 !     begin_execution
+
+  call PrintInfo('beg '//subname)
 
   D8990: DO NX=NHW,NHE
     D8995: DO NY=NVN,NVS
       IF(J.EQ.INT(SolarNoonHour_col(NY,NX)))THEN
 
-        call ApplyMineralFertilizer(I,J,NY,NX,LFDPTH,OFC,OFN,OFP)
+        call ApplyMineralFertilizer(I,J,NY,NX,LFDPTH,OFC,OFN,OFP,UreaLayers,NitrifierLayers)
 !
 !     SOIL LAYER NUMBER IN WHICH PLANT OR ANIMAL RESIDUES ARE APPLIED
 !
@@ -54,28 +59,39 @@ implicit none
 !
 !     FERTILIZER UREA, NITRIFICATION INHIBITORS
         if(lverb)write(iulog,*)'ApplyUreaNitrifierInhibitor'
-        call ApplyUreaNitrifierInhibitor(I,J,NY,NX,LFDPTH)
+        call ApplyUreaNitrifierInhibitor(I,J,NY,NX,UreaLayers,NitrifierLayers)
 
       ENDIF
 
     ENDDO D8995
   ENDDO D8990
+  call PrintInfo('end '//subname)
   end subroutine ApplyFertilizerAtNoon
 !------------------------------------------------------------------------------------------
 
-  subroutine ApplyUreaNitrifierInhibitor(I,J,NY,NX,LFDPTH)
+  subroutine ApplyUreaNitrifierInhibitor(I,J,NY,NX,UreaLayers,NitrifierLayers)
 
   implicit none
   integer, intent(in) :: I,J,NY,NX
-  integer, intent(in) :: LFDPTH
+  logical, intent(in) :: UreaLayers(0:JZ),NitrifierLayers(0:JZ)
+  character(len=*), parameter :: subname='ApplyUreaNitrifierInhibitor'
   integer :: L
 !     begin_execution
+  call PrintInfo('beg '//subname)
 !
 !     IYTYP=fertilizer release type from fertilizer input file
 !     FERT=fertilizer type from fertilizer input file
 !     iUreaHydInhibitorType_col=urea hydrolysis inhibitor type (1=no,2=yes)
 !     ZNHU0,ZNHUI=initial,current urea hydrolysis inhibition activity
 !     ZNFN0,ZNFNI=initial,current nitrification inhibition activity
+!     Inhibitors are dimensionless activity factors with a maximum of 1,
+!     not concentrations or conserved masses. Resetting receiving layers
+!     to 1 and other layers to 0 for each treatment is an intentional
+!     compromise; overlapping applications are not accumulated.
+!     TODO: Revisit treatment overlap across dates and depths, including
+!     the column-wide urea-inhibitor type, if a more detailed representation
+!     is introduced. Preserving old activity would also require an explicit
+!     assumption about how successive treatments interact.
 ! urea application
   IF(FERT(ifert_N_urea,I,NY,NX).GT.0._r8 .OR. FERT(ifert_N_urea_band,I,NY,NX).GT.0._r8)THEN  
     IF(IYTYP(iamendtyp_fert,I,NY,NX).EQ.0)THEN
@@ -90,9 +106,11 @@ implicit none
       iUreaHydInhibitorType_col(NY,NX)=2
     ENDIF
 
+    ! Activity is intensive: initialize each receiving layer at full activity.
+    ! The masks retain mineral placement even if manure changes LFDPTH.
     !urea inhibitor is on
     D9964: DO L=0,NL_col(NY,NX)
-      IF(L.EQ.LFDPTH)THEN
+      IF(UreaLayers(L))THEN
         ZNHU0_vr(L,NY,NX)=1.0_r8  !inital inhibitor activity
         ZNHUI_vr(L,NY,NX)=1.0_r8  !current inhibitor activity
       ELSE
@@ -105,7 +123,7 @@ implicit none
   IF(IYTYP(iamendtyp_fert,I,NY,NX).EQ.3 .OR. IYTYP(iamendtyp_fert,I,NY,NX).EQ.4)THEN
     !nitrification inhibitor is on
     D9965: DO L=0,NL_col(NY,NX)
-      IF(L.EQ.LFDPTH)THEN
+      IF(NitrifierLayers(L))THEN
         ZNFN0_vr(L,NY,NX)=1.0_r8  !initial inhibitor activity
         ZNFNI_vr(L,NY,NX)=1.0_r8  !current inhibitor activity
       ELSE
@@ -114,6 +132,7 @@ implicit none
       ENDIF
     ENDDO D9965
   ENDIF
+  call PrintInfo('end '//subname)
   end subroutine ApplyUreaNitrifierInhibitor
 !------------------------------------------------------------------------------------------
 
@@ -122,43 +141,53 @@ implicit none
   integer, intent(in) :: I,J,NY,NX
   integer, intent(inout) :: LFDPTH
   real(r8), intent(in) :: OFC(2),OFN(2),OFP(2)
-  real(r8) :: CNOF(4),CPOF(4)
+  character(len=*), parameter :: subname='ApplyManure'
   real(r8) :: CORGCX
-  real(r8) :: CNOFT
-  real(r8) :: CPOFT
   real(r8) :: FDPTHM
-  real(r8) :: FRNT,FRPT
   REAL(R8) :: OSCI,OSNI,OSPI
   REAL(R8) :: OSCX,OSNX,OSPX
   REAL(R8) :: OMC1,OMN1,OMP1
   real(r8) :: OQC1,OQN1,OQP1
   real(r8) :: OSC1,OSN1,OSP1
   REAL(R8) :: RNT,RPT
-  integer  :: L,K,M,N,NN,NGL,MID
-  real(r8) :: tglds
-  real(r8) :: OMC1g,OMN1g,OMP1g
+  integer  :: L,K,M,N,NN,NGL,amendment
+  integer :: numGuildsH,numGuildsA
+  real(r8) :: OMC1g,OMN1g,OMP1g,MicrobialShareFactor
 !     begin_execution
+  call PrintInfo('beg '//subname)
+
   associate(                           &
     k_fine_comp => micpar%k_fine_comp, &
     k_manure    => micpar%k_manure   , &
     ilignin     => micpar%ilignin    , &
     icellulos   => micpar%icellulos  , &
     icarbhyro   => micpar%icarbhyro  , &
-    iprotein    => micpar%iprotein     &
+    iprotein    => micpar%iprotein   , &
+    OMCI        => micpar%OMCI      , &
+    OMCF        => micpar%OMCF      , &
+    OMCA        => micpar%OMCA      , &
+    rNCOMC_ave  => micpar%rNCOMC_ave, &
+    rPCOMC_ave  => micpar%rPCOMC_ave, &
+    CNOFC       => micpar%CNOFC     , &
+    CPOFC       => micpar%CPOFC       &
   )
 !     LFDPTH=layer number
 !
   IF(OFC(1)+OFC(2).GT.0._r8)THEN
-    DO  L=0,JZ
-      FDPTHM=FDPTH(I,NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
-      IF(FDPTHM.LE.0._r8)THEN
-        LFDPTH=0
-        exit
-      ELSEIF(CumDepz2LayBottom_vr(L,NY,NX).GE.FDPTHM)THEN
-        LFDPTH=L
-        exit
-      ENDIF
-    ENDDO
+    FDPTHM=FDPTH(I,NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
+    IF(FDPTHM.LE.0._r8)THEN
+      LFDPTH=0
+    ELSE
+      ! Organic-only records also require a destination in the active profile.
+      LFDPTH=-1
+      DO L=NU_col(NY,NX),NL_col(NY,NX)
+        IF(CumDepz2LayBottom_vr(L,NY,NX).GE.FDPTHM)THEN
+          LFDPTH=L
+          exit
+        ENDIF
+      ENDDO
+      if(LFDPTH<0)call endrun('Organic amendment depth exceeds the soil profile in '//mod_filename,__LINE__)
+    ENDIF
 !
 !     ALLOCATION OF PLANT RESIDUE APPLICATION TO
 !     RESIDUE PROTEIN, CH2O, CELLULOSE, LIGNIN
@@ -278,10 +307,23 @@ implicit none
 !     OFC,OFN,OFP=litter C,N,P application from fertilizer file
 !
 
-    D2965: DO K=1,2
-      OSCI=OFC(K)*AREA_3D(3,LFDPTH,NY,NX)
-      OSNI=OFN(K)*AREA_3D(3,LFDPTH,NY,NX)
-      OSPI=OFP(K)*AREA_3D(3,LFDPTH,NY,NX)
+    ! Reserve the represented autotroph shares together with each heterotroph
+    ! allocation, before debiting the common amendment C/N/P donor budgets.
+    MicrobialShareFactor=1._r8
+    DO NN=1,NumMicbAFunGrupsPerCmplx
+      if(JGnfA(NN)>=JGniA(NN))MicrobialShareFactor=MicrobialShareFactor+OMCA(NN)
+    ENDDO
+    D2965: DO amendment=1,2
+      ! Input slots are plant residue and animal manure; their destination
+      ! complexes are fine litter and manure, respectively.
+      IF(amendment==1)THEN
+        K=k_fine_comp
+      ELSE
+        K=k_manure
+      ENDIF
+      OSCI=OFC(amendment)*AREA_3D(3,LFDPTH,NY,NX)
+      OSNI=OFN(amendment)*AREA_3D(3,LFDPTH,NY,NX)
+      OSPI=OFP(amendment)*AREA_3D(3,LFDPTH,NY,NX)
       IF(VLSoilMicPMass_vr(LFDPTH,NY,NX).GT.ZEROS(NY,NX))THEN
         CORGCX=OSCI/VLSoilMicPMass_vr(LFDPTH,NY,NX)
       ELSE
@@ -297,38 +339,43 @@ implicit none
 !     OMCI=microbial biomass content in litter
 !     OMCF,OMCA=hetero,autotrophic biomass composition in litter
 !
-      D2960: DO N=1,NumMicbFunGrupsPerCmplx
-        tglds=JGnfH(N)-JGnfH(N)+1
+      D2960: DO N=1,NumMicbHFunGrupsPerCmplx
+        numGuildsH=JGnfH(N)-JGniH(N)+1
+        ! Unrepresented groups leave their amendment share in the remainder.
+        if(numGuildsH<=0)cycle D2960
         D2961: DO M=1,nlbiomcp
-          OMC1=AZMAX1(AMIN1(OSCI*micpar%OMCI(M,K)*micpar%OMCF(N),OSCI-OSCX))
-          OMN1=AZMAX1(AMIN1(OMC1*micpar%rNCOMC_ave(M,N,K),OSNI-OSNX))
-          OMP1=AZMAX1(AMIN1(OMC1*micpar%rPCOMC_ave(M,N,K),OSPI-OSPX))
+          OMC1=AZMAX1(AMIN1(OSCI*OMCI(M,K)*OMCF(N),(OSCI-OSCX)/MicrobialShareFactor))
+          OMN1=AZMAX1(AMIN1(OMC1*rNCOMC_ave(M,N,K),(OSNI-OSNX)/MicrobialShareFactor))
+          OMP1=AZMAX1(AMIN1(OMC1*rPCOMC_ave(M,N,K),(OSPI-OSPX)/MicrobialShareFactor))
           DO NGL=JGniH(N),JGnfH(N)
-            MID=micpar%get_micb_id(M,NGL)
-            OMC1g=OMC1/tglds
-            OMN1g=OMN1/tglds
-            OMP1g=OMP1/tglds
-            mBiomeHeter_vr(ielmc,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmc,MID,K,LFDPTH,NY,NX)+OMC1g
-            mBiomeHeter_vr(ielmn,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmn,MID,K,LFDPTH,NY,NX)+OMN1g
-            mBiomeHeter_vr(ielmp,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmp,MID,K,LFDPTH,NY,NX)+OMP1g
+            associate(MID => micpar%get_micb_id(M,NGL))
+              OMC1g=OMC1/numGuildsH
+              OMN1g=OMN1/numGuildsH
+              OMP1g=OMP1/numGuildsH
+              mBiomeHeter_vr(ielmc,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmc,MID,K,LFDPTH,NY,NX)+OMC1g
+              mBiomeHeter_vr(ielmn,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmn,MID,K,LFDPTH,NY,NX)+OMN1g
+              mBiomeHeter_vr(ielmp,MID,K,LFDPTH,NY,NX)=mBiomeHeter_vr(ielmp,MID,K,LFDPTH,NY,NX)+OMP1g
+            end associate
           ENDDO
           OSCX=OSCX+OMC1
           OSNX=OSNX+OMN1
           OSPX=OSPX+OMP1
-          D2962: DO NN=1,NumMicbFunGrupsPerCmplx
-            tglds=JGnfA(N)-JGniA(N)+1
+          D2962: DO NN=1,NumMicbAFunGrupsPerCmplx
+            numGuildsA=JGnfA(NN)-JGniA(NN)+1
+            if(numGuildsA<=0)cycle D2962
             DO NGL=JGniA(NN),JGnfA(NN)
-              MID=micpar%get_micb_id(M,NGL)
-              OMC1g=OMC1/tglds
-              OMN1g=OMN1/tglds
-              OMP1g=OMP1/tglds
-              mBiomeAutor_vr(ielmc,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmc,MID,LFDPTH,NY,NX)+OMC1g*micpar%OMCA(NN)
-              mBiomeAutor_vr(ielmn,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmn,MID,LFDPTH,NY,NX)+OMN1g*micpar%OMCA(NN)
-              mBiomeAutor_vr(ielmp,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmp,MID,LFDPTH,NY,NX)+OMP1g*micpar%OMCA(NN)
+              associate(MID => micpar%get_micb_id(M,NGL))
+                OMC1g=OMC1/numGuildsA
+                OMN1g=OMN1/numGuildsA
+                OMP1g=OMP1/numGuildsA
+                mBiomeAutor_vr(ielmc,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmc,MID,LFDPTH,NY,NX)+OMC1g*OMCA(NN)
+                mBiomeAutor_vr(ielmn,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmn,MID,LFDPTH,NY,NX)+OMN1g*OMCA(NN)
+                mBiomeAutor_vr(ielmp,MID,LFDPTH,NY,NX)=mBiomeAutor_vr(ielmp,MID,LFDPTH,NY,NX)+OMP1g*OMCA(NN)
+              end associate
             ENDDO
-            OSCX=OSCX+OMC1*micpar%OMCA(NN)
-            OSNX=OSNX+OMN1*micpar%OMCA(NN)
-            OSPX=OSPX+OMP1*micpar%OMCA(NN)
+            OSCX=OSCX+OMC1*OMCA(NN)
+            OSNX=OSNX+OMN1*OMCA(NN)
+            OSPX=OSPX+OMP1*OMCA(NN)
           ENDDO D2962
         ENDDO D2961
       ENDDO D2960
@@ -337,9 +384,9 @@ implicit none
 !
 !     OQC,OQN,OQP=DOC,DON,DOP in litter
 !
-      OQC1=AMIN1(0.1_r8*OSCX,OSCI-OSCX)
-      OQN1=AMIN1(0.1_r8*OSNX,OSNI-OSNX)
-      OQP1=AMIN1(0.1_r8*OSPX,OSPI-OSPX)
+      OQC1=AZMAX1(AMIN1(0.1_r8*OSCX,OSCI-OSCX))
+      OQN1=AZMAX1(AMIN1(0.1_r8*OSNX,OSNI-OSNX))
+      OQP1=AZMAX1(AMIN1(0.1_r8*OSPX,OSPI-OSPX))
 
       DOM_MicP_vr(idom_doc,K,LFDPTH,NY,NX)=DOM_MicP_vr(idom_doc,K,LFDPTH,NY,NX)+OQC1
       DOM_MicP_vr(idom_don,K,LFDPTH,NY,NX)=DOM_MicP_vr(idom_don,K,LFDPTH,NY,NX)+OQN1
@@ -355,47 +402,33 @@ implicit none
       OSCX=OSCX+OQC1
       OSNX=OSNX+OQN1
       OSPX=OSPX+OQP1
-      CNOFT=0._r8
-      CPOFT=0._r8
-      IF(OSCI-OSCX.GT.ZEROS(NY,NX))THEN
-        RNT=0._r8
-        RPT=0._r8
-        D965: DO M=1,jsken
-          RNT=RNT+(OSCI-OSCX)*CFOSC_vr(M,K,LFDPTH,NY,NX)*micpar%CNOFC(M,K)
-          RPT=RPT+(OSCI-OSCX)*CFOSC_vr(M,K,LFDPTH,NY,NX)*micpar%CPOFC(M,K)
-        ENDDO D965
-        FRNT=(OSNI-OSNX)/RNT
-        FRPT=(OSPI-OSPX)/RPT
-        D970: DO M=1,jsken
-          CNOF(M)=micpar%CNOFC(M,K)*FRNT
-          CPOF(M)=micpar%CPOFC(M,K)*FRPT
-          CNOFT=CNOFT+CFOSC_vr(M,K,LFDPTH,NY,NX)*CNOF(M)
-          CPOFT=CPOFT+CFOSC_vr(M,K,LFDPTH,NY,NX)*CPOF(M)
-        ENDDO D970
-      ELSE
-        D975: DO M=1,jsken
-          CNOF(M)=0._r8
-          CPOF(M)=0._r8
-        ENDDO D975
-      ENDIF
+      ! Normalize component weights independently of remaining carbon or
+      ! nutrient mass. This is the same relative weighting without dividing
+      ! by a remainder that can be zero after microbial/DOM allocation.
+      RNT=0._r8
+      RPT=0._r8
+      DO M=1,jsken
+        RNT=RNT+CFOSC_vr(M,K,LFDPTH,NY,NX)*CNOFC(M,K)
+        RPT=RPT+CFOSC_vr(M,K,LFDPTH,NY,NX)*CPOFC(M,K)
+      ENDDO
       D2970: DO M=1,jsken
-        OSC1=CFOSC_vr(M,K,LFDPTH,NY,NX)*(OSCI-OSCX)
-        IF(CNOFT.GT.ZERO)THEN
-          OSN1=CFOSC_vr(M,K,LFDPTH,NY,NX)*CNOF(M)/CNOFT*(OSNI-OSNX)
+        OSC1=CFOSC_vr(M,K,LFDPTH,NY,NX)*AZMAX1(OSCI-OSCX)
+        IF(RNT.GT.ZERO)THEN
+          OSN1=CFOSC_vr(M,K,LFDPTH,NY,NX)*CNOFC(M,K)/RNT*AZMAX1(OSNI-OSNX)
         ELSE
           OSN1=0._r8
         ENDIF
-        IF(CPOFT.GT.ZERO)THEN
-          OSP1=CFOSC_vr(M,K,LFDPTH,NY,NX)*CPOF(M)/CPOFT*(OSPI-OSPX)
+        IF(RPT.GT.ZERO)THEN
+          OSP1=CFOSC_vr(M,K,LFDPTH,NY,NX)*CPOFC(M,K)/RPT*AZMAX1(OSPI-OSPX)
         ELSE
           OSP1=0._r8
         ENDIF
         SolidOM_vr(ielmc,M,K,LFDPTH,NY,NX)=SolidOM_vr(ielmc,M,K,LFDPTH,NY,NX)+OSC1
         SolidOM_vr(ielmn,M,K,LFDPTH,NY,NX)=SolidOM_vr(ielmn,M,K,LFDPTH,NY,NX)+OSN1
         SolidOM_vr(ielmp,M,K,LFDPTH,NY,NX)=SolidOM_vr(ielmp,M,K,LFDPTH,NY,NX)+OSP1
-        SolidOMAct_vr(M,K,LFDPTH,NY,NX)=SolidOMAct_vr(M,K,LFDPTH,NY,NX)+OSC1*micpar%OMCI(1,K)
+        SolidOMAct_vr(M,K,LFDPTH,NY,NX)=SolidOMAct_vr(M,K,LFDPTH,NY,NX)+OSC1*OMCI(1,K)
         IF(LFDPTH.EQ.0)THEN
-          VGeomLayer_vr(LFDPTH,NY,NX)=VGeomLayer_vr(LFDPTH,NY,NX)+OSC1*ppmc/BulkDensLitR(micpar%k_fine_comp)
+          VGeomLayer_vr(LFDPTH,NY,NX)=VGeomLayer_vr(LFDPTH,NY,NX)+OSC1*ppmc/BulkDensLitR(k_fine_comp)
         ENDIF
       ENDDO D2970
       tAmendOrgC_lnd              = tAmendOrgC_lnd+OSCI
@@ -404,20 +437,30 @@ implicit none
       AmendC_CumYr_flx_col(NY,NX) = AmendC_CumYr_flx_col(NY,NX)+OSCI
       FertN_Flx_CumYr_col(NY,NX)  = FertN_Flx_CumYr_col(NY,NX)+OSNI
       FerP_Flx_CumYr_col(NY,NX)    = FerP_Flx_CumYr_col(NY,NX)+OSPI
-      IF(IYTYP(iAmendtyp_Manure,I,NY,NX).LT.3)THEN
+      IF(amendment==1)THEN
+        ! Plant residue is external regardless of the animal-manure flag.
         Eco_NBP_CumYr_col(NY,NX)=Eco_NBP_CumYr_col(NY,NX)+OSCI
+      ELSE
+        !manure
+        ! Grazing can merge internal returns into FERT and change its type.
+        ! Preserve the independently read external share for application-day NBP.
+        Eco_NBP_CumYr_col(NY,NX)=Eco_NBP_CumYr_col(NY,NX) &
+          +ExternalManureC_col(I,NY,NX)*AREA_3D(3,LFDPTH,NY,NX)
       ENDIF
     ENDDO D2965
   ENDIF
   end associate
+  call PrintInfo('end '//subname)
   end subroutine ApplyManure
 !------------------------------------------------------------------------------------------
 
-  subroutine ApplyMineralFertilizer(I,J,NY,NX,LFDPTH,OFC,OFN,OFP)
+  subroutine ApplyMineralFertilizer(I,J,NY,NX,LFDPTH,OFC,OFN,OFP,UreaLayers,NitrifierLayers)
   implicit none
   integer, intent(in) :: I,J,NY,NX
   real(r8), intent(out) :: OFC(2),OFN(2),OFP(2)
   integer, intent(out) :: LFDPTH
+  logical, intent(out) :: UreaLayers(0:JZ),NitrifierLayers(0:JZ)
+  logical :: HasMineralFertilizer
 
   character(len=*), parameter :: subname='ApplyMineralFertilizer'
   real(r8) :: frcFert2Topsoil
@@ -496,22 +539,47 @@ implicit none
 !     LFDPTH=layer number
 !     frcFert2SurfLitr=fraction of fertilizer applied to surface litter
 !
-  IF(Z4A+Z3A+ZUA+ZOA+Z4B+Z3B+ZUB+ZOB+PMA+PMB+PHA+CAC+CAS+POA+POB.GT.0._r8)THEN
+  HasMineralFertilizer=Z4A+Z3A+ZUA+ZOA+Z4B+Z3B+ZUB+ZOB+PMA+PMB+PHA+CAC+CAS+POA+POB.GT.0._r8
+  LFDPTH=0
+  UreaLayers=.false.;NitrifierLayers=.false.
+  ! Inhibitor-only records also need a placement determined from FDPTH.
+  IF(HasMineralFertilizer .OR. IYTYP(iamendtyp_fert,I,NY,NX)==3 &
+    .OR. IYTYP(iamendtyp_fert,I,NY,NX)==4)THEN
     FDPTHF=FDPTH(I,NY,NX)+CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)
-    IF(FDPTHF.LE.0._r8.AND.isclose(Z4B+Z3B+ZUB+ZOB+PMB,0._r8))THEN
+    IF(FDPTHF.LE.0._r8.AND.isclose(Z4B+Z3B+ZUB+ZOB+PMB+POB,0._r8))THEN
       LFDPTH=0
       frcFert2SurfLitr=1.0_r8-EXP(-0.8E-02_r8*(SoilOrgM_vr(ielmc,0,NY,NX)/AREA_3D(3,0,NY,NX)))
     ELSE
-      D65: DO L=NUI_col(NY,NX),JZ
+      LFDPTH=-1
+      D65: DO L=NUI_col(NY,NX),NL_col(NY,NX)
         IF(CumDepz2LayBottom_vr(L,NY,NX).GE.FDPTHF)THEN
           LFDPTH=L
           frcFert2SurfLitr=1.0_r8
           exit
         ENDIF
       ENDDO D65
+      if(LFDPTH<0)call endrun('Fertilizer/inhibitor depth exceeds the soil profile in '//mod_filename,__LINE__)
     ENDIF
 
     frcFert2Topsoil=1.0_r8-frcFert2SurfLitr
+    ! Record actual N destinations before any organic amendment changes LFDPTH.
+    UreaLayers(LFDPTH)=(ZUA+ZUB)*frcFert2SurfLitr>0._r8
+    NitrifierLayers(LFDPTH)=(Z4A+ZUA+ZOA+Z4B+ZUB+ZOB)*frcFert2SurfLitr>0._r8
+    if(LFDPTH==0)then
+      UreaLayers(NU_col(NY,NX))=(ZUA+ZUB)*frcFert2Topsoil>0._r8
+      ! Ammonia fertilizer bypasses litter and enters topsoil directly.
+      NitrifierLayers(NU_col(NY,NX))=(Z4A+ZUA+ZOA+Z4B+ZUB+ZOB)*frcFert2Topsoil+Z3A+Z3B>0._r8
+    else
+      NitrifierLayers(LFDPTH)=NitrifierLayers(LFDPTH) .or. (Z3A+Z3B>0._r8)
+    endif
+    if(.not.any(NitrifierLayers))then
+      ! Without an N carrier, place the inhibitor using the application split.
+      NitrifierLayers(LFDPTH)=frcFert2SurfLitr>0._r8
+      if(LFDPTH==0)NitrifierLayers(NU_col(NY,NX))=frcFert2Topsoil>0._r8
+    endif
+  ENDIF
+
+  IF(HasMineralFertilizer)THEN
 !
 !     RESET WIDTH AND DEPTH OF NH4 FERTILIZER BAND IF NEW BAND
 !     AND ADD REMAINS OF ANY EXISTING FERTILIZER BAND TO NEW BAND
@@ -607,7 +675,7 @@ implicit none
 !     DPPOB,WDPOB=depth,width of H2PO4 band
 !     VLPOB,VLPO4=soil volume in H2PO4 band,non-band
 !
-    IF((PMB.GT.0.0_r8) .OR. (trcs_solml_vr(ids_H2PO4B,LFDPTH,NY,NX).GT.0._r8 .AND. iFertPO4Band_col(NY,NX).EQ.ifert_off))THEN
+    IF((PMB+POB.GT.0.0_r8) .OR. (trcs_solml_vr(ids_H2PO4B,LFDPTH,NY,NX).GT.0._r8 .AND. iFertPO4Band_col(NY,NX).EQ.ifert_off))THEN
       iFertPO4Band_col(NY,NX)=ifert_on
       ROWSpacePO4_col(NY,NX)=ROWI(I,NY,NX)
       DO  L=NUI_col(NY,NX),JZ
@@ -713,31 +781,38 @@ implicit none
 !     PCAPMB,PCAPDB,PCAPHB=concn of precip CaH4P2O8,CaHPO4,apatite in band
 !     PCACO,PCASO=precipitated CaCO3,CaSO4
 
-    Z4AX = Z4A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4
-    Z3AX = Z3A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 
-    ZUAX = ZUA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea
-    ZOAX = ZOA*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    Z4BX = Z4B*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    Z3BX = Z3B*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    ZUBX = ZUB*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    ZOBX = ZOB*AREA_3D(3,LFDPTH,NY,NX)/natomw
-    POAX = PMA*AREA_3D(3,LFDPTH,NY,NX)/patomw
-    POBX = PMB*AREA_3D(3,LFDPTH,NY,NX)/patomw
+    Z4AX = Z4A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4 soil
+    Z3AX = Z3A*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 soil
+    ZUAX = ZUA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea soil
+    ZOAX = ZOA*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NO3 soil
+    Z4BX = Z4B*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH4 band
+    Z3BX = Z3B*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NH3 band
+    ZUBX = ZUB*AREA_3D(3,LFDPTH,NY,NX)/natomw   !urea band
+    ZOBX = ZOB*AREA_3D(3,LFDPTH,NY,NX)/natomw   !NO3 band
+    POAX = POA*AREA_3D(3,LFDPTH,NY,NX)/patomw   !PO4 soil
+    POBX = POB*AREA_3D(3,LFDPTH,NY,NX)/patomw   !PO4 band
     PMAX = PMA*AREA_3D(3,LFDPTH,NY,NX)/(2.0_r8*patomw)
     PMBX = PMB*AREA_3D(3,LFDPTH,NY,NX)/(2.0_r8*patomw)
     PHAX = PHA*AREA_3D(3,LFDPTH,NY,NX)/(3.0_r8*patomw)
-    CACX = CAC*AREA_3D(3,LFDPTH,NY,NX)/40._r8
-    CASX = CAS*AREA_3D(3,LFDPTH,NY,NX)/40._r8
+    CACX = CAC*AREA_3D(3,LFDPTH,NY,NX)/40._r8   !lime CaCO3
+    CASX = CAS*AREA_3D(3,LFDPTH,NY,NX)/40._r8   !gypsum CaSO4
 
     FertN_mole_soil_vr(ifert_N_nh4,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_soil_vr(ifert_N_nh4,LFDPTH,NY,NX)+Z4AX*frcFert2SurfLitr)
     FertN_mole_soil_vr(ifert_N_urea,LFDPTH,NY,NX) = AZMAX1(FertN_mole_soil_vr(ifert_N_urea,LFDPTH,NY,NX)+ZUAX*frcFert2SurfLitr)
     FertN_mole_soil_vr(ifert_N_no3,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_soil_vr(ifert_N_no3,LFDPTH,NY,NX)+ZOAX*frcFert2SurfLitr)
-    FertP_mole_soil_vr(LFDPTH,NY,NX)              = AZMAX1(FertP_mole_soil_vr(LFDPTH,NY,NX)+POAX*frcFert2SurfLitr)
 
-    FertN_mole_Band_vr(ifert_N_nh4_band,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_nh4_band,LFDPTH,NY,NX)+Z4BX*frcFert2SurfLitr)
-    FertN_mole_Band_vr(ifert_N_urea_band,LFDPTH,NY,NX) = AZMAX1(FertN_mole_Band_vr(ifert_N_urea_band,LFDPTH,NY,NX)+ZUBX*frcFert2SurfLitr)
-    FertN_mole_Band_vr(ifert_N_no3_band,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_no3_band,LFDPTH,NY,NX)+ZOBX*frcFert2SurfLitr)
-    FertP_mole_band_vr(LFDPTH,NY,NX)                   = AZMAX1(FertP_mole_band_vr(LFDPTH,NY,NX) +POBX*frcFert2SurfLitr)
+    ! Layer-zero applications are broadcast; banded pools exist only in soil.
+    if(LFDPTH>0)then
+      FertN_mole_Band_vr(ifert_N_nh4_band,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_nh4_band,LFDPTH,NY,NX)+Z4BX*frcFert2SurfLitr)
+      FertN_mole_Band_vr(ifert_N_urea_band,LFDPTH,NY,NX) = AZMAX1(FertN_mole_Band_vr(ifert_N_urea_band,LFDPTH,NY,NX)+ZUBX*frcFert2SurfLitr)
+      FertN_mole_Band_vr(ifert_N_no3_band,LFDPTH,NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_no3_band,LFDPTH,NY,NX)+ZOBX*frcFert2SurfLitr)
+    endif
+
+    ! Explicit PO4 enters dissolved pools as g P; mineral P remains in precipitates.
+    trcs_solml_vr(ids_H2PO4,LFDPTH,NY,NX) = trcs_solml_vr(ids_H2PO4,LFDPTH,NY,NX) &
+      +patomw*POAX*trcs_VLN_vr(ids_H1PO4,LFDPTH,NY,NX)*frcFert2SurfLitr
+    trcs_solml_vr(ids_H2PO4B,LFDPTH,NY,NX) = trcs_solml_vr(ids_H2PO4B,LFDPTH,NY,NX) &
+      +patomw*(POAX*trcs_VLN_vr(ids_H1PO4B,LFDPTH,NY,NX)+POBX)*frcFert2SurfLitr
 
     trcp_saltpml_vr(idsp_CaH4P2O8,LFDPTH,NY,NX)    = trcp_saltpml_vr(idsp_CaH4P2O8,LFDPTH,NY,NX)+PMAX*trcs_VLN_vr(ids_H1PO4,LFDPTH,NY,NX)*frcFert2SurfLitr
     trcp_saltpml_vr(idsp_CaH4P2O8B,LFDPTH,NY,NX)   = trcp_saltpml_vr(idsp_CaH4P2O8B,LFDPTH,NY,NX)+PMAX*trcs_VLN_vr(ids_H1PO4B,LFDPTH,NY,NX)*frcFert2SurfLitr+PMBX*frcFert2SurfLitr
@@ -749,13 +824,17 @@ implicit none
       FertN_mole_soil_vr(ifert_N_nh3,NU_col(NY,NX),NY,NX)  = AZMAX1(FertN_mole_soil_vr(ifert_N_nh3,NU_col(NY,NX),NY,NX)+Z3AX)
       FertN_mole_soil_vr(ifert_N_urea,NU_col(NY,NX),NY,NX) = AZMAX1(FertN_mole_soil_vr(ifert_N_urea,NU_col(NY,NX),NY,NX)+ZUAX*frcFert2Topsoil)
       FertN_mole_soil_vr(ifert_N_no3,NU_col(NY,NX),NY,NX)  = AZMAX1(FertN_mole_soil_vr(ifert_N_no3,NU_col(NY,NX),NY,NX)+ZOAX*frcFert2Topsoil)
-      FertP_mole_soil_vr(NU_col(NY,NX),NY,NX)              = AZMAX1(FertP_mole_soil_vr(NU_col(NY,NX),NY,NX)+POAX*frcFert2Topsoil)
 
       FertN_mole_Band_vr(ifert_N_nh4_band,NU_col(NY,NX),NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_nh4_band,NU_col(NY,NX),NY,NX)+Z4BX*frcFert2Topsoil)
       FertN_mole_Band_vr(ifert_N_nh3_band,NU_col(NY,NX),NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_nh3_band,NU_col(NY,NX),NY,NX)+Z3BX)
       FertN_mole_Band_vr(ifert_N_urea_band,NU_col(NY,NX),NY,NX) = AZMAX1(FertN_mole_Band_vr(ifert_N_urea_band,NU_col(NY,NX),NY,NX)+ZUBX*frcFert2Topsoil)
       FertN_mole_Band_vr(ifert_N_no3_band,NU_col(NY,NX),NY,NX)  = AZMAX1(FertN_mole_Band_vr(ifert_N_no3_band,NU_col(NY,NX),NY,NX)+ZOBX*frcFert2Topsoil)
-      FertP_mole_band_vr(NU_col(NY,NX),NY,NX)                   = AZMAX1(FertP_mole_band_vr(NU_col(NY,NX),NY,NX)+POBX*frcFert2Topsoil)
+
+      ! Explicit PO4 enters dissolved pools as g P; mineral P remains in precipitates.
+      trcs_solml_vr(ids_H2PO4,NU_col(NY,NX),NY,NX) = trcs_solml_vr(ids_H2PO4,NU_col(NY,NX),NY,NX) &
+        +patomw*POAX*trcs_VLN_vr(ids_H1PO4,NU_col(NY,NX),NY,NX)*frcFert2Topsoil
+      trcs_solml_vr(ids_H2PO4B,NU_col(NY,NX),NY,NX) = trcs_solml_vr(ids_H2PO4B,NU_col(NY,NX),NY,NX) &
+        +patomw*(POAX*trcs_VLN_vr(ids_H1PO4B,NU_col(NY,NX),NY,NX)+POBX)*frcFert2Topsoil
 
       trcp_saltpml_vr(idsp_CaH4P2O8,NU_col(NY,NX),NY,NX)    = trcp_saltpml_vr(idsp_CaH4P2O8,NU_col(NY,NX),NY,NX)+PMAX*trcs_VLN_vr(ids_H1PO4,NU_col(NY,NX),NY,NX)*frcFert2Topsoil
       trcp_saltpml_vr(idsp_CaH4P2O8B,NU_col(NY,NX),NY,NX)   = trcp_saltpml_vr(idsp_CaH4P2O8B,NU_col(NY,NX),NY,NX)+PMAX*trcs_VLN_vr(ids_H1PO4B,NU_col(NY,NX),NY,NX)*frcFert2Topsoil+PMBX*frcFert2Topsoil
@@ -768,10 +847,10 @@ implicit none
     trcp_saltpml_vr(idsp_CaCO3,NU_col(NY,NX),NY,NX)=trcp_saltpml_vr(idsp_CaCO3,NU_col(NY,NX),NY,NX)+CACX
     trcp_saltpml_vr(idsp_CaSO4,NU_col(NY,NX),NY,NX)=trcp_saltpml_vr(idsp_CaSO4,NU_col(NY,NX),NY,NX)+CASX
     TZIN                       = TZIN+natomw*(Z4AX+Z3AX+ZUAX+ZOAX+Z4BX+Z3BX+ZUBX+ZOBX)
-    TPIN                       = TPIN+2._r8*patomw*(PMAX+PMBX)+3._r8*patomw*PHAX
+    TPIN                       = TPIN+patomw*(POAX+POBX)+2._r8*patomw*(PMAX+PMBX)+3._r8*patomw*PHAX
     TIONIN                     = TIONIN+2.0_r8*(CACX+CASX)
     FertN_Flx_CumYr_col(NY,NX) = FertN_Flx_CumYr_col(NY,NX)+natomw*(Z4AX+Z4BX+Z3AX+Z3BX+ZUAX+ZUBX+ZOAX+ZOBX)
-    FerP_Flx_CumYr_col(NY,NX)  = FerP_Flx_CumYr_col(NY,NX)+2._r8*patomw*(PMAX+PMBX)+3.0_r8*patomw*PHAX
+    FerP_Flx_CumYr_col(NY,NX)  = FerP_Flx_CumYr_col(NY,NX)+patomw*(POAX+POBX)+2._r8*patomw*(PMAX+PMBX)+3.0_r8*patomw*PHAX
   ENDIF
 
   call PrintInfo('end '//subname)  

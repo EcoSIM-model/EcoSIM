@@ -1,5 +1,8 @@
 module ATSCPLMod
+  ! Description:
+  ! Transfer the ATS environment and EcoSIM flux/reference pairs through the C ABI.
   use data_kind_mod, only : r8 => DAT_KIND_R8
+  use SurfPhysData, only: ats_pond_aware
   use SharedDataMod
   use ATSEcoSIMInitMod
   use ATSEcoSIMAdvanceMod
@@ -50,13 +53,18 @@ contains
   call c_f_string_ptr(config%pft_file, f_string_buffer)
   ecosim_pft_file_path = trim(f_string_buffer)
 
+  ats_pond_aware=config%ponded_aware
   heat_capacity = config%heat_capacity
   pressure_at_field_capacity = config%field_capacity
   pressure_at_wilting_point = config%wilting_point
+  site_latitude = config%latitude
+  site_solar_noon = config%solar_noon
   p_bool = config%p_bool
   a_bool = config%a_bool
   pheno_bool = config%pheno_bool
   microbe_bool = config%microbe_bool
+  wind_speed_ref_height = config%wind_speed_ref_height
+  soil_surface_roughness = config%soil_surface_roughness
 
   end subroutine CopyConfigFromATS
 !------------------------------------------------------------------------------------------
@@ -86,6 +94,10 @@ contains
   data_ptr = env%temperature%data
   call c_f_pointer(data_ptr, data2D, [size_col, num_cols])
   a_TEMP=data2D(:,:)
+
+  data_ptr = env%thermal_conductivity%data
+  call c_f_pointer(data_ptr, data2D, [size_col, num_cols])
+  a_TCOND=data2D(:,:)
 
   data_ptr = env%depth%data
   call c_f_pointer(data_ptr, data2D, [size_col, num_cols])
@@ -174,6 +186,11 @@ contains
   call c_f_pointer(env%snow_albedo%data, data, (/num_cols/))
   a_SALB = data(:)
 
+  call c_f_pointer(env%ponded_depth%data, data, (/num_cols/))
+  a_POND0 = data(:)
+  call c_f_pointer(env%surface_temperature%data, data, (/num_cols/))
+  a_TSURF = data(:)
+
   ! PFT index of each column, in the first num_pfts entries of the column
   call c_f_pointer(env%plant_functional_type%data, data2D, [size_col,num_cols])
   a_PFT = data2D(:,:)
@@ -187,6 +204,7 @@ contains
   atm_nh3 = env%atm_nh3
   current_day = env%current_day
   current_year = env%current_year
+  current_hour = env%current_hour
 
   ! p_bool was set from the config at setup
   if(p_bool)THEN
@@ -204,7 +222,8 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine CopyFeedbackFromATS(feedback, sizes)
-  ! snow depth is EcoSIM's snow state, kept by ATS between advances. The
+  ! Description:
+  ! Snow depth is EcoSIM's snow state, kept by ATS between advances. The
   ! sources are recomputed by EcoSIM before use; they are copied so that the
   ! SharedDataMod arrays are allocated (allocation on assignment).
   implicit none
@@ -231,6 +250,12 @@ contains
   call c_f_pointer(feedback%surface_energy_source%data, data, (/num_cols/))
   surf_e_source = data(:)
 
+  call c_f_pointer(feedback%surface_energy_source_dtemperature%data, data, (/num_cols/))
+  surf_e_source_dtemperature = data(:)
+
+  call c_f_pointer(feedback%surface_energy_reference_temperature%data, data, (/num_cols/))
+  surf_e_source_temperature_ref = data(:)
+
   call c_f_pointer(feedback%snow_depth%data, data, (/num_cols/))
   surf_snow_depth = data(:)
 
@@ -247,7 +272,9 @@ contains
 !------------------------------------------------------------------------------------------
 
   subroutine CopyFeedbackToATS(feedback, sizes)
-  ! sources and snow depth computed by this advance. The container is
+  ! Description:
+  ! Transfer sources, their surface-temperature linearization, and snow depth.
+  ! The container is
   ! intent(in): only the arrays it points to are written.
   implicit none
   type (EcoFeedback), intent(in) :: feedback
@@ -272,6 +299,12 @@ contains
 
   call c_f_pointer(feedback%surface_energy_source%data, data, (/num_cols/))
   data(:) = surf_e_source
+
+  call c_f_pointer(feedback%surface_energy_source_dtemperature%data, data, (/num_cols/))
+  data(:) = surf_e_source_dtemperature
+
+  call c_f_pointer(feedback%surface_energy_reference_temperature%data, data, (/num_cols/))
+  data(:) = surf_e_source_temperature_ref
 
   call c_f_pointer(feedback%snow_depth%data, data, (/num_cols/))
   data(:) = surf_snow_depth

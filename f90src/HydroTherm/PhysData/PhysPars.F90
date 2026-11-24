@@ -9,9 +9,9 @@ implicit none
   __FILE__
 
 
-! RAM=minimum boundary layer resistance (h m-1)
+! RAM=minimum boundary layer resistance [h m-1]
 ! MinSnowDepth=minimum snowpack depth for full cover (m)
-! RZ=minimum resistance to evaporation of surface water (h m-1)
+! RZ=minimum resistance to evaporation of surface water [h m-1]
 ! RACX,RARX=minimum boundary layer resistances of canopy,litter (h m-1)
 
 ! Z1S,Z2SW,Z2SD,Z3SX=parameters for air-water gas transfers in soil

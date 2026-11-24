@@ -1,4 +1,5 @@
 module SurfPhysData
+  ! Own surface-exchange work arrays, local resistances and area/time prefactors.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
 implicit none
@@ -6,15 +7,17 @@ implicit none
   character(len=*), private, parameter :: mod_filename=&
   __FILE__
 
+  logical :: ats_pond_aware=.false.                                       !ATS-coupled legacy layer: the ATS pond reduces the exposed-soil cover
+  real(r8),allocatable ::  XVLPondATS_col(:,:)                           !ponded water volume held by ATS on the surface, read-only for EcoSIM [m3 H2O/d2]
   real(r8),allocatable ::  XVLMobileWaterLitR_col(:,:)                   !water exceeds holding capacity of surface litter that is available for store on surface [m3 H2O/d2]
   real(r8),allocatable ::  XVLMobileWatMicP(:,:)                         !
   real(r8),allocatable ::  XVLiceMicP_col(:,:)                           !
   real(r8),allocatable ::  VLPoreLitR_col(:,:)                        !
   real(r8),allocatable ::  m3OM_col(:,:)                           !surface litter OM [m3 d-2]
-  real(r8),allocatable ::  ResistAreodynOverLitr_col(:,:)          !aerodynamic resistance over litter [m]
+  real(r8),allocatable ::  RawH2OLitr2CanAir_col(:,:)          !litter surface to canopy-air resistance [h/m]
   real(r8),allocatable ::  AScaledCdWOverSoil_col(:,:)             !area scaled conductance for latent heat flux over exposed soil [m^2 h]
   real(r8),allocatable ::  AScaledCdWOverLitr_col(:,:)             !area scaled conductance for latent heat flux over litter [m^2 h]
-  real(r8),allocatable ::  RawIsoTLitr2ATM_col(:,:)                           !
+  real(r8),allocatable ::  RawIsoTLitr2CanAir_col(:,:) !neutral litter surface to canopy-air resistance [h/m]
   real(r8),allocatable ::  AScaledCdHOverLitr_col(:,:)             !area scaled conductance for sensible heat flux over litter [MJ h /(m K)]
   real(r8),allocatable ::  VapDiffusResistanceLitR(:,:)            !
   real(r8),allocatable ::  WatFLo2LitrM_col(:,:)                   !
@@ -23,7 +26,7 @@ implicit none
 !  real(r8),allocatable :: VapXAir2TopLay(:,:)                     !water vapor flux from canopy air to top layer of soi/lake
   real(r8),allocatable ::  LitrIceFlxThaw_col(:,:)                 !Water flux from ice thaw in litter  (>0 thaw)
   real(r8),allocatable ::  LitrIceHeatFlxFrez_col(:,:)             !Heat associated with ice freeze in litter (<0 thaw) 
-  real(r8),allocatable ::  ResistBndlSurf_col(:,:)                 !boundary layer resistance over ground surface [h/m]
+  real(r8),allocatable ::  ResistGrndGas2CanAir_col(:,:)                 !H2O-reference diagnostic of the ground-to-canopy-air gas network [h/m]
   real(r8),allocatable ::  FracEffAsLitR_col(:,:)                  !fraction of surface effectively coverd by litter [none]
   real(r8),allocatable ::  Rain2SoiMacP1_col(:,:)                      !
   real(r8),allocatable ::  PRECM_col(:,:)                          !
@@ -31,7 +34,7 @@ implicit none
   real(r8),allocatable ::  RainHeat2SoilP1_col(:,:)             !heat to soil from precipitation (+irrigation) [MJ/d2]
   real(r8),allocatable ::  RainHeat2LitR1_col(:,:)                        !
   real(r8),allocatable ::  Rain2LitR1_col(:,:)                          !
-  real(r8),allocatable ::  FracAsExposedSoil_col(:,:)              !fraction of grid exposed as soil, excluding cover by snow, litr and free water
+  real(r8),allocatable ::  FracAsExposedSoil_col(:,:)              !bare fraction of ground excluding litter/free-water cover, before snow partition [-]
 !  real(r8),allocatable ::  HCNDLitr_col(:,:)                         !
   real(r8),allocatable :: TEvapXAir2Toplay_col(:,:)
   real(r8),allocatable :: TEvapXAir2LitR_col(:,:)
@@ -51,27 +54,33 @@ implicit none
   real(r8),allocatable :: CdLitRHSens_col(:,:)            !conductance of sensible heat [MJ/K]
   real(r8),allocatable :: watflw(:,:)
   real(r8),allocatable :: waticefl(:,:)
-
+  real(r8),allocatable :: CdSoiHSens_col(:,:)     ! scaled conductance for sensible heat [MJ/K]
+  real(r8),allocatable :: HeatSnow2LitrM_col(:,:) !heat flux from snow to litter [MJ/d-2]
+  real(r8),allocatable :: HeatAir2LitrM_col(:,:)  !heat flux from air to litter [MJ/d-2]
+  real(r8),allocatable :: HeatSoil2LitrM_col(:,:) !heat flux from soil to litter [MJ/d-2]
   public :: InitSurfPhysData,DestructSurfPhysData
 
   contains
 !------------------------------------------------------------------------------------------  
 
-  subroutine InitSurfPhysData  
+  subroutine InitSurfPhysData
+  ! Allocate and initialize surface-exchange work arrays.
   implicit none
 
+  allocate(HeatSoil2LitrM_col(JY,JX)); HeatSoil2LitrM_col=0._r8
   allocate(watflw(JY, JX))
   allocate(waticefl(JY,JX))
   allocate(m3OM_col(JY,JX))
+  allocate(XVLPondATS_col(JY,JX));       XVLPondATS_col=0._r8
   allocate(XVLMobileWaterLitR_col(JY,JX));       XVLMobileWaterLitR_col=0._r8
   allocate(XVLMobileWatMicP(JY,JX));       XVLMobileWatMicP=0._r8
   allocate(XVLiceMicP_col(JY,JX));       XVLiceMicP_col=0._r8
   allocate(VLPoreLitR_col(JY,JX));      VLPoreLitR_col=0._r8
   allocate(CdLitRHSens_col(JY,JX)); CdLitRHSens_col=0._r8
-  allocate(ResistAreodynOverLitr_col(JY,JX));        ResistAreodynOverLitr_col=0._r8
+  allocate(RawH2OLitr2CanAir_col(JY,JX));        RawH2OLitr2CanAir_col=0._r8
   allocate(AScaledCdWOverSoil_col(JY,JX));       AScaledCdWOverSoil_col=0._r8
   allocate(AScaledCdWOverLitr_col(JY,JX));       AScaledCdWOverLitr_col=0._r8
-  allocate(RawIsoTLitr2ATM_col(JY,JX));        RawIsoTLitr2ATM_col=0._r8
+  allocate(RawIsoTLitr2CanAir_col(JY,JX));        RawIsoTLitr2CanAir_col=0._r8
   allocate(AScaledCdHOverLitr_col(JY,JX));       AScaledCdHOverLitr_col=0._r8
   allocate(VapDiffusResistanceLitR(JY,JX));         VapDiffusResistanceLitR=0._r8  
   allocate(WatFLo2LitrM_col(JY,JX));       WatFLo2LitrM_col=0._r8
@@ -79,7 +88,7 @@ implicit none
   allocate(AScaledCdHOverSoil_col(JY,JX));       AScaledCdHOverSoil_col=0._r8  
 !  allocate(VapXAir2TopLay(JY,JX));       VapXAir2TopLay=0._r8  
   allocate(LitrIceFlxThaw_col(JY,JX));       LitrIceFlxThaw_col         = 0._r8
-  allocate(ResistBndlSurf_col(JY,JX));        ResistBndlSurf_col                            = 0._r8
+  allocate(ResistGrndGas2CanAir_col(JY,JX));        ResistGrndGas2CanAir_col                            = 0._r8
   allocate(LitrIceHeatFlxFrez_col(JY,JX));       LitrIceHeatFlxFrez_col = 0._r8
   allocate(FracEffAsLitR_col(JY,JX));       FracEffAsLitR_col                           = 0._r8
   allocate(Rain2SoiMacP1_col(JY,JX));        Rain2SoiMacP1_col          = 0._r8
@@ -92,33 +101,39 @@ implicit none
   allocate(TEvapXAir2Toplay_col(JY,JX)); TEvapXAir2Toplay_col   = 0._r8
   allocate(TEvapXAir2LitR_col(JY,JX)); TEvapXAir2LitR_col       = 0._r8
   allocate(TEvapXAir2Snow_col(JY,JX)); TEvapXAir2Snow_col       = 0._r8
-!        allocate(HCNDLitr_col(JY,JX));       HCNDLitr_col    = 0._r8
-
-  allocate(HeatSensAir2Grnd_col(JY,JX))
-  allocate(Radnet2Grnd_col(JY,JX))
-  allocate(LatentHeatEvapAir2Grnd_col(JY,JX))
-  allocate(HeatSensVapAir2Grnd_col(JY,JX))
-
+  allocate(HeatSensAir2Grnd_col(JY,JX));    HeatSensAir2Grnd_col=0._r8
+  allocate(Radnet2Grnd_col(JY,JX));         Radnet2Grnd_col=0._r8
+  allocate(LatentHeatEvapAir2Grnd_col(JY,JX)); LatentHeatEvapAir2Grnd_col=0._r8
+  allocate(HeatSensVapAir2Grnd_col(JY,JX)); HeatSensVapAir2Grnd_col=0._r8
+  allocate(HeatSnow2LitrM_col(JY,JX));     HeatSnow2LitrM_col=0._r8
+  allocate(HeatAir2LitrM_col(JY,JX));      HeatAir2LitrM_col=0._r8
+  allocate(CdSoiHSens_col(JY,JX));         CdSoiHSens_col=0._r8
   end subroutine InitSurfPhysData  
 !------------------------------------------------------------------------------------------  
 
   subroutine DestructSurfPhysData
+  ! Release surface-exchange work arrays.
   use abortutils, only : destroy
   implicit none
 
+  call destroy(HeatSoil2LitrM_col)
+  call destroy(HeatAir2LitrM_col)
+  call destroy(HeatSnow2LitrM_col)
+  call destroy(CdSoiHSens_col)
   call destroy(CdLitRHSens_col)
   call destroy(m3OM_col)
   call destroy(TEvapXAir2Toplay_col)
   call destroy(TEvapXAir2LitR_col) 
   call destroy(TEvapXAir2Snow_col) 
+  call destroy(XVLPondATS_col)
   call destroy(XVLMobileWaterLitR_col)
   call destroy(XVLMobileWatMicP)
   call destroy(XVLiceMicP_col)
   call destroy(VLPoreLitR_col)  
-  call destroy(ResistAreodynOverLitr_col)
+  call destroy(RawH2OLitr2CanAir_col)
   call destroy(AScaledCdWOverSoil_col)
   call destroy(AScaledCdWOverLitr_col)
-  call destroy(RawIsoTLitr2ATM_col)
+  call destroy(RawIsoTLitr2CanAir_col)
   call destroy(AScaledCdHOverLitr_col)
   call destroy(VapDiffusResistanceLitR)  
   call destroy(WatFLo2LitrM_col)
@@ -126,7 +141,7 @@ implicit none
   call destroy(AScaledCdHOverSoil_col)  
 !  call destroy(VapXAir2TopLay)
   call destroy(LitrIceFlxThaw_col)  
-  call destroy(ResistBndlSurf_col) 
+  call destroy(ResistGrndGas2CanAir_col)
   call destroy(LitrIceHeatFlxFrez_col)
   call destroy(FracEffAsLitR_col)
   call destroy(Rain2SoiMacP1_col)

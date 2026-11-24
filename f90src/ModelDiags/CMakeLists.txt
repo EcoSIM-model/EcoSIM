@@ -2,11 +2,14 @@ set(MODELDIAGS_MOD_SOURCES
   BalancesMod.F90
   HydrologyDiagMod.F90
   SoilDiagsMod.F90
+  MicrobialDiagMod.F90
+  MLDataDiagMod.F90
 )
 include(add_ecosim_library)
 add_ecosim_library(ModelDiags ${MODELDIAGS_MOD_SOURCES})
 
 target_include_directories(ModelDiags  PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/Minimath/
   ${CMAKE_BINARY_DIR}/f90src/Modelconfig/

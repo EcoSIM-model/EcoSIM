@@ -1,6 +1,6 @@
 module PlantBGCPars
-
-! USES:
+  ! Description:
+  ! Define shared plant process parameters, including canopy snow capacity and area.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts, only : jroots
   use EcoSIMConfig, only : jcplxc
@@ -10,8 +10,16 @@ module PlantBGCPars
   save
   character(len=*),private, parameter :: mod_filename = &
   __FILE__
+  ! Indexed by isnowcept_*: bryophytes, grasses, shrubs, deciduous trees, conifers.
+  real(r8), parameter :: CanopySnowCapacityPerArea(0:4) = &
+    [1.e-4_r8,2.e-4_r8,3.e-4_r8,2.e-3_r8,7.e-3_r8] ! retained SWE capacity [m3/m2]
+  real(r8), parameter :: CanopySnowAreaCoeff(0:4) = &
+    [30._r8,20._r8,70._r8,40._r8,100._r8] ! added interception area per retained SWE [m2/m3]
 !
 !
+  real(r8), parameter :: dmax = 0.015_r8          !Eco-evolutionary responses of species distributions to climate change [m]    
+  real(r8) :: Aphol_ref                           !reference area for phloem transport, [m2]
+  real(r8) :: L0_phol                             !effective distance for phloem transport when PTSHTR is defined [m]
   real(r8) :: FracHour4LeafoffRemob(0:5)          !allocation parameter, [-]
   real(r8) :: PART2LEAF_MIN                       !minimum fraction of growth allocated to leaf, [-]
   real(r8) :: PART2PETOL_MIN                      !minimum fraction of growth allocated to PetolSheth, [-]
@@ -41,7 +49,7 @@ module PlantBGCPars
   real(r8) :: RSMY_stomaCO2                       !minimum stomatal resistance for CO2 uptake (h m-1)
   real(r8) :: C4KI_pepcarboxy                     !nonstructural C inhibition constant on PEP carboxylase (uM)
   real(r8) :: Hours4ConiferSpringDeharden         !hours to full dehardening of conifers in spring (h)
-  real(r8) :: RCytoK(2)                           !cytokinin production efficiency, [1.e-4 gC CK gC-CO2]
+  real(r8) :: RCytoK(2)                           !cytokinin production efficiency, [1.e-3 gC CK gC-resp CO2]
   real(r8) :: kDCytof(2)                          !cytoknin decay rates during production in fine roots and mycorrhizae [h-1]
   real(r8) :: kDCytoC                             !cytoknin decay rates during transport and at thickening sites in coarse roots [h-1]
   real(r8) :: ELEC3                               !e- requirement for CO2 fixn by rubisco,        [umol e- umol CO2]
@@ -61,8 +69,6 @@ module PlantBGCPars
   real(r8) :: BlkDensFineRoots                    !Fine root bulk density, [gC m-3]
   real(r8) :: BlkDActCoarseRoots                  !Coarse root active zone bulk density, [gC m-3]
   real(r8) :: BlkDLigCoarseRoots                  !Coarse root inactive zone bulk density, [gC m-3]
-  real(r8) :: StalkMassDensity                    !stalk density, [MgC m-3]
-  real(r8) :: SpecStalkVolume                     !specific volume (m3 gC-1)
   real(r8) :: FRTX                                !Fraction used to calculate woody faction of stalk,root,[-]
   real(r8) :: SETC                                !Km for nonstructural C concn on seed set, [g g-1]
   real(r8) :: SETN                                !Km for nonstructural N concn on seed set, [g g-1]
@@ -114,9 +120,9 @@ module PlantBGCPars
   real(r8) :: k_ligmax                            !maxinum lignification rate when converting active coarse root into nonactive coarse root, [h-1]
   real(r8) :: k_ligMM                             !half saturation constant for lignification MM kinetics, [gC h-1]
   !terminate [label for varaible parsing]
-  integer, parameter :: ibackward=1  !index for backward scattering in canopy radiation
-  integer, parameter :: iforward =2  !index for forward scattering in canopy radiation
-
+  integer, parameter :: ibackward=1               !index for backward scattering in canopy radiation
+  integer, parameter :: iforward =2               !index for forward scattering in canopy radiation
+  real(r8), parameter :: Rax_ref =7.11e11_r8      !reference lumen vessel axial resistance for 1 um radius and 1 m length, [MPa h m-4]
   real(r8) :: CURV2                               !2xCURV, [-]
   real(r8) :: CURV4                               !4XCURV, [-]
   real(r8) :: ZPLFD                               !1-ZPLFM, [-]
@@ -247,7 +253,7 @@ module PlantBGCPars
   ZPLFD                       = 1.0_r8-ZPLFM
   ZPGRM                       = 0.75_r8
   ZPGRD                       = 1.0_r8-ZPGRM
-  resp_downreg                = 0.05_r8
+  resp_downreg                = 0.1_r8
   k_ligMM                     = 0.1_r8*VMXC
   k_ligmax                    = 0.005_r8
   Yld_lignif                  = 0.62_r8
@@ -257,33 +263,35 @@ module PlantBGCPars
   C4KI_pepcarboxy             = 5.0E+06_r8
   Hours4ConiferSpringDeharden = 276.9_r8
   RootElonZoneLenz            =0.03_r8
-  kDCytof = (/0.69_r8,0.3_r8/)
-  kDCytoC = 0.175_r8
-  RCytoK = (/1.e-4_r8,1.e-3_r8/) !the actual magnitude is 3 orders smaller, here just to maintain the contrast between fine roots and mycorrhizae
+  kDCytof = (/0.036_r8,0.011_r8/)*0.75_r8
+  kDCytoC = 0.011_r8*0.75_r8
+  RCytoK = (/1.e-4_r8,1.e-5_r8/)         !the actual magnitude is 3 orders smaller, here just to maintain the contrast between fine roots and mycorrhizae
   BlkDensFineRoots      = 0.05_r8        !gC cm-3, ~ 0.1 g cm-3
   BlkDActCoarseRoots    = 0.20_r8        !gC m-3, ~ 0.4 g cm-3
   BlkDLigCoarseRoots    = 0.24_r8        !gC m-3, ~ 0.48 g cm-3
-  FSTK                  = 0.05_r8        !ratio of sapwood width to stalk radius, contributing to xylem/phloem transport at the outer portion of the stalk
-  ZSTX                  = 1.0E-03_r8     !one mm
-  StalkMassDensity      = 0.225_r8
-  SpecStalkVolume       = 1.0E-06_r8/StalkMassDensity
-  FRTX                  = 1.0_r8/(1.0_r8-(1.0_r8-FSTK)**2)
-  SETC                  = 1.0E-02_r8
-  SETN                  = 1.0E-03_r8
-  SETP                  = 1.0E-04_r8
-  SLA2                  = -0.33_r8
-  SSL2                  = -0.50_r8
-  SNL2                  = -0.67_r8
-  CNMX                  = 0.20_r8
-  CPMX                  = 0.020_r8
-  CNMN                  = 0.050_r8
-  CPMN                  = 0.005_r8
-  EN2F                  = 0.20_r8
-  VMXO                  = 0.125_r8
-  SPNDLK                = 0.01_r8
-  SPNDL                 = 5.0E-04_r8
-  CCNGR                 = 2.5E-01_r8
-  CCNGB                 = 6.0E-04_r8
+
+  FSTK     = 0.05_r8        !ratio of sapwood width to stalk radius, contributing to xylem/phloem transport at the outer portion of the stalk
+  ZSTX     = 1.0E-03_r8     !one mm
+  FRTX     = 1.0_r8/(1.0_r8-(1.0_r8-FSTK)**2)
+  Aphol_ref = (2._r8*dmax-AMIN1(ZSTX,FSTK*dmax))*AMIN1(ZSTX,FSTK*dmax)
+  L0_phol   = 2._r8 !m
+  SETC     = 1.0E-02_r8
+  SETN     = 1.0E-03_r8
+  SETP     = 1.0E-04_r8
+  SLA2     = -0.33_r8
+  SSL2     = -0.50_r8
+  SNL2     = -0.67_r8
+  CNMX     = 0.20_r8
+  CPMX     = 0.020_r8
+  CNMN     = 0.050_r8
+  CPMN     = 0.005_r8
+  EN2F     = 0.20_r8
+  VMXO     = 0.125_r8
+  SPNDLK   = 0.01_r8
+  SPNDL    = 5.0E-04_r8
+  CCNGR    = 2.5E-01_r8
+  CCNGB    = 6.0E-04_r8
+
   NodulBiomCatInfection = 1.0E-03_r8
   CZKM                  = 2.5E-03_r8
   CPKM                  = 2.5E-04_r8
@@ -304,7 +312,7 @@ module PlantBGCPars
   RCCX=real((/0.417,0.833,0.833,0.833/),r8)
   RCCQ=real((/0.417,0.833,0.833,0.833/),r8)
 
-  RTSK=real((/0.25,1.,4.0,4.0/),r8)
+  RTSK=real((/0.25,1.,2.0,4.0/),r8)
   FXRN=real((/0.25,0.125,0.0625,0.225,0.075,0.025/),r8)
   RateK4ShootSeaStoreNonstEXfer=real((/1.0E-02,1.0E-02,1.0E-05,5.0E-05/),r8)
   RateK4RootSeaStorNonstEXfer=real((/1.0E-02,1.0E-02,1.0E-05,5.0E-05/),r8)

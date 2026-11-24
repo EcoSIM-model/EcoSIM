@@ -1,5 +1,5 @@
 # Use a specific version for stability
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gfortran \
     git \
+    zip \
     cmake \
     vim \
     gdb \
@@ -20,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
     libtool \
     python3 \
+    python3-numpy \
+    python3-netcdf4 \
     python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 

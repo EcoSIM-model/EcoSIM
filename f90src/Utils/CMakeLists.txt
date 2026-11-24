@@ -1,7 +1,7 @@
 set(ECOSIM_UTIL_SOURCES
   data_kind_mod.F90
   data_const_mod.F90
-  StrToolsMod.F90
+  StringToolsMod.F90
   ncdio_pio.F90
   abortutils.F90
   UnitMod.F90

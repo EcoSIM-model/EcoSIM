@@ -34,6 +34,7 @@ module EcosimBGCFluxType
   real(r8),target,allocatable ::  RH1PO4EcoDmndSoilPrev_vr(:,:,:)                   !previous time step HPO4 demand in non-band by all microbial,root,myco populations, [gN d-2 h-1]
   real(r8),target,allocatable ::  REcoH1PO4DmndBand_vr(:,:,:)                       !Current HPO4 demand in band by all microbial,root,myco populations, [gN d-2 h-1]
   real(r8),target,allocatable ::  RH1PO4EcoDmndBandPrev_vr(:,:,:)                   !Previous time step HPO4 demand in band by all microbial,root,myco populations, [gN d-2 h-1]
+  real(r8),target,allocatable ::  CumDryDepoOM_col(:,:)                              !cumulative C from dry decomposition, [gC d-2]
 !----------------------------------------------------------------------
 
 contains
@@ -63,6 +64,7 @@ contains
   allocate(RH1PO4EcoDmndSoilPrev_vr(0:JZ,JY,JX));  RH1PO4EcoDmndSoilPrev_vr=0._r8
   allocate(REcoH1PO4DmndBand_vr(0:JZ,JY,JX));  REcoH1PO4DmndBand_vr=0._r8
   allocate(RH1PO4EcoDmndBandPrev_vr(0:JZ,JY,JX));  RH1PO4EcoDmndBandPrev_vr=0._r8
+  allocate(CumDryDepoOM_col(JY,JX)); CumDryDepoOM_col=0._r8
   end subroutine InitEcosimBGCFluxData
 
 !----------------------------------------------------------------------
@@ -92,6 +94,7 @@ contains
   call destroy(RH1PO4EcoDmndSoilPrev_vr)
   call destroy(REcoH1PO4DmndBand_vr)
   call destroy(RH1PO4EcoDmndBandPrev_vr)
+  call destroy(CumDryDepoOM_col)
   end subroutine DestructEcosimBGCFluxData
 
 end module EcosimBGCFluxType

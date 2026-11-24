@@ -15,8 +15,10 @@ module IrrigationDataType
   real(r8) :: COXU                                                   !subsurface irrigation  O2 concentration,	[g m-3]
   real(r8) :: CNNU                                                   !subsurface irrigation  N2 concentration,	[g m-3]
   real(r8) :: CN2U                                                   !subsurface irrigation  N2O concentration	[g m-3]
+  ! Annual management forcing, reread from inputs on startup and restart.
+  logical, allocatable :: Lirri_auto_col(:,:)                         !automatic irrigation enabled by management, [-]
   integer ,target,allocatable ::  IIRRA(:,:,:)                       !start and end dates of automated irrigation, [-]
-  real(r8),target,allocatable ::  RRIG(:,:,:,:)                      !irrigation application, [mm h-1]
+  real(r8),target,allocatable ::  RRIG(:,:,:,:)                      !irrigation application depth, [m h-1]
   real(r8),target,allocatable ::  WDPTH(:,:,:)                       !depth of irrigation application, [m]
   real(r8),target,allocatable ::  IrrigSubsurf_col(:,:)              !underground irrigation, [m3 d-2 h-1]
   real(r8),target,allocatable ::  IrrigSurface_col(:,:)              !surface irrigation, [m3 d-2 h-1]
@@ -74,7 +76,7 @@ module IrrigationDataType
   real(r8),target,allocatable ::  SurfIrrig_IonStrenth_col(:,:)     !surface irrigation ion strength, [g m-3]
   real(r8),target,allocatable ::  trcg_irrig_mole_conc_col(:,:,:)   !surface irrigation  volatile concentration, [mol m-3]
   real(r8),target,allocatable ::  trcn_irrig_vr(:,:,:,:)            !subsurface irrigation  nutrient concentration, [g m-3]
-  real(r8),target,allocatable ::  trcSalt_Irrig_vr(:,:,:,:)         !subsurface irrigation  chemical concentration, [g m-3]
+  real(r8),target,allocatable ::  trcSalt_Irrig_vr(:,:,:,:)         !prescribed external-water salt concentration, unbanded [mol m-3]
   real(r8),target,allocatable ::  FWatIrrigate2MicP_vr(:,:,:)       !underground irrigation, [m3 d-2 h-1]
   real(r8),target,allocatable ::  HeatIrrigation_vr(:,:,:)          !convective heat due to underground irrigation, [MJ d-2 h-1]
   real(r8),target,allocatable ::  trcs_Irrig_flx_vr(:,:,:,:)            !aqueous non-salt solutes in underground irrigation, [g d-2 h-1]
@@ -148,6 +150,7 @@ module IrrigationDataType
   allocate(RRIG(24,366,JY,JX)); RRIG=0._r8
   allocate(WDPTH(366,JY,JX));   WDPTH=0._r8
 
+  allocate(Lirri_auto_col(JY,JX)); Lirri_auto_col=.false.
   allocate(IIRRA(4,JY,JX));     IIRRA=0
   allocate(IrrigSubsurf_col(JY,JX));       IrrigSubsurf_col=0._r8
   allocate(IrrigSurface_col(JY,JX));       IrrigSurface_col=0._r8
@@ -173,6 +176,7 @@ module IrrigationDataType
   call destroy(trcsalt_irrig_mole_conc_col)
   call destroy(trcs_irrig_flx_col)
   call destroy(trcn_irrig_vr)
+  call destroy(trcSalt_Irrig_vr)
   call destroy(trcs_Irrig_flx_vr)
   call destroy(PHQ)
   call destroy(NH4_irrig_mole_conc)
@@ -223,6 +227,7 @@ module IrrigationDataType
   call destroy(CSTRQ)
   call destroy(RRIG)
   call destroy(WDPTH)
+  call destroy(Lirri_auto_col)
   call destroy(IIRRA)
   call destroy(IrrigSubsurf_col)
   call destroy(IrrigSurface_col)

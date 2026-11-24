@@ -1,0 +1,108 @@
+netcdf ERT6_sp_phenol_20261114 {
+dimensions:
+	ntopou = 6 ;
+	maxpfts = 1 ;
+	nchar1 = 10 ;
+	month = 12 ;
+	year = UNLIMITED ; // (1 currently)
+variables:
+	int NH1(ntopou) ;
+		NH1:long_name = "Starting column from the west" ;
+		NH1:units = "1" ;
+	int NV1(ntopou) ;
+		NV1:long_name = "Starting row from the north" ;
+		NV1:units = "1" ;
+	int NH2(ntopou) ;
+		NH2:long_name = "Ending column at the east" ;
+		NH2:units = "1" ;
+	int NV2(ntopou) ;
+		NV2:long_name = "Ending row at the south" ;
+		NV2:units = "1" ;
+	int NZ(ntopou) ;
+		NZ:long_name = "Number of prescribed PFT slots per topo unit" ;
+		NZ:units = "1" ;
+	int year(year) ;
+		year:long_name = "Forcing-year record; one record repeats for all years" ;
+		year:units = "year" ;
+	char pft_type(year, ntopou, maxpfts, nchar1) ;
+		pft_type:long_name = "Prescribed PFT code; grid IETYPG=0 preserves the supplied climate suffix" ;
+	double PlantPopuLive_pft(year, ntopou, maxpfts) ;
+		PlantPopuLive_pft:long_name = "Living population density retained from ERT_pft_20250819.nc" ;
+		PlantPopuLive_pft:units = "plants m-2" ;
+		PlantPopuLive_pft:valid_min = 0. ;
+	float LAI(year, ntopou, maxpfts, month) ;
+		LAI:units = "m2 m-2" ;
+		LAI:long_name = "Monthly living leaf area index" ;
+	float SAI(year, ntopou, maxpfts, month) ;
+		SAI:units = "m2 m-2" ;
+		SAI:long_name = "Monthly live stem surface area index" ;
+	float HTOP(year, ntopou, maxpfts, month) ;
+		HTOP:units = "m" ;
+		HTOP:long_name = "Monthly canopy top height" ;
+
+// global attributes:
+		:title = "Six-grid ERT prescribed phenology: trees 1-4 and C3 grassland 5-6" ;
+		:source = "Tree LAI/SAI/HTOP from SatePhenol Blodget_sp_phenol_20261103.nc; grass LAI and SAI supplied by user 2026-11-14; PFT codes and populations from ERT_pft_20250819.nc" ;
+		:grass_geometry_assumption = "Grass HTOP=0.5 m is a provisional required-field default; LAI and SAI were supplied by the user" ;
+data:
+
+ NH1 = 1, 2, 3, 4, 5, 6 ;
+
+ NV1 = 1, 1, 1, 1, 1, 1 ;
+
+ NH2 = 1, 2, 3, 4, 5, 6 ;
+
+ NV2 = 1, 1, 1, 1, 1, 1 ;
+
+ NZ = 1, 1, 1, 1, 1, 1 ;
+
+ year = 1980 ;
+
+ pft_type =
+  "ndlf43    ",
+  "ndlf43    ",
+  "ndlf43    ",
+  "ndlf43    ",
+  "gr3s43    ",
+  "gr3s43    " ;
+
+ PlantPopuLive_pft =
+  0.1,
+  0.1,
+  0.1,
+  0.1,
+  300,
+  300 ;
+
+ LAI =
+  1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343,
+    1.3941, 1.2721, 1.2218,
+  1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343,
+    1.3941, 1.2721, 1.2218,
+  1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343,
+    1.3941, 1.2721, 1.2218,
+  1.1852, 1.1821, 1.1554, 1.2433, 1.2922, 1.3341, 1.2296, 1.4118, 1.4343,
+    1.3941, 1.2721, 1.2218,
+  0.05, 0.05, 0.05, 0.1, 0.65, 1.8, 2.5, 2.2, 1.1, 0.25, 0.05, 0.05,
+  0.05, 0.05, 0.05, 0.1, 0.65, 1.8, 2.5, 2.2, 1.1, 0.25, 0.05, 0.05 ;
+
+ SAI =
+  0.319, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084,
+    0.3292, 0.3656, 0.3249,
+  0.319, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084,
+    0.3292, 0.3656, 0.3249,
+  0.319, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084,
+    0.3292, 0.3656, 0.3249,
+  0.319, 0.3058, 0.3058, 0.3032, 0.3058, 0.3117, 0.3433, 0.3032, 0.3084,
+    0.3292, 0.3656, 0.3249,
+  0.25, 0.2, 0.15, 0.15, 0.1, 0.15, 0.25, 0.35, 0.45, 0.4, 0.35, 0.3,
+  0.25, 0.2, 0.15, 0.15, 0.1, 0.15, 0.25, 0.35, 0.45, 0.4, 0.35, 0.3 ;
+
+ HTOP =
+  17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+  17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+  17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+  17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ;
+}

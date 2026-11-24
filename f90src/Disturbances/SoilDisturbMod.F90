@@ -1,11 +1,17 @@
 module SoilDisturbMod
+! Description:
+! Remove soil and litter organic matter during fire or management, retaining
+! accepted sensible energy and exporting the heat carried by withdrawn material.
 
 ! USES:
   use data_kind_mod, only : r8 => DAT_KIND_R8
-  use abortutils  , only : endrun
+  use abortutils  , only : endrun,iulog
   use minimathmod, only : safe_adb
   use EcoSiMParDataMod, only : micpar
   use MiniFuncMod,    only: gOC_to_m3_OM
+  use EcoSIMCtrlMod,  only: plantOM4Heat
+  use RootDataType,   only: RootMycoMassElm_vr
+  use EcoSIMConfig,  only : NumMicbAFunGrupsPerCmplx,NumMicbHFunGrupsPerCmplx  
   use DebugToolMod
   use MicrobialDataType  
   use NitroPars
@@ -38,9 +44,9 @@ module SoilDisturbMod
 
   subroutine SOMRemovalByDisturbance(I,J,NY,NX)
   !
-  !     Description:
-  !ITILL,DCORP=disturbance type,intensity
-  !iSoilDisturbType_col=soil disturbance type 1-20:tillage,21=litter removal,22=fire,23-24=drainage
+  ! Description:
+  ! Remove organic pools for fire (22) or litter removal (21), transferring
+  ! their elements and carried sensible heat to the corresponding ledgers.
   implicit none
   integer, intent(in) :: I,J,NY,NX
   character(len=*), parameter :: subname='SOMRemovalByDisturbance'
@@ -51,7 +57,8 @@ module SoilDisturbMod
   real(r8) :: DC,DN,DP
   real(r8) :: DCORPC
   real(r8) :: FORGCX
-  real(r8) :: HFLXD
+  real(r8) :: HFLXD,rootC
+  real(r8) :: EnergyBefore,EnergyRemaining ! accepted and retained sensible energy [MJ/cell]
   real(r8) :: ONX
   REAL(R8) :: OPX,OCA,OAH
   real(r8) :: ONL(4,1:jcplx),OPL(4,1:jcplx)
@@ -62,13 +69,13 @@ module SoilDisturbMod
   real(r8) :: DCORPC1
 
 !     begin_execution
-  associate(                    &
-   iprotein => micpar%iprotein, &
-   ilignin  => micpar%ilignin   &
-  )
-
   call PrintInfo('beg '//subname)
-  IF(J.EQ.INT(SolarNoonHour_col(NY,NX)) .AND. (iSoilDisturbType_col(I,NY,NX).EQ.itill_rmlitr .OR. iSoilDisturbType_col(I,NY,NX).EQ.itill_fire))THEN
+  associate(                    &
+   iprotein => micpar%iprotein, & ! input: protein kinetic-pool index [-]
+   ilignin  => micpar%ilignin   & ! input: lignin kinetic-pool index [-]
+  )
+  IF(J.EQ.INT(SolarNoonHour_col(NY,NX)) .AND. &
+    (iSoilDisturbType_col(I,NY,NX).EQ.itill_rmlitr .OR. iSoilDisturbType_col(I,NY,NX).EQ.itill_fire))THEN
     IF(iSoilDisturbType_col(I,NY,NX).EQ.itill_fire)THEN
       !fire
       iResetSoilProf_col(NY,NX) = itrue
@@ -120,7 +127,7 @@ module SoilDisturbMod
             !
             !     REMOVE heterotrophic MICROBIAL BIOMASS
             !
-            D2960: DO N=1,NumMicbFunGrupsPerCmplx
+            D2960: DO N=1,NumMicbHFunGrupsPerCmplx
               DO NGL=JGniH(N),JGnfH(N)
                 DO M=1,nlbiomcp
                   MID=micpar%get_micb_id(M,NGL)
@@ -156,7 +163,7 @@ module SoilDisturbMod
         !
         !     REMOVE autotrophic MICROBIAL BIOMASS
         !
-        DO  N=1,NumMicbFunGrupsPerCmplx
+        DO  N=1,NumMicbAFunGrupsPerCmplx
           DO NGL=JGniA(N),JGnfA(N)
             DO M=1,nlbiomcp
               MID=micpar%get_micb_id(M,NGL)
@@ -324,6 +331,12 @@ module SoilDisturbMod
           OMelm(ielmn)=OMelm(ielmn)+DCORPC*(trcs_solml_vr(ids_NH4,L,NY,NX)+trcs_solml_vr(idg_NH3,L,NY,NX) &
             +trcs_solml_vr(ids_NO3,L,NY,NX)+trcs_solml_vr(ids_NO2,L,NY,NX))
           OMelm(ielmp)=OMelm(ielmp)+DCORPC*(trcs_solml_vr(ids_H1PO4,L,NY,NX)+trcs_solml_vr(ids_H2PO4,L,NY,NX))
+          ! Record the elemental mass exported from the molar pools below.
+          OMelm(ielmn)=OMelm(ielmn)+DCORPC*natomw*(trcx_solml_vr(idx_NH4,L,NY,NX) &
+            +SUM(FertN_mole_soil_vr(ifertn_beg:ifertn_end,L,NY,NX)))
+          OMelm(ielmp)=OMelm(ielmp)+DCORPC*patomw*(trcp_saltpml_vr(idsp_AlPO4,L,NY,NX) &
+            +trcp_saltpml_vr(idsp_FePO4,L,NY,NX)+trcp_saltpml_vr(idsp_CaHPO4,L,NY,NX) &
+            +2._r8*trcp_saltpml_vr(idsp_CaH4P2O8,L,NY,NX)+3._r8*trcp_saltpml_vr(idsp_Apatite,L,NY,NX))
           
           DCORPC1=1.0_r8-DCORPC
 
@@ -344,17 +357,39 @@ module SoilDisturbMod
         ENDIF
         SoilOrgM_vr(1:NumPlantChemElms,L,NY,NX)=dOMelm(1:NumPlantChemElms)
         
-        IF(L.EQ.0)THEN
-          HFLXD        = 4.19E-06_r8*(ORGCX_vr(L,NY,NX)-SoilOrgM_vr(ielmc,L,NY,NX))*TKS_vr(L,NY,NX)
-          HeatOut_lnds = HeatOut_lnds+HFLXD
-        ENDIF
+        ! Export sensible heat with the actual organic C withdrawn by this
+        ! event, using the same capacity law as the remaining organic matter.
+        ! ORGCX is an earlier hourly snapshot and includes other C changes.
+        ! This accounts for carried sensible heat, not combustion heat release.
+        EnergyBefore = VHeatCapacity_vr(L,NY,NX)*TKS_vr(L,NY,NX)
+        HFLXD        = cpo*gOC_to_m3_OM(OMelm(ielmc))*TKS_vr(L,NY,NX)
+        HeatOut_lnds = HeatOut_lnds+HFLXD
+        ! This event follows hydrology. Book its export directly in the column
+        ! ledger; a layer heat-source flux would be reapplied by thermal updates.
+        HeatSource_col(NY,NX)=HeatSource_col(NY,NX)-HFLXD
+        EnergyRemaining=EnergyBefore-HFLXD
         IF(L.EQ.0)then
           VHeatCapacity_vr(0,NY,NX)=cpw*VLWatMicP_vr(0,NY,NX)+cpi*VLiceMicP_vr(0,NY,NX)+cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,L,NY,NX))
         else
           VHeatCapSolidSoil_vr(L,NY,NX) = VHeatCapMineralSoil_vr(L,NY,NX)+cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,L,NY,NX))
-          VHeatCapacity_vr(L,NY,NX)     = VHeatCapMineralSoil_vr(L,NY,NX)+cpw*(VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)) &
+          VHeatCapacity_vr(L,NY,NX)     = VHeatCapSolidSoil_vr(L,NY,NX)+cpw*(VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)) &
             +cpi*(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))
-        endif    
+          ! Roots are separate from the soil organic pools removed above.
+          if(plantOM4Heat .and. VHeatCapacity_vr(L,NY,NX)>0._r8)then
+            rootC=sum(RootMycoMassElm_vr(ielmc,:,L,NY,NX))
+            VHeatCapacity_vr(L,NY,NX)=VHeatCapacity_vr(L,NY,NX)+cpo*gOC_to_m3_OM(rootC)
+          endif
+        endif
+        ! Updating the summarized organic capacity supplies no extra heat.
+        ! Retain the accepted inventory minus the explicitly exported material
+        ! enthalpy, including organic-pool changes since its earlier estimate.
+        if(VHeatCapacity_vr(L,NY,NX)>0._r8)then
+          TKS_vr(L,NY,NX)=EnergyRemaining/VHeatCapacity_vr(L,NY,NX)
+          TCS_vr(L,NY,NX)=TKS_vr(L,NY,NX)-TC2K
+        elseif(ABS(EnergyRemaining)>1.e-12_r8*MAX(1._r8,ABS(EnergyBefore)))then
+          write(iulog,*)subname,': nonzero retained energy with zero capacity',I,J,L,NY,NX,EnergyRemaining
+          call endrun('Disturbed soil/litter has no capacity for retained energy',__LINE__)
+        endif
 
         IF(iSoilDisturbType_col(I,NY,NX).EQ.itill_rmlitr)THEN
           DO NE=1,NumPlantChemElms
@@ -384,8 +419,8 @@ module SoilDisturbMod
       ENDIF
     ENDDO D2950
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine SOMRemovalByDisturbance
 !------------------------------------------------------------------------------------------
 

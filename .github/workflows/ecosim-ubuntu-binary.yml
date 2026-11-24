@@ -1,0 +1,101 @@
+name: EcoSIM Ubuntu 24.04 binary
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ubuntu-binary-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Explicit x86_64 Ubuntu release; ubuntu-latest can move to newer glibc.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CFLAGS: -march=x86-64 -mtune=generic
+      CXXFLAGS: -march=x86-64 -mtune=generic
+      # The repository reads CXX_FLAGS and FCFLAGS explicitly.
+      CXX_FLAGS: -march=x86-64 -mtune=generic
+      FCFLAGS: -march=x86-64 -mtune=generic
+      FFLAGS: -march=x86-64 -mtune=generic
+      LC_ALL: C
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            gcc-13 g++-13 gfortran-13 make cmake autoconf automake libtool \
+            pkg-config m4 libcurl4-gnutls-dev libxml2-dev binutils patchelf python3 file
+          test "$(uname -m)" = x86_64
+          test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.39'
+
+      - name: Build standalone double-precision Release executable
+        run: |
+          # Prefer Ubuntu's CMake 3.x over other preinstalled runner versions.
+          export PATH="/usr/bin:/bin:$PATH"
+          bash build_EcoSIM.sh \
+            CC=/usr/bin/gcc-13 CXX=/usr/bin/g++-13 FC=/usr/bin/gfortran-13 \
+            --jobs="$(nproc)" 2>&1 | tee ecosim-build.log
+
+      - name: Package binary and verify architecture and ABI
+        run: python3 .github/scripts/package-ubuntu-binary.py
+
+      - name: Check loader in a clean Ubuntu 24.04 container
+        run: |
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD/dist/ecosim-ubuntu24.04-x86_64:/artifact:ro" \
+            ubuntu:24.04 bash -euo pipefail -c '
+              test "$(uname -m)" = x86_64
+              test "$(getconf GNU_LIBC_VERSION)" = "glibc 2.39"
+              apt-get update -qq
+              mapfile -t packages < /artifact/runtime-packages.txt
+              apt-get install --no-install-recommends -y "${packages[@]}"
+              ldd -r /artifact/bin/ecosim.f90.x > /tmp/loader-check.txt 2>&1
+              cat /tmp/loader-check.txt
+              if grep -E "not found|undefined symbol|version .* not found" /tmp/loader-check.txt; then
+                exit 1
+              fi
+            '
+
+      - name: Archive with executable permissions and checksum
+        run: |
+          tar -C dist -czf dist/ecosim-ubuntu24.04-x86_64.tar.gz ecosim-ubuntu24.04-x86_64
+          cd dist
+          sha256sum ecosim-ubuntu24.04-x86_64.tar.gz > ecosim-ubuntu24.04-x86_64.tar.gz.sha256
+
+      - name: Upload downloadable binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: ecosim-ubuntu24.04-x86_64-${{ github.sha }}
+          path: |
+            dist/ecosim-ubuntu24.04-x86_64.tar.gz
+            dist/ecosim-ubuntu24.04-x86_64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ecosim-ubuntu24.04-build-logs-${{ github.run_id }}
+          path: |
+            ecosim-build.log
+            build/Linux-x86_64-double-Release/3rd-partylibs/*.log
+            build/Linux-x86_64-double-Release/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore

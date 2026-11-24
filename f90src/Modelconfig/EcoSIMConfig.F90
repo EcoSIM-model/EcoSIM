@@ -21,7 +21,8 @@ implicit none
   integer, parameter :: jskenp1   = 5
   integer, parameter :: jcplxc    = 5 !# of microbe-substrate complexes
   integer, parameter :: jcplxcm1   = jcplxc-1
-  integer, parameter :: NumMicbFunGrupsPerCmplx  = 7 !# of microbial functional groups in each complex
+  integer, parameter :: NumMicbHFunGrupsPerCmplx  = 8 !# of heterotrophic microbial functional groups in each complex
+  integer, parameter :: NumMicbAFunGrupsPerCmplx  = 6 !# of autotrohpic microbial functional groups 
   
   character(len=datestrlen)  :: ref_date  = '18000101000000'
   character(len=datestrlen)  :: start_date= '18000101000000'

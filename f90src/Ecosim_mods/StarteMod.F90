@@ -1,4 +1,6 @@
 module StarteMod
+  ! Initialize soil and snow biogeochemical pools and dissolved concentrations.
+  use AtmosCompositionMod, only: UpdateAtmosGasMassConcentrations
   use data_kind_mod,      only: r8 => DAT_KIND_R8
   use SoluteChemDataType, only: solutedtype
   use EcoSiMParDataMod,   only: micpar
@@ -36,16 +38,17 @@ module StarteMod
   public :: starte
   contains
 
-  SUBROUTINE starte(NHW,NHE,NVN,NVS)
+  SUBROUTINE starte(NHW,NHE,NVN,NVS,RefreshRainChem)
 !
 ! DESCRIPTION:
 !     THIS SUBROUTINE INITIALIZES ALL SOIL CHEMISTRY VARIABLES
-! The top layer are initialized every year to accomadate changes in
-! boundary conditions (irrigation, rainfall, manure application) every year
-! other layers are done only in the first year.
+! Irrigation chemistry is refreshed after annual management reading.
+! Rainfall chemistry is refreshed only when raw rainfall inputs were reloaded.
+! Soil, litter and snow state initialization is limited to the first cold-start year.
 
   implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
+  logical, intent(in) :: RefreshRainChem !process rainfall only after raw inputs are reloaded
   character(len=*), parameter :: subname='starte'
   type(solutedtype)  :: solutevar
   REAL(R8) :: BulkSoilMass
@@ -58,13 +61,15 @@ module StarteMod
   !     FROM WEATHER, IRRIGATION AND SOIL FILES IN 'READS'
   !
   call PrintInfo('beg '//subname)
+  ! Annual forcing reads change mixing ratios even when STARTS is skipped.
+  call UpdateAtmosGasMassConcentrations(NHW,NHE,NVN,NVS)
   DO   NX=NHW,NHE
     DO  NY=NVN,NVS
       solutevar%CCO2M = CCO2EI_gperm3_col(NY,NX)/catomw
       solutevar%CCH4M = AtmGasCgperm3_col(idg_CH4,NY,NX)/catomw
       solutevar%COXYM = AtmGasCgperm3_col(idg_O2,NY,NX)/32.0_r8
-      solutevar%CZ2GM = AtmGasCgperm3_col(idg_N2,NY,NX)/natomw
-      solutevar%CZ2OM = AtmGasCgperm3_col(idg_N2O,NY,NX)/natomw
+      solutevar%CZ2GM = AtmGasCgperm3_col(idg_N2,NY,NX)/MolecularWeight(idg_N2)
+      solutevar%CZ2OM = AtmGasCgperm3_col(idg_N2O,NY,NX)/MolecularWeight(idg_N2O)
       solutevar%ATCA  = ATCA_col(NY,NX)
       solutevar%ZEROS = ZEROS(NY,NX)
 
@@ -73,8 +78,32 @@ module StarteMod
           D2000: DO K=micpar%k_fine_comp,micpar%k_POM
             BulkSoilMass=0._r8
 
+            ! Unspecified boundary ions must not retain values from a previous solve.
+            ! The soil branch below supplies its own ion inputs.
+            if(.not.salt_model)then
+              associate(                       &
+                Al_conc => solutevar%Al_mole_conc, &
+                Fe_conc => solutevar%CFEZ,      &
+                Ca_conc => solutevar%CCAZ,      &
+                Mg_conc => solutevar%CMGZ,      &
+                Na_conc => solutevar%CNAZ,      &
+                K_conc  => solutevar%CKAZ,      &
+                SO4_conc => solutevar%CSOZ,     &
+                Cl_conc => solutevar%CCLZ       &
+              )
+                Al_conc=0._r8
+                Fe_conc=0._r8
+                Ca_conc=0._r8
+                Mg_conc=0._r8
+                Na_conc=0._r8
+                K_conc=0._r8
+                SO4_conc=0._r8
+                Cl_conc=0._r8
+              end associate
+            endif
+
             !maure applied at the soil surface
-            IF(K.EQ.micpar%k_manure.AND.L.EQ.1)THEN
+            IF(K.EQ.micpar%k_manure.AND.L.EQ.NU_col(NY,NX))THEN
               !   INITIALIZE IRRIGATION WATER
               solutevar%CN4Z = NH4_irrig_mole_conc(I,NY,NX)
               solutevar%CNOZ = NO3_irrig_mole_conc(I,NY,NX)
@@ -94,7 +123,7 @@ module StarteMod
               solutevar%OH_1e_aque_mole_conc = DPH2O/solutevar%H_1p_aque_mole_conc
             ELSE
               IF(I.EQ.1)then
-                IF(K.EQ.micpar%k_fine_comp.AND.L.EQ.1)THEN
+                IF(K.EQ.micpar%k_fine_comp.AND.L.EQ.NU_col(NY,NX).AND.RefreshRainChem)THEN
                   !     INITIALIZE RAINFALL, top layer
                   solutevar%H_1p_aque_mole_conc  = 10.0_r8**(-(pH_rain_col(NY,NX)-3.0_r8))
                   solutevar%OH_1e_aque_mole_conc = DPH2O/solutevar%H_1p_aque_mole_conc
@@ -111,7 +140,7 @@ module StarteMod
                     solutevar%CSOZ = trcsalt_rain_mole_conc_col(idsalt_SO4,NY,NX)
                     solutevar%CCLZ = trcsalt_rain_mole_conc_col(idsalt_Cl,NY,NX)
                   endif
-!               ELSEIF(K.EQ.micpar%k_POM.AND.(.not.is_restart()).AND.is_first_year)THEN
+                ELSEIF(K.EQ.micpar%k_POM.AND.is_cold_run().AND.is_first_year)THEN
 !
 !     INITIALIZE SOIL WATER
 
@@ -141,7 +170,12 @@ module StarteMod
                   solutevar%CCACOX               = CCACO_vr(L,NY,NX)
                   solutevar%CCASOX               = CCASO_vr(L,NY,NX)
                   solutevar%H_1p_aque_mole_conc  = 10.0_r8**(-(PH_vr(L,NY,NX)-3.0_r8))
-                  solutevar%CNOZ                 = CNO3_vr(L,NY,NX)
+                  ! Convert nitrate from mol/Mg soil to mol/m3 water for chemistry.
+                  IF(VLWatMicP_vr(L,NY,NX).GT.ZEROS(NY,NX))THEN
+                    solutevar%CNOZ = CNO3_vr(L,NY,NX)*BulkSoilMass/VLWatMicP_vr(L,NY,NX)
+                  ELSE
+                    solutevar%CNOZ = 0._r8
+                  ENDIF
                   solutevar%CPOZ                 = CPO4_vr(L,NY,NX)
                   solutevar%OH_1e_aque_mole_conc = DPH2O/solutevar%H_1p_aque_mole_conc
                   solutevar%CN4Z                 = solutevar%CN4X
@@ -176,7 +210,7 @@ module StarteMod
 
             call InitSoluteModel(K,BulkSoilMass,solutevar)
 
-            call InitSoluteConcs(K,I,L,NY,NX,solutevar)
+            call InitSoluteConcs(K,I,L,NY,NX,BulkSoilMass,solutevar)
           ENDDO D2000
         enddo
       ENDDO
@@ -189,10 +223,11 @@ module StarteMod
   END subroutine starte
 !------------------------------------------------------------------------------------------
 
-  subroutine InitSoluteConcs(K,I,L,NY,NX,solutevar)
+  subroutine InitSoluteConcs(K,I,L,NY,NX,BulkSoilMass,solutevar)
 
   implicit none
   integer, intent(in) :: K, I, L, NY, NX
+  real(r8), intent(in) :: BulkSoilMass
   type(solutedtype), intent(in) :: solutevar
   integer :: nsalts,ids,idg
 !
@@ -202,7 +237,7 @@ module StarteMod
     iprotein  => micpar%iprotein,  &
     k_manure  => micpar%k_manure   &
   )
-  IF(K.EQ.micpar%k_fine_comp.AND.L.EQ.1.AND.I.EQ.1)THEN
+  IF(K.EQ.micpar%k_fine_comp.AND.L.EQ.NU_col(NY,NX).AND.I.EQ.1)THEN
     !litter pool, top soil layer
     trcg_rain_mole_conc_col(idg_CO2,NY,NX) = solutevar%H2CO3_aque_mole_conc
     trcg_rain_mole_conc_col(idg_CH4,NY,NX) = solutevar%CH4_aque_mole_conc
@@ -260,7 +295,7 @@ module StarteMod
 !
 !     SOLUTE CONCENTRATIONS IN IRRIGATION
 !
-  ELSEIF(K.EQ.micpar%k_manure .AND. L.EQ.1)THEN
+  ELSEIF(K.EQ.micpar%k_manure .AND. L.EQ.NU_col(NY,NX))THEN
   ! manure, top layer
     trcg_irrig_mole_conc_col(idg_CO2,NY,NX) = solutevar%H2CO3_aque_mole_conc
     trcg_irrig_mole_conc_col(idg_CH4,NY,NX) = solutevar%CH4_aque_mole_conc
@@ -320,7 +355,7 @@ module StarteMod
 ! for the POM complex, on the first day in the first year
 ! U means surface irrigation
 ! first year and not a restart run
-  ELSEIF(K.EQ.micpar%k_POM.AND.I.EQ.1 .AND. (.not.is_restart()).AND.is_first_year)THEN
+  ELSEIF(K.EQ.micpar%k_POM.AND.I.EQ.1 .AND. is_cold_run().AND.is_first_year)THEN
     CCOU                           = solutevar%H2CO3_aque_mole_conc*catomw
     CCHU                           = solutevar%CH4_aque_mole_conc*catomw
     COXU                           = 0._r8
@@ -328,7 +363,7 @@ module StarteMod
     CN2U                           = solutevar%N2O_aque_mole_conc
     trcn_irrig_vr(ids_NH4,L,NY,NX)    = solutevar%NH4_1p_aque_mole_conc*natomw
     trcn_irrig_vr(idg_NH3,L,NY,NX)    = solutevar%NH3_aque_mole_conc*natomw
-    trcn_irrig_vr(ids_NO3,L,NY,NX)    = solutevar%CNOX*natomw
+    trcn_irrig_vr(ids_NO3,L,NY,NX)    = solutevar%CNOZ*natomw
     trcn_irrig_vr(ids_NH4B,L,NY,NX)   = trcn_irrig_vr(ids_NH4,L,NY,NX)
     trcn_irrig_vr(idg_NH3B,L,NY,NX)   = trcn_irrig_vr(idg_NH3,L,NY,NX)
     trcn_irrig_vr(ids_NO3B,L,NY,NX)   = trcn_irrig_vr(ids_NO3,L,NY,NX)
@@ -382,33 +417,22 @@ module StarteMod
     endif
 !
 !   INITIAL STATE VARIABLES FOR GAS IN SOIL
-!   CCO2EI_gperm3 is set to the first year, because AtmGasCgperm3_col(idg_CO2,x)
-!   varies year by year, while other tracer gases are fixed year by year,
-!   this is not quite right for CH4, and N2O. However, the current implementation
-!   make sure the inexact restart run works. When exact restart is used, trcg_gasml_vr
-!   and trcs_solml_vr will be read from restart file, so that the following inconsistent
-!   use between CO2 and other gas tracers can be avoided.
-!   Comment by Jinyun Tang, Nov 11, 2022
 !
-    trcg_gasml_vr(idg_CO2,L,NY,NX) = CCO2EI_gperm3_col(NY,NX)*VLsoiAirP_vr(L,NY,NX)
     DO idg=idg_beg,idg_NH3
       trcg_gasml_vr(idg,L,NY,NX) = AtmGasCgperm3_col(idg,NY,NX)*VLsoiAirP_vr(L,NY,NX)
     ENDDO
 
-!   ExtWaterTablet0_col: external water table depth
-    IF(CumDepz2LayBottom_vr(L-1,NY,NX).LT.ExtWaterTablet0_col(NY,NX))THEN
+!   ExtWaterTableLocDepz_col: external water table depth
+    IF(CumDepz2LayBottom_vr(L-1,NY,NX).LT.ExtWaterTableLocDepz_col(NY,NX))THEN
       ! above water table
-      trcs_solml_vr(idg_O2,L,NY,NX)=AtmGasCgperm3_col(idg_O2,NY,NX)*gas_solubility(idg_O2, ATCA_col(NY,NX)) &
-        /(EXP(GasSechenovConst(idg_O2)*solutevar%CSTR1))*solutevar%FH2O*VLWatMicP_vr(L,NY,NX)
+      DO idg=idg_beg,idg_NH3-1
+        trcs_solml_vr(idg,L,NY,NX)=AtmGasCgperm3_col(idg,NY,NX)*gas_solubility(idg, ATCA_col(NY,NX)) &
+          /(EXP(GasSechenovConst(idg)*solutevar%CSTR1))*solutevar%FH2O*VLWatMicP_vr(L,NY,NX)
+      ENDDO
     ELSE
       !below water table
-      trcs_solml_vr(idg_O2,L,NY,NX)=0._r8
+      trcs_solml_vr(idg_beg:idg_NH3-1,L,NY,NX)=0._r8
     ENDIF
-    
-    DO idg=idg_beg,idg_NH3-1  
-      trcs_solml_vr(idg,L,NY,NX)=AtmGasCgperm3_col(idg,NY,NX)*gas_solubility(idg, ATCA_col(NY,NX)) &
-        /(EXP(GasSechenovConst(idg)*solutevar%CSTR1))*solutevar%FH2O*VLWatMicP_vr(L,NY,NX)
-    ENDDO  
 !
 !     INITIAL STATE VARIABLES FOR MINERAL N AND P IN SOIL
 !
@@ -416,8 +440,10 @@ module StarteMod
     trcs_solml_vr(ids_NH4B,L,NY,NX) = trcn_irrig_vr(ids_NH4B,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_NH4B,L,NY,NX)
     trcs_solml_vr(idg_NH3,L,NY,NX)  = trcn_irrig_vr(idg_NH3,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_NH4,L,NY,NX)
     trcs_solml_vr(idg_NH3B,L,NY,NX) = trcn_irrig_vr(idg_NH3B,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_NH4B,L,NY,NX)
-    trcs_solml_vr(ids_NO3,L,NY,NX)  = trcn_irrig_vr(ids_NO3,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_NO3,L,NY,NX)
-    trcs_solml_vr(ids_NO3B,L,NY,NX) = trcn_irrig_vr(ids_NO3B,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_NO3B,L,NY,NX)
+    ! Preserve the prescribed soil nitrate inventory, including in dry layers.
+    ! Dry layers start with zero aqueous boundary concentration.
+    trcs_solml_vr(ids_NO3,L,NY,NX)  = CNO3_vr(L,NY,NX)*BulkSoilMass*natomw*trcs_VLN_vr(ids_NO3,L,NY,NX)
+    trcs_solml_vr(ids_NO3B,L,NY,NX) = CNO3_vr(L,NY,NX)*BulkSoilMass*natomw*trcs_VLN_vr(ids_NO3B,L,NY,NX)
 
     trcs_solml_vr(ids_H2PO4,L,NY,NX)  = trcn_irrig_vr(ids_H2PO4,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_H1PO4,L,NY,NX)
     trcs_solml_vr(ids_H2PO4B,L,NY,NX) = trcn_irrig_vr(ids_H2PO4B,L,NY,NX)*VLWatMicP_vr(L,NY,NX)*trcs_VLN_vr(ids_H1PO4B,L,NY,NX)
@@ -500,6 +526,7 @@ module StarteMod
 !------------------------------------------------------------------------------------------
 
   subroutine InitialState(NY,NX)
+  ! Initialize dissolved pools in the surface residue and every occupied snow layer.
 
   implicit none
   integer, intent(in) :: NY, NX
@@ -509,7 +536,7 @@ module StarteMod
 !
 !     INITIAL STATE VARIABLES FOR MINERALS IN SURFACE RESIDUE
 ! not restart run and first year
-  IF(.not.is_restart().AND.is_first_year)THEN
+  IF(is_cold_run().AND.is_first_year)THEN
     trcs_solml_vr(ids_nuts_beg:ids_nuts_end,0,NY,NX)=0._r8
 
     trcx_solml_vr(idx_NH4,0,NY,NX)    = 0._r8
@@ -540,7 +567,7 @@ module StarteMod
 !     INITIAL STATE VARIABLES FOR MINERAL N AND P IN SNOWPACK
 !
     D9985: DO L=1,JS
-      IF(VLHeatCapSnow_snvr(L,NY,NX).GT.VLHeatCapSnowMin_col(NY,NX))THEN
+      IF(VLHeatCapSnow_snvr(L,NY,NX).GT.ZEROS(NY,NX))THEN
         VOLWW                             = VLWatSnow_snvr(L,NY,NX)+VLDrySnoWE_snvr(L,NY,NX)+VLIceSnow_snvr(L,NY,NX)*DENSICE
 
         DO idg=idg_beg,idg_NH3

@@ -3,11 +3,13 @@ module PlantInfoMod
 ! DESCRIPTION
 ! code to read plant information
   use data_kind_mod, only: r8 => DAT_KIND_R8
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use fileUtil,      only: open_safe, check_read, int2str, getavu, relavu, opnfil
   use minimathmod,   only: isLeap
   use abortutils,    only: endrun, iulog
   use DebugToolMod,  only: PrintInfo
-  use PlantTraitTableMod  
+  use StringToolsMod, only: count_delimited_items, string_compaction
+  use PlantTraitTableMod
   use netcdf
   use ncdio_pio  
   use GridConsts
@@ -25,6 +27,7 @@ module PlantInfoMod
   use GridDataType
   use EcoSIMCtrlMod
   use EcoSIMConfig
+  use Read4SatePhenolMod, only: ReadSatePhenol
 
 implicit none
 
@@ -48,7 +51,11 @@ implicit none
 ! RECOVER PLANT SPECIES DISTRIBUTION IN 'ROUTQ'
 !
  
-  CALL ReadPlantInfoNC(yeari,NHW,NHE,NVN,NVS)
+  if(ldo_sp_mode)then
+    call ReadSatePhenol(yeari,NHW,NHE,NVN,NVS)
+  else
+    CALL ReadPlantInfoNC(yeari,NHW,NHE,NVN,NVS)
+  endif
 !
 !   READ INPUT DATA FOR PLANT SPECIES AND MANAGEMENT IN 'READQ'
 !   AND SET UP OUTPUT AND CHECKPOINT FILES IN 'FOUTP'
@@ -77,17 +84,25 @@ implicit none
 
 ! begin_execution
   call PrintInfo('beg '//subname)
-  call ReadPlantManagementNC(yearc,yeari,NHW,NHE,NVN,NVS,pft_changed)
+  if(ldo_sp_mode)then
+    ! Prescribed vegetation has no planting or harvest schedule to read.
+    ! Its species and slot counts were loaded from sp_phenol_in above.
+    pft_changed=.true.
+    call InitPlantMgmnt(NHW,NHE,NVN,NVS)
+  else
+    call ReadPlantManagementNC(yearc,yeari,NHW,NHE,NVN,NVS,pft_changed)
+  endif
 
   if(disp_planttrait .and. pft_changed)then
     nu_plt=getavu()
-    write(fnm_loc,'(A,I4,A)')'plant_trait.',etimer%get_curr_yearAD(),'.desc'
+    write(fnm_loc,'(A,I4)')trim(case_name)//'.plant_trait.desc.',etimer%get_curr_yearAD()
     call opnfil(fnm_loc,nu_plt,'f')    
   endif
 
   D9995: DO NX=NHW,NHE
     D9990: DO NY=NVN,NVS
-      D9985: DO NZ=1,NP_col(NY,NX)
+      !fallow slots NP_col+1..NP0_col reload the traits of their residue PFT
+      D9985: DO NZ=1,NP0_col(NY,NX)
 !
 !       OPEN PFT(11), PFT MANAGEMENT(12) FILES FROM
 !       FILE NAMES IN DATA ARRAYS LOADED IN MAIN.F
@@ -118,17 +133,17 @@ implicit none
   character(len=*), parameter :: subname='readplantinginfo'
   logical  :: readvar
   integer  :: NH1,NV1,NH2,NV2,NS
-  integer :: NTOPO,NY,NX,NZ
-  real(r8) :: DY
+  integer :: NTOPO,NY,NX,NZ,lstr
   type(Var_desc_t) :: vardesc
-  character(len=128) :: pft_pltinfo(JP),tstr
-  integer :: LPY,IDX,IMO,IYR,IDY
+  character(len=128) :: pft_pltinfo(JP),tstr,date_str
+  integer :: IYR,IDY,ierr
 
   call PrintInfo('beg '//subname)
   DO NX=NHW,NHE
     DO NY=NVN,NVS
       DO NZ=1,NP_col(NY,NX)
         PlantinDepz_pft(NZ,NY,NX)=1.e-6_r8
+        PPmax_pft(NZ,NY,NX)=0._r8
       ENDDO
     ENDDO
   ENDDO
@@ -139,7 +154,26 @@ implicit none
     call ncd_getvar(pftinfo_nfid,'NH2',ntopo,NH2)
     call ncd_getvar(pftinfo_nfid,'NV2',ntopo,NV2)
     call ncd_getvar(pftinfo_nfid,'NZ',ntopo,NS)
-    if(any((/NH1, NV1,NH2,NV2/)<=0) .or. any((/NH1, NV1,NH2,NV2/)>ntopou))exit
+    !
+    ! Legacy plant files may reserve more ntopou slots than they populate.
+    ! Nonpositive bounds (including NetCDF fill values) end the populated records;
+    ! exit before validating NZ or reading planting/management data for unused slots.
+    ! Keep this sentinel exit when changing validation. Populated units may span
+    ! multiple cells, so their bounds are checked against JX/JY, not ntopou.
+    !
+    if(any((/NH1,NV1,NH2,NV2/)<=0))exit
+    if(NS<0 .or. NS>JP)then
+      write(iulog,*)'Invalid PFT count in '//subname,': topo unit=',NTOPO,' NZ=',NS,' capacity=',JP
+      call endrun('PFT count must be between zero and JP in '//subname,__LINE__)
+    endif
+    !
+    ! Topographic units may span several cells; validate against grid dimensions.
+    if(NH1<1 .or. NH2>JX .or. NH1>NH2 .or. &
+       NV1<1 .or. NV2>JY .or. NV1>NV2)then
+      write(iulog,*)'Invalid bounds in '//subname,': topo unit=',NTOPO, &
+        ' NH1,NH2,NV1,NV2=',NH1,NH2,NV1,NV2,' JX,JY=',JX,JY
+      call endrun('Invalid topographic-unit bounds in '//subname,__LINE__)
+    endif
     !planting information
     call check_var(pftinfo_nfid, 'pft_pltinfo', vardesc, readvar)
     if(.not. readvar)then
@@ -153,21 +187,32 @@ implicit none
     DO NX=NH1,NH2
       DO NY=NV1,NV2
         DO NZ=1,MIN(NS,NP_col(NY,NX))
-          tstr=trim(pft_pltinfo(NZ))
-          if (tstr .EQ. "") then
+          if(PlantPopuLive_pft(NZ,NY,NX).GT.1.e-2_r8)cycle          
+          tstr=pft_pltinfo(NZ)
+          if (string_compaction(tstr) .EQ. "") then
             cycle
           endif
-          read(tstr,'(I2,I2,I4)')IDX,IMO,IYR
-          read(tstr,*)DY,PPI_pft(NZ,NY,NX),PlantinDepz_pft(NZ,NY,NX)
-          PlantinDepz_pft(NZ,NY,NX)=AZMAX1(PlantinDepz_pft(NZ,NY,NX),1.e-6_r8)
-          LPY=0
-          if(isLeap(iyr) .and. IMO.GT.2)LPY=1
-          !obtain the ordinal day
-          IF(IMO.EQ.1)then
-            IDY=IDX
-          else
-            IDY=30*(IMO-1)+ICOR(IMO-1)+IDX+LPY
+
+          call CheckPlantRecordFields(tstr,3,4,NTOPO,NZ)
+          date_str=''
+          select case(count_delimited_items(tstr, ' '))
+          case(3)
+            lstr=3
+            read(tstr,*,iostat=ierr)date_str,PPI_pft(NZ,NY,NX),PlantinDepz_pft(NZ,NY,NX)
+          case(4)
+            lstr=4
+            read(tstr,*,iostat=ierr)date_str,PPI_pft(NZ,NY,NX),PlantinDepz_pft(NZ,NY,NX),PPmax_pft(NZ,NY,NX)
+          case default
+            lstr=0
+            ierr=1
+          end select
+          if(ierr/=0)then
+            write(iulog,*)'lstr=',lstr
+            call endrun('Invalid planting record (expected DDMMYYYY population depth [maximum population]): '// &
+              trim(tstr)//' in '//subname,__LINE__)
           endif
+          PlantinDepz_pft(NZ,NY,NX)=AZMAX1(PlantinDepz_pft(NZ,NY,NX),1.e-6_r8)
+          call ParsePlantEventDate(date_str,yearc,NTOPO,NZ,IDY,IYR)
 
           IF(IDY.GT.0.AND.IYR.GT.0)THEN
             IF(iselect_plantZ==-1 .OR. (iselect_plantZ>0 .and. NZ==iselect_plantZ))THEN
@@ -187,6 +232,79 @@ implicit none
   end subroutine readplantinginfo
 
 !------------------------------------------------------------------------------------------
+  subroutine CheckPlantRecordFields(record,MinFields,MaxFields,NTOPO,NZ)
+  ! Require explicit values before list-directed reads can retain old values.
+  implicit none
+  character(len=*), intent(inout) :: record
+  integer, intent(in) :: MinFields,MaxFields,NTOPO,NZ
+  character(len=*), parameter :: subname='CheckPlantRecordFields'
+  character(len=len(record)) :: normalized
+  integer :: i,first,nfields
+  logical :: valid_record
+
+  call PrintInfo('beg '//subname)
+  normalized=string_compaction(record)
+  do i=1,len(normalized)
+    if(normalized(i:i)==achar(9))normalized(i:i)=' '
+  enddo
+  ! Slash terminates a read successfully; asterisk permits repeated/null values.
+  valid_record=index(record,'/')==0.and.index(record,'*')==0
+  first=1
+  do i=1,len_trim(record)
+    if(record(i:i)==',')then
+      ! Check comma fields before normalization hides empty fields as whitespace.
+      if(len_trim(normalized(first:i-1))==0)valid_record=.false.
+      first=i+1
+    endif
+  enddo
+  if(len_trim(normalized(first:))==0)valid_record=.false.
+  nfields=count_delimited_items(normalized,' ')
+  if(nfields<MinFields.or.nfields>MaxFields)valid_record=.false.
+  if(.not.valid_record)then
+    write(iulog,*)'Invalid plant record fields: topo unit=',NTOPO,' PFT=',NZ, &
+      ' expected fields=',MinFields,MaxFields,' record=',trim(record)
+    call endrun('Plant records require explicit values for every field in '//subname,__LINE__)
+  endif
+  record=normalized
+  call PrintInfo('end '//subname)
+  end subroutine CheckPlantRecordFields
+
+!------------------------------------------------------------------------------------------
+  subroutine ParsePlantEventDate(date_str,yearc,NTOPO,NZ,IDY,IYR)
+  ! Validate DDMMYYYY before computing any calendar or daily-array index.
+  implicit none
+  character(len=*), intent(in) :: date_str
+  integer, intent(in) :: yearc,NTOPO,NZ
+  integer, intent(out) :: IDY,IYR
+  character(len=*), parameter :: subname='ParsePlantEventDate'
+  integer :: IDX,IMO,ierr
+  integer :: MonthDays(12)
+  logical :: valid_date
+
+  call PrintInfo('beg '//subname)
+  MonthDays=(/31,28,31,30,31,30,31,31,30,31,30,31/)
+  ! Events are applied in yearc, including recurring management with year 0000.
+  ! Preserve the input year for the caller's planting/harvest selection rules.
+  if(isLeap(yearc))MonthDays(2)=29
+  valid_date=len_trim(date_str)==8.and.verify(trim(date_str),'0123456789')==0
+  if(valid_date)then
+    read(date_str,'(I2,I2,I4)',iostat=ierr)IDX,IMO,IYR
+    valid_date=ierr==0
+  endif
+
+  if(valid_date)valid_date=IMO>=1.and.IMO<=12
+  ! Do not index MonthDays until the month has been validated.
+  if(valid_date)valid_date=IDX>=1.and.IDX<=MonthDays(IMO)
+  if(.not.valid_date)then
+    write(iulog,*)'Invalid plant event date: topo unit=',NTOPO,' PFT=',NZ, &
+      ' date=',trim(date_str),' simulation year=',yearc
+    call endrun('Expected a valid DDMMYYYY date in '//subname,__LINE__)
+  endif
+  IDY=sum(MonthDays(1:IMO-1))+IDX
+  call PrintInfo('end '//subname)
+  end subroutine ParsePlantEventDate
+
+!------------------------------------------------------------------------------------------
   subroutine InitPlantMgmnt(NHW,NHE,NVN,NVS)
   implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
@@ -195,10 +313,10 @@ implicit none
   ! initialize the disturbance arrays
   DO NX=NHW,NHE
     DO NY=NVN,NVS
-      DO NZ=1,NP_col(NY,NX)
+      DO NZ=1,NP0_col(NY,NX)
         DO M=1,366
           iHarvstType_pft(NZ,M,NY,NX)                                   = -1
-          jHarvstType_pft(NZ,M,NY,NX)                                   = 0
+          jHarvstType_pft(NZ,M,NY,NX)                                   = 0     !do not terminate
           CanopyCutProxy_pft(NZ,M,NY,NX)                               = 1.0E+06_r8
           THIN_pft(NZ,M,NY,NX)                                          = -1.0_r8
           FracBiomHarvsted(iHarvst_pft,iplthvst_leaf,NZ,M,NY,NX)        = 1.0_r8
@@ -227,15 +345,15 @@ implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
   character(len=*), parameter :: subname='ReadPlantMgmtinfo'
   logical  :: readvar
-  real(r8) :: DY,ECUT11,ECUT12,ECUT13,ECUT14,ECUT21,ECUT22,ECUT23
+  real(r8) :: ECUT11,ECUT12,ECUT13,ECUT14,ECUT21,ECUT22,ECUT23
   real(r8) :: ECUT24,HCUT,PCUT
   integer  :: pft_nmgnt(JP)
   integer  :: NH1,NV1,NH2,NV2,NS
   type(Var_desc_t) :: vardesc
   integer :: NTOPO,NY,NX,NZ
-  character(len=128) :: pft_pltinfo(JP),tstr  
+  character(len=128) :: pft_pltinfo(JP),tstr,date_str
   character(len=128) :: pft_mgmtinfo(24,JP)
-  integer :: LPY,IDX,IMO,IYR,IDY,ICUT,IDYE,IDYG,JCUT,IDYS
+  integer :: IYR,IDY,ICUT,IDYE,IDYG,JCUT,IDYS,ierr
   integer :: M,NN,N,nn1
 
   call PrintInfo('beg '//subname)
@@ -247,6 +365,16 @@ implicit none
     call ncd_getvar(pftinfo_nfid,'NH2',ntopo,NH2)
     call ncd_getvar(pftinfo_nfid,'NV2',ntopo,NV2)
     call ncd_getvar(pftinfo_nfid,'NZ',ntopo,NS)
+    ! Legacy plant files may reserve more ntopou slots than they populate.
+    ! Nonpositive bounds (including NetCDF fill values) end the populated records;
+    ! exit before validating NZ or reading planting/management data for unused slots.
+    ! Keep this sentinel exit when changing validation. Populated units may span
+    ! multiple cells, so their bounds are checked against JX/JY, not ntopou.
+    if(any((/NH1,NV1,NH2,NV2/)<=0))exit
+    if(NS<0 .or. NS>JP)then
+      write(iulog,*)'Invalid PFT count in '//subname,': topo unit=',NTOPO,' NZ=',NS,' capacity=',JP
+      call endrun('PFT count must be between zero and JP in '//subname,__LINE__)
+    endif
 
     call check_var(pftinfo_nfid, 'nmgnts', vardesc, readvar)
     if(.not. readvar)then
@@ -256,6 +384,14 @@ implicit none
     call check_ret(nf90_get_var(pftinfo_nfid%fh, vardesc%varid, pft_nmgnt, &
       start = (/1,NTOPO,iyear/),count = (/JP,1,1/)),trim(mod_filename)// &
       '::at line '//trim(int2str(__LINE__)))
+
+    do NZ=1,NS
+      if(pft_nmgnt(NZ)<0 .or. pft_nmgnt(NZ)>size(pft_mgmtinfo,1))then
+        write(iulog,*)'Invalid event count in '//subname,': topo unit=',NTOPO, &
+          ' PFT=',NZ,' nmgnts=',pft_nmgnt(NZ),' capacity=',size(pft_mgmtinfo,1)
+        call endrun('Plant management event count exceeds the supported range in '//subname,__LINE__)
+      endif
+    enddo
 
     if(any(pft_nmgnt(1:NS)>0))then
       call check_var(pftinfo_nfid, 'pft_mgmt', vardesc, readvar)
@@ -267,31 +403,32 @@ implicit none
         start = (/1,1,1,NTOPO,iyear/),count = (/len(pft_mgmtinfo(1,1)),24,JP,1,1/)),&
         trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
     endif
-    if(any((/NH1, NV1,NH2,NV2/)<=0) .or. any((/NH1, NV1,NH2,NV2/)>ntopou))exit
+    ! Topographic units may span several cells; validate against grid dimensions.
+    if(NH1<1 .or. NH2>JX .or. NH1>NH2 .or. &
+       NV1<1 .or. NV2>JY .or. NV1>NV2)then
+      write(iulog,*)'Invalid bounds in '//subname,': topo unit=',NTOPO, &
+        ' NH1,NH2,NV1,NV2=',NH1,NH2,NV1,NV2,' JX,JY=',JX,JY
+      call endrun('Invalid topographic-unit bounds in '//subname,__LINE__)
+    endif
 
     DO NX=NH1,NH2
       DO NY=NV1,NV2
-        DO NZ=1,MIN(NS,NP_col(NY,NX))
-          !write(iulog,*)'NZ,pft_nmgnt=',NZ,pft_nmgnt(NZ)
+        DO NZ=1,MIN(NS,NP_col(NY,NX))          
           if(pft_nmgnt(NZ)>0)then
             NN=0
             DO nn1=1,pft_nmgnt(NZ)
-              if(len_trim(pft_mgmtinfo(NN1,NZ))==0)cycle
+              if(string_compaction(pft_mgmtinfo(NN1,NZ))=='')cycle
               tstr=trim(pft_mgmtinfo(NN1,NZ))
-              !read day/month/year when management occurs
-              read(tstr,'(I2,I2,I4)')IDX,IMO,IYR
-              
-              READ(TSTR,*)DY,ICUT,JCUT,HCUT,PCUT,ECUT11,ECUT12,ECUT13,&
+              call CheckPlantRecordFields(tstr,13,13,NTOPO,NZ)
+              date_str=''
+              read(tstr,*,iostat=ierr)date_str,ICUT,JCUT,HCUT,PCUT,ECUT11,ECUT12,ECUT13, &
                   ECUT14,ECUT21,ECUT22,ECUT23,ECUT24
-              !"17050000,2,0,0.06,0.0,0.9,0.3,0.0,0.1,0.9,0.9,0.0,0.5       
-              LPY=0
-              if(isLeap(iyr) .and. IMO.GT.2)LPY=1
-              !obtain the ordinal day
-              IF(IMO.EQ.1)then
-                IDY=IDX
-              else
-                IDY=30*(IMO-1)+ICOR(IMO-1)+IDX+LPY
+              if(ierr/=0)then
+                write(iulog,*)'Invalid plant management record: topo unit=',NTOPO,' PFT=',NZ, &
+                  ' record=',trim(tstr)
+                call endrun('Invalid management record in '//subname,__LINE__)
               endif
+              call ParsePlantEventDate(date_str,yearc,NTOPO,NZ,IDY,IYR)
 
               IF(IDY.GT.0 .AND. JCUT.EQ.1)THEN
                 iDayPlantHarvest_pft(NZ,NY,NX)=IDY
@@ -319,13 +456,12 @@ implicit none
               FracBiomHarvsted(iHarvst_pft,iplthvst_stdead,NZ,IDY,NY,NX)      = ECUT14
 
               !ecosystem-level harvest
+              !For a harvested pft component, a fraction by (1- ecosystem-level harvest fraction) becomes litter
               FracBiomHarvsted(iHarvst_col,iplthvst_leaf,NZ,IDY,NY,NX)        = ECUT21
               FracBiomHarvsted(iHarvst_col,iplthvst_finenonleaf,NZ,IDY,NY,NX) = ECUT22
               FracBiomHarvsted(iHarvst_col,iplthvst_stalk,NZ,IDY,NY,NX)       = ECUT23
               FracBiomHarvsted(iHarvst_col,iplthvst_stdead,NZ,IDY,NY,NX)      = ECUT24
 
-
-              !write(iulog,*)'NZ,IDY=',NZ,IDY,StriHarvtype(ICUT),StrjHarvtype(JCUT),'Cut height:',HCUT,'cut fraction:',PCUT
               IF(iHarvstType_pft(NZ,IDY,NY,NX).EQ.iharvtyp_grazing .OR. iHarvstType_pft(NZ,IDY,NY,NX).EQ.iharvtyp_herbivo)THEN
                 !animal or insect biomass
                 NN=NN+1
@@ -334,7 +470,7 @@ implicit none
                   D580: DO IDYG=IDYS+1,IDYE-1
                     iHarvstType_pft(NZ,IDYG,NY,NX)    = ICUT
                     jHarvstType_pft(NZ,IDYG,NY,NX)    = JCUT
-                    CanopyCutProxy_pft(NZ,IDYG,NY,NX) = HCUT
+                    CanopyCutProxy_pft(NZ,IDYG,NY,NX) = HCUT !impact height by disturbance, mostly
                     THIN_pft(NZ,IDYG,NY,NX)           = PCUT
                     
                     FracBiomHarvsted(iHarvst_pft,iplthvst_leaf,NZ,IDYG,NY,NX)        = ECUT11
@@ -382,6 +518,7 @@ implicit none
 
   call PrintInfo('beg '//subname)
   pft_changed_loc=.false.
+  if(present(pft_changed))pft_changed=.false.
   if (len_trim(pft_mgmt_in)==0)return
   
   call ncd_pio_openfile(pftinfo_nfid, pft_mgmt_in, ncd_nowrite)
@@ -390,6 +527,14 @@ implicit none
 
   call check_ret(nf90_get_var(pftinfo_nfid%fh, vardesc%varid, pft_dflag), &
     trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
+
+  if(pft_dflag==-1)then
+    ! ReadPlantInfoNC has already disabled plants. No year, topographic-unit,
+    ! planting, or management records are required for the no-plant flag.
+    call ncd_pio_closefile(pftinfo_nfid)
+    call PrintInfo('end '//subname)
+    return
+  endif
 
   !obtain the number of topographic units
   ntopou=get_dim_len(pftinfo_nfid, 'ntopou')    
@@ -416,15 +561,20 @@ implicit none
       if(year==yeari)exit   !when year is found matching the forcing data yeari.
       iyear=iyear+1
     ENDDO
+    
     call readplantinginfo(pftinfo_nfid,ntopou,iyear,yearc,NHW,NHE,NVN,NVS)    
     call readplantmgmtinfo(pftinfo_nfid,ntopou,iyear,yearc,NHW,NHE,NVN,NVS)
   else
     pft_changed_loc=.true.
+
     !transient pft data (flexible inputs)
+    ! Intentionally use the simulation year for flexible planting/management,
+    ! while ReadPlantInfoNC selects species using the forcing year. The two
+    ! record years may differ when climate forcing is cycled.
     iyear=1
     DO while(.true.)
       call ncd_getvar(pftinfo_nfid,'year',iyear,year)
-      if(year==yearc)exit
+      if(year==yearc)exit  !when year is found matching the current model year.
       iyear=iyear+1
     ENDDO
     call readplantinginfo(pftinfo_nfid,ntopou,iyear,yearc,NHW,NHE,NVN,NVS)
@@ -464,6 +614,18 @@ implicit none
   IF(DATAP(NZ,NY,NX).NE.'NO')THEN
 
     call SetPlantTraits(nu_plt,pft_changed,NZ,NY,NX,VRNLI,VRNXI)
+
+    ! Drought leaf-out uses PSIMin4LeafOut(2:4) in PlantPhenolMod.
+    IF ((iPlantPhenolType_pft(NZ,NY,NX).EQ.iphenotyp_drouhtdecidu .OR. &
+         iPlantPhenolType_pft(NZ,NY,NX).EQ.4 .OR. &
+         iPlantPhenolType_pft(NZ,NY,NX).EQ.5) .AND. &
+        (iEmbryophyteType_pft(NZ,NY,NX).LT.2 .OR. &
+         iEmbryophyteType_pft(NZ,NY,NX).GT.4)) THEN
+      CALL ENDRUN('Unsupported botanical/phenology combination for '// &
+        TRIM(DATAP(NZ,NY,NX))//': drought leaf-out requires IEBTYP=2:4; '// &
+        TRIM(mod_filename), __LINE__)
+    ENDIF
+
 !
 !   RE-CALCULATE PLANT INPUTS IN MODEL UNITS
 !
@@ -585,10 +747,11 @@ implicit none
   call ncd_getvar(pft_nfid, 'KLGMAX',loc,KLigMax_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'KLGMM',loc,KLigMM_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'PR', loc,NonstCMinCon2InitRoot_pft(NZ,NY,NX))
+  call ncd_getvar(pft_nfid,'RVSR',loc,RootVesselRadius_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'RSRR', loc,RootRadialResist_pft(ipltroot,NZ,NY,NX))
-  call ncd_getvar(pft_nfid, 'RSRA', loc,RootAxialResist_pft(ipltroot,NZ,NY,NX))
+  call ncd_getvar(pft_nfid, 'RSRA', loc,RootSingleVesselRstaxial_pft(NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'PTSHT', loc,ShootRootNonstElmConduts_pft(NZ,NY,NX))
-  call ncd_getvar(pft_nfid, 'RTFQ', loc,RootBranchFreq_pft(NZ,NY,NX))
+  call ncd_getvar(pft_nfid, 'RTFQ', loc,FineRootBranchFreq_pft(NZ,NY,NX))
 
   call ncd_getvar(pft_nfid, 'UPMXZH', loc,VmaxNH4Root_pft(ipltroot,NZ,NY,NX))
   call ncd_getvar(pft_nfid, 'UPKMZH', loc,KmNH4Root_pft(ipltroot,NZ,NY,NX))
@@ -647,7 +810,7 @@ implicit none
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
-    call morphology_trait_disp(nu_plt,NZ,NY,NX)
+    call Shoot_morphology_trait_disp(nu_plt,NZ,NY,NX)
     call Root_trait_disp(nu_plt,NZ,NY,NX)
     call Root_nutrient_trait_disp(nu_plt,NZ,NY,NX)
     call plant_water_trait_disp(nu_plt,NZ,NY,NX)
@@ -676,8 +839,11 @@ implicit none
     loc=DATAPI(NZ,NY,NX)
   else
     loc=get_pft_loc(KoppenClimZone_col(NY,NX),DATAP(NZ,NY,NX)(1:6),pft_lname,koppen_climl,koppen_clims)
+    !trait-table index of the PFT in this slot, kept in restart files so that a
+    !fallow slot can reload the traits of the PFT whose residue it holds
+    DATAPI(NZ,NY,NX)=loc
   endif
-  
+  StemSpecVolume_pft(NZ,NY,NX) = 1.e-6_r8/StemMassDensity_tab(loc)
   iEmbryophyteType_pft(NZ,NY,NX)     = iEmbryophyteType_pft_tab(loc)
   iPlantPhotosynsType_pft(NZ,NY,NX)  = iPlantPhotosynsType_pft_tab(loc)
   iPlantRootProfile_pft(NZ,NY,NX)     = iPlantRootProfile_tab(loc)
@@ -690,7 +856,7 @@ implicit none
   iPlant2ndGrothPattern_pft(NZ,NY,NX) = iPlant2ndGrothPattern_tab(loc)
   iPlantGrainType_pft(NZ,NY,NX)       = iPlantGrainType_tab(loc)
   Myco_pft(NZ,NY,NX)                  = Myco_tab(loc)
-  PlantInitThermoAdaptZone_pft(NZ,NY,NX)  = PlantInitThermoAdaptZone_pft_tab(loc)
+  PlantInitThermoAdaptZone_pft(NZ,NY,NX)  = PlantInitThermoAdaptZone_tab(loc)
   xylemPhi_min_pft(NZ,NY,NX)          = xylemPhi_min_tab(loc)
   Radius95pctMature_pft(NZ,NY,NX)     = Radius95pctMature_tab(loc)
   xylemPhi_max_pft(NZ,NY,NX)          = xylemPhi_max_tab(loc)
@@ -721,6 +887,8 @@ implicit none
   TCChill4Seed_pft(NZ,NY,NX)             = TCChill4Seed_tab(loc)
   VRNLI                                  = VRNLI_tab(loc)
   VRNXI                                  = VRNXI_tab(loc)
+  enh_cyto_pft(NZ,NY,NX)                 = enh_cyto_tab(Loc)
+  StalkAxialResist_pft(NZ,NY,NX)         = StalkAxialResist_tab(loc)
   rLen2WidthLeaf_pft(NZ,NY,NX)           = rLen2WidthLeaf_tab(loc)
   NonstCMinConc2InitBranch_pft(NZ,NY,NX) = NonstCMinConc2InitBranch_tab(loc)
 
@@ -745,20 +913,27 @@ implicit none
   GrainFillRate25C_pft(NZ,NY,NX)                      = GrainFillRate25C_tab(loc)
   StandingDeadInitC_pft(NZ,NY,NX)                     = StandingDeadInitC_tab(loc)
 
-  Root1stMaxRadius_pft(1,NZ,NY,NX)        = Root1stMaxRadius_tab(loc)
-  Root2ndMaxRadius_pft(1,NZ,NY,NX)        = Root2ndMaxRadius_tab(loc)
-  RootPorosity_pft(1,NZ,NY,NX)            = RootPorosity_tab(loc)
-  KLigMax_pft(NZ,NY,NX)                   = KLigMax_tab(loc)
-  KLigMM_pft(NZ,NY,NX)                    = KLigMM_tab(loc)
-  NonstCMinCon2InitRoot_pft(NZ,NY,NX)        = NonstCMinCon2InitRoot_tab(loc)
-  RootRadialResist_pft(1,NZ,NY,NX)        = RootRadialResist_tab(loc)
-  RootAxialResist_pft(1,NZ,NY,NX)         = RootAxialResist_tab(loc)
-  ShootRootNonstElmConduts_pft(NZ,NY,NX) = ShutRutNonstElmntConducts_tab(loc)
-  RootBranchFreq_pft(NZ,NY,NX)            = RootBranchFreq_tab(loc)
+  rECLiveCRoot_pft(ielmn,NZ,NY,NX) = rNCLiveCRoot_tab(loc)
+  rECLiveCRoot_pft(ielmp,NZ,NY,NX) = rPCLiveCRoot_tab(loc)
+  rECDeadCRoot_pft(ielmn,NZ,NY,NX) = rNCDeadCRoot_tab(loc)
+  rECDeadCRoot_pft(ielmp,NZ,NY,NX) = rPCDeadCRoot_tab(loc)
 
-  VmaxNH4Root_pft(ipltroot,NZ,NY,NX) = VmaxNH4Root_tab(loc)
-  KmNH4Root_pft(ipltroot,NZ,NY,NX)   = KmNH4Root_tab(loc)
-  CMinNH4Root_pft(ipltroot,NZ,NY,NX) = CMinNH4Root_tab(loc)
+  Root1stMaxRadius_pft(1,NZ,NY,NX)       = Root1stMaxRadius_tab(loc)
+  Root2ndMaxRadius_pft(1,NZ,NY,NX)       = Root2ndMaxRadius_tab(loc)
+  RootPorosity_pft(1,NZ,NY,NX)           = RootPorosity_tab(loc)
+  KLigMax_pft(NZ,NY,NX)                  = KLigMax_tab(loc)
+  KLigMM_pft(NZ,NY,NX)                   = KLigMM_tab(loc)
+  NonstCMinCon2InitRoot_pft(NZ,NY,NX)    = NonstCMinCon2InitRoot_tab(loc)
+  RootRadialResist_pft(1,NZ,NY,NX)       = RootRadialResist_tab(loc)
+  AlphaVesselAxialResist_pft(NZ,NY,NX)    = AlphaVesselAxialResist_tab(loc)
+  RootVesselRadius_pft(NZ,NY,NX)         = RootVesselRadius_tab(loc)
+  
+  ShootRootNonstElmConduts_pft(NZ,NY,NX) = ShutRutNonstElmntConducts_tab(loc)
+  FineRootBranchFreq_pft(NZ,NY,NX)       = FineRootBranchFreq_tab(loc)
+  MediumRootBranchFreq_pft(NZ,NY,NX)     = MediumRootBranchFreq_tab(loc)
+  VmaxNH4Root_pft(ipltroot,NZ,NY,NX)     = VmaxNH4Root_tab(loc)
+  KmNH4Root_pft(ipltroot,NZ,NY,NX)       = KmNH4Root_tab(loc)
+  CMinNH4Root_pft(ipltroot,NZ,NY,NX)     = CMinNH4Root_tab(loc)
 
   MorphogenBase_pft(NZ,NY,NX) = MorphogenBase_tab(loc)*0.01_r8
   VmaxNO3Root_pft(ipltroot,NZ,NY,NX) = VmaxNO3Root_tab(loc)
@@ -772,6 +947,43 @@ implicit none
   OrganOsmoPsi0pt_pft(NZ,NY,NX) = CanOsmoPsi0pt_tab(loc)
   RCS_pft(NZ,NY,NX)           = RCS_tab(loc)
   CuticleResist_pft(NZ,NY,NX) = CuticleResist_tab(loc)
+
+  if(ats_cpl_mode .or. ldo_sp_mode)then
+    irootType_pft(NZ,NY,NX)       = irootType_tab(loc)
+    MeanSecondaryAxisLength_pft(NZ,NY,NX) = MeanSecondaryAxisLength_tab(loc)
+    if(.not.ieee_is_finite(CanopyNonstOMConc_tab(loc)))then
+      write(iulog,*)'Invalid CCPOLT for PFT table record:',loc,CanopyNonstOMConc_tab(loc)
+      call endrun('prescribed PFT CCPOLT must be finite and nonnegative',__LINE__)
+    endif
+    if(CanopyNonstOMConc_tab(loc)<0._r8)then
+      write(iulog,*)'Negative CCPOLT for PFT table record:',loc,CanopyNonstOMConc_tab(loc)
+      call endrun('prescribed PFT CCPOLT must be finite and nonnegative',__LINE__)
+    endif
+    CanopyNonstOMConc_pft(NZ,NY,NX) = CanopyNonstOMConc_tab(loc)
+  endif
+  if(ldo_sp_mode)then
+    if(.not.ieee_is_finite(RootNonstOMConc_tab(loc)))then
+      write(iulog,*)'Invalid RTNSC for PFT table record:',loc,RootNonstOMConc_tab(loc)
+      call endrun('prescribed PFT RTNSC must be finite and nonnegative',__LINE__)
+    endif
+    if(RootNonstOMConc_tab(loc)<0._r8)then
+      write(iulog,*)'Negative RTNSC for PFT table record:',loc,RootNonstOMConc_tab(loc)
+      call endrun('prescribed PFT RTNSC must be finite and nonnegative',__LINE__)
+    endif
+    PrescribedRootNonstOMConc_pft(NZ,NY,NX) = RootNonstOMConc_tab(loc)
+    if(.not.ieee_is_finite(LeafProteinDensity_tab(loc)))then
+      write(iulog,*)'Invalid LFPRTC for PFT table record:',loc,LeafProteinDensity_tab(loc)
+      call endrun('prescribed PFT LFPRTC must be finite and nonnegative',__LINE__)
+    endif
+    if(LeafProteinDensity_tab(loc)<0._r8)then
+      write(iulog,*)'Negative LFPRTC for PFT table record:',loc,LeafProteinDensity_tab(loc)
+      call endrun('prescribed PFT LFPRTC must be finite and nonnegative',__LINE__)
+    endif
+    PrescribedLeafProteinDensity_pft(NZ,NY,NX) = LeafProteinDensity_tab(loc)
+  endif
+  if(ats_cpl_mode)then
+    CanopyHeightLive_pft(NZ,NY,NX) = CanopyHeightLive_tab(loc)
+  endif
 
   LeafBiomGrowthYld_pft(NZ,NY,NX)    = LeafBiomGrowthYld_tab(loc)
   PetolShethBiomGrowthYld_pft(NZ,NY,NX) = PetolShethBiomGrowthYld_tab(loc)
@@ -816,7 +1028,7 @@ implicit none
     call photosyns_trait_disp(nu_plt,NZ,NY,NX)
     call plant_optic_trait_disp(nu_plt,NZ,NY,NX)
     call Phenology_trait_disp(nu_plt,NZ,NY,NX,VRNLI,VRNXI)
-    call morphology_trait_disp(nu_plt,NZ,NY,NX)
+    call Shoot_morphology_trait_disp(nu_plt,NZ,NY,NX)
     call Root_trait_disp(nu_plt,NZ,NY,NX)
     call Root_nutrient_trait_disp(nu_plt,NZ,NY,NX)
     call plant_water_trait_disp(nu_plt,NZ,NY,NX)
@@ -892,9 +1104,9 @@ implicit none
   case (0)
     strval='Shallow root profile, like bryophytes (0)'
   case (1)
-    strval='Intermediate root profile, like herbs (1)'
+    strval='Intermediate deep fibrous root profile, like herbs (1)'
   case (2)
-    strval='Deep root profile, like trees/drought tolerant grasses (2)'
+    strval='Deep penetrative root profile, like trees/drought tolerant grasses (2)'
   case (3)
     strval='Very deep tap root profile (3)'  
   case default
@@ -1067,8 +1279,8 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine photosyns_trait_disp(nu_plt,NZ,NY,NX)
-  !
-  !Description
+  ! Description:
+  ! Write the active PFT photosynthetic traits and SP prescribed protein density.
   implicit none
   integer, intent(in) :: NZ,NY,NX
   integer, intent(in) :: nu_plt
@@ -1077,6 +1289,11 @@ implicit none
   write(nu_plt,*)('-',j=1,110)
   write(nu_plt,*)'PHOTOSYNTHETIC PROPERTIES'
   id=0;
+  if(ldo_sp_mode)then
+    id=addone(id)
+    call writefixl(nu_plt,id,'LFPRTC','Prescribed leaf protein carbon per leaf area [gC protein m-2 leaf]', &
+      PrescribedLeafProteinDensity_pft(NZ,NY,NX),110)
+  endif
   if(iPlantPhotosynsType_pft(NZ,NY,NX).eq.ic3_photo)then
     id=addone(id)
     call writefixl(nu_plt,id,'VCMX','Saturated specific carboxylation rate by Rubisco at 25oC  [umol CO2 (gC rubisco)-1 s-1]',VmaxSpecRubCarboxyRef_pft(NZ,NY,NX),110)
@@ -1087,11 +1304,11 @@ implicit none
     id=addone(id)
     call writefixl(nu_plt,id,'XKO2','Reference Km for rubisco oxygenation  at 25oC  [uM]',XKO2_pft(NZ,NY,NX),110)
     id=addone(id)
-    call writefixl(nu_plt,id,'RUBP','Fraction of total leaf protein is Rubisco enzyme [gC rubisco/(gC protein)]',LeafRubisco2Protein_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'RUBP','Fraction of total leaf protein as Rubisco enzyme [gC rubisco/(gC protein)]',LeafRubisco2Protein_pft(NZ,NY,NX),110)
     id=addone(id)
     call writefixl(nu_plt,id,'ETMX','Specific chlorophyll activity  [umol e- (gC chl)-1 s-1]',SpecLeafChlAct_pft(NZ,NY,NX),110)
     id=addone(id)
-    call writefixl(nu_plt,id,'CHL','Fraction of total leaf protein that is chlorophyll-binded  [-]',LeafProtein2Chl_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'CHL','Fraction of total leaf protein as chlorophyll-bound for light-harvesting [-]',LeafProtein2Chl_pft(NZ,NY,NX),110)
   elseif(iPlantPhotosynsType_pft(NZ,NY,NX).eq.ic4_photo)then
     id=addone(id)
     call writefixl(nu_plt,id,'VCMX','Saturated specific carboxylation rate by Rubisco  at 25oC  [umol CO2 (gC rubisco)-1 s-1]',VmaxSpecRubCarboxyRef_pft(NZ,NY,NX),110)
@@ -1102,7 +1319,7 @@ implicit none
     id=addone(id)
     call writefixl(nu_plt,id,'XKO2','Reference Km for rubisco oxygenation at 25oC  [uM]',XKO2_pft(NZ,NY,NX),110)
     id=addone(id)
-    call writefixl(nu_plt,id,'RUBP','Fraction of total leaf protein is Rubisco enzyme  [gC rubisco/(gC protein)]',LeafRubisco2Protein_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'RUBP','Fraction of total leaf protein as Rubisco enzyme  [gC rubisco/(gC protein)]',LeafRubisco2Protein_pft(NZ,NY,NX),110)
     id=addone(id)
     call writefixl(nu_plt,id,'ETMX','Specific chlorophyll activity at 25oC [umol e- (gC chl)-1 s-1]',SpecLeafChlAct_pft(NZ,NY,NX),110)
     id=addone(id)
@@ -1110,11 +1327,11 @@ implicit none
     id=addone(id)
     call writefixl(nu_plt,id,'XKCO24','Reference KM for PEP carboxylation  at 25oC  [uM]',Km4PEPCarboxy_pft(NZ,NY,NX),110)    
     id=addone(id)
-    call writefixl(nu_plt,id,'PEPC','Fraction of total leaf protein is PEPC enzyme [gC PEP/(gC protein)]',LeafPEP2Protein_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'PEPC','Fraction of total leaf protein as PEPC enzyme [gC PEP/(gC protein)]',LeafPEP2Protein_pft(NZ,NY,NX),110)
     id=addone(id)
-    call writefixl(nu_plt,id,'CHL','Fraction of total leaf protein that is chlorophyll-binded  [-]',LeafProtein2Chl_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'CHL','Fraction of total leaf protein that as chlorophyll-bound for light-harvesting protein [-]',LeafProtein2Chl_pft(NZ,NY,NX),110)
     id=addone(id)
-    call writefixl(nu_plt,id,'fCHLMESO','Fraction of chlorophyll-binded proteins in mesophyll cells [-]',fMesophyllChlProtein_pft(NZ,NY,NX),110)
+    call writefixl(nu_plt,id,'fCHLMESO','Fraction of chlorophyll-bound light-harvesting proteins in mesophyll cells [-]',fMesophyllChlProtein_pft(NZ,NY,NX),110)
   endif  
   id=addone(id)
   call writefixl(nu_plt,id,'FCO2','Intercellular-to-atmospheric CO2 concentration ratio  [-]',CanopyCi2CaRatio_pft(NZ,NY,NX),110)
@@ -1144,7 +1361,7 @@ implicit none
   id=addone(id)
   call writefixl(nu_plt,id,'VRNXI','Hours of senescence conditions (temp or water) required for autumn leafoff [h]',VRNXI,100)
   id=addone(id)
-  call writefixl(nu_plt,id,'PB','Nonstructural C concentration needed for branching [gC nonst/gC structl]',NonstCMinConc2InitBranch_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'PB','Nonstructural C concentration needed for shoot branching [gC nonst/gC structl]',NonstCMinConc2InitBranch_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'GROUPX','Maturity group, node number (on top of XTLI) required for floral initiation [-]',GROUPX_pft(NZ,NY,NX),100)
   id=addone(id)
@@ -1157,7 +1374,7 @@ implicit none
   end subroutine Phenology_trait_disp
 
 !------------------------------------------------------------------------------------------
-  subroutine morphology_trait_disp(nu_plt,NZ,NY,NX)
+  subroutine Shoot_morphology_trait_disp(nu_plt,NZ,NY,NX)
   implicit none
   integer, intent(in) :: NZ,NY,NX
   integer, intent(in) :: nu_plt
@@ -1171,10 +1388,12 @@ implicit none
   id=addone(id)  
   call writefixl(nu_plt,id,'SSL1','Specific Petiole/Sheath length vs mass [m gC-1]',PetolShethLen2Mass_pft(NZ,NY,NX),100)
   id=addone(id)
-  call writefixl(nu_plt,id,'SNL1','Specific internode length vs mass [m gC-1]',NodeLenPergC_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'SNL1','Specific stem internode length vs mass [m gC-1]',NodeLenPergC_pft(NZ,NY,NX),100)
   id=addone(id)
   call writeafixl(nu_plt,id,'CLASS','Fraction of leaf area in 0-22.5,22.5-45,45-67.5,67.5-90 degrees inclination classes (0 being flat) [-]',&
-    LeafAngleClass_pft(1:NumLeafInclinationClasses,NZ,NY,NX),100)
+    LeafAngleClass_pft(1:NumLeafInclinationClasses,NZ,NY,NX),100)  
+  id=addone(id)
+  call writefixl(nu_plt,id,'STDENS','Stem dry mass density (including voids) [gC cm-3]',1.e-6_r8/StemSpecVolume_pft(NZ,NY,NX),100)    
   id=addone(id)
   call writefixl(nu_plt,id,'WDLF','Leaf length:width ratio [-]',rLen2WidthLeaf_pft(NZ,NY,NX),100)  
   id=addone(id)
@@ -1197,7 +1416,13 @@ implicit none
   call writefixl(nu_plt,id,'GFILL','Grain filling rate at 25 oC [gC seed-1 h-1]',GrainFillRate25C_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'WTSTDI','Mass of dead standing biomass at planting [gC m-2]',StandingDeadInitC_pft(NZ,NY,NX),100)
-  end subroutine morphology_trait_disp
+  if(is_plant_woody_vascular(iPlantRootProfile_pft(NZ,NY,NX),iPlant2ndGrothPattern_pft(NZ,NY,NX)))then
+    id=addone(id)
+    call writefixl(nu_plt,id,'CYTOS','Cytokinin sensitivity of corase root thickening [0-1]',enh_cyto_pft(NZ,NY,NX),100)    
+  endif
+  id=addone(id)
+  call writefixl(nu_plt,id,'RSSA','Stalk axial resistance per m length for water uptake [MPa h m-4]',StalkAxialResist_pft(NZ,NY,NX),100)
+  end subroutine Shoot_morphology_trait_disp
 
 !------------------------------------------------------------------------------------------
   subroutine Root_trait_disp(nu_plt,NZ,NY,NX)
@@ -1216,10 +1441,10 @@ implicit none
   call writefixl(nu_plt,id,'PORT','Primary/fine root air porosity [m3 m-3]',RootPorosity_pft(1,NZ,NY,NX),105)
 
   if(is_plant_woody_vascular(iPlantRootProfile_pft(NZ,NY,NX),iPlant2ndGrothPattern_pft(NZ,NY,NX)))then
-    id=addone(id)
-    call writefixl(nu_plt,id,'KLGMAX','Maximum lignification rate of coarse roots [h-1]',KLigMax_pft(NZ,NY,NX),105)
-    id=addone(id)
-    call writefixl(nu_plt,id,'KLGMAX','Half saturation parameter for coarse roots lignification [h-1]',KLigMM_pft(NZ,NY,NX),105)
+!    id=addone(id)
+!    call writefixl(nu_plt,id,'KLGMAX','Maximum lignification rate of coarse roots [h-1]',KLigMax_pft(NZ,NY,NX),105)
+!    id=addone(id)
+!    call writefixl(nu_plt,id,'KLGMM','Half saturation parameter for coarse roots lignification [h-1]',KLigMM_pft(NZ,NY,NX),105)
     id=addone(id)
     call writefixl(nu_plt,id,'ROOTMAGE','Root age to trigger secondary growth [h]', RootMatureAge_pft(NZ,NY,NX),105)
     id=addone(id)
@@ -1228,23 +1453,27 @@ implicit none
     call writefixl(nu_plt,id,'PhiMAX','Asymptotic limit lumen fraction of the coarse root xyxlem area of woody vascular [m2/m2]', xylemPhi_max_pft(NZ,NY,NX),105)
     id=addone(id)
     call writefixl(nu_plt,id,'R95MAT','Critical radius where the woody root is considered 95% mature [m]', Radius95pctMature_pft(NZ,NY,NX),105)
+    id=addone(id)    
+    call writefixl(nu_plt,id,'MRTFQ','Medium root branching freq. on structrual roots [# m-1]', MediumRootBranchFreq_pft(NZ,NY,NX),105)    
   else
     id=addone(id)
     call writefixl(nu_plt,id,'PhiMean','The mean lumen area fraction found in the seminal roots of non-tree roots, [m2/m2]', xylemPhi_mean_pft(NZ,NY,NX),105)      
   endif
   id=addone(id)  
   call writefixl(nu_plt,id,'PR','Nonstructural C concentration needed for root'// &
-    ' branching (gC nonst/gC structl)',NonstCMinCon2InitRoot_pft(NZ,NY,NX),105)
+    ' initiation (gC nonst/gC structl)',NonstCMinCon2InitRoot_pft(NZ,NY,NX),105)
   id=addone(id)  
   call writefixl(nu_plt,id,'RSRR','Radial resistcance per m2 root surface area for water uptake [MPa h m-1]',RootRadialResist_pft(1,NZ,NY,NX),105)
   id=addone(id)
-  call writefixl(nu_plt,id,'RSRA','Axial resistance per m root length for water uptake defined at RRAD2M [MPa h m-4]',RootAxialResist_pft(1,NZ,NY,NX),105)
+  call writefixl(nu_plt,id,'ARSRA','Axial resistance correcting factor from lumen to actual vessel [-]',AlphaVesselAxialResist_pft(NZ,NY,NX),105)
+  id=addone(id)
+  call writefixl(nu_plt,id,'RVSR','Root vessel mean radius [m]',RootVesselRadius_pft(NZ,NY,NX),105)
   id=addone(id)
   call writefixl(nu_plt,id,'PTSHT','Rate scalar (<1) for equilibrating shoot-root '// &
     'nonstructural elemental concentrations [h-1]',ShootRootNonstElmConduts_pft(NZ,NY,NX),105)
   !as a rule of thumb, RTFQ often takes the value of .  
   id=addone(id)
-  call writefixl(nu_plt,id,'RTFQ','Square root of (fine root branching frequency on 1st roots) X (root hair frequency on fine roots) [m-1]',RootBranchFreq_pft(NZ,NY,NX),105)
+  call writefixl(nu_plt,id,'RTFQ','Square root of (fine root branching frequency on 1st roots) X (root hair frequency on fine roots) [# m-1]',FineRootBranchFreq_pft(NZ,NY,NX),105)
   end subroutine Root_trait_disp
 
 !------------------------------------------------------------------------------------------
@@ -1335,18 +1564,22 @@ implicit none
   write(nu_plt,*)('-',j=1,110)
   write(nu_plt,*)'ORGAN N AND P CONCENTRATIONS'
   id=0;id=addone(id)
-  call writefixl(nu_plt,id,'CNWR','Plant root protein C to N ratio [g protein C (g root N)-1]',rProteinC2RootN_pft(NZ,NY,NX),100)      
+  call writefixl(nu_plt,id,'CNWR','Ratio of root protein C to total root N [g protein C (g root N)-1]',rProteinC2RootN_pft(NZ,NY,NX),100)      
   id=addone(id)
-  call writefixl(nu_plt,id,'CNWL','Plant leaf protein C to N ratio [g protein C (g leaf N)-1]',rProteinC2LeafN_pft(NZ,NY,NX),100)    
+  call writefixl(nu_plt,id,'CNWL','Ratio of leaf protein C to total leaf N [g protein C (g leaf N)-1]',rProteinC2LeafN_pft(NZ,NY,NX),100)    
   id=addone(id)
-  call writefixl(nu_plt,id,'CNLF','Plant leaf NC mass ratio [gN (gC)-1]',rNCLeaf_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'CNLF','Plant leaf maximum NC mass ratio [gN (gC)-1]',rNCLeaf_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CNSHE','Plant PetolSheth NC mass ratio [gN (gC)-1]',rNCSheath_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CNSTK','Plant stalk NC mass ratio [gN (gC)-1]',rNCStalk_pft(NZ,NY,NX),100)  
   if(is_plant_woody_vascular(iPlantRootProfile_pft(NZ,NY,NX),iPlant2ndGrothPattern_pft(NZ,NY,NX)))then  
+!    id=addone(id)
+!    call writefixl(nu_plt,id,'CNRTLIG','Plant lignified root NC mass ratio [gN (gC)-1]',rNCLigRoot_pft(NZ,NY,NX),100)
     id=addone(id)
-    call writefixl(nu_plt,id,'CNRTLIG','Plant lignified root NC mass ratio [gN (gC)-1]',rNCLigRoot_pft(NZ,NY,NX),100)
+    call writefixl(nu_plt,id,'CNLCRT','Live coarse root NC mass ratio [gN (gC)-1]',rECLiveCRoot_pft(ielmn,NZ,NY,NX),100)
+    id=addone(id)
+    call writefixl(nu_plt,id,'CNDCRT','Dead coarse root NC mass ratio [gN (gC)-1]',rECDeadCRoot_pft(ielmn,NZ,NY,NX),100)
   endif
   id=addone(id)
   call writefixl(nu_plt,id,'CNRSV','Plant stalk reserve NC mass ratio [gN (gC)-1]',rNCReserve_pft(NZ,NY,NX),100)
@@ -1363,18 +1596,22 @@ implicit none
     call writefixl(nu_plt,id,'CNND','Plant nodule NC mass ratio [gN (gC)-1]',rNCNodule_pft(NZ,NY,NX),100)
   endif
   id=addone(id)
-  call writefixl(nu_plt,id,'CPWR','Plant root protein C to P ratio [g protein C (g root P)-1]',rProteinC2RootP_pft(NZ,NY,NX),100)      
+  call writefixl(nu_plt,id,'CPWR','Ratio of total root protein C to total root P [g protein C (g root P)-1]',rProteinC2RootP_pft(NZ,NY,NX),100)      
   id=addone(id)
-  call writefixl(nu_plt,id,'CPWL','Plant leaf protein C to P ratio [g protein C (g leaf P)-1]',rProteinC2LeafP_pft(NZ,NY,NX),100)      
+  call writefixl(nu_plt,id,'CPWL','Ratio of total leaf protein C to total P [g protein C (g leaf P)-1]',rProteinC2LeafP_pft(NZ,NY,NX),100)      
   id=addone(id)
-  call writefixl(nu_plt,id,'CPLF','Plant leaf PC mass ratio [gP (gC)-1]',rPCLeaf_pft(NZ,NY,NX),100)
+  call writefixl(nu_plt,id,'CPLF','Plant leaf maximum PC mass ratio [gP (gC)-1]',rPCLeaf_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CPSHE','Plant PetolSheth PC mass ratio [gP (gC)-1]',rPCSheath_pft(NZ,NY,NX),100)
   id=addone(id)
   call writefixl(nu_plt,id,'CPSTK','Plant stalk PC mass ratio [gP (gC)-1]',rPCStalk_pft(NZ,NY,NX),100)
   if(is_plant_woody_vascular(iPlantRootProfile_pft(NZ,NY,NX),iPlant2ndGrothPattern_pft(NZ,NY,NX)))then  
+!    id=addone(id)
+!    call writefixl(nu_plt,id,'CPRTLIG','Plant lignified root PC mass ratio [gP (gC)-1]',rPCLigRoot_pft(NZ,NY,NX),100)
     id=addone(id)
-    call writefixl(nu_plt,id,'CPRTLIG','Plant lignified root PC mass ratio [gP (gC)-1]',rPCLigRoot_pft(NZ,NY,NX),100)
+    call writefixl(nu_plt,id,'CPLCRT','Live coarse root NC mass ratio [gN (gC)-1]',rECLiveCRoot_pft(ielmp,NZ,NY,NX),100)
+    id=addone(id)
+    call writefixl(nu_plt,id,'CPDCRT','Dead coarse root NC mass ratio [gN (gC)-1]',rECDeadCRoot_pft(ielmp,NZ,NY,NX),100)
   endif
   id=addone(id)
   call writefixl(nu_plt,id,'CPRSV','Plant stalk reserve PC mass ratio [gP (gC)-1]',rPCReserve_pft(NZ,NY,NX),100)
@@ -1428,6 +1665,7 @@ implicit none
   integer :: IDATE
   integer :: NPP(JY,JX)
   integer :: IYR,NX,NY,NZ,NN,NH1,NH2,NV1,NV2,NS
+  integer :: NA        !number of PFT slots named for this year; the rest of the NS slots are fallow
   CHARACTER(len=2) :: CLIMATE
   integer :: ntopou,NTOPO
   type(file_desc_t) :: pftinfo_nfid
@@ -1440,7 +1678,7 @@ implicit none
   character(len=10) :: pft_gtype(JP)
 
   call PrintInfo('beg '//subname)
-  IF(is_first_year)THEN
+  IF(is_first_year .and. is_cold_run())THEN
     D9999: DO NX=NHW,NHE
       DO  NY=NVN,NVS
         DO NZ=1,JP
@@ -1461,7 +1699,6 @@ implicit none
         NP_col(NY,NX)=0
         DO NZ=1,NP0_col(NY,NX)
           DATAP(NZ,NY,NX)='NO'
-          DATAM(NZ,NY,NX)='NO'
         enddo
       enddo
     ENDDO D5995
@@ -1485,7 +1722,6 @@ implicit none
           NP_col(NY,NX)=0
           DO NZ=1,NP0_col(NY,NX)
             DATAP(NZ,NY,NX)='NO'
-            DATAM(NZ,NY,NX)='NO'
           enddo
         enddo
       ENDDO
@@ -1495,6 +1731,9 @@ implicit none
         iyear=1
       else
         iyear=1
+        ! Species intentionally follow the forcing year in all transient modes.
+        ! Flexible planting/management separately follow the simulation year;
+        ! do not make these year selections identical when forcing is cycled.
         DO while(.true.)
           call ncd_getvar(pftinfo_nfid,'year',iyear,year)
           if(year==yeari)exit
@@ -1510,9 +1749,25 @@ implicit none
         call ncd_getvar(pftinfo_nfid,'NH2',ntopo,NH2)
         call ncd_getvar(pftinfo_nfid,'NV2',ntopo,NV2)
         call ncd_getvar(pftinfo_nfid,'NZ',ntopo,NS)
+        ! Legacy plant files may reserve more ntopou slots than they populate.
+        ! Nonpositive bounds (including NetCDF fill values) end the populated records;
+        ! exit before validating NZ or reading planting/management data for unused slots.
+        ! Keep this sentinel exit when changing validation. Populated units may span
+        ! multiple cells, so their bounds are checked against JX/JY, not ntopou.
+        if(any((/NH1,NV1,NH2,NV2/)<=0))exit
+        if(NS<0 .or. NS>JP)then
+          write(iulog,*)'Invalid PFT count in '//subname,': topo unit=',NTOPO,' NZ=',NS,' capacity=',JP
+          call endrun('PFT count must be between zero and JP in '//subname,__LINE__)
+        endif
 
         NN=1
-        if(any((/NH1, NV1,NH2,NV2/)<=0) .or. any((/NH1, NV1,NH2,NV2/)>ntopou))exit
+        ! Topographic units may span several cells; validate against grid dimensions.
+        if(NH1<1 .or. NH2>JX .or. NH1>NH2 .or. &
+           NV1<1 .or. NV2>JY .or. NV1>NV2)then
+          write(iulog,*)'Invalid bounds in '//subname,': topo unit=',NTOPO, &
+            ' NH1,NH2,NV1,NV2=',NH1,NH2,NV1,NV2,' JX,JY=',JX,JY
+          call endrun('Invalid topographic-unit bounds in '//subname,__LINE__)
+        endif
         D4995: DO NX=NH1,NH2
           D4990: DO NY=NV1,NV2
             NP0_col(NY,NX)=NS
@@ -1522,6 +1777,7 @@ implicit none
           ENDDO D4990
         ENDDO D4995
 
+        NA=0
         IF(NS.GT.0)THEN
           ! a vegetated topo unit
           call check_var(pftinfo_nfid, 'pft_type', vardesc, readvar)
@@ -1532,9 +1788,23 @@ implicit none
             start = (/1,1,NTOPO,iyear/),count = (/len(pft_gtype(1)),JP,1,1/)), &
             trim(mod_filename)//':: at line '//trim(int2str(__LINE__)))
 
+          ! A blank pft_type marks a fallow slot for this year. Named slots come first,
+          ! so slots NA+1..NS are fallow and keep only the residue of their last crop.
+          DO NZ=1,NS
+            if(is_blank_pft(pft_gtype(NZ)))exit
+            NA=NZ
+          ENDDO
+          DO NZ=NA+1,NS
+            if(.not.is_blank_pft(pft_gtype(NZ)))then
+              write(iulog,*)subname//': topo unit ',NTOPO,' year record ',iyear, &
+                ' names PFT slot ',NZ,' after blank slot ',NA+1
+              call endrun('fallow (blank) pft_type slots must follow the named slots in '//subname,__LINE__)
+            endif
+          ENDDO
+
           D4975: DO NX=NH1,NH2
             D4970: DO NY=NV1,NV2
-              D4965: DO NZ=1,NS
+              D4965: DO NZ=1,NA
                 flag_active_pft(NZ,NY,NX)=.true.
                 !modify pft name 
                 IF(KoppenClimZone_col(NY,NX).GT.0)THEN
@@ -1555,6 +1825,7 @@ implicit none
                 flag_active_pft(2:NS,NY,NX)=.false.
                 NP0_col(NY,NX)=1
                 NS=1
+                NA=MIN(NA,1)
               endif  
             ENDDO D4970
           ENDDO D4975
@@ -1562,13 +1833,23 @@ implicit none
 
         D8995: DO NX=NH1,NH2
           D8990: DO NY=NV1,NV2
-            NP_col(NY,NX)=NS
-            !DATAP(NZ,NY,NX) and DATAM(NZ,NY,NX) are to be read in readqmod.F90
-            D100: DO NZ=1,NP_col(NY,NX)
+            call CheckPFTSlotChange(NTOPO,NA,NS,NY,NX)
+            !NP_col slots grow; slots NP_col+1..NP0_col are fallow
+            NP_col(NY,NX)=NA
+            !PFT names for this year; their traits are read in readq
+            D100: DO NZ=1,NA
               DATAP(NZ,NY,NX)=DATAX_pft(NZ)
             ENDDO D100
+            !a fallow slot keeps the name of the PFT whose residue it holds
+            D102: DO NZ=NA+1,NS
+              if(DATAPI(NZ,NY,NX).GT.0)then
+                DATAP(NZ,NY,NX)=pftss_tab(DATAPI(NZ,NY,NX))
+              else
+                DATAP(NZ,NY,NX)='NO'
+              endif
+            ENDDO D102
 
-            D101: DO NZ=NP_col(NY,NX)+1,JP
+            D101: DO NZ=NS+1,JP
               DATAP(NZ,NY,NX)='NO'
             ENDDO D101
           ENDDO D8990
@@ -1579,6 +1860,68 @@ implicit none
   endif
   call PrintInfo('end '//subname)
   end subroutine ReadPlantInfoNC
+!------------------------------------------------------------------------------------------
+
+  logical function is_blank_pft(pft_name)
+  !
+  !Description
+  !true when a pft_type entry is empty (blank or NetCDF null characters), i.e. a fallow slot
+  implicit none
+  character(len=*), intent(in) :: pft_name
+
+  is_blank_pft=len_trim(pft_name)==0 .or. ichar(pft_name(1:1))==0
+  end function is_blank_pft
+!------------------------------------------------------------------------------------------
+
+  subroutine CheckPFTSlotChange(NTOPO,NA,NS,NY,NX)
+  !
+  !Description
+  !Check the PFT slots of a column before this year's PFT names are assigned.
+  !Slots NA+1..NS turn fallow: their plants must already be dead, because fallow
+  !slots get no growth, respiration or senescence. Slots 1..NA that change PFT while
+  !holding standing dead must keep the same woody status, because the litter class
+  !and decay rate of standing dead are taken from the current PFT traits.
+  use ElmIDMod, only : ielmc
+  implicit none
+  integer, intent(in) :: NTOPO   !topographic unit
+  integer, intent(in) :: NA      !number of named PFT slots this year
+  integer, intent(in) :: NS      !number of PFT slots of the column
+  integer, intent(in) :: NY,NX
+
+  character(len=*), parameter :: subname='CheckPFTSlotChange'
+  character(len=40) :: pft_lname
+  character(len=64) :: koppen_climl
+  character(len=3)  :: koppen_clims
+  integer :: NZ,loc_old,loc_new
+  logical :: woody_old,woody_new
+
+  call PrintInfo('beg '//subname)
+  DO NZ=NA+1,NS
+    if(iPlantStateLive_pft(NZ,NY,NX).EQ.iTrue)then
+      write(iulog,*)subname//': topo unit ',NTOPO,' column ',NY,NX,' PFT slot ',NZ, &
+        ' (',trim(DATAP(NZ,NY,NX)),') is still alive at the start of its fallow year'
+      call endrun('schedule a harvest that kills the plant before a fallow year in '//subname,__LINE__)
+    endif
+  ENDDO
+
+  DO NZ=1,NA
+    loc_old=DATAPI(NZ,NY,NX)
+    if(loc_old.LE.0 .or. StandDeadStrutElms_pft(ielmc,NZ,NY,NX).LE.0._r8)cycle
+    loc_new=get_pft_loc(KoppenClimZone_col(NY,NX),DATAX_pft(NZ)(1:6),pft_lname,koppen_climl,koppen_clims)
+    if(loc_new.EQ.loc_old)cycle
+    woody_old=iPlantTurnoverPattern_tab(loc_old).NE.0 .and. &
+      is_plant_woody_vascular(iPlantRootProfile_tab(loc_old),iPlant2ndGrothPattern_tab(loc_old))
+    woody_new=iPlantTurnoverPattern_tab(loc_new).NE.0 .and. &
+      is_plant_woody_vascular(iPlantRootProfile_tab(loc_new),iPlant2ndGrothPattern_tab(loc_new))
+    if(woody_old.NEQV.woody_new)then
+      write(iulog,*)subname//': topo unit ',NTOPO,' column ',NY,NX,' PFT slot ',NZ,' changes from ', &
+        trim(pftss_tab(loc_old)),' to ',trim(DATAX_pft(NZ)),' with standing dead C ', &
+        StandDeadStrutElms_pft(ielmc,NZ,NY,NX)
+      call endrun('woody and non-woody PFTs cannot share a slot holding standing dead in '//subname,__LINE__)
+    endif
+  ENDDO
+  call PrintInfo('end '//subname)
+  end subroutine CheckPFTSlotChange
 
 !------------------------------------------------------------------------------------------
 
@@ -1645,9 +1988,12 @@ implicit none
 !------------------------------------------------------------------------------------------
 
   Subroutine ReadPlantTraitTable()
-
+  ! Description:
+  ! Read the PFT trait catalog, including prescribed concentrations for SP mode.
   implicit none
   character(len=*), parameter :: subname='ReadPlantTraitTable'
+  type(Var_desc_t) :: vardesc
+  logical :: readvar
 
   call PrintInfo('beg '//subname)
 
@@ -1670,7 +2016,8 @@ implicit none
   call ncd_getvar(pft_nfid, 'I2EXP', iPlant2ndGrothPattern_tab)
   call ncd_getvar(pft_nfid, 'IRTYP', iPlantGrainType_tab)
   call ncd_getvar(pft_nfid, 'MY',  Myco_tab)
-  call ncd_getvar(pft_nfid, 'ZTYPI', PlantInitThermoAdaptZone_pft_tab)
+  call ncd_getvar(pft_nfid,'STDENS',StemMassDensity_tab)
+  call ncd_getvar(pft_nfid, 'ZTYPI', PlantInitThermoAdaptZone_tab)
   call ncd_getvar(pft_nfid, 'VCMX',  VmaxRubCarboxyRef_tab)
   call ncd_getvar(pft_nfid, 'VOMX',  VmaxRubOxyRef_tab)
   call ncd_getvar(pft_nfid, 'VCMX4', VmaxPEPCarboxyRef_tab)
@@ -1717,17 +2064,25 @@ implicit none
   call ncd_getvar(pft_nfid, 'GRDM', SeedCMass_tab)
   call ncd_getvar(pft_nfid, 'GRW2L',SeedWidth2LenRatio_tab)
   call ncd_getvar(pft_nfid, 'GFILL',GrainFillRate25C_tab)
+  call ncd_getvar(pft_nfid, 'CYTOS',enh_cyto_tab)
+  call ncd_getvar(pft_nfid,'RSSA',StalkAxialResist_tab)
   call ncd_getvar(pft_nfid, 'WTSTDI',StandingDeadInitC_tab)
   call ncd_getvar(pft_nfid, 'RRAD1M',Root1stMaxRadius_tab)
   call ncd_getvar(pft_nfid, 'RRAD2M',Root2ndMaxRadius_tab)
   call ncd_getvar(pft_nfid, 'PORT', RootPorosity_tab)
   call ncd_getvar(pft_nfid,'KLGMAX',KLigMax_tab)
   call ncd_getvar(pft_nfid,'KLGMM',KLigMM_tab)
+  call ncd_getvar(pft_nfid,'CNLCRT',rNCLiveCRoot_tab)
+  call ncd_getvar(pft_nfid,'CNDCRT',rNCDeadCRoot_tab)
+  call ncd_getvar(pft_nfid,'CPLCRT',rPCLiveCRoot_tab)
+  call ncd_getvar(pft_nfid,'CPDCRT',rPCDeadCRoot_tab)
   call ncd_getvar(pft_nfid, 'PR', NonstCMinCon2InitRoot_tab)
   call ncd_getvar(pft_nfid, 'RSRR', RootRadialResist_tab)
-  call ncd_getvar(pft_nfid, 'RSRA', RootAxialResist_tab)
+  call ncd_getvar(pft_nfid,'RVSR',RootVesselRadius_tab)
+  call ncd_getvar(pft_nfid, 'ARSRA', AlphaVesselAxialResist_tab)
   call ncd_getvar(pft_nfid, 'PTSHT',ShutRutNonstElmntConducts_tab)
-  call ncd_getvar(pft_nfid, 'RTFQ', RootBranchFreq_tab)
+  call ncd_getvar(pft_nfid, 'RTFQ', FineRootBranchFreq_tab)
+  call ncd_getvar(pft_nfid, 'MRTFQ',MediumRootBranchFreq_tab)
   call ncd_getvar(pft_nfid, 'UPMXZH',VmaxNH4Root_tab)
   call ncd_getvar(pft_nfid, 'UPKMZH',KmNH4Root_tab)
   call ncd_getvar(pft_nfid, 'UPMNZH',CMinNH4Root_tab)
@@ -1774,6 +2129,22 @@ implicit none
   call ncd_getvar(pft_nfid, 'CPGR', rPCGrain_tab)
   call ncd_getvar(pft_nfid, 'CPRT', rPCRootr_tab)
   call ncd_getvar(pft_nfid, 'CPND', rPCNoduler_tab)
+  if(ats_cpl_mode .or. ldo_sp_mode)then
+    call ncd_getvar(pft_nfid, 'IROOTJK', irootType_tab)
+    call ncd_getvar(pft_nfid, 'MFRUTL', MeanSecondaryAxisLength_tab)
+    call ncd_getvar(pft_nfid, 'CCPOLT', CanopyNonstOMConc_tab)
+  endif
+  if(ldo_sp_mode)then
+    call check_var(pft_nfid, 'RTNSC', vardesc, readvar)
+    if(.not.readvar)call endrun('missing prescribed PFT RTNSC',__LINE__)
+    call ncd_getvar(pft_nfid, 'RTNSC', RootNonstOMConc_tab)
+    call check_var(pft_nfid, 'LFPRTC', vardesc, readvar)
+    if(.not.readvar)call endrun('missing prescribed PFT LFPRTC',__LINE__)
+    call ncd_getvar(pft_nfid, 'LFPRTC', LeafProteinDensity_tab)
+  endif
+  if(ats_cpl_mode)then
+    call ncd_getvar(pft_nfid, 'CANHT', CanopyHeightLive_tab)
+  endif
   call ncd_pio_closefile(pft_nfid)
   call PrintInfo('end '//subname)
   end Subroutine ReadPlantTraitTable

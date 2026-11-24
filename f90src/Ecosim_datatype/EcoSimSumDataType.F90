@@ -54,7 +54,7 @@ module EcoSimSumDataType
 !----------------------------------------------------------------------
   subroutine InitAllocate
   implicit none
-  allocate(SurfGas_lnd(idg_beg:idg_NH3))
+  allocate(SurfGas_lnd(idg_beg:idg_NH3));SurfGas_lnd = 0._r8
   allocate(PlantElemntStoreLandscape(NumPlantChemElms)); PlantElemntStoreLandscape=0._r8
   end subroutine InitAllocate
 

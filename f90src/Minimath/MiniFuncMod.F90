@@ -1,4 +1,6 @@
 module MiniFuncMod
+  ! Description:
+  ! Supply shared physical response functions and safe numerical combinations.
 
   use data_kind_mod     , only : r8 => DAT_KIND_R8
   use EcosimConst
@@ -7,28 +9,44 @@ implicit none
 
   character(len=*),private, parameter :: mod_filename = &
   __FILE__
+  
   contains
 !------------------------------------------------------------------------------------------
 
   pure function FilmThickness(PSISM, is_top_layer)result(ans)
-
+  ! Description:
+  ! Evaluate the empirical water-film thickness. Limit its suction argument at
+  ! the former saturated-soil value PSIPS, retaining a finite saturated film
+  ! when a retention scheme reaches zero pressure. Soil pressure is unchanged.
   implicit none
-  real(r8), intent(in) :: PSISM
-  logical, optional, intent(in) :: is_top_layer
-  real(r8) :: ans
+  real(r8), intent(in) :: PSISM ! matric potential [MPa]
+  logical, optional, intent(in) :: is_top_layer ! select the surface-film fit [-]
+  real(r8) :: ans ! water-film thickness [m]
+  real(r8) :: psi_film
   logical :: is_top_layer_loc
   is_top_layer_loc=.false.
   if(PRESENT(is_top_layer))is_top_layer_loc=is_top_layer
-  ! For saturated conditions (PSISM >= 0), LOG(-PSISM) is undefined.
-  ! Return a large film thickness representing pore-filling water.
-  if(PSISM >= 0._r8)then
-    ans = 1.0e-3_r8
-  elseif(is_top_layer_loc)then
-    ans=AMAX1(ppmc,EXP(-13.650_r8-0.857_r8*LOG(-PSISM)))
+  psi_film=AMIN1(PSISM,PSIPS)
+  if(is_top_layer_loc)then
+    ans=AMAX1(ppmc,EXP(-13.650_r8-0.857_r8*LOG(-psi_film)))
   else
-    ans=AMAX1(ppmc,EXP(-13.833_r8-0.857_r8*LOG(-PSISM)))
+    ans=AMAX1(ppmc,EXP(-13.833_r8-0.857_r8*LOG(-psi_film)))
   endif
   end function FilmThickness
+!------------------------------------------------------------------------------------------
+  pure function Harmonicmean_safe(a,b)result(hm)
+  implicit none
+  real(r8), intent(in) :: a,b
+  real(r8) :: hm
+  real(r8) :: tiny_val
+  tiny_val = TINY(1.0_r8)
+
+  IF (a <= tiny_val .OR. b <= tiny_val) THEN
+    hm = 0.0_r8
+  ELSE  
+    hm = 2.0_r8 * MIN(a,b) / (1.0_r8 + MIN(a,b) / MAX(a,b))  
+  endif
+  end function Harmonicmean_safe
 !------------------------------------------------------------------------------------------
 
 
@@ -130,14 +148,16 @@ implicit none
   endif
   end function fDiffusivitySolutEff
 !------------------------------------------------------------------------------------------
-  pure function fOFFSET(atcs)result(ans)
+  pure function f_microbe_TOffset(atcs)result(ans)
+  !
+  !computing the temeprature offset for microbial activity
   implicit none
   real(r8), intent(in) :: atcs   !mean annual soil temperature, [oC]
   real(r8) :: ans
 
   ans=0.333_r8*(12.5_r8-AMAX1(0.0_r8,AMIN1(25.0_r8,ATCS)))
 
-  end function fOFFSET
+  end function f_microbe_TOffset
 
 !------------------------------------------------------------------------------------------
   function GetDayLength(ALAT,I,DECLIN)result(DYL)

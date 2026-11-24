@@ -31,7 +31,7 @@ implicit none
    real(r8) ,target,allocatable ::  SILT_vr(:,:,:)                      !soil silt content	,[Mg d-2]
    real(r8) ,target,allocatable ::  CLAY_vr(:,:,:)                      !soil clay content	,[Mg d-2]
    real(r8) ,target,allocatable ::  VLMicP_vr(:,:,:)                    !total micropore volume in layer ,[m3 d-2]
-   real(r8) ,target,allocatable ::  VLMacP_vr(:,:,:)                    !total macropore volume in layer ,[m3 d-2]
+   real(r8) ,target,allocatable ::  VLMacroPores_vr(:,:,:)                    !total macropore volume in layer ,[m3 d-2]
    real(r8) ,target,allocatable ::  VGeomLayer_vr(:,:,:)                !soil volume including  macropores+rock ,[m3 d-2]
    real(r8) ,target,allocatable ::  VGeomLayert0_vr(:,:,:)              !initial soil volume including  macropores+rock ,[m3 d-2]
    real(r8) ,target,allocatable ::  VOLTX_vr(:,:,:)                     !maximum soil pore (mac+mic) volume allowed ,[m3 d-2]  
@@ -77,7 +77,7 @@ contains
   allocate(SILT_vr(JZ,JY,JX));      SILT_vr=0._r8
   allocate(CLAY_vr(JZ,JY,JX));      CLAY_vr=0._r8
   allocate(VLMicP_vr(0:JZ,JY,JX));    VLMicP_vr=0._r8
-  allocate(VLMacP_vr(JZ,JY,JX));     VLMacP_vr=0._r8
+  allocate(VLMacroPores_vr(JZ,JY,JX));     VLMacroPores_vr=0._r8
   allocate(VGeomLayer_vr(0:JZ,JY,JX));    VGeomLayer_vr=0._r8
   allocate(VGeomLayert0_vr(0:JZ,JY,JX));   VGeomLayert0_vr=0._r8
   allocate(VOLTX_vr(JZ,JY,JX));  VOLTX_vr=0._r8
@@ -112,7 +112,7 @@ contains
   call destroy(SILT_vr)
   call destroy(CLAY_vr)
   call destroy(VLMicP_vr)
-  call destroy(VLMacP_vr)
+  call destroy(VLMacroPores_vr)
   call destroy(VGeomLayer_vr)
   call destroy(VGeomLayert0_vr)
   call destroy(VOLTX_vr)

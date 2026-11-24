@@ -4,7 +4,7 @@ module RedistDataMod
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use abortutils, only : destroy
   use TracerIDMod
-  use EcoSIMConfig, only : jcplx => jcplxc,jsken=>jskenc,NumMicbFunGrupsPerCmplx=>NumMicbFunGrupsPerCmplx
+  use EcoSIMConfig, only : jcplx => jcplxc,jsken=>jskenc
   use EcoSIMConfig, only : nlbiomcp=>NumLiveMicrbCompts,ndbiomcp=>NumDeadMicrbCompts
 implicit none
 

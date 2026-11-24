@@ -389,7 +389,11 @@ module ChemEquilibriaMod
 !     [X-OH2(+)][H2PO4(-)]/[X-H2PO4]=K, SPH2P
 !     X-H2PO4+OH(-) <-> X-OH+H2PO4(-)
 !     [X-OH][H2PO4(-)]/([X-H2PO4][OH(-)])=K,SXH2P
-      SPH2P                       = SXH2P*DPH2O
+
+      ! R-H2PO4 + H2O <=> R-OH2(+) + H2PO4(-).
+      ! Combine neutral-site exchange (SXH2P), water dissociation (DPH2O),
+      ! and R-OH2(+) <=> R-OH + H(+) (SXOH2) to close the equilibrium cycle.
+      SPH2P = SXH2P*DPH2O/SXOH2
       H2PO4_1e_to_XH2PO4_ROH2_flx = TADA*(XROH2_mole_conc*H2PO4_1e_aque_mole_conc-SPH2P*XH2PO4_mole_conc)/(XROH2_mole_conc+SPH2P)*VLWatMicPBK
       H2PO4_to_XH2PO4_ROH_flx     = TADA*(XROH1_mole_conc*H2PO4_1e_aque_mole_conc-SXH2P*OH_1e_aque_mole_conc*XH2PO4_mole_conc)/(XROH1_mole_conc+SXH2P)*VLWatMicPBK
 !------------------------------------------
@@ -421,10 +425,12 @@ module ChemEquilibriaMod
 !    corresponding to
 !  (AB) <-> A+B,  (A+x)(B+x)/((AB)-x)=K
 !  X represents flux from H2PO4(-) dissolution
+    ! Rationalize the smaller root to retain small phosphate transfers;
+    ! TSL retains the existing relaxation and root factor 1/2.
     DP                     = DPH2P
     S0                     = H1PO4_2e_aque_mole_conc+H_1p_aque_mole_conc+DP
-    S1                     = AMAX1(0._r8,S0**2-4.0_r8*(H1PO4_2e_aque_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_aque_mole_conc))
-    H2PO4_e_to_HPO4_2e_flx = TSL*(S0-SQRT(S1))
+    S1=MAX(0._r8,(H1PO4_2e_aque_mole_conc-H_1p_aque_mole_conc)**2+2._r8*DP*(H1PO4_2e_aque_mole_conc+H_1p_aque_mole_conc)+DP**2+4._r8*DP*H2PO4_1e_aque_mole_conc)
+    H2PO4_e_to_HPO4_2e_flx=TSL*(4._r8*((H1PO4_2e_aque_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_aque_mole_conc)/(S0+SQRT(S1))))
   ELSE
     H2PO4_1e_AlPO4_dissol_flx    = 0._r8
     H2PO4_1e_FePO4_dissol_flx    = 0._r8
@@ -510,7 +516,10 @@ module ChemEquilibriaMod
 !   H2PO4_1e_band_mole_conc: H2PO4(-)
 !   XH2PO4_band_mole_conc: R-H2PO4
 !   XROH2_band_mole_conc: R-OH2
-      SPH2P                        = SXH2P*DPH2O
+      ! R-H2PO4 + H2O <=> R-OH2(+) + H2PO4(-).
+      ! Combine neutral-site exchange (SXH2P), water dissociation (DPH2O),
+      ! and R-OH2(+) <=> R-OH + H(+) (SXOH2) to close the equilibrium cycle.
+      SPH2P = SXH2P*DPH2O/SXOH2
       H2PO4_1e_to_XH2PO4_ROH2_Bflx = TADA*(XROH2_band_mole_conc*H2PO4_1e_band_mole_conc-SPH2P*XH2PO4_band_mole_conc)/(XROH2_band_mole_conc+SPH2P)*VLWatMicPBK
       H2PO4_to_XH2PO4_ROH_Bflx     = TADA*(XROH_band_mole_conc*H2PO4_1e_band_mole_conc-SXH2P*XH2PO4_band_mole_conc*OH_1e_aque_mole_conc)/(XROH_band_mole_conc+SXH2P)*VLWatMicPBK
 !
@@ -535,10 +544,11 @@ module ChemEquilibriaMod
 !     S1=eqilibriunm concentration in band
 !     RH2B=H2PO4-H+HPO4 dissociation in band
 !
+    ! Use the same cancellation-resistant root in the fertilizer band.
     DP   = DPH2P
     S0   = H1PO4_2e_band_mole_conc+H_1p_aque_mole_conc+DP
-    S1   = AMAX1(0._r8,S0**2._r8-4.0_r8*(H1PO4_2e_band_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_band_mole_conc))
-    RH2B = TSLX*(S0-SQRT(S1))
+    S1=MAX(0._r8,(H1PO4_2e_band_mole_conc-H_1p_aque_mole_conc)**2+2._r8*DP*(H1PO4_2e_band_mole_conc+H_1p_aque_mole_conc)+DP**2+4._r8*DP*H2PO4_1e_band_mole_conc)
+    RH2B=TSLX*(4._r8*((H1PO4_2e_band_mole_conc*H_1p_aque_mole_conc-DP*H2PO4_1e_band_mole_conc)/(S0+SQRT(S1))))
   ELSE
     H2PO4_1e_AlPO4_dissolB_flx    = 0._r8
     H2PO4_1e_FePO4_dissolB_flx    = 0._r8
@@ -671,11 +681,9 @@ module ChemEquilibriaMod
 !
   IF(VLWatMicPNH.GT.ZEROS2)THEN
     RNH4 = (H_1p_aque_mole_conc*NH3_aque_mole_conc-DPN4*NH4_1p_aque_mole_conc)/(DPN4+H_1p_aque_mole_conc)
-    if(RNH4>0._r8)then
-      RNH4=AMIN1(RNH4,H_1p_aque_mole_conc,NH3_aque_mole_conc)
-    else
-      RNH4 = AMAX1(RNH4,-NH4_1p_aque_mole_conc)
-    ENDIF
+    ! Prescribed pH supplies H(+); only NH3 and NH4 are finite N donors.
+    ! Match the band limiter and retain equal, opposite NH3/NH4 transfers.
+    RNH4 = AMAX1(AMIN1(RNH4,NH3_aque_mole_conc),-NH4_1p_aque_mole_conc)
 
   ELSE
     RNH4=0._r8

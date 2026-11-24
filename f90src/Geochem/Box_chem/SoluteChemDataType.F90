@@ -55,7 +55,7 @@ module SoluteChemDataType
     real(r8) :: FeH2PO4_2p_aque_mole_conc
     real(r8) :: CaPO4_1e_con
     real(r8) :: CaHPO4_conc
-    real(r8) :: CaH4P2O8_1p_aque_mole_conc
+    real(r8) :: CaH4P2O8_1p_aque_mole_conc ! Legacy name: dissolved CaH2PO4(+), one P atom.
     real(r8) :: MgHPO4_conc
     real(r8) :: CSTR1
     real(r8) :: CCO2M

@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water-table exchange in WatsubMod — equations and accounting</title>
+<style>
+/* Layout: single reading column (~72ch) with wide figures/tables allowed to scroll in their own boxes */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --fg:#1b262e; --muted:#5a6a75; --rule:#d3dce1;
+  --accent:#1d6a98;   /* water */
+  --earth:#8a5627;    /* soil, tiles */
+  --codebg:#e9eff2; --soil:#e6dccd; --soilline:#c9b9a2; --wet:rgba(29,106,152,.16);
+  --ok:#2f7d4f; --warn:#a46a0a; --bad:#b3372f;
+  --f-display:"IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10171c; --surface:#151f26; --fg:#dbe4e9; --muted:#8fa0ab; --rule:#2a3943;
+  --accent:#6db3df; --earth:#d29a5e; --codebg:#1a2730; --soil:#2a241c; --soilline:#4a3f31; --wet:rgba(109,179,223,.18);
+  --ok:#6cc391; --warn:#e0a948; --bad:#ec7d73; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#10171c; --surface:#151f26; --fg:#dbe4e9; --muted:#8fa0ab; --rule:#2a3943;
+  --accent:#6db3df; --earth:#d29a5e; --codebg:#1a2730; --soil:#2a241c; --soilline:#4a3f31; --wet:rgba(109,179,223,.18);
+  --ok:#6cc391; --warn:#e0a948; --bad:#ec7d73; color-scheme:dark }
+
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:46rem;margin:0 auto;padding-inline:16px;padding-block:2.5rem 4rem;display:flex;flex-direction:column;gap:1.1rem}
+.wrap > *{min-width:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2rem;font-weight:600}
+h2{font-size:1.4rem;font-weight:600;margin-top:1.6rem;padding-top:1rem;border-top:1px solid var(--rule)}
+h3{font-size:1.1rem;font-weight:600;margin-top:.6rem}
+p,ul,ol{margin:0}
+ul,ol{padding-left:1.3rem;display:flex;flex-direction:column;gap:.35rem}
+a{color:var(--accent)}
+.meta{color:var(--muted);font-size:.9rem}
+.eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--codebg);padding:.05em .3em;border-radius:3px;overflow-wrap:anywhere}
+pre{margin:0}
+.eq{font-family:var(--f-mono);font-size:.86rem;line-height:1.55;background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--accent);padding:.8rem 1rem;overflow-x:auto;white-space:pre}
+.eq{tab-size:2}.mathbox{background:var(--surface);border:1px solid var(--rule);padding:1rem;overflow-x:auto}math{font-size:1.15rem}nav{display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.9rem}section{display:flex;flex-direction:column;gap:1rem}svg{max-width:100%;height:auto}body{margin:0}.eq.tile{border-left-color:var(--earth)}
+.src{font-family:var(--f-mono);font-size:.78rem;color:var(--muted)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--muted);font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+figure{margin:0;background:var(--surface);border:1px solid var(--rule);padding:.75rem}
+figcaption{color:var(--muted);font-size:.85rem;margin-top:.5rem}
+svg text{font-family:var(--f-body);font-size:12.5px;fill:var(--fg)}
+svg .m{font-family:var(--f-mono);font-size:11.5px;fill:var(--muted)}
+.steps{counter-reset:s;list-style:none;padding-left:0}
+.steps > li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:.4rem}
+.steps > li::before{content:counter(s);font-family:var(--f-mono);color:var(--accent);font-weight:500}
+.steps > li > div{min-width:0}
+.chip{display:inline-block;font-family:var(--f-mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;padding:.1em .45em;border:1px solid currentColor;border-radius:3px;margin-right:.4rem;vertical-align:.1em}
+.c-bad{color:var(--bad)} .c-warn{color:var(--warn)} .c-ok{color:var(--ok)} .c-mut{color:var(--muted)}
+.issues{list-style:none;padding-left:0;gap:.8rem}
+.issues li{padding-left:.8rem;border-left:2px solid var(--rule)}
+.note{background:var(--surface);border:1px solid var(--rule);padding:.8rem 1rem}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:.65rem">
+<div class="eyebrow">EcoSIM · HydroTherm/SoilPhys · mathematical walkthrough</div>
+<h1>Water-table exchange in WatsubMod</h1>
+<p>External-water-table and tile exchange are Darcy-type boundary transfers, activated by depth and wetness tests. This description distinguishes the activation gates, driving potentials, accepted water volumes, signed face storage, and hourly depth updates.</p>
+<p class="meta">Reviewed 14 October 2026 against the working tree based on <code>0cb20d7c</code>, including current uncommitted changes in WatsubMod and RedistMod. Equations describe the implementation; design intentions and unresolved concerns are identified separately. No model code was changed for this page.</p>
+<nav aria-label="Page sections"><a href="#notation">Notation</a><a href="#activation">Activation</a><a href="#discharge">Discharge</a><a href="#recharge">Recharge</a><a href="#bottom">Bottom boundary</a><a href="#accounting">Accounting</a><a href="#evolution">Table evolution</a><a href="#limits">Qualifications</a></nav>
+</header>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 760 440" width="760" height="440" role="img" aria-label="Soil column with external water table, internal water table, tile level, and boundary fluxes">
+      <defs>
+        <marker id="ha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" style="fill:var(--accent)"/></marker>
+        <marker id="he" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" style="fill:var(--earth)"/></marker>
+        <marker id="hm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" style="fill:var(--muted)"/></marker>
+      </defs>
+      <text x="20" y="24" class="m">W, N faces: XN = +1   ·   E, S faces and bottom: XN = −1</text>
+      <text x="480" y="44" class="m">east face of a boundary cell</text>
+      <!-- column -->
+      <rect x="250" y="50" width="220" height="320" style="fill:var(--soil);stroke:var(--soilline)"/>
+      <rect x="250" y="150" width="220" height="220" style="fill:var(--wet)"/>
+      <g style="stroke:var(--soilline)">
+        <line x1="250" y1="90" x2="470" y2="90"/><line x1="250" y1="130" x2="470" y2="130"/>
+        <line x1="250" y1="170" x2="470" y2="170"/><line x1="250" y1="210" x2="470" y2="210"/>
+        <line x1="250" y1="250" x2="470" y2="250"/><line x1="250" y1="290" x2="470" y2="290"/>
+        <line x1="250" y1="330" x2="470" y2="330"/>
+      </g>
+      <text x="240" y="54" text-anchor="end">soil surface</text>
+      <!-- internal water table -->
+      <line x1="250" y1="150" x2="470" y2="150" style="stroke:var(--accent);stroke-width:1.5"/>
+      <text x="240" y="154" text-anchor="end">internal water table z_int</text>
+      <!-- external water table -->
+      <line x1="20" y1="190" x2="250" y2="190" style="stroke:var(--accent);stroke-width:2;stroke-dasharray:7 5"/>
+      <line x1="470" y1="190" x2="740" y2="190" style="stroke:var(--accent);stroke-width:2;stroke-dasharray:7 5"/>
+      <text x="240" y="206" text-anchor="end">external water table z_wt</text>
+      <!-- tile level -->
+      <line x1="470" y1="290" x2="740" y2="290" style="stroke:var(--earth);stroke-width:2;stroke-dasharray:2 4"/>
+      <circle cx="724" cy="290" r="9" style="fill:var(--surface);stroke:var(--earth);stroke-width:2"/>
+      <text x="565" y="310">tile level z_tile</text>
+      <!-- active layer -->
+      <line x1="250" y1="350" x2="470" y2="350" style="stroke:var(--earth);stroke-width:1.5;stroke-dasharray:4 3"/>
+      <text x="240" y="354" text-anchor="end">active-layer depth</text>
+      <!-- fluxes -->
+      <line x1="474" y1="110" x2="556" y2="110" style="stroke:var(--accent);stroke-width:2" marker-end="url(#ha)"/>
+      <text x="565" y="114">discharge above z_wt</text>
+      <line x1="556" y1="230" x2="474" y2="230" style="stroke:var(--accent);stroke-width:2" marker-end="url(#ha)"/>
+      <text x="565" y="234">recharge below z_wt</text>
+      <line x1="474" y1="270" x2="556" y2="270" style="stroke:var(--earth);stroke-width:2" marker-end="url(#he)"/>
+      <text x="565" y="274">tile discharge above z_tile</text>
+      <line x1="360" y1="372" x2="360" y2="422" style="stroke:var(--muted);stroke-width:2" marker-end="url(#hm)"/>
+      <text x="372" y="404">free drainage × RCHGDG</text>
+    </svg>
+    </div>
+    <figcaption>One boundary column. Lateral faces of boundary cells exchange with the external water table and the tile drain. A nonzero bottom multiplier selects free drainage. Recharge explicitly tests active-layer depth; discharge has pathway-specific gates rather than a universal active-layer cutoff. Depths increase downward. The shaded region is schematic, not a solved saturation profile.</figcaption>
+  </figure>
+<section id="notation"><h2>1. Coordinate system, units, and signs</h2>
+<p>Depth <i>z</i> increases downward. Use the same column depth coordinate for layer edges, midpoints, and water-table levels; elevation and surface-depth adjustments are applied upstream. Matric potentials are normally negative. Write <i>g</i> = <code>mGravAccelerat</code> ≈ 0.00981 MPa m⁻¹ for the water-head-to-potential conversion.</p>
+<div class="scroll"><table><thead><tr><th>Symbol</th><th>Implementation</th><th>Units / meaning</th></tr></thead><tbody>
+<tr><td>zₜ, zᵦ, zₘ; h = zᵦ − zₜ</td><td><code>CumDepz2LayBottom_vr(L−1/L,…)</code>, <code>SoilDepthMidLay_vr</code>, <code>DLYR_3D(3,…)</code></td><td>m; layer top, bottom, midpoint, thickness</td></tr>
+<tr><td>zₑ, zᵢ, z_d, zₐ</td><td><code>ExtWaterTable_col</code>, <code>WaterTableDepZi_col</code>, <code>TileWaterTable_col</code>, <code>ActiveLayDepZ_col</code></td><td>m; external, diagnosed internal, tile, active-layer depths</td></tr>
+<tr><td>ψₘ, ψₒ, ψₛ</td><td><code>PSISoilMatricPtmp_vr</code>, <code>PSISoilOsmotic_vr</code>, <code>PSI_at_Sautration_vr</code></td><td>MPa; matric, osmotic, saturation potentials. Activation may instead use <code>PSISM1_vr</code>, denoted ψ₁.</td></tr>
+<tr><td>K_N(θ), K_N,sat; K_mac</td><td><code>HydroCond_3D(N,k,…)</code>, entry <code>k=1</code>; <code>HydroCondMacP1_vr</code></td><td>m² MPa⁻¹ h⁻¹ as required by the Darcy volume equation; datatype comments say m MPa⁻¹ h⁻¹, a dimensional discrepancy</td></tr>
+<tr><td>A_N, A₃; ℓ_N</td><td><code>AREA_3D(N,…)</code>, <code>AREA_3D(3,…)</code>; <code>DLYR_3D(N,…)</code></td><td>m²; directional face and footprint areas. ℓ_N is the directional cell width (m).</td></tr>
+<tr><td>s, D; b</td><td><code>Recharg2WTBLScal</code>, <code>RechargDist2WTBL</code>; <code>WaterTable2GroundSlope_col</code></td><td>Boundary multiplier, nominal outlet distance (m), relative water-table slope. Input UG flags are dimensionless; some datatype comments instead call s a rate constant.</td></tr>
+<tr><td>Δt, α</td><td><code>dts_HeatWatTP</code>, <code>dts_wat</code></td><td>Δt = 0.99999/NPH h; α = 0.99999 min(1,10Δt), used as a numerical water-volume fraction</td></tr>
+<tr><td>c_w, T_local</td><td><code>cpw</code>, <code>TKSoil1_vr</code></td><td>c_w = 4.186 MJ m⁻³ K⁻¹; local absolute temperature in K. Their product with transferred volume is heat in MJ.</td></tr>
+<tr><td>q, F, ξ</td><td>column gain; signed face <code>watflx</code>; <code>XN</code></td><td>q and F are transferred m³ per substep, not rates. ξ = +1 on west/north, −1 on east/south/bottom.</td></tr>
+</tbody></table></div>
+<div class="mathbox"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mi>F</mi><mo>=</mo><mi>ξ</mi><mi>q</mi><mo>,</mo><mspace width="1em"/><mi>q</mi><mo>=</mo><mi>ξ</mi><mi>F</mi><mo>,</mo><mspace width="1em"/><mi>q</mi><mo>&gt;</mo><mn>0</mn><mtext> means water enters the column.</mtext></math></div>
+<p>Consequently drainage has <i>q</i> &lt; 0 on every face, but its stored face flux changes sign with orientation. The formulas below use <i>q</i> except in the explicit free-drainage equation. Positive <i>s</i>, nonnegative <i>D</i>, and valid hydraulic tables are assumed when interpreting direction.</p>
+<h3>Layer overlap and macropore water surface</h3>
+<pre class="eq">clip(x,a,b) = min(b,max(a,x))
+f(z*)       = clip((zᵦ − z*)/h, 0, 1)
+              = 1                 if z* ≤ zₜ       (whole layer below target)
+              = (zᵦ − z*)/h       if zₜ &lt; z* &lt; zᵦ
+              = 0                 if z* ≥ zᵦ       (whole layer above target)
+
+z_mac = zᵦ − h (W_mac + I_mac)/V_mac     when V_mac &gt; numerical threshold
+        zᵦ                             otherwise</pre>
+<p>The code weights discharge by <b>1 − f</b> and recharge by <b>f</b>. These are geometric fractions, not saturation fractions. A partly intersected layer is still subject to midpoint activation tests; a nonzero overlap alone does not activate transfer. The macropore surface estimate includes ice volume, while the drained donor volume is liquid water.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">CopySoilWatVolIterateM and get_Surf2MacPDepz</a>; <a href="../f90src/Ecosim_mods/StartsMod.F90">set_ecosim_solver</a>.</p>
+</section>
+
+<section id="modes"><h2>2. Input modes and substep dispatch</h2>
+<p><code>readimod</code> reads grid <code>IDTBLG</code> at <code>loc=1</code> and initially assigns that mode to all initialized cells. Restarts and selected-cell management events can subsequently make modes differ.</p>
+<div class="scroll"><table><thead><tr><th>IDWaterTable</th><th>Natural external table</th><th>Tile</th></tr></thead><tbody>
+<tr><td>0</td><td>Disabled</td><td>Disabled</td></tr><tr><td>1</td><td>Stationary</td><td>Disabled</td></tr><tr><td>2</td><td>Mobile</td><td>Disabled</td></tr><tr><td>3</td><td>Stationary</td><td>Enabled, stationary</td></tr><tr><td>4</td><td>Mobile</td><td>Enabled, mobile</td></tr>
+</tbody></table></div>
+<p><code>DTBLIG</code> supplies natural depth, <code>DTBLDIG</code> tile depth, and <code>DTBLGG</code> the relative slope <i>b</i>. Each face supplies <i>s</i> from <code>RCHG{N,E,S,W}UG</code> and <i>D</i> from <code>RCHG{N,E,S,W}TG</code>. <code>RCHGDG</code> supplies the bottom multiplier. A zero face multiplier disables both natural and tile exchange on that face.</p>
+<ol class="steps"><li><div>Internal Darcy transport executes first and updates a remaining micropore budget, <code>VLWatMicP2_vr</code>.</div></li><li><div><code>XBoundaryFlowM</code> calculates layer pore space and discharge flags, then visits external west/east/north/south faces and the bottom face. Direction processing begins at <code>FlowDirIndicator_col = grid_mode</code>; mode 3 processes only vertical flow.</div></li><li><div>The caller currently selects <code>VertBoundaryDrainM</code> when <code>(IDWaterTable=0 OR N=3) AND s≠0</code>. Otherwise it adds natural discharge, tile discharge, and natural recharge when their respective conditions hold.</div></li><li><div>Face divergences are collected by <code>Summarize3DFlowM</code> and applied to water and heat storage by <code>UpdateSoilMoistTempM</code>.</div></li></ol>
+<div class="note"><b>Intended vertical role versus current caller.</b> VertBoundaryDrainM is intended for vertical drainage, but the <code>IDWaterTable=0</code> clause currently permits lateral calls. The equations below document that actual branch rather than silently treating it as vertical-only. With mode 3, no lateral natural-table or tile exchange occurs.</div>
+<p class="src">Source: <a href="../f90src/IOutils/readimod.F90">readimod</a>, <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">watsub and XBoundaryFlowM</a>.</p>
+</section>
+
+<section id="activation"><h2>3. Activation is separate from hydraulic driving force</h2>
+<h3>Natural micropore discharge: default branch</h3>
+<pre class="eq">Start with flag = false.
+Require mode ≠ 0, zₘ &lt; zₑ, and zₘ &lt; zₑ + ψₛ,L/g.
+The last test is equivalently ψₛ,L &gt; g(zₘ − zₑ).
+For each deeper layer j:
+  z_eq,j = zₑ + ψₛ,j/g
+  only if zₘ,j &lt; z_eq,j, disable the flag when
+    [ψ₁,j ≤ g(zₘ,j − z_eq,j) AND j ≠ bottom] OR zₘ,j &gt; zₐ.</pre>
+<p>The source-layer gate uses <b>ψₛ</b>, not its current ψₘ. It is therefore inaccurate to describe that initial gate as a direct current-wetness test. Actual driving potential is calculated later. The deeper-layer restriction is nested inside <code>zₘ,j &lt; z_eq,j</code>; there is no universal source-layer active-depth check in this branch.</p>
+<h3>Natural micropore discharge: use_ecosys_drainage</h3>
+<pre class="eq">Require mode ≠ 0, zₘ &lt; zₑ, and ψₘ,L &gt; ψ_threshold,L.
+For every deeper j with zₘ,j &lt; zₑ:
+  disable if ψₘ,j ≤ ψ_threshold,j OR zₘ,j &gt; zₐ.</pre>
+<p><code>ZmOutletWetnessPotential</code> searches the vertical K table for its first entry below 0.1 Ksat and converts the preceding wetter entry’s θ to matric potential. If the threshold cannot be resolved, it retains ψₛ. This is a conductivity-derived gate, not a claim that every permitted layer is fully saturated.</p>
+<h3>Tile micropore discharge</h3>
+<pre class="eq tile">Require mode ≥ 3, zₘ &lt; z_d, and zₘ &lt; z_d + ψ₁,L/g.
+The last test is equivalently ψ₁,L &gt; g(zₘ − z_d).
+For deeper j, use z_eq,j = z_d + ψₛ,j/g and the default deeper-layer test.</pre>
+<p>Unlike the default natural gate, the <b>tile source gate uses ψ₁,L</b>. Tile activation does not switch to the conductivity-derived gate when <code>use_ecosys_drainage</code> is true, even though tile flux then uses the legacy driving-potential branch.</p>
+<h3>Macropore discharge</h3>
+<p>The natural gate requires mode ≠ 0, <code>z_mac &lt; zₑ</code>, and positive liquid macropore storage; the tile gate requires mode ≥ 3 and <code>z_mac &lt; z_d</code>. Default natural and tile configuration reject discharge if a deeper layer above the target has no macropore capacity. The legacy natural branch returns before this deeper-capacity scan and does not explicitly test <code>LMacPoreOff</code>. In the current default branch, <code>LMacPoreOff</code> is checked <em>after</em> micropore configuration, so it no longer suppresses natural micropore discharge.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">Config4WaterTableDrain, ZmOutletWetnessPotential, Config4TileDrainage</a>.</p>
+</section>
+
+<section id="discharge"><h2>4. Discharge to the natural table or tiles</h2>
+<p>Let target <i>z*</i> be zₑ for natural discharge or z_d for tiles. The clipped depth term simplifies exactly:</p>
+<div class="mathbox"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mo>(</mo><mi>z</mi><mo>−</mo><mi>z*</mi><mo>)</mo><mo>−</mo><mi>max</mi><mo>(</mo><mn>0</mn><mo>,</mo><mi>z</mi><mo>−</mo><msub><mi>z</mi><mi>i</mi></msub><mo>)</mo><mo>=</mo><mi>min</mi><mo>(</mo><mi>z</mi><mo>,</mo><msub><mi>z</mi><mi>i</mi></msub><mo>)</mo><mo>−</mo><mi>z*</mi></math></div>
+<p>Thus the internal table caps the depth contributing to gravitational head. The term is not a direct calculation of saturated layer volume; that geometric weighting is supplied separately by 1 − f.</p>
+<pre class="eq">Directional slope correction:
+  δ_N = ξ · ½ g · SLOPE_N · ℓ_N · (1 − b)
+
+Micropore, default:
+  p₀ = min(0, −ψₘ − 0.03ψₒ + g[min(zₘ,zᵢ) − z*])
+  K  = K_N,sat
+
+Micropore, use_ecosys_drainage (natural AND tile):
+  p₀ = min(0, −ψₘ + ψₛ + g[min(zₘ,zᵢ) − z*])
+  θ  = max(θ_air-dry, min(porosity, W_mic/V_soil-mic))
+  k  = max(1,min(100,101 − int(100θ/porosity)))
+  K  = K_N(θ)
+
+Macropore, either switch setting:
+  p₀ = g[min(z_mac,zᵢ) − z*]
+  K  = K_mac
+
+For each domain:
+  p = p₀ − δ_N  if p₀ &lt; 0; otherwise p = p₀
+  q_raw = p K A_N (1 − f(z*)) s Δt / (D + 1 m)</pre>
+<h3>Interpretation as a potential difference</h3>
+<pre class="eq">ψ_eq = g[min(zₘ,zᵢ) − z*]
+Default micropore potential before slope correction:
+  p₀ = min(0, ψ_eq − ψₘ − 0.03ψₒ)
+Legacy micropore potential before slope correction:
+  p₀ = min(0, ψ_eq + ψₛ − ψₘ)</pre>
+<p>With zero osmotic and slope contributions, the default branch produces outflow when ψₘ &gt; ψ_eq: the soil is wetter than the target equilibrium. At ψₘ = ψ_eq its flux potential is zero. The legacy branch shifts this threshold by ψₛ and changes conductivity at the same time. This explains the flux equation; it does not replace the distinct activation gates in section 3. The source uses a prescribed reservoir level and finite conductance rather than solving an atmospheric-pressure seepage face.</p>
+<p>The written <code>D+1</code> is interpreted as a one-metre offset if D is a distance. For dimensionless <i>s</i>, Darcy volume requires K in m² MPa⁻¹ h⁻¹: MPa × K × m² / m × h = m³. This is a dimensional interpretation of the equation; the existing K and boundary-rate metadata are inconsistent with it.</p>
+<pre class="eq">Accepted micropore discharge: q_mic = q_raw              (no donor cap)
+
+Accepted macropore discharge:
+  B_mac = α W_mac + F_vertical,in − F_vertical,out
+  q_mac = max(q_raw, min(0, −B_mac))
+
+Stored face contribution: F = ξ q
+Drainage diagnostic increment: ΔQDrain = −q</pre>
+<p>The macropore cap includes net vertical macropore flow already stored in the face arrays, but does not subtract earlier lateral or natural/tile withdrawals. Because the negative-part clip occurs <b>before</b> the slope correction, the final <i>p</i> is not guaranteed to remain nonpositive. The macropore potential has no initial negative-part clip at all. “Discharge” is therefore a pathway name, not an unconditional guarantee of sign.</p>
+<div class="note"><b>Effect of the legacy switch.</b> The shared discharge routine applies its legacy potential and K(θ) to tiles as well as natural outlets. Upstream <code>SoilHydroParaMod</code> also sets SRP to 0.67 and derives air-entry/saturation thresholds from a 10% conductivity crossing. The switch consequently affects internal hydraulics too; it is not solely a boundary-flux change.</div>
+<h3>Worked discharge example</h3>
+<p>Take a whole layer above its target: zₘ = 1 m, z* = 2 m, zᵢ = 1.2 m, ψₘ = −0.002 MPa, ψₒ = 0, ψₛ = −0.001 MPa, δ_N = 0, A_N = 1 m², D = 1 m, s = 1, and Δt = 0.99999/30 h. Prescribe Ksat = 1 and K(θ) = 0.2 in the Darcy units above. Assume the appropriate activation gate passes.</p>
+<div class="scroll"><table><thead><tr><th>Branch</th><th>Driving potential</th><th>Column transfer q</th></tr></thead><tbody>
+<tr><td>Default</td><td>0.002 − 0.00981 = −0.00781 MPa</td><td>−0.000130165 m³ ≈ −0.130 L</td></tr>
+<tr><td>Legacy</td><td>0.002 − 0.001 − 0.00981 = −0.00881 MPa</td><td>−0.0000293664 m³ ≈ −0.0294 L</td></tr>
+</tbody></table></div>
+<p>The more negative legacy potential does not imply greater discharge: its smaller current-moisture conductivity dominates this example. These are illustrative prescribed values, not simulation results.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">DischargeOverWaterTBL</a>; <a href="../f90src/HydroTherm/SoilPhys/SoilHydroParaMod.F90">SoilHydroParaMod</a>.</p>
+</section>
+
+<section id="recharge"><h2>5. Recharge from the natural table</h2>
+<p>Only zₑ supplies recharge; there is no tile-to-soil recharge routine. Micropore recharge requires zₘ ≥ zₑ, zₐ &gt; zₑ, zₘ &lt; zₐ, positive stored micropore air volume, a nonzero face multiplier, and either positive working air space or a non-soil layer. Macropore recharge instead requires z_mac &gt; zₑ, zₐ &gt; zₑ, zₘ &lt; zₐ, and positive macropore air space.</p>
+<pre class="eq">Micropore:
+  u₀ = max(0, −ψₘ − 0.03ψₒ + g(zₘ − zₑ))
+  K  = K_N,sat                         even when use_ecosys_drainage is true
+Macropore:
+  u₀ = −0.03ψₒ + g(z_mac − zₑ)
+  K  = K_mac
+
+u = u₀ + δ_N  if u₀ &gt; 0; otherwise u = u₀
+q_raw = u K A_N f(zₑ) s Δt / (D + 1 m)
+
+Soil micropores:
+  q_mic = min(q_raw, C_mic)
+  q_aux = min(q_raw, C_aux)             separate wetting-front capacity
+Non-soil micropores:
+  q_mic = q_aux = q_raw                working-air cap bypassed
+Macropores:
+  q_mac = min(q_raw, C_mac)
+
+After each face:
+  C_mic ← C_mic − q_mic; C_aux ← C_aux − q_aux; C_mac ← C_mac − q_mac</pre>
+<p>Working capacities are initialized once per layer from pore capacity minus liquid and ice, then reduced as faces are visited. Soil recharge therefore shares a capacity budget among faces. It is not an aggregate budget for all internal and external processes. Neither final potential nor accepted transfer is clipped from below after the slope correction, so positivity should be interpreted conditionally. <code>q_aux</code> updates an auxiliary representation of the same micropore water, not another physical pool.</p>
+<h3>Worked recharge and sign example</h3>
+<p>Let zₘ = 2 m, zₑ = 1 m, ψₘ = −0.003 MPa, ψₒ = −0.01 MPa, δ_N = 0, f = 1, Ksat = 1, A_N = 1 m², D = 1 m, s = 1, and Δt = 0.99999/30 h. Then u = 0.003 + 0.0003 + 0.00981 = 0.01311 MPa, giving q_raw ≈ 0.2185 L. With only 0.1 L working air space, accepted recharge is 0.1 L. The remaining capacity becomes zero; a subsequent face cannot add more positive water through that capacity.</p>
+<p>On an east face ξ = −1, so F = −0.0001 m³. On a west face ξ = +1, F = +0.0001 m³. Both mean the column gains 0.0001 m³ and both add −0.0001 m³ to <code>QDischarg2WTBL_col</code>.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">RechargeFromExtWaterTBL</a>.</p>
+</section>
+
+<section id="bottom"><h2>6. Vertical free drainage and the mode-zero branch</h2>
+<pre class="eq">θ = max(θ_air-dry, min(porosity, W_mic/V_soil-mic))
+K_mic = K_N(θ) × RainEkReducedKsat   at the upper active layer; otherwise K_N(θ)
+K_mac = HydroCondMacP1_vr
+
+For domain p ∈ {mic,mac}:
+  F_raw,p = −ξ s Δt D g |SLOPE_N| A₃ K_p
+  F_p = AZERO(clip(F_raw,p, −αW_p, +αW_p))
+  q_p = ξF_p</pre>
+<p>At the bottom, ξ = −1, D = 1, and initialization sets SLOPE₃ = −1; thus positive controls produce outward drainage. Each call caps liquid removal at αW_p. The micropore surface reduction can also affect bottom flow in a single-active-layer column. The formula is quoted as implemented: its dimensional distance-factor interpretation should not be conflated with the divided-distance water-table formula.</p>
+<p>Under the current mode-zero lateral branch, the same routine uses footprint area A₃ and multiplies by D, even for N = 1 or 2. This differs from the directional-area, divided-distance exchange equations. It is an implementation/design mismatch to resolve in the caller; no model correction is made here.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">VertBoundaryDrainM and XBoundaryFlowM</a>.</p>
+</section>
+
+<section id="accounting"><h2>7. Water and heat accounting</h2>
+<pre class="eq">For every boundary contribution:
+  F = ξq
+  face heat H = c_w T_local F
+  column heat gain = ξH = c_w T_local q
+
+Discharge/free-drainage accumulators:
+  ΔQDrain = ΔQDrainM = ΔQDrain_cum = ΔQDrainloss = −q
+  ΔHeatDrain = −c_w T_local q
+Recharge accumulators:
+  ΔQDischarg2WTBL = ΔQDischarM = −q
+  ΔHeatDischar = −c_w T_local q
+
+Net layer water change from face transport:
+  ΔW = Σ_N (F_N,upstream − F_N,downstream)
+Then add infiltration, pore-domain exchange, phase change and irrigation
+in their respective storage updates; they are not all represented by ΔW.</pre>
+<p>The water-table helpers use the <b>local soil temperature for both discharge and recharge</b>; no separately prescribed external-reservoir temperature appears in those heat terms. VertBoundaryDrainM selects the donor by face sign; for ordinary outward west/north drainage its indexed donor is still the interior cell. The column energy update combines advective heat with conductive and phase-change terms and divides by the updated heat capacity.</p>
+<p>Boundary discharge and recharge are diagnostics for opposite named pathways; their sum need not represent the entire hydrological budget. Natural and tile discharge both enter QDrain; natural recharge enters QDischarg2WTBL with a negative sign. They remain separate in the mobile-table update below.</p>
+<p class="src">Source: <a href="../f90src/HydroTherm/SoilPhys/WatsubMod.F90">Summarize3DFlowM and UpdateSoilMoistTempM</a>.</p>
+</section>
+
+<section id="evolution"><h2>8. How table depths and modes change</h2>
+<p>Let z₀ be <code>ExtWaterTableLocDepz_col</code>, d₀ be <code>TileWaterTableLocDepz_col</code>, e_s be <code>CumDepz2LayBottom_vr(NU−1,…)</code>, A be footprint area, R be the hour’s <code>QDischarg2WTBL_col</code>, and λ = 0.00167 per hourly invocation.</p>
+<pre class="eq">Hour1 resets:
+  modes 0,1,3: zₑ ← z₀
+  modes 2,4:   zₑ ← z₀ + e_s
+  modes 3,4:   z_d ← d₀
+
+Redist, modes 2 and 4 (assignment order matters):
+  zₑ ← z₀ + e_s
+  zₑ ← zₑ − R/A − λ(zₑ − z₀ − e_s)
+     = z₀ + e_s − R/A                relaxation term evaluates to zero
+
+Redist, mode 4:
+  z_d ← z_d − R/A − λ(z_d − d₀)
+       = d₀ − R/A                   if no intervening event changed z_d</pre>
+<p>The natural-table update has no retained previous-depth term. Hour1 also resets tile depth each hour, so tile relaxation generally has no accumulated memory across hours. Since R &lt; 0 means recharge into soil, −R/A is positive: that booked recharge increases the external depth. Neither natural nor tile discharge booked in QDrain drives this update, and no specific yield appears. These are implementation equations, not a groundwater storage balance inferred from process names.</p>
+<pre class="eq tile">At solar noon, event 23, with management depth d and Δe = ALTZ − ALT:
+  NatWtblDepz ← d + e_s
+  z₀ ← NatWtblDepz − Δe(1 − b)
+  zₑ ← z₀ + e_s                     e_s enters twice through these assignments
+  IDWaterTable is unchanged.
+
+At solar noon, event 24:
+  WtblDepzTile ← d + e_s
+  d₀ ← max(0, WtblDepzTile − Δe(1 − b)); z_d ← d₀
+  mode 1 → 3; mode 2 → 4; modes 0,3,4 remain unchanged.</pre>
+<p>These events are read into the selected grid rectangle. Event 24 does not turn mode zero into an enabled water-table mode. Mode 4 then executes its mobile update in the same routine. An internal water table zᵢ is diagnosed separately from soil water/ice and air volume by <code>DiagWaterTableDepZi</code>; it is not identical to zₑ and is not the externally supplied boundary condition.</p>
+<p class="src">Source: <a href="../f90src/Modelforc/Hour1Mod.F90">Hour1Mod</a>, <a href="../f90src/Balances/RedistMod.F90">ModifyExWTBLByDisturbance</a>, <a href="../f90src/IOutils/ReadManagementMod.F90">ReadTillageFile</a>, <a href="../f90src/ModelDiags/HydrologyDiagMod.F90">DiagWaterTableDepZi</a>.</p>
+</section>
+
+<section id="fen"><h2>9. Applying the equations to the Fen example</h2>
+<p>The actual grid NetCDF selected by <code>FenStordIsland.namelist</code> has IDTBLG = 1, DTBLIG = 0 m, north/south multipliers s = 1 with D = 1 m, east/west multipliers zero, and RCHGDG ≈ 0.1. The namelist uses grid_mode = 1.</p>
+<p>In the initialized reference geometry, ordinary soil midpoints below zₑ = 0 cannot pass the source-layer natural discharge gate zₘ &lt; zₑ. Those layers can instead receive recharge when active-depth and pore-space conditions pass. North and south share each layer’s working air-space budget; they do not each get an independent full capacity. Bottom drainage uses a nonzero multiplier and remains a separate pathway. Surface shifts and management changes must be evaluated in the same adjusted depth coordinate before extending this interpretation to later states.</p>
+<p class="src">Checked directly: <a href="../examples/run_dir/Fen/FenStordIsland.namelist">Fen namelist</a> and <a href="../examples/inputs/Fen/FenStordIsland_grid_20250820.nc">selected grid NetCDF</a>.</p>
+</section>
+
+<section id="limits"><h2>10. Qualifications and verification</h2>
+<ul class="issues">
+<li><span class="chip c-ok">updated source</span><b>Macropores-off behavior.</b> The old default-branch early-return defect has been corrected in the current working tree. It must not remain listed as an unresolved default micropore-discharge bug. Legacy macropore activation still follows a separate early-return branch.</li>
+<li><span class="chip c-warn">confirmed mechanism</span><b>No aggregate outflow budget.</b> Micropore water-table discharge is uncapped; capped free-drainage calls share the original liquid store rather than a remaining budget. A source-extracted synthetic one-cell, five-face check removed 1.66663 units from one stored unit at NPH = 30. That reproduces conditional overdraw but does not establish its occurrence in an example case. Macropore natural/tile caps also omit previously accepted lateral withdrawals.</li>
+<li><span class="chip c-warn">source behavior</span><b>Fixed-water-level heat.</b> The boundary helpers do not apply the HeatAdv_scal suppression used by internal Darcy flow. Fixed-water-level mode suppresses boundary water divergence but retains its heat divergence. No fixed-water-level integration test was run here.</li>
+<li><span class="chip c-mut">formulation</span><b>Sign and unit assumptions.</b> Slope corrections occur after one-sided potential clips; do not label all accepted discharge negative or recharge positive without checking the final potential. Input and datatype units disagree for conductivity and face multipliers. Lateral mode-zero dispatch and distance scaling need a design decision.</li>
+<li><span class="chip c-mut">scope</span><b>Boundary cells and active depth.</b> Natural/table exchange uses lateral external faces, so interior cells do not directly access tile outlets. Mode 3 omits those pathways. Active-depth conditions differ among gates and are not a blanket exclusion of every layer below zₐ.</li>
+</ul>
+<p>Verification for this revision comprises tracing the active formulas, caller order, shared routine use, source links, and arithmetic examples against the current source. No model build or integration simulation was run for this documentation edit. The source-extracted synthetic free-drainage reproduction used GNU Fortran 13.4.0 with bounds checks and floating-point traps (scratch artifacts: <code>/private/tmp/ecosim-boundary-review-m1lk6v6s/</code>). Execution without NaN/Inf would not establish scientific correctness or long-term conservation.</p>
+</section>
+</main>
+</body>
+</html>

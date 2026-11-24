@@ -79,7 +79,7 @@ implicit none
   integer :: idsalt_FeH2PO4 ! FeH2PO4
   integer :: idsalt_CaPO4   ! CaPO4
   integer :: idsalt_CaHPO4  ! CaHPO4
-  integer :: idsalt_CaH4P2O8 ! CaH4P2O8
+  integer :: idsalt_CaH4P2O8 ! Legacy name: dissolved CaH2PO4(+), one P atom; retain ID for compatibility.
   integer :: idsalt_MgHPO4 ! MgHPO4
 !band salt
   integer :: idsalt_H0PO4B   ! PO4
@@ -88,7 +88,7 @@ implicit none
   integer :: idsalt_FeH2PO4B ! FeH2PO4
   integer :: idsalt_CaPO4B   ! CaPO4
   integer :: idsalt_CaHPO4B  ! CaHPO4
-  integer :: idsalt_CaH4P2O8B ! CaH4P2O8
+  integer :: idsalt_CaH4P2O8B ! Legacy name: band dissolved CaH2PO4(+), one P atom.
   integer :: idsalt_MgHPO4B ! MgHPO4
   integer :: idsaltb_beg    !band begin
   integer :: idsaltb_end    !band end
@@ -106,12 +106,12 @@ implicit none
   integer :: idsp_CaSO4
   integer :: idsp_AlPO4
   integer :: idsp_FePO4
-  integer :: idsp_CaH4P2O8
+  integer :: idsp_CaH4P2O8 ! Solid Ca(H2PO4)2, two P atoms per formula unit.
   integer :: idsp_CaHPO4B
   integer :: idsp_ApatiteBand
   integer :: idsp_AlPO4B
   integer :: idsp_FePO4B
-  integer :: idsp_CaH4P2O8B
+  integer :: idsp_CaH4P2O8B ! Band solid Ca(H2PO4)2, two P atoms per formula unit.
   integer :: idsp_psoi_beg,idsp_psoi_end
   integer :: idsp_p_beg, idsp_p_end
   
@@ -282,7 +282,7 @@ implicit none
 
     idsalt_end  = idsalt_MgHPO4
     idsaltb_beg = idsalt_end+1
-    idsaltb_end = idsaltb_beg
+    idsaltb_end = idsalt_end
     idsalt_psoil_beg=idsalt_H0PO4;idsalt_psoil_end=idsalt_MgHPO4
 
     idsalt_nuts=idsalt_MgHPO4-idsalt_H0PO4

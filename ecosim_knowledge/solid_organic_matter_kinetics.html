@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solid organic matter kinetics in EcoSIM</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .note, pre { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; }
+    pre { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #ccd8cf; }
+    .table-wrap { overflow-x: auto; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Kinetic components of solid organic matter</h1>
+  <p class="meta">Code-based knowledge note · 18 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>EcoSIM subdivides each solid organic matter complex into kinetic components, whose meanings depend on the complex.</strong> Litter uses four biochemical fractions; POM uses one kinetic fraction; humus uses two resistance classes. See also <a href="microbial_complexes.html">microbial complexes and layer coverage</a>.</p>
+  <h2>Component meanings</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Index M</th><th>Litter (K = 1–3)</th><th>POM (K = 4)</th><th>Humus (K = 5)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Protein</td><td>Single POM fraction</td><td>Less-resistant humus</td></tr>
+      <tr><td>2</td><td>Nonstructural carbohydrate</td><td>Unused</td><td>More-resistant humus</td></tr>
+      <tr><td>3</td><td>Cellulose</td><td>Unused</td><td>Unused</td></tr>
+      <tr><td>4</td><td>Lignin</td><td>Unused</td><td>Unused</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">The names <code>iprotein</code>, <code>icarbhyro</code>, <code>icellulos</code>, and <code>ilignin</code> label array positions. Their chemical meanings apply to litter; use of <code>iprotein</code> for humus component 1 does not make that pool literal protein.</p>
+  <p>Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>, lines 150–162, and <a href="../f90src/Microbial_bgc/Layers_Micmodel/InitSOMBGCMod.F90">InitSOMBGCMod.F90</a>, lines 594–658.</p>
+  <h2>Composition, nutrients, and colonization</h2>
+  <p><code>SolidOM(element,M,K)</code> holds C, N, and P separately for each component and complex. <code>SolidOMAct(M,K)</code> holds colonized/active carbon. Initial carbon fractions are specified by <code>CFOSC_vr</code>, with litter composition varying by residue type and component nutrient ratios represented by <code>CNOSC_vr</code> and <code>CPOSC_vr</code>.</p>
+  <p>POM is initialized with component fractions <code>(1,0,0,0)</code>; humus uses <code>(FC1,1−FC1,0,0)</code>. The humus fraction <code>FC1 = FC0 × FCX</code> depends on nutrient-to-carbon ratios, accumulated overlying SOC, and natural versus reconstructed soil settings. Sources: <a href="../f90src/Microbial_bgc/Layers_Micmodel/InitSOMBGCMod.F90">InitSOMBGCMod.F90</a>, lines 346–360, 462–566, and 594–658.</p>
+  <p>Colonization increases active carbon according to microbial activity and the complex-specific coefficient <code>DOSA(K)</code>, capped by total component carbon. Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicrobialLitterColonization in MicBGCFGMod.F90</a>, lines 1899–1923.</p>
+  <h2>Specific decomposition coefficients</h2>
+  <p><code>SPOSC(M,K)</code> distinguishes component kinetics. These are the configured values after applying the code’s ×1.5 multiplier to litter complexes:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Complex</th><th>M = 1</th><th>M = 2</th><th>M = 3</th><th>M = 4</th></tr></thead>
+    <tbody>
+      <tr><td>Woody litter</td><td>11.25</td><td>11.25</td><td>2.25</td><td>0.75</td></tr>
+      <tr><td>Fine litter</td><td>11.25</td><td>11.25</td><td>2.25</td><td>0.75</td></tr>
+      <tr><td>Manure</td><td>11.25</td><td>11.25</td><td>2.25</td><td>0.75</td></tr>
+      <tr><td>POM</td><td>0.05</td><td>0</td><td>0</td><td>0</td></tr>
+      <tr><td>Humus</td><td>0.05</td><td>0.0167</td><td>0</td><td>0</td></tr>
+    </tbody>
+  </table></div>
+  <p>The declaration labels <code>SPOSC</code> as h⁻¹, but these values are not standalone first-order turnover rates: the hydrolysis equation combines them with a microbial-activity scalar and a cap. Their reciprocals should not be interpreted as pool residence times. Source: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>, line 41 and lines 329–335.</p>
+  <h2>How the components decompose</h2>
+  <p>For each component M in complex K, carbon hydrolysis follows this implementation (notation shortened):</p>
+  <pre><code>activity_scalar(K) = max(0, A(K)) × DFNS(K) × OQCI(K) / BulkSOMC(K)
+H_C(M,K) = SolidOMAct(M,K) × min(0.5, SPOSC(M,K) × activity_scalar(K))</code></pre>
+  <ul>
+    <li><code>A(K)</code> is <code>ROQC4HeterMicActCmpK(K)</code>, respiration of DOC plus acetate used to represent microbial activity.</li>
+    <li><code>DFNS = COSC / (COSC + DCKD)</code> expresses substrate-concentration saturation; <code>DCKD</code> increases with aqueous microbial activity and uses different base constants for surface litter and soil.</li>
+    <li><code>OQCI = 1 / (1 + DOC_concentration / OQKI)</code> represents inhibition by accumulated DOC.</li>
+    <li>The calculation acts on colonized carbon and caps hydrolysis at 50% of that active carbon per calculation. Elemental hydrolysis is additionally capped by available mass.</li>
+  </ul>
+  <p>N and P hydrolysis uses the fraction of total component carbon hydrolyzed, divided by the respective microbial nutrient limitation factors <code>FCNK</code> and <code>FCPK</code> (bounded between 0.5 and 1), and capped by available N or P. Thus nutrient release need not remain exactly proportional to carbon release. Environmental effects also enter through microbial activity; the carbon equation shown does not directly multiply by a separate temperature factor.</p>
+  <p>Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">SolidOMDecomposition in MicBGCFGMod.F90</a>, lines 1305–1375.</p>
+  <p class="meta">Source line numbers may shift as the code changes. This note documents the inspected implementation; no model code or parameters were changed.</p>
+</body>
+</html>

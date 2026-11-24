@@ -1,4 +1,5 @@
 module SnowDataType
+  ! Store snow constituents, layer geometry, temperatures and exchange diagnostics.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
   use TracerIDMod
@@ -37,7 +38,7 @@ module SnowDataType
   real(r8),target, allocatable ::  VcumIceSnow_col(:,:)                    !ice volume in snowpack, [m3 d-2]
   real(r8),target, allocatable ::  VcumSnoDWI_col(:,:)                     !dry snow volume, [m3 d-2]
   real(r8),target, allocatable ::  VcumSnowWE_col(:,:)                     !water equivalent snowpack, [m3 d-2]
-  real(r8),target, allocatable ::  VLHeatCapSnowMin_col(:,:)               !minimum layer integrated snowpack heat capacity,  [MJ d-2 K-1]
+  real(r8),target, allocatable ::  VLHeatCapSnowMin_col(:,:)               !legacy snow layer/surface-property threshold, [MJ K-1 per column]
   real(r8),target, allocatable ::  WatConvSno2MicP_snvr(:,:,:)             !water from snowpack to soil micropores,[m3 d-2 h-1]
   real(r8),target, allocatable ::  WatConvSno2MacP_snvr(:,:,:)             !water from snowpack to soil macropores,[m3 d-2 h-1]
   real(r8),target, allocatable ::  HeatConvSno2Soi_snvr(:,:,:)             !convective heat from snowpack to soil,[MJ d-2 h-1]

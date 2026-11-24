@@ -15,7 +15,7 @@ module EcosysWarmingMod
   use GridDataType,     only: CumDepz2LayBottom_vr, NU_col, NL_col
   use abortutils,       only : endrun,iulog  
   use DebugToolMod,     only : PrintInfo
-  use StrToolsMod  
+  use StringToolsMod
   use EcoSimConst  
   implicit none
   private
@@ -42,6 +42,8 @@ module EcosysWarmingMod
   integer :: NY_w,NX_w
 
   public :: check_warming_dates
+  public :: check_warming_year
+  public :: warming_hours_needed
   public :: get_warming_fname
   public :: config_soil_warming
   public :: apply_soil_cable_warming
@@ -140,28 +142,48 @@ module EcosysWarmingMod
     return
   endif
 
-  ans=(year==warm_yearb .and. I>=warm_doyb) .or. (year==warm_yeare .and. I<=warm_doye) &
-    .or. (year>warm_yearb .and. year <warm_yeare)
+  !on or after the first day and on or before the last day; also correct when
+  !the period starts and ends in the same year
+  ans=(year>warm_yearb .or. (year==warm_yearb .and. I>=warm_doyb)) &
+    .and. (year<warm_yeare .or. (year==warm_yeare .and. I<=warm_doye))
   
-  if(I==1 .and. J==1)then
-    
-    leap_cor=0
-    if(seas_doyb>59)then
-      leap_cor(1)=iisleap(year)
-    endif
-
-    if(seas_doyb<seas_doye)then
-      !within a year
-      leap_cor(2)=leap_cor(1)
-    else
-      !over two years
-      if(seas_doye>59)then
-        leap_cor(2)=iisleap(year+1)
-      endif      
-    endif
+  ! Seasonal endpoints are stored as non-leap-year ordinal days. Each is
+  ! compared against the current year's I, including cross-year seasons.
+  ! Refresh on every call so a midyear start/restart needs no January setup.
+  leap_cor=0
+  if(igrowth==2 .or. igrowth==3)then
+    if(seas_doyb>59)leap_cor(1)=iisleap(year)
+    if(seas_doye>59)leap_cor(2)=iisleap(year)
   endif
   return
   end function check_warming_dates
+!------------------------------------------------------------------------------------------
+
+  logical function check_warming_year(year)result(ans)
+  !
+  !Description
+  !check if any day of year falls in the warming period
+  implicit none
+  integer, intent(in) :: year
+
+  ans=lsoil_warming .and. year>=warm_yearb .and. year<=warm_yeare
+  end function check_warming_year
+!------------------------------------------------------------------------------------------
+
+  integer function warming_hours_needed(year)result(nhrs)
+  !
+  !Description
+  !number of hourly reference records needed for year, counted from Jan 1:
+  !through warm_doye in the last warming year, the whole year otherwise
+  implicit none
+  integer, intent(in) :: year
+
+  if(year==warm_yeare)then
+    nhrs=24*warm_doye
+  else
+    nhrs=24*(365+iisLeap(year))
+  endif
+  end function warming_hours_needed
 !------------------------------------------------------------------------------------------
 
   subroutine config_soil_warming(warming_exp)
@@ -276,6 +298,10 @@ module EcosysWarmingMod
   DO KK=1,num_found
     select case(trim(variables(kk)))
     case ('power')
+      ! IR power is parsed but currently cannot be applied consistently through
+      ! the model's energy coupling. Warming uses the prescribed dT instead;
+      ! power alone does not define the treatment. TODO: implement a consistent
+      ! IR energy-input pathway before using warm_IR_power to drive warming.
       if(extract_number_and_unit(values(kk), warm_IR_power, unit_out))then
         if(trim(unit_out)=='Wm-2')then
           !convert from W m-2 to MJ/m2/hr
@@ -307,7 +333,7 @@ module EcosysWarmingMod
         !growing season only
         igrowth=1
       elseif(Extract_dates2doy(values(kk),seas_doyb,seas_doye))then
-        if(seas_doyb<seas_doye)then
+        if(seas_doyb<=seas_doye)then
           igrowth=2
         else
           igrowth=3
@@ -372,7 +398,7 @@ module EcosysWarmingMod
         !growing season only
         igrowth=1
       elseif(Extract_dates2doy(values(kk),seas_doyb,seas_doye))then
-        if(seas_doyb<seas_doye)then
+        if(seas_doyb<=seas_doye)then
           igrowth=2
         else
           igrowth=3
@@ -400,7 +426,8 @@ module EcosysWarmingMod
   call PrintInfo('beg '//subname)
   igrowth=0  !default all year
   wind_otc       = 0.4_r8 !default to 0.4 m/s
-  ems_reduct_otc = 0.07 !default reduce 7%
+  ems_reduct_otc = 0.07_r8 !default reduce 7%
+  taus_otc       = 1._r8 !neutral solar transmission unless specified
   DO KK             = 1, num_found
     select case(trim(variables(kk)))
     case ('beg_time')
@@ -413,19 +440,15 @@ module EcosysWarmingMod
       endif
     case ('taus') 
       !solar transmissivity
-      if(extract_number_and_unit(values(kk), taus_otc, unit_out))then
-        if(trim(unit_out)=='%')taus_otc=taus_otc*0.01_r8
-      endif 
+      call ParseOTCFraction(values(kk),'taus',taus_otc)
     case ('EMSReduct')        
-      if(extract_number_and_unit(values(kk), ems_reduct_otc, unit_out))then
-        if(trim(unit_out)=='%')ems_reduct_otc=ems_reduct_otc*0.01_r8
-      endif    
+      call ParseOTCFraction(values(kk),'EMSReduct',ems_reduct_otc)
     case ('season')
       if(trim(values(kk))=='growth')then
         !growing season only
         igrowth=1
       elseif(Extract_dates2doy(values(kk),seas_doyb,seas_doye))then
-        if(seas_doyb<seas_doye)then
+        if(seas_doyb<=seas_doye)then
           igrowth=2
         else
           igrowth=3
@@ -444,6 +467,42 @@ module EcosysWarmingMod
   end subroutine set_open_top_chamber
 
 !------------------------------------------------------------------------------------------
+  subroutine ParseOTCFraction(value,name,fraction)
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  implicit none
+  character(len=*), intent(in) :: value,name
+  real(r8), intent(out) :: fraction
+  character(len=*), parameter :: subname='ParseOTCFraction'
+  character(len=len(value)) :: numeric
+  integer :: n,ios
+  logical :: isPercent
+  real(r8) :: parsed
+
+  call PrintInfo('beg '//subname)
+  ! OTC scalars accept a unitless fraction or a trailing percent sign.
+  ! Keep the unit-requiring parser's contract unchanged for other settings.
+  numeric=adjustl(value)
+  n=len_trim(numeric)
+  isPercent=.false.
+  if(n>0)then
+    isPercent=numeric(n:n)=='%'
+    if(isPercent)numeric(n:n)=' '
+  endif
+  ios=1
+  ! Reject extra tokens, unsupported units and null list-directed values.
+  if(len_trim(numeric)>0)then
+    if(verify(trim(numeric),'0123456789.+-eEdD')==0)read(numeric,*,iostat=ios)parsed
+  endif
+  if(ios/=0)call endrun('Invalid OTC '//name//' fraction: '//trim(value)//' in '//mod_filename,__LINE__)
+  if(.not.ieee_is_finite(parsed)) &
+    call endrun('Nonfinite OTC '//name//' fraction in '//mod_filename,__LINE__)
+  if(isPercent)parsed=parsed*0.01_r8
+  if(parsed<0._r8 .or. parsed>1._r8) &
+    call endrun('OTC '//name//' fraction must be in [0,1] in '//mod_filename,__LINE__)
+  fraction=parsed
+  call PrintInfo('end '//subname)
+  end subroutine ParseOTCFraction
+!------------------------------------------------------------------------------------------
   logical function get_warming_fname(year,fname)result(ans)
   !
   !get warming file name for year 
@@ -459,12 +518,9 @@ module EcosysWarmingMod
   ans=.true.  
   write(fname,'(A)')trim(fname_warming_Tref)
   
-  do jj = 1, 256
-    if(fname(jj:jj+3)=='xxxx')then
-      write(fname(jj:jj+3),'(I4)')year      
-      exit
-    endif
-  enddo
+  ! Substitute a year template when present; literal filenames remain valid.
+  jj=index(fname,'xxxx')
+  if(jj>0)write(fname(jj:jj+3),'(I4)')year
   
   end function get_warming_fname
 
@@ -518,6 +574,9 @@ module EcosysWarmingMod
   logical :: daytime_chk
   logical :: season_chk
   
+  ! Recompute eligibility each hour; an inactive cable must not force the
+  ! unmodified control temperature after a daytime or seasonal warming period.
+  warm_LL(NVN:NVS,NHW:NHE)=0
   DO NX=NHW,NHE
     DO NY=NVN,NVS
       if(warm_type(NY,NX)==2 .or.warm_type(NY,NX)>20)then
@@ -546,7 +605,7 @@ module EcosysWarmingMod
   !
   !Description
   !Apply infrared warming
-  use ClimForcDataType,  only: TairK_col,SineSunInclinationAngle_col
+  use ClimForcDataType,  only: TairK_col,TCA_col,SineSunInclinationAngle_col
   use GridDataType,      only: AREA_3D, NU_col
   use PlantDataRateType, only: GrossCO2Fix_pft
   implicit none
@@ -565,7 +624,8 @@ module EcosysWarmingMod
 
         season_chk=check_warming_season(I,NY,NX)
         if(daytime_chk .and. season_chk)then
-          TairK_col(NY,NX)=TairK_col(NY,NX)+warm_dTK          
+          TairK_col(NY,NX)=TairK_col(NY,NX)+warm_dTK
+          TCA_col(NY,NX)=TairK_col(NY,NX)-TC2K
         endif  
       endif
     ENDDO
@@ -587,7 +647,7 @@ module EcosysWarmingMod
   !
   !Description
   !check if day I is within the specified warming dates
-  use PlantDataRateType, only: GrossCO2Fix_pft  
+  use PlantDataRateType, only: GPP_PrevDay_col
 
   implicit none
   integer, intent(in) :: I,NY,NX
@@ -600,8 +660,9 @@ module EcosysWarmingMod
     !over two years
     ans=I>=seas_doyb+leap_cor(1) .or. I<=seas_doye+leap_cor(2)
   else
-    !floating growing season, using gpp to check
-    ans = igrowth==0 .or. (igrowth==1 .and. MAXVAL(GrossCO2Fix_pft(:,NY,NX))>0._r8)      
+    ! Yesterday's completed daily GPP keeps the seasonal gate fixed overnight.
+    ! Cold/legacy starts remain inactive until a complete day is available.
+    ans = igrowth==0 .or. (igrowth==1 .and. GPP_PrevDay_col(NY,NX)>0._r8)
   endif
   end function check_warming_season
 end module EcosysWarmingMod

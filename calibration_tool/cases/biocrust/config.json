@@ -1,0 +1,35 @@
+{
+  "source_run_dir": "../../../examples/run_dir/biocrust",
+  "ecosim_exe": "local/bin/ecosim.f90.x",
+  "python": "calibration_tool/.venv/bin/python",
+  "pft_file_in": "ecosim_pftpar_20260915.nc",
+  "pft_code": "lich22",
+  "spinup_years": null,
+  "timeout_s": 3600,
+  "keep_last_n": 3,
+  "parameters": [
+    {
+      "name": "VCMX",
+      "bounds": [10.0, 90.0],
+      "log": false,
+      "note": "Rubisco capacity, umol C g-1 s-1; lich22 default 45.0"
+    },
+    {
+      "name": "SLA1",
+      "bounds": [0.0005, 0.005],
+      "log": true,
+      "note": "specific leaf area, m2 gC-1; lich22 default 0.00167"
+    },
+    {
+      "name": "CHL",
+      "bounds": [0.005, 0.08],
+      "log": false,
+      "note": "chlorophyll, lich22 default 0.025"
+    }
+  ],
+  "targets": {
+    "annual_gpp": { "observed": 1.367, "weight": 1.0, "note": "PLACEHOLDER = baseline simulation value; replace with site observations (gC/m2, annual total)" },
+    "annual_et": { "observed": 106.064, "weight": 1.0, "note": "PLACEHOLDER (mm H2O/m2, annual total)" },
+    "midseason_lai": { "observed": 0.19, "weight": 1.0, "note": "PLACEHOLDER (m2/m2, mid-season)" }
+  }
+}

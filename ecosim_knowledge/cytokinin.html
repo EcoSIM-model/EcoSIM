@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cytokinin in EcoSIM — pools, transport and root growth</title>
+<style>
+:root{--ink:#193b33;--muted:#596c66;--green:#196b54;--light:#edf4ef;--rule:#d6e1d9;--paper:#fffef9;--fine:#347b9b;--medium:#bb7e30;--coarse:#397855}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1110px;margin:auto;padding:54px 30px 70px}header{max-width:850px;margin-bottom:35px}.eyebrow{color:var(--green);font-size:12px;letter-spacing:.13em;text-transform:uppercase;font-weight:750}h1{font-size:clamp(36px,5vw,57px);line-height:1.08;letter-spacing:-.035em;margin:15px 0 22px}h2{font-size:27px;line-height:1.25;margin:0 0 20px;letter-spacing:-.02em}h3{font-size:19px;margin:24px 0 10px}.lead{font-size:21px;line-height:1.5}.meta,.source,figcaption{font-size:13px;color:var(--muted)}a{color:var(--green);text-underline-offset:3px}a:hover{color:#092e24}.layout{display:grid;grid-template-columns:185px minmax(0,1fr);gap:44px}nav{position:sticky;top:25px;align-self:start;font-size:14px}nav a{display:block;padding:7px 0;text-decoration:none;border-bottom:1px solid var(--rule)}nav p{font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.12em}section{padding-bottom:36px;margin-bottom:36px;border-bottom:1px solid var(--rule)}p{margin:12px 0}code{font: .85em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;background:#eef1eb;padding:1px 4px;border-radius:3px}.equation{background:var(--light);border-left:3px solid var(--green);border-radius:0 7px 7px 0;padding:16px 20px;margin:16px 0;font-family:Georgia,serif;font-size:19px;overflow-wrap:anywhere}.equation div+div{margin-top:8px}.note{padding:16px 20px;background:#f8f1e3;border-radius:8px;font-size:15px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.card{padding:16px;border:1px solid var(--rule);border-radius:10px}.card strong{display:block;margin-bottom:9px}.card p{font-size:14px;line-height:1.5}.card code{font-size:12px}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:12px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule)}th{background:var(--light)}ol,ul{padding-left:23px}li{margin:8px 0}figure{margin:22px 0}.diagram{width:100%;height:auto;background:var(--light);border-radius:12px}.diagram text{font-family:system-ui,sans-serif;fill:var(--ink)}.demo{padding:24px;background:#f1f5f0;border:1px solid var(--rule);border-radius:12px}.controls{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin:20px 0}.controls label{display:block;font-size:14px}.controls input{width:100%;accent-color:var(--green)}output{font-weight:700}.bar-row{display:grid;grid-template-columns:115px 1fr 60px;align-items:center;gap:10px;font-size:14px;margin:12px 0}.track{height:18px;background:#dfe6df;border-radius:3px;overflow:hidden}.bar{height:100%;transition:width .12s}.fine{background:var(--fine)}.medium{background:var(--medium)}.coarse{background:var(--coarse)}.total{border-top:1px solid var(--rule);padding-top:12px;font-weight:700}.small{font-size:14px;color:var(--muted)}footer{font-size:13px;color:var(--muted)}:focus-visible{outline:3px solid #bc7b32;outline-offset:4px}
+@media(max-width:800px){main{padding:30px 20px}.layout{display:block}nav{position:static;display:flex;flex-wrap:wrap;gap:6px 15px;margin-bottom:30px}nav p{display:none}nav a{font-size:13px}.cards{grid-template-columns:1fr}.controls{grid-template-columns:1fr}h2{font-size:25px}.bar-row{grid-template-columns:100px 1fr 52px}}
+@media print{body{font-size:11pt;background:white}main{max-width:none;padding:0}.layout{display:block}nav,.controls{display:none}header{margin-bottom:20px}h1{font-size:32pt}h2{font-size:20pt}section{margin-bottom:20px;padding-bottom:20px}.equation,.note,.card,figure,.demo{break-inside:avoid}a{color:inherit}h2,h3{break-after:avoid}.bar{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">EcoSIM knowledge · Plant biogeochemistry</div>
+<h1>Cytokinin in EcoSIM</h1>
+<p class="lead">A transported root signal connects local growth metabolism to the balance between root elongation and thickening.</p>
+<p class="meta">Code-based explanation · 24 September 2026 · <code>solphys</code> working tree, base commit <code>94529d7a</code>, including the medium- and fine-root transfer fixes.</p>
+</header>
+<div class="layout">
+<nav aria-label="Contents"><p>On this page</p><a href="#overview">1. Representation</a><a href="#pools">2. Pools and geometry</a><a href="#hour">3. Hourly sequence</a><a href="#production">4. Production and decay</a><a href="#transfer">5. Transfers between roots</a><a href="#vertical">6. Vertical transport</a><a href="#growth">7. Growth feedback</a><a href="#outputs">8. State and outputs</a><a href="#limits">9. Interpretation limits</a><a href="#sources">Source map</a></nav>
+<article>
+<section id="overview">
+<h2>1. What is represented?</h2>
+<p>EcoSIM carries three cytokinin concentrations through its root system. Fine roots and mycorrhizae produce the signal in proportion to growth respiration. Water uptake carries it into medium and coarse roots; medium roots also produce a smaller local source. In coarse roots, upward advection and diffusion redistribute it among soil layers. The concentrations influence the allocation of growth toward thicker roots.</p>
+<div class="note"><strong>Scope of the root representation.</strong> Medium roots are optional and are represented only for trees. Trees without medium roots use the direct fine-root-to-coarse-root pathway. Cytokinin dynamics for non-tree PFTs are for diagnostic purposes only; the growth-regulating role described here applies to the tree pathway.</div>
+<p><strong>Current implementation:</strong> <code>CytoKininDynamics</code> runs for the model’s woody vascular pathway: <code>iPlantRootProfile_pft &gt; 1</code> and <code>iPlant2ndGrothPattern_pft == 1</code>. It returns when there are no structural root axes. Thus this transport calculation is not applied universally to every PFT.</p>
+<figure>
+<svg class="diagram" viewBox="0 0 760 350" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">Cytokinin sources and transport pathways</title><desc id="flow-desc">Fine roots and mycorrhizae export to medium roots or directly to coarse roots. Medium roots export to coarse roots. Coarse roots redistribute cytokinin upward and by diffusion. Medium and coarse concentrations affect root growth.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#196b54"/></marker></defs>
+<g fill="white" stroke="#a9c3b2" stroke-width="1.5"><rect x="25" y="78" width="206" height="90" rx="10"/><rect x="300" y="78" width="177" height="90" rx="10"/><rect x="546" y="78" width="189" height="90" rx="10"/><rect x="301" y="266" width="433" height="54" rx="10"/></g>
+<g font-size="17" font-weight="650" text-anchor="middle"><text x="128" y="110">Fine roots / mycorrhizae</text><text x="389" y="110">Medium roots</text><text x="640" y="110">Coarse roots</text><text x="518" y="299">Root thickening and allocation</text></g>
+<g font-size="13" text-anchor="middle"><text x="128" y="137">Growth-linked source + decay</text><text x="389" y="137">Local source + decay</text><text x="640" y="137">Decay + vertical transport</text><text x="262" y="102">f E<tspan baseline-shift="sub" font-size="10">f</tspan></text><text x="511" y="102">E<tspan baseline-shift="sub" font-size="10">m</tspan></text><text x="372" y="207">Direct path: (1 − f) E<tspan baseline-shift="sub" font-size="10">f</tspan></text><text x="640" y="35">Upward export from root profile</text><text x="502" y="244">Concentration-dependent response</text></g>
+<g fill="none" stroke="#196b54" stroke-width="2" marker-end="url(#arrow)"><path d="M231 123H292"/><path d="M477 123H538"/><path d="M128 168V219H640V176"/><path d="M640 78V44"/><path d="M389 168V191M389 225V258" stroke-dasharray="4 4"/><path d="M685 168V258" stroke-dasharray="4 4"/></g>
+</svg>
+<figcaption>Tree pathway: the medium-root compartment is optional. Solid arrows move cytokinin mass. Dashed arrows show growth feedback, not material transfer. Sources and decay are local to each pool.</figcaption>
+</figure>
+<div class="note"><strong>A calibrated signal scale.</strong> Source comments state that production is amplified by 10³, and the response constants use the same scaled convention. Interpret numerical concentrations together with that calibration. The implementation does not distinguish cytokinin chemical species or include an explicit shoot cytokinin pool in this pathway.</div>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, <code>CytoKininDynamics</code>; <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, <code>is_plant_woody_vascular</code>.</p>
+</section>
+<section id="pools">
+<h2>2. The pools, their volumes, and population scaling</h2>
+<div class="cards"><div class="card"><strong>Fine roots / mycorrhizae</strong><code>Cytokinin2ndConc_rpvr(N,L,NR,NZ)</code><p>Separate concentrations for plant roots (<code>N=1</code>) and mycorrhizae (<code>N=2</code>).</p></div><div class="card"><strong>Medium roots · optional</strong><code>CytokininMRConc_rpvr(L,NR,NZ)</code><p>Tree-only compartment, with one concentration per soil layer and structural-axis group when present.</p></div><div class="card"><strong>Coarse roots</strong><code>Cytokinin1stConc_rpvr(L,NR,NZ)</code><p>One concentration per layer and structural-axis group; transported vertically.</p></div></div>
+<p><code>L</code> is the soil layer, <code>NR</code> the structural-axis index, and <code>NZ</code> the PFT. The API operates on a column; the persistent arrays also carry grid coordinates. The <code>1st</code> and <code>2nd</code> names refer to primary and secondary roots in this representation.</p>
+<div class="equation">Stored concentration: C &nbsp; · &nbsp; Associated inventory: M = C V</div>
+<p>The volume must have the same population and spatial basis as the source and flow. Root counts and total lengths already contain population scaling; multiplying by population again would double-count it.</p>
+<div class="table-wrap"><table><thead><tr><th>Pool</th><th>Volume used in the update</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>Fine</td><td>V<sub>f</sub> = A<sub>fine</sub> ℓ<sub>fine,total</sub> (1 − porosity)</td><td><code>Root2ndVH2O_rpvr</code>, constructed from fine-root cross section and population total length.</td></tr>
+<tr><td>Medium</td><td>A<sub>m</sub> = a<sub>m</sub> n<sub>m</sub><br>V<sub>m</sub> = a<sub>m</sub> ℓ<sub>m,total</sub></td><td><code>MRootLumenArea_rpvr</code> and <code>RootMediumVH2O_rpvr</code>. Single-root lumen area a<sub>m</sub> is multiplied by count for area, or total length for volume.</td></tr>
+<tr><td>Coarse</td><td>V<sub>c</sub> = A<sub>c</sub> Δz</td><td><code>CRootLumenArea_rpvr × DLYR3</code>. Layer thickness approximates the in-layer conducting length.</td></tr>
+</tbody></table></div>
+<p>Medium-root volume therefore follows root length, not soil-layer thickness. Its aggregate area is summed across axis groups without multiplying the root count a second time. Coarse-root area combines population-scaled geometry, a radius-dependent lumen fraction, and, for mature roots, a canopy-supported sapwood-area limit.</p>
+<p class="small">Units: C is expressed on the model’s cytokinin mass-per-water-volume scale. API comments use gC m⁻³ H₂O, while history labels use 10⁻³ gC m⁻³. Population lengths and counts have the model’s spatial normalization (<code>d-2</code> in several comments); inventories, volumes, and flow must share that basis. These inconsistent labels should not be interpreted as automatic unit conversions.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, fine volume near line 1469 and geometry near 4835–4865; <a href="../f90src/APIData/PlantMorphologyAPIData.F90">PlantMorphologyAPIData.F90</a>; <a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod.F90</a>, root-type constants.</p>
+</section>
+<section id="hour">
+<h2>3. What happens in one hour?</h2>
+<ol>
+<li><strong>Use the existing signal to allocate growth.</strong> <code>SummarizeRootSink</code> uses coarse-root concentration to calculate growth sink strengths.</li>
+<li><strong>Grow roots and calculate production.</strong> Root biochemistry updates geometry and growth-linked cytokinin sources. Medium-root growth uses the existing medium-root concentration to divide growth between elongation and thickening.</li>
+<li><strong>Build the transport geometry.</strong> <code>CytoKininDynamics</code> reconstructs conducting areas and volumes, partitions water uptake among axes, and accumulates upward coarse-root flow.</li>
+<li><strong>Apply local sources, decay, and lateral transfers.</strong> Fine-root production and decay precede fine-root export. Medium roots receive their share, add local production, decay, then export. Existing coarse-root cytokinin decays before it receives this hour’s lateral inputs.</li>
+<li><strong>Redistribute the coarse-root signal.</strong> Upward advection is followed by vertical diffusion. Updated concentrations become available for the next growth update.</li>
+</ol>
+<p>This is an explicitly ordered hourly feedback. Growth and transport are not iterated together to convergence. Despite the routine’s “steady-state model” comment, it retains concentrations between calls and advances them using one-hour production, decay, and transport steps.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, calls near lines 102–115 and 286; <code>CytoKininDynamics</code> near 4717–5010.</p>
+</section>
+<section id="production">
+<h2>4. Production and decay</h2>
+<p>Production follows <code>RGrowCO2_Oltd</code>, the growth-respiration rate after the implemented oxygen, water-related, and nutrient constraints. Nutrient uptake influences this signal through growth metabolism rather than entering as a direct cytokinin source.</p>
+<div class="equation"><div>P<sub>f,N</sub> = R<sub>growth,N</sub> RCytoK(N)</div><div>P<sub>m</sub> = 0.1 R<sub>growth,m</sub> RCytoK(1)</div></div>
+<div class="table-wrap"><table><thead><tr><th>Compartment</th><th>Production coefficient</th><th>Decay constant, h⁻¹</th></tr></thead><tbody><tr><td>Fine plant roots</td><td><code>RCytoK(1) = 10⁻⁴</code></td><td><code>kDCytof(1) = 0.027</code></td></tr><tr><td>Mycorrhizae</td><td><code>RCytoK(2) = 10⁻⁵</code></td><td><code>kDCytof(2) = 0.00825</code></td></tr><tr><td>Medium roots</td><td><code>0.1 × RCytoK(1) = 10⁻⁵</code></td><td><code>kDCytof(1) = 0.027</code></td></tr><tr><td>Coarse roots</td><td>No local source in this routine</td><td><code>kDCytoC = 0.00825</code></td></tr></tbody></table></div>
+<p>These are initialized constants in <code>PlantBGCPars</code>. The fine-root update, written in mass form for positive volume and nonnegative input state, is:</p>
+<div class="equation">M<sub>f</sub>* = (C<sub>f</sub> V<sub>f</sub> + P<sub>f</sub> Δt) exp(−k<sub>f</sub> Δt), &nbsp; Δt = 1 h</div>
+<p>The code actually adds <code>P/V</code> to concentration and then applies exponential decay and a nonnegative bound. Thus newly produced cytokinin receives the full step’s decay. This is a split source/decay update, not the exact continuously forced decay solution. Medium-root production and decay can continue when water flow is zero; its production-rate array is reset before each root-growth pass.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, <code>Grow2ndRootAxes</code> near line 683, <code>GrowMediumRootAxes</code> near 1155; <a href="../f90src/Modelpars/PlantBGCPars.F90">PlantBGCPars.F90</a>, lines 261–263.</p>
+</section>
+<section id="transfer">
+<h2>5. Conservative transfers between root classes</h2>
+<h3>Water flow and routing</h3>
+<p>For an absorbing root type, the layer uptake is distributed among structural-axis groups in proportion to their fine-root counts:</p>
+<div class="equation">Q<sub>N,L,NR</sub> = −RPlantRootH2OUptk<sub>N,L</sub> × n<sub>N,L,NR</sub> / n<sub>N,L,total</sub></div>
+<p>This applies only when uptake is negative in the model’s sign convention and the total count is positive; otherwise Q is zero. Reverse flow is not represented in this cytokinin transfer path.</p>
+<p>The fraction passing through medium roots is the geometric approximation:</p>
+<div class="equation">f = ℓ<sub>m,total</sub> / (ℓ<sub>m,total</sub> + Δz × PlantPopuLive)</div>
+<p>If medium-root volume is absent, f is zero and export goes directly to coarse roots. The fraction is calculated independently of water flow. For each fine-root/mycorrhizal donor, the two recipient shares use one exported mass.</p>
+<h3>Fine roots → medium and coarse roots</h3>
+<div class="equation"><div>M<sub>f</sub><sup>new</sup> = M<sub>f</sub>* V<sub>f</sub> / (V<sub>f</sub> + Q Δt)</div><div>E<sub>f</sub> = M<sub>f</sub>* − M<sub>f</sub><sup>new</sup></div><div>Medium credit = f E<sub>f</sub> &nbsp; · &nbsp; Direct coarse credit = (1 − f) E<sub>f</sub></div></div>
+<p>This is a backward-Euler, well-mixed outflow update. It debits the fine-root pool exactly once, keeps it nonnegative, and limits export to its available inventory. Zero flow causes no transfer. A zero-volume donor exports nothing; the transfer loop also requires a positive coarse receiving volume.</p>
+<h3>Medium roots → coarse roots</h3>
+<p>Let I<sub>m</sub> = Σ<sub>N</sub> f E<sub>f,N</sub> and Q<sub>m</sub> = Σ<sub>N</sub> f Q<sub>N</sub>. The medium-root step is:</p>
+<div class="equation"><div>M<sub>m</sub>* = max(0, C<sub>m</sub> V<sub>m</sub> + I<sub>m</sub> + P<sub>m</sub> Δt) exp(−k<sub>f,1</sub> Δt)</div><div>M<sub>m</sub><sup>new</sup> = M<sub>m</sub>* V<sub>m</sub> / (V<sub>m</sub> + Q<sub>m</sub> Δt)</div><div>E<sub>m</sub> = M<sub>m</sub>* − M<sub>m</sub><sup>new</sup> &nbsp; · &nbsp; Coarse credit = E<sub>m</sub></div></div>
+<p>Recipient mass is converted back to concentration using its own volume. The local coarse concentration before vertical transport is:</p>
+<div class="equation">C<sub>c</sub>* = C<sub>c</sub> exp(−k<sub>c</sub> Δt) + [Σ<sub>N</sub>(1 − f) E<sub>f,N</sub> + E<sub>m</sub>] / V<sub>c</sub></div>
+<p>New lateral inputs are not subjected to coarse-root decay until a later call. Medium-bound fine-root input, however, passes through the medium decay step immediately. That difference follows the actual update order.</p>
+<div class="demo">
+<h3 style="margin-top:0">Explore one transfer step</h3>
+<p class="small">Illustrative normalized system: fine-root inventory = 10 units; fine and medium volumes = 1 each; both receiving inventories start at zero. No production, decay, or vertical transport. This demonstrates the implemented lateral-transfer formulas, not a simulation case.</p>
+<div class="controls"><label for="turnover">Fine-root water turnover QΔt/V<sub>f</sub>: <output id="turnover-value" for="turnover">1.00</output><input id="turnover" type="range" min="0" max="5" step="0.05" value="1"></label><label for="routing">Fraction routed through medium roots: <output id="routing-value" for="routing">0.67</output><input id="routing" type="range" min="0" max="1" step="0.01" value="0.67"></label></div>
+<div aria-live="polite" aria-atomic="true"><div class="bar-row"><span>Fine retained</span><div class="track"><div id="fine-bar" class="bar fine" style="width:50%"></div></div><output id="fine-value">5.000</output></div><div class="bar-row"><span>Medium retained</span><div class="track"><div id="medium-bar" class="bar medium" style="width:20.05988%"></div></div><output id="medium-value">2.006</output></div><div class="bar-row"><span>Coarse received</span><div class="track"><div id="coarse-bar" class="bar coarse" style="width:29.94012%"></div></div><output id="coarse-value">2.994</output></div><p class="total">Total inventory: <output id="total-value">10.000</output> units</p></div>
+<p class="small">Higher flow redistributes the inventory more rapidly. It does not create cytokinin. At f = 0, the medium-root path is bypassed.</p><noscript><p>JavaScript is disabled. The displayed example uses QΔt/V = 1 and f = 0.67.</p></noscript>
+</div>
+<p class="source">Source: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, <code>DNR100</code> water partition and <code>DNR200</code> lateral transfers, approximately lines 4868–4964. The current code includes matching donor debits for both fine-root and medium-root export.</p>
+</section>
+<section id="vertical">
+<h2>6. Vertical transport in coarse roots</h2>
+<h3>Advection toward the upper root boundary</h3>
+<p>Coarse-root water flow is accumulated upward from deeper layers and divided by the population conducting area to obtain sap velocity, u = Q<sub>c</sub>/A<sub>c</sub>. Despite its name, <code>Root1stVH2O_rpvr</code> is used here as accumulated water flow, not the storage volume V<sub>c</sub>.</p>
+<p><code>advect_remap_mass_loss</code> reverses the soil-layer ordering into an upward coordinate. It displaces cell edges, carries cell mass on that moving grid, and remaps cumulative mass onto the fixed grid. If necessary it subdivides the step to prevent problematic edge crossing inside the domain.</p>
+<p>The bottom edge has zero prescribed velocity. Cytokinin can leave through the upper root boundary. Boundary loss is handled once by the remap; <code>CytoKininDynamics</code> does not request the optional <code>lost_mass</code> output or credit that export to a shoot pool. The transport routine uses an internal 10⁶ mass scaling, then reverses it for concentration; its optional loss value retains that internal scale.</p>
+<h3>Diffusion along each coarse-root axis</h3>
+<div class="equation">D<sub>eff</sub>(T) = [4.3 × 10<sup>−5</sup> × 1.03<sup>(T − 298.15)</sup> / 24] / 1.2</div>
+<p>This is the implemented diffusivity, used in m² h⁻¹, with T in kelvin and a fixed tortuosity divisor of 1.2. At 298.15 K it is about 1.49 × 10⁻⁶ m² h⁻¹.</p>
+<p><code>solve_root_diffusion_step</code> uses implicit diffusion with storage AΔz and zero flux at both ends. Each layer interface has one shared conductance, constructed with harmonic means of area and D/Δz. The same interfacial exchange enters the two adjacent balances with opposite signs, conserving the volume-weighted inventory for valid positive geometry. Diffusion is within each structural axis; the routine does not mix cytokinin between separate axes.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, coarse transport near lines 4965–5000; <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, <code>advect_remap_mass_loss</code> near line 358 and <code>solve_root_diffusion_step</code> near 587.</p>
+</section>
+<section id="growth">
+<h2>7. How the signal changes root growth</h2>
+<p>This growth feedback describes the tree pathway. Cytokinin dynamics in non-tree PFTs serve a diagnostic purpose.</p>
+<p>The common response function is:</p>
+<div class="equation">F(C) = min[1, h C / {1.2 + C(1 + C/12)}], &nbsp; h = enh_cyto_pft</div>
+<p>The sensitivity h is read from the PFT parameter <code>CYTOS</code>. At zero concentration the response is zero. It increases at low concentration, then declines at sufficiently high concentration because of the C² term. Before the upper cap, the peak occurs at C = √(1.2 × 12) ≈ 3.79 in the internal concentration scale. A larger concentration therefore does not always mean stronger thickening.</p>
+<h3>Coarse roots: alter sink strength</h3>
+<p>For eligible coarse-root layers, <code>SummarizeRootSink</code> sets primary-root sink strength proportional to <code>PrimaryRootCd4NonstTP × F(Cc)</code>, and multiplies the fine-root sink expression by <code>1 − F(Cc)</code>. These are growth-allocation sink weights, not direct additions of biomass.</p>
+<p>Eligibility additionally requires the coarse-root switch, sufficient root age, and the implemented root-tip/depth criteria. Where those conditions fail, the cytokinin scalar for coarse-root thickening is set to zero.</p>
+<h3>Medium roots: divide elongation and thickening</h3>
+<div class="equation"><div>f<sub>thick</sub> = F(C<sub>m</sub>) max(0, 1 − R<sub>m</sub>/d<sub>max</sub>)</div><div>f<sub>elong</sub> = 1 − f<sub>thick</sub>, &nbsp; d<sub>max</sub> = 0.015 m</div></div>
+<p>When net medium-root growth is positive, the elongation share determines added root length. Total structural biomass is then updated, and radius is inferred from biomass and length. The response therefore influences root shape as well as the later conducting volume and transport rate.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, <code>func_cyto</code> near line 5217, <code>GrowMediumRootAxes</code> near 1135, <code>SummarizeRootSink</code> near 5457–5517; <a href="../f90src/IOutils/PlantInfoMod.F90">PlantInfoMod.F90</a>, <code>CYTOS</code> loading.</p>
+</section>
+<section id="outputs">
+<h2>8. Persistent state and diagnostic output</h2>
+<p>The three concentration arrays are allocated and initially zeroed in <code>RootDataType</code>, transferred between column APIs and persistent grid state by <code>PlantRootAxisTransferMod</code>, and supported by restart read/write handling in <code>RestartMod</code>.</p>
+<div class="table-wrap"><table><thead><tr><th>History field</th><th>Interpretation</th></tr></thead><tbody><tr><td><code>Cytokinin1stConc_pvr</code></td><td>Arithmetic mean of coarse-root concentrations across structural axes in each layer. It is not a lumen-volume-weighted concentration or a total mass.</td></tr><tr><td><code>Cytok_scalar_pvr</code></td><td>Arithmetic mean of the coarse-root growth-response scalar across structural axes.</td></tr></tbody></table></div>
+<p>Both fields are registered with time averaging and are inactive by default. The concentration output is labeled <code>1.e-3gC/m3</code>; its update averages the internal values without an explicit 10⁻³ conversion. Compare concentrations and response constants on a consistent internal scale before interpreting measured hormone concentrations.</p>
+<p class="source">Sources: <a href="../f90src/Ecosim_datatype/RootDataType.F90">RootDataType.F90</a>; <a href="../f90src/APIs/PlantRootAxisTransferMod.F90">PlantRootAxisTransferMod.F90</a>; <a href="../f90src/IOutils/RestartMod.F90">RestartMod.F90</a>, near lines 4551–4595; <a href="../f90src/IOutils/HistData/HistUpdatePlant.F90">HistUpdatePlant.F90</a>, lines 429–444; <a href="../f90src/IOutils/HistData/HistRegisterSoilPhysRoot.F90">HistRegisterSoilPhysRoot.F90</a>, lines 341–352.</p>
+</section>
+<section id="limits">
+<h2>9. What conservation does—and does not—mean here</h2>
+<p><strong>The corrected local transfers conserve cytokinin mass between their donor and recipient pools.</strong> With fixed volumes and with production, decay, and boundary export disabled, their sum is unchanged. In the full update, the intended accounting is:</p>
+<div class="equation">Change in root inventory = production − decay − upper-boundary export</div>
+<p>This identity needs qualifications when diagnosing the whole model:</p>
+<ul><li><strong>Geometry evolves.</strong> Concentration is persistent while volumes are reconstructed. This routine does not generally rescale an old concentration by an old/new volume ratio to conserve inventory during growth or root loss.</li><li><strong>Zero-volume handling clears concentrations.</strong> This is an explicit numerical treatment, not a modeled redistribution of residual hormone.</li><li><strong>Upper-boundary loss is not recorded by this caller.</strong> The root profile is an open system under upward advection; there is no corresponding shoot-pool credit in this pathway.</li><li><strong>Cytokinin is a growth-linked signal.</strong> Its production is derived from respiration; the inspected source assignments do not introduce a separate stoichiometric cytokinin C/N/P pool and matching substrate withdrawal.</li><li><strong>Update ordering matters.</strong> Source rates must represent the current growth pass. Skipped growth branches and changing geometry need consideration in a full lifecycle budget; conservative transport alone does not establish that budget.</li></ul>
+<p class="note">Validation of the current transfer changes included 109 focused geometry and transport checks plus 16 ten-day smoke cases, excluding <code>dryland2</code>. The focused checks isolate local transfers from later vertical transport. Smoke completion and finite outputs establish execution health, not biological calibration or long-term whole-model conservation.</p>
+</section>
+<section id="sources">
+<h2>Source map</h2>
+<div class="table-wrap"><table><thead><tr><th>File</th><th>Start with</th></tr></thead><tbody>
+<tr><td><a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a></td><td><code>RootBiochemistry</code>, <code>Grow2ndRootAxes</code>, <code>GrowMediumRootAxes</code>, <code>CytoKininDynamics</code>, <code>func_cyto</code>, <code>SummarizeRootSink</code></td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a></td><td>Woody-plant eligibility; advection/remap; implicit root diffusion</td></tr>
+<tr><td><a href="../f90src/Modelpars/PlantBGCPars.F90">PlantBGCPars.F90</a></td><td><code>RCytoK</code>, <code>kDCytof</code>, <code>kDCytoC</code>, <code>dmax</code></td></tr>
+<tr><td><a href="../f90src/APIData/PlantRootBGCAPIData.F90">PlantRootBGCAPIData.F90</a></td><td>Concentration and production-rate API arrays</td></tr>
+<tr><td><a href="../f90src/APIData/PlantMorphologyAPIData.F90">PlantMorphologyAPIData.F90</a></td><td>Root counts, lengths, conducting areas, and water volumes</td></tr>
+</tbody></table></div>
+<p class="small">Links are relative to this document in <code>ecosim_knowledge/</code>. Line references describe the inspected working tree and may shift. Equations use explanatory symbols; the linked Fortran remains the implementation reference.</p>
+</section>
+</article></div>
+<footer>EcoSIM · Cytokinin representation · Self-contained HTML; the transfer illustration runs locally without external libraries.</footer>
+</main>
+<script>
+(() => {
+ const qInput=document.getElementById('turnover'), fInput=document.getElementById('routing');
+ function update(){
+  const q=Number(qInput.value), f=Number(fInput.value);
+  const fine=10/(1+q), exported=10-fine;
+  const medium=f*exported/(1+f*q), coarse=(1-f)*exported+(f*exported-medium);
+  for(const [name,mass] of [['fine',fine],['medium',medium],['coarse',coarse]]){
+   document.getElementById(name+'-value').value=mass.toFixed(3);
+   document.getElementById(name+'-bar').style.width=(mass*10)+'%';
+  }
+  document.getElementById('turnover-value').value=q.toFixed(2);
+  document.getElementById('routing-value').value=f.toFixed(2);
+  document.getElementById('total-value').value=(fine+medium+coarse).toFixed(3);
+ }
+ qInput.addEventListener('input',update);fInput.addEventListener('input',update);update();
+})();
+</script>
+</body>
+</html>

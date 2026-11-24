@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The hydraulic role of mycorrhizae in EcoSIM</title>
+<style>
+:root{--ink:#193a36;--muted:#576d68;--green:#116859;--pale:#e8f2ed;--line:#ccddd4;--paper:#fbfcf8}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}header{background:#153f37;color:#fff;padding:54px max(24px,calc((100vw - 960px)/2)) 42px}header p{max-width:790px;color:#d7e8df}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#a9d9c2}h1{font-size:clamp(30px,5vw,48px);line-height:1.12;margin:14px 0 22px;max-width:860px}h2{font-size:25px;line-height:1.3;margin:40px 0 14px}h3{font-size:19px}main{max-width:1008px;margin:auto;padding:12px 24px 54px}a{color:var(--green);text-underline-offset:3px}nav{display:flex;flex-wrap:wrap;gap:8px 20px;margin:25px 0;font-size:14px}p{margin:12px 0}code{font-size:.88em;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}.equation,.note{padding:18px 22px;background:var(--pale);border-radius:9px;margin:20px 0}.equation{font-size:18px}.note{border-left:4px solid var(--green)}.source,.meta,figcaption{font-size:13px;color:var(--muted)}table{border-collapse:collapse;width:100%;font-size:15px;margin:18px 0}th,td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid var(--line)}th{background:var(--pale)}.table-wrap{overflow-x:auto}.paths{display:grid;gap:12px;margin:20px 0}.path{display:grid;grid-template-columns:1fr 24px 2fr 24px 1fr;align-items:center;text-align:center;gap:8px}.node{border:1px solid var(--line);border-radius:10px;padding:15px;background:white}.fungal{background:#e8f2ed;border-color:#94b9a6}.arrow{font-weight:bold;color:var(--green)}figure{margin:22px 0}.small{font-size:14px}.callchain{font-size:14px;background:#173f36;color:#edf8f1;padding:20px;border-radius:10px}.sources li{margin-bottom:9px}footer{border-top:1px solid var(--line);padding-top:20px;margin-top:35px;font-size:14px}
+@media(max-width:620px){body{font-size:16px}header{padding:34px 22px}main{padding:8px 18px 35px}.path{grid-template-columns:1fr}.arrow{transform:rotate(90deg)}h2{font-size:22px}th,td{padding:9px}.equation{font-size:16px}}
+@media print{body{background:white;font-size:11pt}header{background:white;color:var(--ink);padding:0 0 16px}header p,.eyebrow{color:var(--muted)}main{padding:0;max-width:none}nav{display:none}h1{font-size:28pt}h2{break-after:avoid}.note,figure,tr{break-inside:avoid}a{color:inherit}.callchain{background:#eee;color:#111}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">EcoSIM · Process knowledge</div><h1>The hydraulic role of mycorrhizae</h1><p>EcoSIM represents mycorrhizae as an additional soil-water uptake pathway connected to the plant’s canopy water balance. Its contribution emerges from fungal geometry, hydraulic resistance, water availability, and the soil–canopy potential difference.</p><p class="small">Based on the active Fortran implementation in <strong>solphys</strong> · 24 September 2026</p></header>
+<main>
+<nav aria-label="Contents"><a href="#representation">Representation</a><a href="#resistance">Resistance</a><a href="#flow">Water flow</a><a href="#feedback">Feedbacks</a><a href="#diagnostics">Diagnostics</a><a href="#sources">Source map</a></nav>
+<section id="representation"><h2>1. A second uptake pathway for each plant</h2>
+<p>The category index <code>N</code> distinguishes plant roots (<code>ipltroot=1</code>) from mycorrhizae (<code>imycorrhz=2</code>). Hydraulic routines loop over <code>N=1,Myco_pft(NZ)</code>: a value of 1 includes roots only; 2 includes roots and mycorrhizae. <code>NZ</code> identifies the plant functional type and <code>L</code> the soil layer.</p>
+<p>Mycorrhizae have category-specific absorptive length, radius, water volume, axis number, water potential, and radial/axial resistivities. Both categories connect to the <em>same</em> <code>PSICanopy_pft(NZ)</code>. The hydraulic solver does not calculate a separate fungal-to-root interface potential or exchange resistance.</p>
+<figure><div class="paths" role="img" aria-label="Two effective parallel pathways connect each soil layer to the same canopy water potential: plant roots and mycorrhizae. Each pathway includes soil, radial, and axial resistance."><div class="path"><div class="node">Soil layer L<br>Ψ<sub>soil,L</sub></div><span class="arrow">→</span><div class="node">Plant-root pathway · N=1<br>Soil + radial + axial resistance</div><span class="arrow">→</span><div class="node">Shared canopy<br>Ψ<sub>canopy</sub></div></div><div class="path"><div class="node">Same soil layer<br>Ψ<sub>soil,L</sub></div><span class="arrow">→</span><div class="node fungal">Mycorrhizal pathway · N=2<br>Soil + fungal radial/axial + host transport terms</div><span class="arrow">→</span><div class="node">Same canopy<br>water balance</div></div></div><figcaption>Arrows show uptake. Reverse flow is also permitted. This is the effective parallel-path formulation in the code; host axial terms are included within each pathway’s resistance.</figcaption></figure>
+<p class="source">Sources: <a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod.F90</a>, category constants; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, <code>CalcPlantHydroResistance</code> and <code>CanopyEnergyH2OIter_func</code>.</p>
+<div class="note"><strong>Configuration matters.</strong> The prescribed-phenology uptake API explicitly sets <code>Myco_pft=1</code>. The description here concerns runs that enable the second category and develop nonzero mycorrhizal geometry. Merely enabling the category does not guarantee water uptake.</div>
+</section>
+<section id="resistance"><h2>2. How hyphae affect hydraulic resistance</h2>
+<p>The model first derives effective absorptive geometry in <code>UpdateRootProperty</code>, then assembles resistance in <code>CalcPlantHydroResistance</code>. A category participates only when the layer has liquid water, positive soil conductivity, absorptive length, and the required primary and secondary axis counts.</p>
+<div class="equation">R<sub>total,N,L</sub> = R<sub>soil,N,L</sub> + R<sub>radial,N,L</sub> + R<sub>axial,N,L</sub><br>G<sub>plant</sub> = Σ<sub>N,L</sub> 1 / R<sub>total,N,L</sub></div>
+<div class="table-wrap"><table><thead><tr><th>Component</th><th>Implemented dependence</th><th>Hydraulic interpretation</th></tr></thead><tbody>
+<tr><td>Soil-to-absorber resistance</td><td>ln(r<sub>outer</sub>/r<sub>effective</sub>) / [K<sub>soil</sub> × <code>RootEffLen4Absorption_pvr</code> × <code>PlantPopuLive_pft</code>]</td><td>Longer absorptive networks alter the effective collecting geometry. Low soil conductivity can still dominate supply.</td></tr>
+<tr><td>Radial resistance</td><td><code>RootRadialResist_pft</code> × V<sub>micropore</sub> / [A<sub>absorbing</sub> × V<sub>liquid</sub>], with A = 2πr × absorptive length per plant × population</td><td>More absorbing surface lowers resistance, all else equal; a smaller liquid-water fraction increases it.</td></tr>
+<tr><td>Fungal axial resistance</td><td><code>Root2ndAxialResist_pft</code> × effective axis length / [(r/r<sub>max</sub>)<sup>4</sup> × axis count]</td><td>Longer individual flow paths increase resistance; more parallel axes reduce it. The fungal radius factor has a fourth-power dependence.</td></tr>
+<tr><td>Host transport</td><td>Stalk and primary-root terms use canopy height, primary-axis count, and coarse-root lumen area.</td><td>The fungal pathway still includes host-side transport costs. Mycorrhizal uptake does not bypass the plant hydraulic system.</td></tr>
+</tbody></table></div>
+<p>The plant-root category uses a squared radius ratio in its secondary axial term, whereas the mycorrhizal category uses the fourth power. This distinction is explicit in the current implementation.</p>
+<p>When <code>RootFineFrac2Med_pvr</code> is positive, fine transport is partitioned between a direct coarse-root connection and a connection through medium roots. Those two conductances are combined before adding the primary-root and radial terms. <strong>Medium roots are optional and only for trees</strong>; they are not a separate fungal compartment.</p>
+<h3>Initialization values</h3>
+<div class="table-wrap"><table><thead><tr><th>Mycorrhizal quantity</th><th>Value assigned during initialization</th></tr></thead><tbody>
+<tr><td>Reference primary and secondary radius</td><td>5 × 10<sup>−6</sup> m = 5 μm</td></tr>
+<tr><td>Radial resistivity</td><td>10<sup>4</sup> MPa h m<sup>−1</sup>, as used by the resistance equation</td></tr>
+<tr><td>Secondary axial resistivity</td><td>10<sup>12</sup> MPa h m<sup>−4</sup></td></tr>
+<tr><td>Porosity</td><td>Copied from the plant-root category</td></tr>
+</tbody></table></div>
+<p>These are code initialization assignments, not measured universal fungal constants. Actual length, biomass, and hydraulic geometry evolve. Specific length is derived from volume per carbon divided by πr²; consequently, the small assigned fungal radius provides a large length per unit carbon under that representation.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/InitPlantMod.F90">InitPlantMod.F90</a>, <code>InitDimensionsandUptake</code>; matching initial assignments in <a href="../f90src/Ecosim_mods/StartqMod.F90">StartqMod.F90</a>; resistance equations in <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>.</p>
+</section>
+<section id="flow"><h2>3. The driving potential and water limits</h2>
+<p>For each active category and layer, the trial water flux is:</p>
+<div class="equation">q<sub>N,L</sub> = [Ψ<sub>canopy</sub> + Ψ<sub>gravity</sub> − Ψ<sub>soil,L</sub>] / R<sub>total,N,L</sub></div>
+<p>The gravitational term uses an effective uptake height of 0.8 × live canopy height. Soil potential is supplied through <code>TotalSoilPSIMPa_vr</code>, with the surface-elevation adjustment made during preparation.</p>
+<div class="note"><strong>Read the sign from the equation:</strong> <code>RPlantRootH2OUptk_pvr(N,L,NZ) &lt; 0</code> means soil water enters the plant system. A positive value means water returns to soil. Some nearby comments use a conflicting sign description.</div>
+<p>Uptake is bounded by available micropore water, with the mineral-soil air-dry amount subtracted where applicable. Return flow is bounded by available micropore air space. Both bounds are multiplied by <code>FracPRoot4Uptake_pvr</code>, calculated from the category’s <code>PopuRootMycoC_pvr</code> divided by total root/mycorrhizal carbon across PFTs in that layer. A further canopy-water check scales down positive return flow if the plant cannot supply it.</p>
+<p>Thus the fungal branch has access to the same modeled soil-water pool, subject to its allocation and resistances. It is not granted a separate water reservoir or an automatic drought-benefit multiplier. Adding mycorrhizae changes both conductance and allocation, so an increase in total uptake is not guaranteed.</p>
+<p>Water potentials are in MPa and lengths/radii in metres. Flux arrays use the model’s population/grid accounting basis; do not interpret a category flux as a per-hypha rate. Convert with the actual grid area when reporting water-depth fluxes.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, <code>PrepNutrientUptake</code>, <code>UpdateRootProperty</code>, and the water-balance loop in <code>CanopyEnergyH2OIter_func</code>.</p>
+</section>
+<section id="feedback"><h2>4. Where mycorrhizal water goes</h2>
+<p>The canopy solver sums uptake and return flow over both categories and all rooted layers. Their combined supply participates in the same iterative balance as transpiration, canopy water storage, and heat exchange. Mycorrhizal water therefore can support canopy hydration and transpiration through this shared balance.</p>
+<p>Category-specific fluxes are also accumulated into <code>TWaterPlantRoot2Soil_vr</code> by <code>ExtractsMod</code>. Associated heat transport uses soil temperature for uptake and canopy temperature for return flow. Fungal water uptake is an accounted exchange, rather than an additional uncharged water source.</p>
+<p>When gradients reverse, the mycorrhizal category can return water to a layer. Together with uptake elsewhere, this permits redistribution through the common plant water balance. There is no explicitly resolved fungal network connecting different host plants in these equations.</p>
+<h3>Fungal water status and biological feedback</h3>
+<p><code>UpdatePlantWaterVars</code> diagnoses <code>PSIRoot_pvr(2,L,NZ)</code> from soil and canopy potentials weighted by hydraulic resistances. It assumes steady water status with <strong>zero root storage capacity in that pressure calculation</strong>, then calculates osmotic potential and turgor. The pressure diagnostic uses <code>PSICanopy_pft</code> directly; the flux calculation above uses its gravity-adjusted value.</p>
+<p>The model nevertheless retains geometric root/hyphal water volumes for other calculations. Those volumes should not be mistaken for a separately solved fungal hydraulic capacitance. Fungal water status can affect subsequent growth; water uptake also enters nutrient-uptake calculations as a per-plant inward water flux.</p>
+<p class="source">Sources: <a href="../f90src/Plant_bgc/ExtractsMod.F90">ExtractsMod.F90</a>, water/heat aggregation; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, <code>UpdatePlantWaterVars</code>; <a href="../f90src/Plant_bgc/RootMod.F90">RootMod.F90</a>, growth and geometry; <a href="../f90src/Plant_bgc/NutUptakeMod.F90">NutUptakeMod.F90</a>, <code>PerPlantRootH2OUptake</code>.</p>
+</section>
+<section id="diagnostics"><h2>5. How to identify the fungal contribution</h2>
+<p>Inspect both categories explicitly. The clearest quantity is <code>RPlantRootH2OUptk_pvr(imycorrhz,L,NZ)</code>. Sum <code>max(−q,0)</code> for gross fungal uptake and <code>max(q,0)</code> for gross return flow; keep those separate from the signed net exchange.</p>
+<div class="table-wrap"><table><thead><tr><th>Question</th><th>Variables to inspect</th></tr></thead><tbody>
+<tr><td>Is the pathway enabled and populated?</td><td><code>Myco_pft</code>, fungal <code>RootAbsorbLenPerPlant_pvr</code>, <code>Root2ndXNumL_rpvr</code></td></tr>
+<tr><td>What limits its supply?</td><td><code>SoilResist4H2O_rvr</code>, <code>RootResist4H2O_pvr</code>, <code>SoilRootResist4H2O_pvr</code>, allocated water bounds</td></tr>
+<tr><td>Is it taking up or releasing water?</td><td>Signed <code>RPlantRootH2OUptk_pvr(2,L,NZ)</code> and soil/canopy potentials</td></tr>
+<tr><td>Does the host benefit?</td><td>Compare total category uptake, canopy potential, transpiration, and canopy water storage in otherwise matched runs</td></tr>
+</tbody></table></div>
+<p>The current <code>h2D_RootH2OUptk_pvr</code> history assignment selects <code>ipltroot</code> only. That output alone cannot establish the mycorrhizal contribution; inspect the underlying second-category flux or add an explicit fungal diagnostic.</p>
+<p class="source">Source: <a href="../f90src/IOutils/HistData/HistUpdatePlant.F90">HistUpdatePlant.F90</a>, assignment of <code>h2D_RootH2OUptk_pvr</code>.</p>
+<p class="small">Implementation note: <code>RootMod</code> derives fine-root geometry from surviving biomass and lengths and refreshes all active categories and layers after growth and withdrawal, before cytokinin transport. This includes previously processed layers affected by withdrawal. The fate of cytokinin in dying tissue remains a separate accounting question. This document describes the implemented formulation, not a validation of every numerical pathway.</p>
+</section>
+<section id="sources"><h2>6. Source map</h2>
+<pre class="callchain">RootUptakes
+  → PrepNutrientUptake: soil potentials, water limits, competing biomass
+  → UpdateRootProperty: category-specific absorption geometry and shares
+  → CalcPlantHydroResistance: soil + radial + axial resistance
+  → CanopyEnergyH2OIter_func: category fluxes and shared canopy balance
+  → UpdatePlantWaterVars: category water potential, osmosis, turgor
+
+ExtractsMod: category water and heat fluxes → column accounting
+RootMod: growth / withdrawal → geometry used by later uptake</pre>
+<ul class="sources"><li><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a> — main hydraulic formulation.</li><li><a href="../f90src/Plant_bgc/InitPlantMod.F90">InitPlantMod.F90</a> and <a href="../f90src/Ecosim_mods/StartqMod.F90">StartqMod.F90</a> — initial fungal morphology and resistivity assignments.</li><li><a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod.F90</a> — category identifiers.</li><li><a href="../f90src/APIs/PlantAPI4Uptake.F90">PlantAPI4Uptake.F90</a> — prescribed-phenology uptake setup sets <code>Myco_pft=1</code>.</li><li><a href="../f90src/Plant_bgc/ExtractsMod.F90">ExtractsMod.F90</a> and <a href="../f90src/Plant_bgc/NutUptakeMod.F90">NutUptakeMod.F90</a> — exchange accounting and nutrient coupling.</li></ul>
+</section>
+<footer>Related notes: <a href="canopy_water_potential.html">Canopy water potential</a> · <a href="transpiration.html">Transpiration</a> · <a href="cytokinin.html">Cytokinin representation</a><br>Source links are relative to this document in <code>solphys/ecosim_knowledge</code>. Local code and equations, rather than general claims about fungal biology, are the basis of this explanation.</footer>
+</main>
+</body>
+</html>

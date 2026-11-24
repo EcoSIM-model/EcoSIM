@@ -6,14 +6,14 @@
 case_name='dryland_maize2'
 prefix='../../inputs/dryland_maize/'
 do_regression_test=.false.
-pft_file_in='../../../input_data/ecosim_pftpar_20240723.nc'
+pft_file_in='../../../input_data/ecosim_pftpar_20261021.nc'
 grid_file_in='../../../examples/inputs/dryland_maize/dryland_grid_20230221.nc'
 pft_mgmt_in='../../../examples/inputs/dryland_maize/dryland_pft_20230509.nc'
 soil_mgmt_in='../../../examples/inputs/dryland_maize/dryland_soilmgmt_20230210.nc'
 clm_hour_file_in='../../../examples/inputs/dryland_maize/dryland_clm_20230203.nc'
 clm_factor_in='NO'
 atm_ghg_in='../../../input_data/fatm_hist_GHGs_1750-2022.nc'
-finidat='./dryland_maize.ecosim.r.2004-01-01-00000.nc'
+finidat='./dryland_maize.ecosim.r.2004-01-01-000000.nc'
 !atm_co2_fix=370.
 lverbose=.false.
 grid_mode=1
@@ -32,9 +32,8 @@ NPYS=10,10,10   !number of cycles per NPX for gas flux calcns
 NCYC_LITR=20
 NCYC_SNOW=20
 !set up output frequency
-JOUTS=1,3,3       !frequency on hourly scale, DATA(18)
 hist_mfilt=3650,8760
-hist_fincl2 = 'EXUD_CumYr_C_FLX','EXUD_CumYr_N_FLX','EXUD_CumYr_P_FLX','Uptk_N_CumYr_FLX','Uptk_P_CumYr_FLX'
+hist_fincl2 = 'EXUD_CumYr_C_FLX_pft','EXUD_CumYr_N_FLX_pft','EXUD_CumYr_P_FLX_pft','Uptk_N_CumYr_FLX_pft','Uptk_P_CumYr_FLX_pft'
 hist_nhtfrq=-24,-1
 /
 &bbgcforc

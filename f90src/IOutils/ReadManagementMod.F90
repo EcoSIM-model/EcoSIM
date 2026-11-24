@@ -29,11 +29,12 @@ implicit none
   __FILE__
 
   public :: ReadManagementFiles
+  public :: ReadSoilManagementForYear
   public :: ReadFire
   contains
 
 !------------------------------------------------------------------------------------------
-  subroutine ReadTillageFile(soilmgmt_nfid,FileTillage,NH1,NH2,NV1,NV2,dimtill)
+  subroutine ReadTillageFile(soilmgmt_nfid,FileTillage,NH1,NH2,NV1,NV2,dimtill,EventYear)
   !
   !read soil tillage information. It also includes events due to fire and drainage
   implicit none
@@ -41,6 +42,7 @@ implicit none
   integer, intent(in) :: NH1,NH2,NV1,NV2
   type(file_desc_t), intent(in) :: soilmgmt_nfid
   character(len=*), intent(in) :: dimtill
+  integer, optional, intent(in) :: EventYear !configured fire year; otherwise use the record year
   integer :: NY,NX
   integer  :: IPLOW,IDY
   real(r8) :: DPLOW,DY
@@ -71,9 +73,11 @@ implicit none
   !     DepzCorp_col=intensity (fire) or depth (tillage,drainage) of disturbance
   !
   kk=1
-  do while(len_trim(tillf(kk))>0)
+  do while(len_trim(tillf(kk)).GT.0)
 
     read(tillf(kk),'(I2,I2,I4)')IDY1,IDY2,IDY3
+    ! Fire records may contain placeholder years; use the configured event calendar.
+    if(present(EventYear))IDY3=EventYear
     LPY=0
     IF(isLeap(IDY3).and.IDY2.GT.2)LPY=1
     IF(IDY2.EQ.1)then
@@ -86,19 +90,21 @@ implicit none
       print*,tillf(kk)
       print*,idy1,idy2,idy3,IPLOW,DPLOW
     endif
+    
     D8995: DO NX=NH1,NH2
       D8990: DO NY=NV1,NV2
         iSoilDisturbType_col(IDY,NY,NX) = IPLOW
         DepzCorp_col(IDY,NY,NX)         = DPLOW
       ENDDO D8990
     ENDDO D8995
-    if(kk==ntill)exit
+    if(kk.eq.ntill)exit
     kk=kk+1    
   enddo
   end subroutine ReadTillageFile
 !------------------------------------------------------------------------------------------
 
   subroutine ReadIrrigationFile(soilmgmt_nfid,FileIrrig,NH1,NH2,NV1,NV2)
+  use abortutils, only : iulog
 
   implicit none
   character(len=*), intent(in) :: FileIrrig
@@ -113,6 +119,7 @@ implicit none
   real(r8) :: DIRRX,PHQX,CKAQX,RRH,WDPTHI,CCLQX
   real(r8) :: CMGQX,CNAQX,CSOQX
   real(r8) :: CN4QX,CNOQX,CPOQX,CALQX,CFEQX,CCAQX
+  real(r8) :: IrrigProperties(13),ExistingProperties(13)
   integer :: kk
   logical :: readvar
   type(Var_desc_t) :: vardesc
@@ -120,6 +127,7 @@ implicit none
   integer :: nirrig
 
   nirrig=get_dim_len(soilmgmt_nfid,'nirri')
+  if(nirrig==0)return
 
   if(nirrig>24)then
     call endrun("not enough size for array irrigf in "//trim(mod_filename), __LINE__)
@@ -136,6 +144,10 @@ implicit none
 !       AUTOMATED IRRIGATION
 !
 !       DST,DEN=start,end dates,hours DDMMHHHH
+!       TODO: Verify this input format; DDMMHHHH may be a documentation typo.
+!       The final four digits are used both as a year in isLeap(IDY3) and
+!       as a time in IHRS/IHRE. Check the intended input convention before
+!       revising the parsing or leap-year calculation for either endpoint.
 !       iIrrigOptX=flag for irrigation criterion,0=SWC,1=canopy water potl
 !       FIRRX=depletion of SWC from CIRRX to WP(iIrrigOpt_col=0),or minimum canopy
 !       water potential(iIrrigOpt_col=1), to trigger irrigation
@@ -188,6 +200,7 @@ implicit none
 !
     D7965: DO NX=NH1,NH2
       D7960: DO NY=NV1,NV2
+        Lirri_auto_col(NY,NX) = .true.
         iIrrigOpt_col(NY,NX) = iIrrigOptX
         IIRRA(1,NY,NX)       = IDYS
         IIRRA(2,NY,NX)       = IDYE
@@ -198,18 +211,19 @@ implicit none
         DIRRA(1,NY,NX) = DIRRX    !depth
         DIRRA(2,NY,NX) = WDPTHI   !width
         D220: DO I = 1, 366
-          PHQ(IDY,NY,NX)                                    = PHQX
-          NH4_irrig_mole_conc(IDY,NY,NX)                    = CN4QX/14.0_r8
-          NO3_irrig_mole_conc(IDY,NY,NX)                    = CNOQX/14.0_r8
-          H2PO4_irrig_mole_conc(IDY,NY,NX)                  = CPOQX/31.0_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Al,IDY,NY,NX)  = CALQX/27.0_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Fe,IDY,NY,NX)  = CFEQX/55.8_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Ca,IDY,NY,NX)  = CCAQX/40.0_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Mg,IDY,NY,NX)  = CMGQX/24.3_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Na,IDY,NY,NX)  = CNAQX/23.0_r8
-          trcsalt_irrig_mole_conc_col(idsalt_K,IDY,NY,NX)   = CKAQX/39.1_r8
-          trcsalt_irrig_mole_conc_col(idsalt_SO4,IDY,NY,NX) = CSOQX/32.0_r8
-          trcsalt_irrig_mole_conc_col(idsalt_Cl,IDY,NY,NX)  = CCLQX/35.5_r8
+          ! EcoSIM_ZM: initialize every day, not uninitialized scheduled IDY.
+          PHQ(I,NY,NX)                                    = PHQX
+          NH4_irrig_mole_conc(I,NY,NX)                    = CN4QX/14.0_r8
+          NO3_irrig_mole_conc(I,NY,NX)                    = CNOQX/14.0_r8
+          H2PO4_irrig_mole_conc(I,NY,NX)                  = CPOQX/31.0_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Al,I,NY,NX)  = CALQX/27.0_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Fe,I,NY,NX)  = CFEQX/55.8_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Ca,I,NY,NX)  = CCAQX/40.0_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Mg,I,NY,NX)  = CMGQX/24.3_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Na,I,NY,NX)  = CNAQX/23.0_r8
+          trcsalt_irrig_mole_conc_col(idsalt_K,I,NY,NX)   = CKAQX/39.1_r8
+          trcsalt_irrig_mole_conc_col(idsalt_SO4,I,NY,NX) = CSOQX/32.0_r8
+          trcsalt_irrig_mole_conc_col(idsalt_Cl,I,NY,NX)  = CCLQX/35.5_r8
         ENDDO D220
       ENDDO D7960
     ENDDO D7965
@@ -217,10 +231,10 @@ implicit none
 !
 !    print*,'   SCHEDULED IRRIGATION'
 !
-    call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, irrigf),&
+    call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, irrigf(1:nirrig)),&
       trim(mod_filename))
 
-    do kk=1,24
+    do kk=1,nirrig
       if(len_trim(irrigf(kk))==0)exit
 !
 !     DY,RR,JST,JEN=date DDMMYYYY,amount (mm),start and end hours
@@ -244,11 +258,39 @@ implicit none
       else
         IDY=30*(IDY2-1)+ICOR(IDY2-1)+IDY1+LPY
       endif
+      if(JST<1 .or. JEN>24 .or. JST>JEN .or. RR<0._r8)then
+        write(iulog,*)'Invalid scheduled irrigation in ',trim(FileIrrig), &
+          ': record=',kk,' day=',IDY,' start,end hours=',JST,JEN,' amount [mm]=',RR
+        call endrun('Scheduled irrigation requires 1<=start<=end<=24 and a nonnegative amount',__LINE__)
+      endif
+      ! A zero-water record must not replace another event's daily properties.
+      if(RR==0._r8)cycle
+      ! Chemistry and application depth are daily fields; all pulses must agree.
+      IrrigProperties=(/PHQX,CN4QX/14._r8,CNOQX/14._r8,CPOQX/31._r8, &
+        CALQX/27._r8,CFEQX/55.8_r8,CCAQX/40._r8,CMGQX/24.3_r8, &
+        CNAQX/23._r8,CKAQX/39.1_r8,CSOQX/32._r8,CCLQX/35.5_r8,WDPTHI/)
       RRH=RR/(JEN-(JST-1))
       D8965: DO NX=NH1,NH2
         D8960: DO NY=NV1,NV2
+          if(any(RRIG(:,IDY,NY,NX)>0._r8))then
+            ExistingProperties=(/PHQ(IDY,NY,NX),NH4_irrig_mole_conc(IDY,NY,NX), &
+              NO3_irrig_mole_conc(IDY,NY,NX),H2PO4_irrig_mole_conc(IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Al,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Fe,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Ca,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Mg,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Na,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_K,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_SO4,IDY,NY,NX), &
+              trcsalt_irrig_mole_conc_col(idsalt_Cl,IDY,NY,NX),WDPTH(IDY,NY,NX)/)
+            if(any(IrrigProperties/=ExistingProperties))then
+              write(iulog,*)'Conflicting scheduled irrigation in ',trim(FileIrrig), &
+                ': record=',kk,' day=',IDY,' NY,NX=',NY,NX
+              call endrun('Same-day irrigation requires identical chemistry and application depth',__LINE__)
+            endif
+          endif
           D2535: DO J=1,24
-            IF(J.GE.JST.AND.J.LE.JEN)RRIG(J,IDY,NY,NX)=RRH/1000.0_r8
+            IF(J.GE.JST.AND.J.LE.JEN)RRIG(J,IDY,NY,NX)=RRIG(J,IDY,NY,NX)+RRH/1000.0_r8
           ENDDO D2535
 !
 !           TRANSFER INPUTS TO MODEL ARRAYS
@@ -276,6 +318,7 @@ implicit none
 
   subroutine ReadFertlizerFile(soilmgmt_nfid,FertFile,NH1,NH2,NV1,NV2)
 
+  use abortutils, only : iulog
   implicit none
   character(len=*), intent(in) :: FertFile
   integer,intent(in) :: NH1,NH2,NV1,NV2
@@ -294,8 +337,10 @@ implicit none
   type(Var_desc_t) :: vardesc
   character(len=128) :: fertf(12)
   integer :: nfert
+  integer :: FirstRecord(366)
 
   nfert=get_dim_len(soilmgmt_nfid,'nfert')
+  if(nfert==0)return
   if(nfert>12)then
     call endrun('Not enough size for array fertf in '//trim(mod_filename), __LINE__)
   endif
@@ -317,10 +362,11 @@ implicit none
     call endrun('fail to find fertilizer '//trim(FertFile)//' in '//trim(mod_filename), __LINE__)
   endif
 
-  call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, fertf),&
+  call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, fertf(1:nfert)),&
       trim(mod_filename))
 
-  do kk=1,12
+  FirstRecord=0
+  do kk=1,nfert
     if(len_trim(fertf(kk))==0)exit
     !all nutrients are in g/m2
     READ(fertf(kk),*)DDMMYYYY,NH4Soil,NH3Soil,UreaSoil,NO3Soil,NH4Band,NH3Band,UreaBand,NO3Band &
@@ -349,6 +395,18 @@ implicit none
     else
       IDY=30*(IDY2-1)+ICOR(IDY2-1)+IDY1+LPY
     endif
+
+    ! One combined amendment record is applied at noon for each day.
+    if(IDY<1 .or. IDY>size(FirstRecord))then
+      write(iulog,*)'Invalid fertilizer day in ',trim(FertFile),': record=',kk,' day=',IDY
+      call endrun('Fertilizer day is outside the daily schedule',__LINE__)
+    endif
+    if(FirstRecord(IDY)/=0)then
+      write(iulog,*)'Duplicate fertilizer day in ',trim(FertFile),': day=',IDY, &
+        ' records=',FirstRecord(IDY),kk
+      call endrun('Combine same-day fertilizer and amendment inputs into one record',__LINE__)
+    endif
+    FirstRecord(IDY)=kk
 
     D8985: DO NX=NH1,NH2
       D8980: DO NY=NV1,NV2
@@ -384,6 +442,9 @@ implicit none
         FERT(ifert_plant_resN,IDY,NY,NX)  = PlantResN
         FERT(ifert_plant_resP,IDY,NY,NX)  = PlantResP
         FERT(ifert_plant_manuC,IDY,NY,NX) = ManureC
+        ! Retain input provenance even if grazing later merges manure returns.
+        ExternalManureC_col(IDY,NY,NX)=0._r8
+        if(IR2<imanure_grazing)ExternalManureC_col(IDY,NY,NX)=ManureC
         FERT(ifert_plant_manuN,IDY,NY,NX) = ManureN
         FERT(ifert_plant_manuP,IDY,NY,NX) = ManureP
         FERT(ifert_PO4_soil,IDY,NY,NX)    = PO4Soil
@@ -406,12 +467,25 @@ implicit none
 
 !------------------------------------------------------------------------------------------
 
+  subroutine ReadSoilManagementForYear(simulation_year,forcing_year)
+  ! Select only the schedule coordinate. Event doses, units and processes
+  ! remain in the existing reader; missing years still stop explicitly.
+  use EcoSIMCtrlMod, only : soil_mgmt_use_model_year
+  implicit none
+  integer, intent(in) :: simulation_year,forcing_year
+  if(soil_mgmt_use_model_year)then
+    call ReadManagementFiles(simulation_year)
+  else
+    call ReadManagementFiles(forcing_year)
+  endif
+  end subroutine ReadSoilManagementForYear
+
   subroutine ReadManagementFiles(yeari)
   !
   !DESCRIPTION
   !read in management information for soil: tillage
   !fertilizer and irrigation
-  use EcoSIMCtrlMod, only : soil_mgmt_in,Lirri_auto
+  use EcoSIMCtrlMod, only : soil_mgmt_in
   implicit none
   integer, intent(in) :: yeari
   character(len=*), parameter :: subname='ReadManagementFiles'
@@ -430,6 +504,8 @@ implicit none
 !   DATA1(8),DATA1(5),DATA1(6)=disturbance,fertilizer,irrigation files
 !   PREFIX=path for files in current or higher level directory
   call PrintInfo('beg '//subname)
+  ! Reset annual irrigation modes so absent selections cannot retain old settings.
+  Lirri_auto_col=.false.
   call ncd_pio_openfile(soilmgmt_nfid, soil_mgmt_in, ncd_nowrite)
   nyears=get_dim_len(soilmgmt_nfid, 'year')
   if(nyears==0)then
@@ -437,15 +513,22 @@ implicit none
     call ncd_pio_closefile(soilmgmt_nfid)
     return
   endif
-  iyear=1
-  DO while(.true.)
+  ! EcoSIM_ZM: stop at the declared year count rather than reading beyond
+  ! the coordinate when a forcing year is absent from management input.
+  DO iyear=1,nyears
     call ncd_getvar(soilmgmt_nfid,'year',iyear,year)
     if(year==yeari)exit
-    iyear=iyear+1
   ENDDO
+  if(iyear>nyears)then
+    call ncd_pio_closefile(soilmgmt_nfid)
+    call endrun('management forcing year not present: '//trim(int2str(yeari)), __LINE__)
+  endif
 
   ntopou=get_dim_len(soilmgmt_nfid, 'ntopou')
-  if(ntopou==0)return
+  if(ntopou==0)then
+    call ncd_pio_closefile(soilmgmt_nfid)
+    return
+  endif
   if(first_topou)ntopou=1  
   DO NTOPO=1,ntopou
     call ncd_getvar(soilmgmt_nfid,'NH1',ntopo,NH1)
@@ -463,8 +546,9 @@ implicit none
       call endrun('fail to find fertf in '//trim(mod_filename), __LINE__)
     endif
 
+    ! EcoSIM_ZM: route the schedule for this unit, not the final unit count.
     call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, fertf, &
-      start = (/1,ntopou,iyear/),count = (/len(fertf),1/)), &
+      start = (/1,ntopo,iyear/),count = (/len(fertf),1/)), &
       trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
     !!!!
     call check_var(soilmgmt_nfid, 'tillf', vardesc, readvar)
@@ -473,7 +557,7 @@ implicit none
     endif
 
     call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, tillf, &
-      start = (/1,ntopou,iyear/),count = (/len(tillf),1/)), &
+      start = (/1,ntopo,iyear/),count = (/len(tillf),1/)), &
       trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
     !!!!
     call check_var(soilmgmt_nfid, 'irrigf', vardesc, readvar)
@@ -482,7 +566,7 @@ implicit none
     endif
 
     call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, irrigf, &
-      start = (/1,ntopou,iyear/),count = (/len(irrigf),1/)), &
+      start = (/1,ntopo,iyear/),count = (/len(irrigf),1/)), &
       trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
 !
 !   READ TILLAGE INPUT FILE
@@ -501,8 +585,8 @@ implicit none
 !
 !   READ IRRIGATION INPUT FILE
 !
+    Lirri_auto_col(NV1:NV2,NH1:NH2)=.false.
     IF(trim(irrigf).NE.'NO')THEN
-      Lirri_auto=irrigf(1:4)=='auto'
       if(lverb)print*,'ReadIrrigationFile'
       call ReadIrrigationFile(soilmgmt_nfid,irrigf,NH1,NH2,NV1,NV2)
     ENDIF
@@ -515,13 +599,14 @@ implicit none
 
   subroutine ReadFire(yearc,fire_event_entry,NHW,NHE,NVN,NVS)
   use EcoSIMCtrlMod, only : soil_mgmt_in  
+  use abortutils, only : iulog
   implicit none
   integer, intent(in) :: yearc
   character(len=21), intent(in) :: fire_event_entry
   integer, intent(in) :: NHW,NHE,NVN,NVS
   type(file_desc_t) :: soilmgmt_nfid
   character(len=10) :: firef
-  integer :: ntopou,ntopo,pair_end
+  integer :: ntopou,ntopou_plant,ntopo,pair_end
   logical :: readvar
   type(Var_desc_t) :: vardesc
   type(file_desc_t) :: pftinfo_nfid
@@ -529,10 +614,26 @@ implicit none
   integer :: NH1,NH2,NV1,NV2
 
   call ncd_pio_openfile(soilmgmt_nfid, soil_mgmt_in, ncd_nowrite)
+  call ncd_pio_openfile(pftinfo_nfid, pft_mgmt_in, ncd_nowrite)
 
   ntopou=get_dim_len(soilmgmt_nfid, 'ntopou')
-  if(ntopou==0)return
+  ntopou_plant=get_dim_len(pftinfo_nfid, 'ntopou')
+  ! Both management files must describe the same number of topographic units.
+  ! Check the full dimensions before first_topou restricts either fire loop.
+  if(ntopou/=ntopou_plant)then
+    write(iulog,*)'ReadFire: ntopou=',ntopou,' in soil file ',trim(soil_mgmt_in)
+    write(iulog,*)'ReadFire: ntopou=',ntopou_plant,' in plant file ',trim(pft_mgmt_in)
+    call endrun('ReadFire requires matching ntopou in soil and plant management files',__LINE__)
+  endif
+
+  if(ntopou==0)then
+    call ncd_pio_closefile(soilmgmt_nfid)
+    call ncd_pio_closefile(pftinfo_nfid)
+    return
+  endif
   if(first_topou)ntopou=1  
+  !
+  !fire disturbance to soil  
   pair_end = index(fire_event_entry, ',')  
   DO NTOPO=1,ntopou
     call ncd_getvar(soilmgmt_nfid,'NH1',ntopo,NH1)
@@ -551,16 +652,13 @@ implicit none
     endif
 
     call check_ret(nf90_get_var(soilmgmt_nfid%fh, vardesc%varid, firef, &
-      start = (/1,ntopou/),count = (/len(firef),1/)), &
+      start = (/1,ntopo/),count = (/len(firef),1/)), &
       trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
-
-    call ReadTillageFile(soilmgmt_nfid,firef,NH1,NH2,NV1,NV2,'nfire')
+    call ReadTillageFile(soilmgmt_nfid,firef,NH1,NH2,NV1,NV2,'nfire',EventYear=yearc)
   ENDDO  
   call ncd_pio_closefile(soilmgmt_nfid)
 
-  !    
-  call ncd_pio_openfile(pftinfo_nfid, pft_mgmt_in, ncd_nowrite)
-
+  !fire disturbance to plants    
   DO NTOPO=1,ntopou
     call ncd_getvar(pftinfo_nfid,'NH1',ntopo,NH1)
     call ncd_getvar(pftinfo_nfid,'NV1',ntopo,NV1)
@@ -578,7 +676,7 @@ implicit none
     endif
 
     call check_ret(nf90_get_var(pftinfo_nfid%fh, vardesc%varid, firef, &
-      start = (/1,ntopou/),count = (/len(firef),1/)), &
+      start = (/1,ntopo/),count = (/len(firef),1/)), &
       trim(mod_filename)//'::at line '//trim(int2str(__LINE__)))
     
     call ReadPlantFireMgmt(yearc,pftinfo_nfid,firef,NH1,NH2,NV1,NV2)
@@ -629,7 +727,8 @@ implicit none
             ECUT14,ECUT21,ECUT22,ECUT23,ECUT24
         !"17050000,2,0,0.06,0.0,0.9,0.3,0.0,0.1,0.9,0.9,0.0,0.5               
         LPY=0
-        if(isLeap(iyr) .and. IMO.GT.2)LPY=1
+        ! FireEvents determines the execution year, regardless of the record year.
+        if(isLeap(yearc) .and. IMO.GT.2)LPY=1
         !obtain the ordinal day
         IF(IMO.EQ.1)then
           IDY=IDX

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transpiration in EcoSIM</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .equation, .note, pre { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; overflow-wrap: anywhere; }
+    pre { white-space: pre-wrap; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Transpiration in EcoSIM</h1>
+  <p class="meta">Code-based knowledge note · 11 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>EcoSIM computes transpiration from the leaf-to-air water-vapor concentration gradient, limited by aerodynamic and stomatal resistance.</strong> It solves this flux together with canopy temperature, tissue water storage, root water uptake, and canopy water potential.</p>
+
+  <h2>Dry-canopy equation</h2>
+  <p>For a canopy without intercepted water and with a vapor gradient favoring evaporation, the calculation simplifies to:</p>
+  <div class="equation">E = A<sub>eff</sub> (ρ<sub>v,leaf</sub> − ρ<sub>v,air</sub>) / (r<sub>a</sub> + r<sub>s</sub>)</div>
+  <p>E denotes positive water loss in this explanatory equation. A<sub>eff</sub> is the PFT-covered grid area, ρ denotes water-vapor concentration, r<sub>a</sub> is canopy-to-air aerodynamic resistance, and r<sub>s</sub> is canopy stomatal resistance to water vapor. Resistances and concentrations must use the model’s consistent unit conventions.</p>
+  <p>The implementation first calculates aerodynamic demand, then applies the stomatal resistance factor:</p>
+  <pre><code>EffPFTGridArea4H2O = FracGridPFTCovered * AREA3(NU)
+CdVapCanopyAir = EffPFTGridArea4H2O / ra
+EX = CdVapCanopyAir * (VPA - VPLeaf)
+Transpiration_pft(NZ) = EX * ra / (ra + rs)</code></pre>
+  <p>Here <code>ra</code> abbreviates <code>RawH2OCanopy2Atm_pft(NZ)</code> and <code>rs</code> abbreviates <code>CanPStomaResistH2O_pft(NZ)</code>.</p>
+  <p class="note"><strong>Sign and area conventions:</strong> <code>Transpiration_pft</code> is negative for water loss from the canopy. The local calculation includes effective PFT area; it should not be interpreted directly as a per-leaf-area flux. The equation above reverses the code’s sign to describe evaporation as positive.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 770, 807, 837–841, and 878.</p>
+
+  <h2>Leaf vapor concentration</h2>
+  <p>EcoSIM calculates vapor concentration inside the leaf from canopy temperature and water potential:</p>
+  <div class="equation">ρ<sub>v,leaf</sub> = ρ<sub>sat</sub>(T<sub>canopy</sub>) exp[18 max(Ψ<sub>canopy</sub>, −5000) / (R T<sub>canopy</sub>)]</div>
+  <p>This is the exact numerical form used in the code’s unit conventions: temperature is in kelvin, water potential is in MPa, and R represents <code>RGASC</code>. The saturation function is <code>vapsat</code>. Negative water potential reduces leaf vapor concentration below the saturation value. Increasing leaf temperature increases saturation vapor concentration.</p>
+  <p>Although comments sometimes call <code>VPLeaf</code> and <code>VPA</code> vapor pressures, they are used as vapor concentrations in this transport calculation. The leaf calculation is annotated as tonnes of water per cubic meter.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 825–840.</p>
+
+  <h2>Stomatal and aerodynamic resistance</h2>
+  <p>The canopy stomatal resistance responds to turgor:</p>
+  <div class="equation">r<sub>s</sub> = r<sub>min</sub> + (r<sub>cuticle</sub> − r<sub>min</sub>) exp(−Ψ<sub>turgor</sub> / RCS)</div>
+  <p><code>RCS_pft</code> is the turgor response scale. As turgor decreases toward zero, stomatal resistance approaches the cuticular limit, reducing transpiration. The minimum resistance is supplied by the model’s stomatal calculations.</p>
+  <p>Aerodynamic resistance is updated from the isothermal canopy-to-air resistance using the Richardson number, with bounds on its change during iteration. Thus canopy temperature and atmospheric stability affect vapor transport as well as the leaf vapor concentration.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, approximately lines 569–586; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, lines 804–820.</p>
+
+  <h2>Intercepted liquid water, snow, and dew</h2>
+  <p>When the canopy holds intercepted liquid water, EcoSIM calculates surface evaporation using aerodynamic and surface resistance, limiting that loss to the water present. It subtracts the liquid evaporation from the aerodynamic demand before applying the stomatal resistance factor:</p>
+  <pre><code>EX = EX - VapXAir2CanopyLiq_pft(NZ)
+Transpiration_pft(NZ) = EX * ra / (ra + rs)</code></pre>
+  <p>Both EX and liquid evaporation are negative during water loss, so subtracting the evaporation term reduces the remaining magnitude of demand available for transpiration.</p>
+  <p>Snow sublimation is calculated separately and contributes to latent heat exchange. In the inspected implementation, only the liquid evaporation term is subtracted from EX at this step; the snow sublimation term is not subtracted there.</p>
+  <p>If the vapor gradient instead favors condensation, the model calculates dew on the canopy and sets EX to zero, giving zero transpiration in that branch.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 841–879.</p>
+
+  <h2>Coupling to water supply and energy balance</h2>
+  <p>Transpiration and intercepted-water evaporation remove latent heat; sublimation uses its own latent heat coefficient. The resulting energy balance changes canopy temperature, which changes leaf vapor concentration and aerodynamic exchange.</p>
+  <p>Meanwhile, transpiration removes tissue water. The canopy water-balance solver adjusts water potential to reconcile root uptake, transpiration, and changes in tissue storage. That potential affects turgor, which changes stomatal resistance and feeds back on transpiration.</p>
+  <div class="equation">ΔW<sub>canopy</sub> / Δt = root water uptake − transpiration</div>
+  <p>This conceptual balance uses uptake and transpiration as positive quantities. Transpiration need not equal root uptake at every step: stored plant water can temporarily supply the difference.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 878–887 and 1031–1112. See also <a href="canopy_water_potential.html">canopy water potential in EcoSIM</a> and <a href="leaf_respiration.html">leaf CO₂ and respiration in EcoSIM</a>.</p>
+  <p>Further analysis: <a href="ci_ca_transpiration_feedback.html">Ci/Ca and transpiration feedback</a> explains how the prescribed reference ratio affects baseline resistance, why the iterated Ci does not directly update transpiration, and which coupling questions remain to be tested.</p>
+  <p class="meta">Scope: the inspected main canopy solver. Source line numbers may shift as the code changes. Explanatory symbols and positive-loss equations are distinguished from the code’s variable names and signs.</p>
+</body>
+</html>

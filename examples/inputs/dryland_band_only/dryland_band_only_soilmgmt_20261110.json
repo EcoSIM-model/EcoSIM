@@ -1,0 +1,176 @@
+{
+  "years": [
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006
+  ],
+  "topo_units": [
+    {
+      "NH1": 1,
+      "NV1": 1,
+      "NH2": 1,
+      "NV2": 1,
+      "years": {
+        "2001": {
+          "fertf": "me01f",
+          "tillf": "me01t",
+          "irrigf": "NO"
+        },
+        "2002": {
+          "fertf": "NO",
+          "tillf": "NO",
+          "irrigf": "NO"
+        },
+        "2003": {
+          "fertf": "me03f",
+          "tillf": "NO",
+          "irrigf": "NO"
+        },
+        "2004": {
+          "fertf": "NO",
+          "tillf": "NO",
+          "irrigf": "NO"
+        },
+        "2005": {
+          "fertf": "me05f",
+          "tillf": "NO",
+          "irrigf": "NO"
+        },
+        "2006": {
+          "fertf": "NO",
+          "tillf": "NO",
+          "irrigf": "NO"
+        }
+      }
+    }
+  ],
+  "fertilizer_files": {
+    "me01f": [
+      {
+        "DDMMYYYY": "16052001",
+        "NH4Soil": 0.0,
+        "NH3Soil": 0.0,
+        "UreaSoil": 0.0,
+        "NO3Soil": 0.0,
+        "NH4Band": 0.0,
+        "NH3Band": 10.54,
+        "UreaBand": 0.0,
+        "NO3Band": 4.27,
+        "MonocalciumPhosphateSoil": 0.0,
+        "MonocalciumPhosphateBand": 5.0,
+        "hydroxyapatite": 0.0,
+        "LimeStone": 0.0,
+        "Gypsum": 0.0,
+        "PlantResC": 0.0,
+        "PlantResN": 0.0,
+        "PlantResP": 0.0,
+        "ManureC": 0.0,
+        "ManureN": 0.0,
+        "ManureP": 0.0,
+        "AppDepth": 0.02,
+        "BandWidth": 0.76,
+        "PO4Soil": 0.0,
+        "PO4Band": 0.0,
+        "IsAmendtypFert": 1,
+        "IsAmendtypResidual": 0,
+        "IsAmendtypManure": 0
+      }
+    ],
+    "me03f": [
+      {
+        "DDMMYYYY": "16052003",
+        "NH4Soil": 0.0,
+        "NH3Soil": 0.0,
+        "UreaSoil": 0.0,
+        "NO3Soil": 0.0,
+        "NH4Band": 0.0,
+        "NH3Band": 7.98,
+        "UreaBand": 0.0,
+        "NO3Band": 2.99,
+        "MonocalciumPhosphateSoil": 0.0,
+        "MonocalciumPhosphateBand": 5.0,
+        "hydroxyapatite": 0.0,
+        "LimeStone": 0.0,
+        "Gypsum": 0.0,
+        "PlantResC": 0.0,
+        "PlantResN": 0.0,
+        "PlantResP": 0.0,
+        "ManureC": 0.0,
+        "ManureN": 0.0,
+        "ManureP": 0.0,
+        "AppDepth": 0.02,
+        "BandWidth": 0.76,
+        "PO4Soil": 0.0,
+        "PO4Band": 0.0,
+        "IsAmendtypFert": 1,
+        "IsAmendtypResidual": 0,
+        "IsAmendtypManure": 0
+      }
+    ],
+    "me05f": [
+      {
+        "DDMMYYYY": "07042005",
+        "NH4Soil": 0.0,
+        "NH3Soil": 0.0,
+        "UreaSoil": 0.0,
+        "NO3Soil": 0.0,
+        "NH4Band": 0.0,
+        "NH3Band": 9.84,
+        "UreaBand": 0.0,
+        "NO3Band": 3.92,
+        "MonocalciumPhosphateSoil": 0.0,
+        "MonocalciumPhosphateBand": 5.0,
+        "hydroxyapatite": 0.0,
+        "LimeStone": 0.0,
+        "Gypsum": 0.0,
+        "PlantResC": 0.0,
+        "PlantResN": 0.0,
+        "PlantResP": 0.0,
+        "ManureC": 0.0,
+        "ManureN": 0.0,
+        "ManureP": 0.0,
+        "AppDepth": 0.02,
+        "BandWidth": 0.76,
+        "PO4Soil": 0.0,
+        "PO4Band": 0.0,
+        "IsAmendtypFert": 1,
+        "IsAmendtypResidual": 0,
+        "IsAmendtypManure": 0
+      }
+    ]
+  },
+  "tillage_files": {
+    "me01t": [
+      {
+        "DDMMYYYY": "09042001",
+        "iSoilDisturbType": 3,
+        "DepzCorp": 0.1
+      },
+      {
+        "DDMMYYYY": "10042001",
+        "iSoilDisturbType": 3,
+        "DepzCorp": 0.1
+      },
+      {
+        "DDMMYYYY": "16042001",
+        "iSoilDisturbType": 3,
+        "DepzCorp": 0.1
+      },
+      {
+        "DDMMYYYY": "20042001",
+        "iSoilDisturbType": 7,
+        "DepzCorp": 0.05
+      },
+      {
+        "DDMMYYYY": "08112001",
+        "iSoilDisturbType": 1,
+        "DepzCorp": 0.2
+      }
+    ]
+  },
+  "irrigation_files": {},
+  "description": "soil managment data created on 2023/02/10/15:03:35"
+}

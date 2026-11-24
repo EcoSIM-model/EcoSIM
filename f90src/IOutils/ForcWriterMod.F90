@@ -1,4 +1,7 @@
 module ForcWriterMod
+  ! Description:
+  ! Export initialization data for the batch soil biogeochemistry driver.
+  use abortutils, only: endrun
   use SoilPhysDataType
   use SOMDataType
   USE MicrobialDataType
@@ -31,8 +34,7 @@ implicit none
 
 !------------------------------------------------------------------------------------------
   subroutine WriteBBGCFORC(doy,year)
-  !
-  ! DESCRIPTION:
+  ! Description:
   ! Write initial condition for the batch soil bgc model.
   ! Because the single layer bgc does not have band information.
   ! The band nutrients is set to zero, or add to the bulk soil
@@ -46,6 +48,9 @@ implicit none
   real(r8),pointer :: data1d(:)
   real(r8), allocatable :: dat1d(:)
 
+  ! The batch driver reconstructs the EcoSIM curve from legacy scalar fields.
+  ! Reject VG export rather than create forcing with a different retention law.
+  if(allocated(VGThetaR_vr))call endrun('Batch-soil forcing export supports only the ecosim hydraulic scheme')
   if(year==bgc_forc_conf%year .and. doy==bgc_forc_conf%doy)then
     NY=1;NX=1;L=bgc_forc_conf%Layer
     write(*,*)'write bbgc forc on day ',doy,'year',year
@@ -226,7 +231,7 @@ implicit none
     call ncd_putvar(ncf,'PSIMD',LOGPSIMND_col(NY,NX))
     call ncd_putvar(ncf,'PSIMS',LOGPSIAtSat(NY,NX))
     call ncd_putvar(ncf,'PSISD',LOGPSIMXD_col(NY,NX))
-    call ncd_putvar(ncf,'PSISE',PSISE_vr(L,NY,NX))
+    call ncd_putvar(ncf,'PSISE',PSI_at_Sautration_vr(L,NY,NX))
     call ncd_putvar(ncf,'DLYR3',DLYR_3D(3,L,NY,NX))
     call ncd_putvar(ncf,'CEC',CEC_vr(L,NY,NX))
     call ncd_putvar(ncf,'XCEC',trcx_solml_vr(idx_CEC,L,NY,NX))

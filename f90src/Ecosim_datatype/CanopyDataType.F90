@@ -1,4 +1,6 @@
 module CanopyDataType
+  ! Description:
+  ! Own native canopy biomass, geometry, energy-water state and concentrations.
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use data_const_mod, only : spval => DAT_CONST_SPVAL
@@ -25,7 +27,7 @@ module CanopyDataType
   real(r8),target,allocatable ::  TurgEff4CanopyResp_pft(:,:,:)              !Turgor pressure effect on canopy respiration, [-]
   real(r8),target,allocatable ::  CanPStomaResistH2O_pft(:,:,:)              !canopy stomatal resistance, [h m-1]
   real(r8),target,allocatable ::  CanopyMinStomaResistH2O_pft(:,:,:)           !canopy minimum stomatal resistance, [s m-1]
-  real(r8),target,allocatable ::  RawIsoTSurf2SinkZ_col(:,:)                  !canopy boundary layer resistance, [m h-1]
+  real(r8),target,allocatable ::  RawIsoTSurf2SinkZ_col(:,:)                  !neutral within-canopy resistance from ground surface to zero-sink height, [h m-1]
   real(r8),target,allocatable ::  O2I_pft(:,:,:)                             !leaf gaseous O2 concentration, [umol m-3]
   real(r8),target,allocatable ::  LeafIntracellularCO2_pft(:,:,:)            !leaf gaseous CO2 concentration, [umol m-3]
   real(r8),target,allocatable ::  AirConc_pft(:,:,:)                         !total gas concentration, [mol m-3]
@@ -73,11 +75,15 @@ module CanopyDataType
   real(r8),target,allocatable ::  LWRadCanopy_pft(:,:,:)                     !canopy longwave radiation , [MJ d-2 h-1]
   real(r8),target,allocatable ::  RadSWCanopyAbsorption_pft(:,:,:)                   !canopy absorbed shortwave radiation , [MJ d-2 h-1]
   real(r8),target,allocatable ::  RadPARCanopyAbsorption_pft(:,:,:)                  !canopy absorbed PAR , [umol m-2 s-1]
-  real(r8),target,allocatable ::  FracPARads2Canopy_pft(:,:,:)               !fraction of incoming PAR absorbed by canopy, [-]
+  real(r8),target,allocatable ::  FracPARads2Canopy_pft(:,:,:)               !fraction of incoming PAR absorbed by total canopy, [-]
+  real(r8),target,allocatable ::  FracPARads2LiveCanopy_pft(:,:,:)           !fraction of incoming PAR absorbed by live canopy, [-]
   real(r8),target,allocatable ::  TAU_DirectSunSha(:,:,:)                         !fraction of radiation transmitted by canopy layer, [-]
   real(r8),target,allocatable ::  TAU_DirectSunLit(:,:,:)                 !fraction of radiation intercepted by canopy layer, [-]
   real(r8),target,allocatable ::  FracSWRad2Grnd_col(:,:)                    !fraction of radiation intercepted by ground surface, [-]
   real(r8),target,allocatable ::  RadSWGrnd_col(:,:)                         !shortwave radiation incident on ground surface, [MJ h-1]
+  real(r8),target,allocatable ::  RadPARGrnd_col(:,:)                        !ground PAR, [umol m-2 s-1]
+  real(r8),target,allocatable ::  RadPAR2Soil_col(:,:)                       !PAR to exposed soil, [umol m-2 s-1]
+  real(r8),target,allocatable ::  RadPAR2LitR_col(:,:)                       !PAR to litter, [umol m-2 s-1]
   real(r8),target,allocatable ::  LWRadCanGPrev_col(:,:)                     !longwave radiation emitted by canopy, [MJ h-1]
   real(r8),target,allocatable ::  LWRadGrnd_col(:,:)                         !longwave radiation emitted by ground surface, [MJ m-2 h-1]
   real(r8),target,allocatable ::  WatHeldOnCanopy_col(:,:)                   !canopy held water content, [m3 d-2]
@@ -97,17 +103,20 @@ module CanopyDataType
   real(r8),target,allocatable ::  PSICanopyOsmo_pft(:,:,:)                   !platn canopy osmotic water potential, [Mpa]
   real(r8),target,allocatable ::  RNodeInitiate_pft(:,:,:)                   !node initiation rate, [h-1]
   real(r8),target,allocatable ::  RLeafAppear_pft(:,:,:)                     !leaf appearing rate, [h-1]
-  real(r8),target,allocatable ::  RawCanopy2Atm_pft(:,:,:)                !canopy boundary layer resistance, [h m-1]
+  real(r8),target,allocatable ::  RawH2OCanopy2Atm_pft(:,:,:)                !canopy boundary layer resistance, [h m-1]
+  real(r8),target,allocatable ::  RawHeatCanopy2Atm_pft(:,:,:)                !canopy sensible-heat boundary layer resistance, [h m-1]
   real(r8),target,allocatable ::  Transpiration_pft(:,:,:)                   !canopy transpiration, [m3 d-2 h-1]
   real(r8),target,allocatable ::  VapXAir2Canopy_pft(:,:,:)                  !negative of canopy evaporation, [m2 d-2 h-1]
   real(r8),target,allocatable ::  CanopyBiomWater_pft(:,:,:)                 !canopy water content associated with dry matter, [m3 d-2]
   real(r8),target,allocatable ::  CanopyWaterMassBeg_col(:,:)                !Canopy water before mass balance check [m3 d-2]
   real(r8),target,allocatable ::  CanopyWaterMassEnd_col(:,:)                !Canopy water at mass balance check [m3 d-2]
-  real(r8),target,allocatable ::  HeatCanopy2Dist_col(:,:)                   !Canopy heat content loss to disturbance, [MJ d-2]
-  real(r8),target,allocatable ::  QCanopyWat2Dist_col(:,:)                   !canopy water loss to disturbance, [m3 d-2 h-1]
+  real(r8),target,allocatable ::  CanopyHeatLoss2Dist_col(:,:)                   !Canopy heat content loss to disturbance, [MJ d-2]
+  real(r8),target,allocatable ::  QCanopyWatLoss2Dist_col(:,:)                   !canopy water loss to disturbance, [m3 d-2 h-1]
   real(r8),target,allocatable ::  QVegET_col(:,:)                            !total canopy evaporation + transpiration, [m3 d-2 h-1]
   real(r8),target,allocatable ::  VapXAir2Canopy_col(:,:)                    !total canopy evaporation, [m3 d-2]
   real(r8),target,allocatable ::  CanopyHeatStor_col(:,:)                    !total canopy heat content, [MJ  d-2]
+  real(r8),target,allocatable :: HeatSensVapAir2Canopy_col(:,:) ! accepted canopy vapor sensible heat [MJ/cell/hour]
+  real(r8),target,allocatable :: HeatPrecAir2Canopy_col(:,:) ! accepted canopy intercepted precipitation heat [MJ/cell/hour]
   real(r8),target,allocatable ::  HeatFlx2Canopy_col(:,:)                    !total canopy heat flux, [MJ  d-2 h-1]
   real(r8),target,allocatable ::  CanopyBiomWater_col(:,:)                         !total canopy water content stored in dry matter, [m3 d-2]
   real(r8),target,allocatable ::  LWRadCanG_col(:,:)                         !total canopy LW emission, [MJ d-2 h-1]
@@ -118,6 +127,7 @@ module CanopyDataType
   real(r8),target,allocatable ::  SnowOnCanopy_pft(:,:,:)                    !canopy held snow [m3 d-2]
   real(r8),target,allocatable ::  WatHeldOnCanopy_pft(:,:,:)                 !canopy held water content, [m3 d-2]
   real(r8),target,allocatable ::  TKC_pft(:,:,:)                             !canopy temperature after energy iteration, [K]
+  real(r8),target,allocatable ::  DynCi2CaRatio_pft(:,:,:)                   !dynamic Ci:Ca ratio, [-]
   real(r8),target,allocatable ::  TdegCCanopy_pft(:,:,:)                     !canopy temperature, [oC]
   real(r8),target,allocatable ::  DeltaTKC_pft(:,:,:)                        !change in canopy temperature, [K]
   real(r8),target,allocatable ::  TKCanopy_pft(:,:,:)                        !canopy temperature during canopy energy iteration, [K]
@@ -142,6 +152,7 @@ module CanopyDataType
   real(r8),target,allocatable ::  CanopyLeafCLyr_pft(:,:,:,:)                !canopy layer leaf C, [g d-2]
   real(r8),target,allocatable ::  CanopyNonstElms_pft(:,:,:,:)               !canopy nonstructural chemical element, [g d-2]
   real(r8),target,allocatable ::  CanopyNonstElmConc_pft(:,:,:,:)            !canopy nonstructural chemical element concentration, [g d-2]
+  real(r8),target,allocatable :: CanopyNonstOMConc_pft(:,:,:)                !C+N+P concentration: derived in full model, CCPOLT input in SP [g gC-1]
   real(r8),target,allocatable ::  CanopyStemSurfAreaZ_pft(:,:,:,:)               !plant canopy layer stem area, [m2 d-2]
   real(r8),target,allocatable ::  CanopyNodulNonstElms_pft(:,:,:,:)          !canopy nodule nonstructural chemical element, [g d-2]
   real(r8),target,allocatable ::  ShootNoduleElms_pft(:,:,:,:)               !canopy nodule chemical elemental biomass [g d-2]
@@ -168,7 +179,7 @@ module CanopyDataType
   real(r8),target,allocatable ::  LeafProteinC_node(:,:,:,:,:)                !layer leaf protein C, [g d-2]
   real(r8),target,allocatable ::  PetoleProteinC_node(:,:,:,:,:)         !layer sheath protein C, [g d-2]
   real(r8),target,allocatable ::  CanopyNoduleNonstCConc_pft(:,:,:)            !nodule nonstructural C, [g d-2]
-  real(r8),target,allocatable ::  GrainSeedBiomCMean_brch(:,:,:,:)           !maximum grain C during grain fill, [g d-2]
+  real(r8),target,allocatable ::  SingleGrainMeanBiomC_brch(:,:,:,:)           !potential carbon mass per grain, [gC seed-1]
   real(r8),target,allocatable ::  CanopyNLimFactor_brch(:,:,:,:)             !Canopy N-limitation factor, [0->1] weaker limitation,[-]
   real(r8),target,allocatable ::  CanopyPLimFactor_brch(:,:,:,:)             !Canopy P-limitation factor, [0->1] weaker limitation,[-]
   real(r8),target,allocatable ::  StandDeadCompKElms_pft(:,:,:,:,:)          !standing dead chemical element fraction, [g d-2]
@@ -176,7 +187,7 @@ module CanopyDataType
   real(r8),target,allocatable ::  SeasonalNonstElms_pft(:,:,:,:)             !plant stored nonstructural chemical element, [g d-2]
   real(r8),target,allocatable ::  SeasonalNonstCDayAve_pft(:,:,:)            !daily average seasonal storage C for annual plant death check, [g d-2]
   real(r8),target,allocatable ::  SeedPlantedElm_pft(:,:,:,:)              !plant stored nonstructural chemical elements at planting, [g d-2]
-  REAL(R8),target,allocatable ::  AvgCanopyBiomC2Graze_pft(:,:,:)            !landscape average canopy shoot C, [g d-2]
+  REAL(R8),target,allocatable ::  AvgCanopyBiomC2Graze_pft(:,:,:)            !section mean shoot C density times local cell area, [g d-2]
   real(r8),target,allocatable :: CO2FixCL_pft(:,:,:)                         !CO2-limited carboxylation rate, [gC d2 h-1]
   real(r8),target,allocatable :: CO2FixLL_pft(:,:,:)                         !Light-limited carboxylation rate,[gC d2 h-1]
   real(r8),target,allocatable :: CanopyMassC_pft(:,:,:)                      !Canopy biomass, [gC d-2]
@@ -203,16 +214,18 @@ module CanopyDataType
   real(r8),target,allocatable :: LeafRubiscoCperm2LA_pft(:,:,:)                     !Bundle sheath C4/mesophyll C3 Rubisco C for the branches, [gC Rubisco d-2]
   real(r8),target,allocatable :: LeafPEPCperm2LA_pft(:,:,:)                         !PEP C for the branches, [gC PEP d-2]
   real(r8),target,allocatable :: SpecificLeafArea_pft(:,:,:)                   !specifc leaf area per g C of leaf mass, [m2 leaf area (gC leaf C)-1]
-
+  real(r8),target,allocatable :: CdH2ORootxSoil_pft(:,:,:)                     !total root and soil conductance for plant root water uptake, [mH2O h-1 d-2 MPa-1]
   contains
 !----------------------------------------------------------------------
 
   subroutine InitCanopyData
 
   implicit none
+  allocate(CdH2ORootxSoil_pft(JP,JY,JX)); CdH2ORootxSoil_pft=0._r8
   allocate(LAI_col(JY,JX)); LAI_col=0._r8
   allocate(PARSunlit_pft(JP,JY,JX));PARSunlit_pft=0._r8
   allocate(PARSunsha_pft(JP,JY,JX));PARSunsha_pft=0._r8
+  allocate(DynCi2CaRatio_pft(JP,JY,JX));DynCi2CaRatio_pft=0._r8
   allocate(CH2OSunlit_pft(JP,JY,JX));CH2OSunlit_pft=0._r8
   allocate(CH2OSunsha_pft(JP,JY,JX));CH2OSunsha_pft=0._r8
   ALLOCATE(SpecificLeafArea_pft(JP,JY,JX)); SpecificLeafArea_pft=0._r8
@@ -231,8 +244,8 @@ module CanopyDataType
   allocate(fPCLFW_pft(JP,JY,JX)); fPCLFW_pft=0._r8
   allocate(CanopyWaterMassBeg_col(JY,JX)); CanopyWaterMassBeg_col=0._r8
   allocate(CanopyWaterMassEnd_col(JY,JX)); CanopyWaterMassEnd_col=0._r8
-  allocate(HeatCanopy2Dist_col(JY,JX)); HeatCanopy2Dist_col=0._r8
-  allocate(QCanopyWat2Dist_col(JY,JX)); QCanopyWat2Dist_col=0._r8
+  allocate(CanopyHeatLoss2Dist_col(JY,JX)); CanopyHeatLoss2Dist_col=0._r8
+  allocate(QCanopyWatLoss2Dist_col(JY,JX)); QCanopyWatLoss2Dist_col=0._r8
   allocate(CO2FixCL_pft(JP,JY,JX)); CO2FixCL_pft=spval
   allocate(CO2FixLL_pft(JP,JY,JX)); CO2FixLL_pft=spval
   allocate(canopy_growth_pft(JP,JY,JX)); canopy_growth_pft=spval
@@ -296,11 +309,15 @@ module CanopyDataType
   allocate(LWRadCanopy_pft(JP,JY,JX));    LWRadCanopy_pft=0._r8
   allocate(RadSWCanopyAbsorption_pft(JP,JY,JX));     RadSWCanopyAbsorption_pft=0._r8
   allocate(RadPARCanopyAbsorption_pft(JP,JY,JX));     RadPARCanopyAbsorption_pft=0._r8
-  allocate(FracPARads2Canopy_pft(JP,JY,JX));    FracPARads2Canopy_pft=0._r8
+  allocate(FracPARads2Canopy_pft(JP,JY,JX));        FracPARads2Canopy_pft=0._r8
+  allocate(FracPARads2LiveCanopy_pft(JP,JY,JX));    FracPARads2LiveCanopy_pft=0._r8
   allocate(TAU_DirectSunSha(NumCanopyLayers+1,JY,JX));   TAU_DirectSunSha=0._r8
   allocate(TAU_DirectSunLit(NumCanopyLayers+1,JY,JX));   TAU_DirectSunLit=0._r8
   allocate(FracSWRad2Grnd_col(JY,JX));       FracSWRad2Grnd_col=0._r8
   allocate(RadSWGrnd_col(JY,JX));        RadSWGrnd_col=0._r8
+  allocate(RadPARGrnd_col(JY,JX));       RadPARGrnd_col=0._r8
+  allocate(RadPAR2Soil_col(JY,JX));      RadPAR2Soil_col=0._r8
+  allocate(RadPAR2LitR_col(JY,JX));      RadPAR2LitR_col=0._r8
   allocate(LWRadCanGPrev_col(JY,JX));      LWRadCanGPrev_col=0._r8
   allocate(LWRadGrnd_col(JY,JX));      LWRadGrnd_col=0._r8
   allocate(SnowOnCanopy_col(JY,JX)); SnowOnCanopy_col=0._r8
@@ -320,13 +337,16 @@ module CanopyDataType
   allocate(RNodeInitiate_pft(JP,JY,JX)); RNodeInitiate_pft=0._r8
   allocate(RLeafAppear_pft(JP,JY,JX)); RLeafAppear_pft=0._r8
   allocate(PSICanopyOsmo_pft(JP,JY,JX));    PSICanopyOsmo_pft=0._r8
-  allocate(RawCanopy2Atm_pft(JP,JY,JX));       RawCanopy2Atm_pft=0._r8
+  allocate(RawH2OCanopy2Atm_pft(JP,JY,JX));       RawH2OCanopy2Atm_pft=0._r8
+  allocate(RawHeatCanopy2Atm_pft(JP,JY,JX));       RawHeatCanopy2Atm_pft=0._r8
   allocate(Transpiration_pft(JP,JY,JX));       Transpiration_pft=0._r8
   allocate(VapXAir2Canopy_pft(JP,JY,JX));    VapXAir2Canopy_pft=0._r8
   allocate(CanopyBiomWater_pft(JP,JY,JX));    CanopyBiomWater_pft=0._r8
   allocate(QVegET_col(JY,JX));      QVegET_col=0._r8
   allocate(VapXAir2Canopy_col(JY,JX));      VapXAir2Canopy_col=0._r8
   allocate(CanopyHeatStor_col(JY,JX));      CanopyHeatStor_col=0._r8
+  allocate(HeatSensVapAir2Canopy_col(JY,JX)); HeatSensVapAir2Canopy_col=0._r8
+  allocate(HeatPrecAir2Canopy_col(JY,JX)); HeatPrecAir2Canopy_col=0._r8
   allocate(HeatFlx2Canopy_col(JY,JX));      HeatFlx2Canopy_col=0._r8
   allocate(CanopyBiomWater_col(JY,JX));      CanopyBiomWater_col=0._r8
   allocate(LWRadCanG_col(JY,JX));       LWRadCanG_col=0._r8
@@ -337,6 +357,7 @@ module CanopyDataType
   allocate(SnowOnCanopy_pft(JP,JY,JX)); SnowOnCanopy_pft=0._r8
   allocate(SnowIntcptByCanopy_pft(JP,JY,JX)); SnowIntcptByCanopy_pft=0._r8
   allocate(TKC_pft(JP,JY,JX));      TKC_pft=0._r8
+
   allocate(TdegCCanopy_pft(JP,JY,JX));      TdegCCanopy_pft=0._r8
   allocate(DeltaTKC_pft(JP,JY,JX));     DeltaTKC_pft=0._r8
   allocate(TKCanopy_pft(JP,JY,JX));     TKCanopy_pft=0._r8
@@ -359,6 +380,7 @@ module CanopyDataType
   allocate(CanopyLeafCLyr_pft(NumCanopyLayers,JP,JY,JX)); CanopyLeafCLyr_pft=0._r8
   allocate(CanopyNonstElms_pft(NumPlantChemElms,JP,JY,JX));   CanopyNonstElms_pft=0._r8
   allocate(CanopyNonstElmConc_pft(NumPlantChemElms,JP,JY,JX));   CanopyNonstElmConc_pft=0._r8
+  allocate(CanopyNonstOMConc_pft(JP,JY,JX));CanopyNonstOMConc_pft=0._r8
   allocate(CanopyStemSurfAreaZ_pft(NumCanopyLayers,JP,JY,JX)); CanopyStemSurfAreaZ_pft=0._r8
   allocate(ShootNoduleElms_pft(NumPlantChemElms,JP,JY,JX));ShootNoduleElms_pft=0._r8
   allocate(CanopyNodulNonstElms_pft(NumPlantChemElms,JP,JY,JX));   CanopyNodulNonstElms_pft=0._r8
@@ -396,7 +418,7 @@ module CanopyDataType
   allocate(LeafProteinC_node(0:MaxNodesPerBranch,MaxNumBranches,JP,JY,JX));LeafProteinC_node=0._r8
   allocate(PetoleProteinC_node(0:MaxNodesPerBranch,MaxNumBranches,JP,JY,JX));PetoleProteinC_node=0._r8
   allocate(CanopyNoduleNonstCConc_pft(JP,JY,JX));   CanopyNoduleNonstCConc_pft=0._r8
-  allocate(GrainSeedBiomCMean_brch(MaxNumBranches,JP,JY,JX)); GrainSeedBiomCMean_brch=0._r8
+  allocate(SingleGrainMeanBiomC_brch(MaxNumBranches,JP,JY,JX)); SingleGrainMeanBiomC_brch=0._r8
   allocate(StandDeadCompKElms_pft(NumPlantChemElms,jskenp1,JP,JY,JX)); StandDeadCompKElms_pft=0._r8
   allocate(StandDeadStrutElms_pft(NumPlantChemElms,JP,JY,JX));    StandDeadStrutElms_pft=0._r8
   allocate(SeasonalNonstElms_pft(NumPlantChemElms,JP,JY,JX));  SeasonalNonstElms_pft=0._r8
@@ -410,6 +432,7 @@ module CanopyDataType
   use abortutils, only : destroy
   implicit none
 
+  call destroy(CdH2ORootxSoil_pft)
   call destroy(LAI_col)
   call destroy(fNCLFW_pft)
   call destroy(fPCLFW_pft)
@@ -435,8 +458,8 @@ module CanopyDataType
   call destroy(CanopyMassC_pft)
   call destroy(CanopyWaterMassBeg_col)
   call destroy(CanopyWaterMassEnd_col)
-  call destroy(HeatCanopy2Dist_col)
-  call destroy(QCanopyWat2Dist_col)
+  call destroy(CanopyHeatLoss2Dist_col)
+  call destroy(QCanopyWatLoss2Dist_col)
   call destroy(canopy_growth_pft)
   call destroy(CO2FixCL_pft)
   call destroy(CO2FixLL_pft)
@@ -456,6 +479,7 @@ module CanopyDataType
   call destroy(O2I_pft)
   call destroy(LeafIntracellularCO2_pft)
   call destroy(AirConc_pft)
+  call destroy(DynCi2CaRatio_pft)
   call destroy(DiffCO2Atmos2Intracel_pft)
   call destroy(CanopyGasCO2_pft)
   call destroy(aquCO2Intraleaf_pft)
@@ -499,10 +523,14 @@ module CanopyDataType
   call destroy(RadSWCanopyAbsorption_pft)
   call destroy(RadPARCanopyAbsorption_pft)
   call destroy(FracPARads2Canopy_pft)
+  call destroy(FracPARads2LiveCanopy_pft)
   call destroy(TAU_DirectSunSha)
   call destroy(TAU_DirectSunLit)
   call destroy(FracSWRad2Grnd_col)
   call destroy(RadSWGrnd_col)
+  call destroy(RadPARGrnd_col)
+  call destroy(RadPAR2Soil_col)
+  call destroy(RadPAR2LitR_col)
   call destroy(LWRadCanGPrev_col)
   call destroy(LWRadGrnd_col)
   call destroy(WatHeldOnCanopy_col)
@@ -522,13 +550,16 @@ module CanopyDataType
   call destroy(RNodeInitiate_pft)
   call destroy(RLeafAppear_pft)
   call destroy(PSICanopyOsmo_pft)
-  call destroy(RawCanopy2Atm_pft)
+  call destroy(RawH2OCanopy2Atm_pft)
+  call destroy(RawHeatCanopy2Atm_pft)
   call destroy(Transpiration_pft)
   call destroy(VapXAir2Canopy_pft)
   call destroy(CanopyBiomWater_pft)
   call destroy(QVegET_col)
   call destroy(VapXAir2Canopy_col)
   call destroy(CanopyHeatStor_col)
+  call destroy(HeatSensVapAir2Canopy_col)
+  call destroy(HeatPrecAir2Canopy_col)
   call destroy(HeatFlx2Canopy_col)
   call destroy(CanopyBiomWater_col)
   call destroy(LWRadCanG_col)
@@ -562,6 +593,7 @@ module CanopyDataType
   call destroy(CanopyLeafCLyr_pft)
   call destroy(CanopyNonstElms_pft)
   call destroy(CanopyNonstElmConc_pft)
+  call destroy(CanopyNonstOMConc_pft)
   call destroy(CanopyStemSurfAreaZ_pft)
   call destroy(CanopyNodulNonstElms_pft)
   call destroy(ShootNoduleElms_pft)
@@ -589,7 +621,7 @@ module CanopyDataType
   call destroy(LeafProteinC_node)
   call destroy(PetoleProteinC_node)
   call destroy(CanopyNoduleNonstCConc_pft)
-  call destroy(GrainSeedBiomCMean_brch)
+  call destroy(SingleGrainMeanBiomC_brch)
   call destroy(StandDeadCompKElms_pft)
   call destroy(StandDeadStrutElms_pft)
   call destroy(SeasonalNonstElms_pft)

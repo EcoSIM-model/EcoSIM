@@ -4,6 +4,7 @@ program SoilManagementReader
   use abortutils, only : endrun
   USE FertilizerDataType
   use FlagDataType
+  use IrrigationDataType, only : InitIrrigation
 implicit none
 
   character(len=40) :: progname
@@ -22,6 +23,7 @@ implicit none
   CALL InitFertilizerData
 
   call InitFlagData
+  call InitIrrigation
   iyear=1
   lverb=.true.
 

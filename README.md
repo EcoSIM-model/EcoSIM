@@ -5,9 +5,9 @@ A biogeochemical modeling library spins off the ecosys model.
 # Pull requests (for contributors & collaborators)
 
 Before submitting your PR:
+- make sure smoke-run-test and restart-run-test are passed (via coding agent).
 - Search for existing PRs to prevent duplicating efforts
-
-- Test your changes:
+- Rebase your change with main branch & Test your changes:
 -Create separate PRs for each feature or fix:
  - Avoid combining unrelated changes in a single PR
  - For intricate features, consider opening a feature request first to discuss and align expectations
@@ -80,6 +80,17 @@ where --fresh means the first time run docker, otherwise, use
 ./run_docker.sh --rocky
 
 One can also try ubuntu container. However, it seems buggy on my apple machine.
+
+## Repository layout
+
+- `f90src/` — Fortran source of the EcoSIM model (process modules, drivers, I/O, data types)
+- `calibration_tool/` — agent-based calibration framework for EcoSIM; wraps parameter perturbation, simulation, and target extraction into a reset/step environment. See `calibration_tool/usage.html`
+- `examples/` — example model inputs and ready-to-run case directories (e.g. `examples/run_dir/biocrust`), each with namelist and case-specific forcing
+- `input_data/` — shared model input datasets, including PFT parameter NetCDF files, atmospheric GHG forcing, and climate inputs referenced by multiple cases
+- `ecosim-agent/` — Python preprocessing and analysis bridge (git submodule): climate/soil/management data preparation, PFT parameter editing, output target extraction; canonical skills live under `ecosim-agent/.agents/skills/`
+- `ecosim_knowledge/` — HTML notes documenting model science: process formulations such as canopy water potential, transpiration feedbacks, leaf respiration, and microbial complex kinetics
+- `tests/` and `regression-tests/` — unit and regression test resources
+
 
 
 

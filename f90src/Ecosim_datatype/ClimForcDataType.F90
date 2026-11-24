@@ -32,6 +32,7 @@ implicit none
   real(r8) :: RAIN(366)                         !daily precipitation, [mm d-1 ]
   real(r8) :: WIND(366)                         !daily wind travel, [m d-1]
   real(r8) :: DWPT(2,366)                       !daily dewpoint temperature, [oC]
+  real(r8) :: DryDepoOMC(366)                   !dry deposition of organic C, [gC/day/m2]
 
   real(r8) :: TMP_hrly(24,366)                   !hourly air temperature, [oC]
   real(r8) :: SWRad_hrly(24,366)                !hourly solar radiation, [MJ m-2 h-1]
@@ -48,10 +49,11 @@ implicit none
   real(r8) :: DWIND(12)                         !change factor for wind speed, [-]
   real(r8) :: DCN4R(12)                         !change factor for NH4 in precipitation, [-]
   real(r8) :: DCNOR(12)                         !change factor for NO3 in precipitation, [-]
-
+  
   real(r8),target,allocatable ::  srad_scalar_col(:,:)     !solar radiation scalar due to open top chamber
   real(r8),target,allocatable ::  EMS_Modify_Scalar_col(:,:)      !emissivity scalar due to open top chamber
   real(r8),target,allocatable ::  Eco_RadSW_col(:,:)       !shortwave radiation absorbed by the ecosystem [MJ/h]
+  real(r8),target,allocatable ::  RadSWATS_col(:,:)        !incident shortwave radiation from ATS (IWTHR=-999), [MJ m-2 h-1]
   real(r8),target,allocatable ::  TKS_ref_vr(:,:,:,:)      !reference tempeature profile from control run to warming experiment [K]
   real(r8),target,allocatable ::  TDTPX(:,:,:)                       !accumulated change  for maximum temperature, [-]
   real(r8),target,allocatable ::  TDTPN(:,:,:)                       !accumulated change  for minimum temperature, [-]
@@ -106,6 +108,10 @@ implicit none
   real(r8),target,allocatable ::  TSHX_col(:,:)                          !total sensible heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  Air_Heat_Latent_store_col(:,:)         !total latent heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  Air_Heat_Sens_store_col(:,:)           !total sensible heat flux x boundary layer resistance, [MJ m-1]
+  real(r8),target,allocatable ::  dSensHeatdTKQ_col(:,:)                 !hourly resistance estimate of weighted sensible-heat derivative [MJ m-1 K-1]
+  real(r8),target,allocatable ::  TKQHeatRef_col(:,:)                     !Tq used for last completed hour [K]; zero means no completed-hour reference
+  real(r8),target,allocatable ::  dLatHeatdVPQ_col(:,:)                   !weighted latent-energy derivative w.r.t. vapor concentration [MJ m2 ton-1]
+  real(r8),target,allocatable ::  VPQLatHeatRef_col(:,:)                  !last completed-hour vapor concentration [ton m-3]; -1 means no reference
   real(r8),target,allocatable ::  SoilHeatSrcDepth_col(:,:)              !depth of soil heat sink/source, [m]
   real(r8),target,allocatable ::  TKSD_col(:,:)                          !temperature of soil heat sink/source, [oC]
   real(r8),target,allocatable ::  ATCAI_col(:,:)                         !initial mean annual air temperature, [oC]
@@ -133,12 +139,22 @@ implicit none
   real(r8),target,allocatable ::  PrecHeat_col(:,:)                      !precipitation heat to surface, [MJ/d2/h]
   real(r8),target,allocatable ::  RainLitr_col(:,:)                      !water from aboveground falling litter,[m3 d-2]
   real(r8),target, allocatable :: trcs_solcoef_col(:,:,:)                !parameter for computing RGasSinkScalar_vr,[-]  
+  real(r8),target,allocatable :: sp_popdens_pft(:,:,:) !prescribed annual population density, [plants m-2]
   real(r8),target,allocatable ::  tlai_mon_pft(:,:,:,:)                  !monthly lai for different pft used in prescribed phenology, [m2/m2]
   real(r8),target,allocatable ::  tsai_mon_pft(:,:,:,:)                  !monthly sai for different pft used in prescribed phenology, [m2/m2]
-  real(r8),target,allocatable ::  tlai_day_pft(:,:,:)                    !interpolated daily lai for different pft used in prescribed phenology, [m2/m2]
-  real(r8),target,allocatable ::  tsai_day_pft(:,:,:)                    !interpolated daily sai for different pft used in prescribed phenology, [m2/m2]
+  real(r8),target,allocatable ::  tlai_day_pft(:,:,:)                    !daily prescribed leaf area for each PFT, [m2 cell-1]
+  real(r8),target,allocatable ::  tsai_day_pft(:,:,:)                    !daily prescribed stem area for each PFT, [m2 cell-1]
   real(r8),target,allocatable ::  height_top_mon_pft(:,:,:,:)            !monthly canopy top height used in prescribed phenology, [m]
   real(r8),target,allocatable ::  height_bot_mon_pft(:,:,:,:)            !monthly canopy bottom height used in prescribed phenology, [m]
+  REAL(R8),target,allocatable ::  NWetDep_col(:,:)                       !atmospheric inorganic N wet deposition, [gN m-2 h-1]
+  real(r8),target,allocatable :: f_aerosol_DOM_col(:,:)                  !fraction of bioaerosol C as dissolved organic matter [0-1]
+  real(r8),target,allocatable :: f_aerosol_DeadMB_col(:,:)               !fraction of bioaerosol C as dead microbial biomass [0-1]
+  real(r8),target,allocatable :: f_aerosol_LiveMB_col(:,:)               !fraction of bioaerosol C as live microbial biomass [0-1]
+  real(r8),target,allocatable :: f_aerosol_DeadNMB_col(:,:)              !fraction of bioaerosol C as dead nonmicrobial biomass [0-1]
+  real(r8),target,allocatable :: f_aerosol_LichB_col(:,:)                !fraction of bioaerosol C as lichen spore, [0-1]
+  real(r8),target,allocatable :: f_aerosol_MossB_col(:,:)                !fraction of bioaerosol C as moss spore, [0-1]
+  real(r8),target,allocatable :: fAeroScalar_col(:,:)                    !optional per-topounit bioaerosol carbon deposition scalar read from grid file, [-]
+  real(r8),target,allocatable :: SeedCDeposition_pft(:,:,:)              !seed C deposition for each PFT, [gC m-2]
 
   contains
 !----------------------------------------------------------------------
@@ -150,6 +166,16 @@ implicit none
   if(len(trim(warming_exp))>10)then
     allocate(TKS_ref_vr(8784,JZ,JY,JX));TKS_ref_vr=0._r8
   endif
+  allocate(f_aerosol_DOM_col(JY,JX));f_aerosol_DOM_col=0._r8
+  allocate(f_aerosol_DeadMB_col(JY,JX));f_aerosol_DeadMB_col=0._r8
+  allocate(f_aerosol_LiveMB_col(JY,JX));f_aerosol_LiveMB_col=0._r8
+  allocate(f_aerosol_DeadNMB_col(JY,JX));f_aerosol_DeadNMB_col=0._r8
+  allocate(f_aerosol_LichB_col(JY,JX));f_aerosol_LichB_col=0._r8
+  allocate(f_aerosol_MossB_col(JY,JX));f_aerosol_MossB_col=0._r8
+  allocate(fAeroScalar_col(JY,JX));fAeroScalar_col=0._r8
+  allocate(SeedCDeposition_pft(JP,JY,JX));SeedCDeposition_pft=0._r8
+  allocate(NWetDep_col(JY,JX)); NWetDep_col=0._r8
+  allocate(sp_popdens_pft(JP,JY,JX));sp_popdens_pft=0._r8
   allocate(tlai_mon_pft(12,JP,JY,JX));tlai_mon_pft=0._r8
   allocate(tsai_mon_pft(12,JP,JY,JX));tsai_mon_pft=0._r8
   allocate(tlai_day_pft(JP,JY,JX));tlai_day_pft=0._r8
@@ -161,6 +187,7 @@ implicit none
   allocate(srad_scalar_col(JY,JX));srad_scalar_col=1._r8
   allocate(trcs_solcoef_col(idg_beg:idg_NH3,JY,JX)); trcs_solcoef_col=0._r8
   allocate(Eco_RadSW_col(JY,JX)); Eco_RadSW_col=0._r8
+  allocate(RadSWATS_col(JY,JX));  RadSWATS_col=0._r8
   allocate(GDD_col(JY,JX)); GDD_col=0._r8
   allocate(TDTPX(12,JY,JX));    TDTPX=0._r8
   allocate(TDTPN(12,JY,JX));    TDTPN=0._r8
@@ -218,6 +245,10 @@ implicit none
   allocate(TSHX_col(JY,JX));        TSHX_col=0._r8
   allocate(Air_Heat_Latent_store_col(JY,JX));        Air_Heat_Latent_store_col=0._r8
   allocate(Air_Heat_Sens_store_col(JY,JX));        Air_Heat_Sens_store_col=0._r8
+  allocate(dSensHeatdTKQ_col(JY,JX)); dSensHeatdTKQ_col=0._r8
+  allocate(TKQHeatRef_col(JY,JX));    TKQHeatRef_col=0._r8
+  allocate(dLatHeatdVPQ_col(JY,JX));  dLatHeatdVPQ_col=0._r8
+  allocate(VPQLatHeatRef_col(JY,JX)); VPQLatHeatRef_col=-1._r8
   allocate(SoilHeatSrcDepth_col(JY,JX));      SoilHeatSrcDepth_col=0._r8
   allocate(TKSD_col(JY,JX));        TKSD_col=0._r8
   allocate(ATCAI_col(JY,JX));       ATCAI_col=0._r8
@@ -249,8 +280,18 @@ implicit none
   use abortutils, only : destroy
   implicit none
 
+  call destroy(f_aerosol_DOM_col)
+  call destroy(f_aerosol_DeadMB_col)
+  call destroy(f_aerosol_LiveMB_col)
+  call destroy(f_aerosol_DeadNMB_col)
+  call destroy(f_aerosol_MossB_col)
+  call destroy(f_aerosol_LichB_col)
+  call destroy(fAeroScalar_col)
+  call destroy(SeedCDeposition_pft)
+  call destroy(NWetDep_col)
   call destroy(height_bot_mon_pft)  
   call destroy(height_top_mon_pft)
+  call destroy(sp_popdens_pft)
   call destroy(tlai_mon_pft)
   call destroy(tsai_mon_pft)
   call destroy(tlai_day_pft)
@@ -294,6 +335,7 @@ implicit none
   call destroy(AtmGmms_col)
   call destroy(TKS_ref_vr)
   call destroy(Eco_RadSW_col)
+  call destroy(RadSWATS_col)
   call destroy(OXYE_col)
   call destroy(Z2OE_col)
   call destroy(Z2GE_col)
@@ -314,6 +356,10 @@ implicit none
   call destroy(TSHX_col)
   call destroy(Air_Heat_Latent_store_col)
   call destroy(Air_Heat_Sens_store_col)
+  call destroy(dSensHeatdTKQ_col)
+  call destroy(TKQHeatRef_col)
+  call destroy(dLatHeatdVPQ_col)
+  call destroy(VPQLatHeatRef_col)
   call destroy(SoilHeatSrcDepth_col)
   call destroy(TKSD_col)
   call destroy(ATCAI_col)

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plant phenology in EcoSIM — clocks, seasons and life cycles</title>
+<style>
+:root{--ink:#193b33;--muted:#536a62;--green:#17664e;--paper:#f7f8f2;--line:#cddbd0;--pale:#e7f0e6;--gold:#f7ecd2;--white:#fff;--blue:#176c80}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}header{background:#193f35;color:white;padding:56px max(24px,calc((100vw - 1080px)/2)) 44px}header p{color:#d5e7db;max-width:850px}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#acd2bb}h1{font-size:clamp(36px,5vw,58px);line-height:1.08;max-width:950px;margin:18px 0 24px}h2{font-size:29px;line-height:1.25;margin:0 0 20px}h3{font-size:21px;line-height:1.35;margin:25px 0 10px}p{margin:12px 0}main{max-width:1128px;margin:auto;padding:0 24px 60px}section{padding-top:46px;scroll-margin-top:20px}a{color:var(--green);text-underline-offset:3px}nav{display:flex;flex-wrap:wrap;gap:8px 20px;padding:23px 0;border-bottom:1px solid var(--line);font-size:15px}.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card,.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:23px;min-width:0}.card h3,.panel h3{margin-top:0}.kicker{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);font-weight:700}.note{padding:18px 22px;background:var(--pale);border-left:4px solid var(--green);border-radius:0 10px 10px 0;margin:22px 0}.note.gold{background:var(--gold);border-color:#a87923}.small,.source{font-size:14px;color:var(--muted)}code{font: .86em ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}pre{padding:20px;border-radius:10px;background:#edf2eb;border:1px solid var(--line);overflow:auto;line-height:1.65;font-size:14px}pre code{font-size:inherit;overflow-wrap:normal}.equation{padding:18px 22px;background:white;border:1px solid var(--line);border-radius:10px;overflow-wrap:anywhere;margin:18px 0}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:white;margin:20px 0}table{border-collapse:collapse;width:100%;font-size:15px}th,td{text-align:left;vertical-align:top;padding:14px 16px;border-bottom:1px solid var(--line)}th{background:#e3ede2;font-size:12px;letter-spacing:.05em;text-transform:uppercase}tr:last-child td{border-bottom:0}td:first-child{min-width:120px}ol,ul{padding-left:23px}li{margin:7px 0}.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;list-style:none;padding:0;counter-reset:flow}.flow li{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;counter-increment:flow}.flow li:before{content:counter(flow,decimal-leading-zero);display:block;font:700 14px ui-monospace,monospace;color:var(--blue);margin-bottom:10px}.flow b{display:block}.flow span{font-size:14px;color:var(--muted)}details{border:1px solid var(--line);border-radius:10px;background:white;padding:15px 20px;margin:16px 0}summary{cursor:pointer;font-weight:650}select,button{font:inherit;color:var(--ink);background:white;border:1px solid #8faa99;border-radius:7px;padding:9px 12px;max-width:100%}select{width:100%}label{display:block;font-weight:600;margin-bottom:7px}.control{margin-bottom:18px}.controls label{font-size:15px}.controls input[type=checkbox]{accent-color:var(--green);margin-right:8px}.result{background:#edf4ed;padding:20px;border-radius:10px}.status{display:inline-block;padding:3px 10px;border-radius:20px;background:#d6e8dc;font-size:13px;font-weight:700}.status.off{background:#e4e5dd}.result strong{color:var(--green)}.result p{margin:10px 0}footer{margin-top:45px;border-top:1px solid var(--line);padding-top:24px;font-size:14px;color:var(--muted)}:focus-visible{outline:3px solid #c68b23;outline-offset:4px}
+@media(max-width:760px){body{font-size:16px}header{padding:38px 22px}main{padding:0 18px 40px}h2{font-size:25px}.cards,.two{grid-template-columns:1fr}.flow{grid-template-columns:1fr 1fr}.table-wrap table{min-width:660px}th,td{padding:12px}.card,.panel{padding:19px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{body{background:white;font-size:10pt}header{background:white;color:var(--ink);padding:15px 0}header p,.eyebrow{color:var(--muted)}h1{font-size:30pt}main{max-width:none;padding:0}nav,.controls{display:none}h2{font-size:19pt}h3{font-size:13pt}section{padding-top:24px}.table-wrap{overflow:visible}table{font-size:9pt}.card,.note,.equation{break-inside:avoid}.flow{grid-template-columns:repeat(4,1fr)}a{color:var(--ink)}details{break-inside:avoid}footer{font-size:9pt}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">EcoSIM knowledge · plant biogeochemistry</div>
+<h1>Plant phenology:<br>clocks, seasons and life cycles</h1>
+<p>How EcoSIM moves plants from establishment through vegetative growth, reproduction, senescence and renewed growth—and how those transitions differ among crops, grasses, trees and nonvascular plants.</p>
+<p class="small" style="color:#bcd7c6">Source snapshot: <strong>solphys</strong> working tree · 25 September 2026 · includes the local remobilization-flag correction</p>
+</header>
+<main>
+<nav aria-label="Contents"><a href="#overview">Overview</a><a href="#traits">Plant traits</a><a href="#establishment">Establishment</a><a href="#development">Developmental stages</a><a href="#seasons">Seasonal rules</a><a href="#plant-types">Plant life cycles</a><a href="#reserves">Reserves &amp; senescence</a><a href="#reset">Reset &amp; reseeding</a><a href="#diagnostics">Diagnostics</a><a href="#sources">Sources</a></nav>
+
+<section id="overview">
+<h2>Phenology is a set of interacting processes</h2>
+<p>EcoSIM does not assign every species a single fixed calendar or a universal growing-degree-day threshold. A plant functional type (PFT) combines life span, seasonal response, photoperiod response, development pattern and structural traits. Branches then carry their own development dates and seasonal counters. Actual leaf area emerges from growth, resource supply and tissue loss; crossing a phenological threshold alone does not create a full canopy.</p>
+<div class="cards">
+<article class="card"><div class="kicker">Clock 1 · Development</div><h3>Nodes and stage dates</h3><p>Temperature-dependent node initiation and leaf appearance advance branches toward floral initiation, anthesis and seed filling. The calendar records when each event occurred.</p></article>
+<article class="card"><div class="kicker">Clock 2 · Seasonal permission</div><h3>Leaf-out and leaf-off</h3><p>Hours accumulated under photoperiod, temperature or water-potential conditions open and close seasonal growth phases. Unfavorable conditions can reverse incomplete leaf-out progress.</p></article>
+<article class="card"><div class="kicker">Clock 3 · Reserve use</div><h3>Mobilization and recovery</h3><p>A separate physiological-time counter regulates reserve-supported growth. Seasonal eligibility and current stress also control the remobilization of existing tissues.</p></article>
+</div>
+<h3>Where phenology sits in an hourly plant update</h3>
+<ol class="flow"><li><b>Establishment input</b><span>Seed deposition at the first hour; activation and planting flags.</span></li><li><b>PhenologyUpdate</b><span>Emergence, branch development, leaf-out and leaf-off counters.</span></li><li><b>Uptake and growth</b><span>ROOTUPTAKES, then GROWPLANTS: allocation, grain filling, reserve transfers and turnover.</span></li><li><b>Re-establishment</b><span>Extraction routines, ReSeedPlants, balance closure and state return.</span></li></ol>
+<p class="small">Within an emerged branch, developmental-stage checks precede the climate-specific counter update. Growth later in the plant call can use the updated counters. A PFT being active, a shoot being alive, and a branch having emerged are distinct conditions.</p>
+<p class="source">Source: <a href="../f90src/APIs/PlantMod.F90">PlantMod.F90 — PlantModel</a>; <a href="../f90src/Plant_bgc/PlantPhenolMod.F90">PlantPhenolMod.F90 — PhenologyUpdate, Emerged_plant_Phenology</a>.</p>
+</section>
+
+<section id="traits">
+<h2>Which plant differences are represented?</h2>
+<p>These are separate trait axes. “Tree,” “perennial,” “evergreen,” and “long-day” describe different properties and must not be treated as interchangeable classifications.</p>
+<div class="table-wrap"><table><caption class="small">Codes defined in ElmIDMod.F90</caption><thead><tr><th>Trait / state selector</th><th>Values</th><th>Role in progression</th></tr></thead><tbody>
+<tr><td>Life span<br><code>iPlantPhenolPattern_pft</code></td><td>0 annual; 1 perennial</td><td>Changes stress effects on development, reserve-use parameters, seasonal reset and death/reseeding behavior.</td></tr>
+<tr><td>Seasonal strategy<br><code>iPlantPhenolType_pft</code></td><td>0 evergreen; 1 cold deciduous; 2 drought deciduous; 3 cold + drought deciduous</td><td>Selects the climate rules for leaf-out and leaf-off.</td></tr>
+<tr><td>Development<br><code>iPlantDevelopPattern_pft</code></td><td>0 determinate; 1 indeterminate</td><td>For annuals, affects when final vegetative leaf number is fixed.</td></tr>
+<tr><td>Photoperiod<br><code>iPlantPhotoperiodType_pft</code></td><td>0 neutral; 1 short-day; 2 long-day</td><td>Filters floral initiation, with explicit seasonal overrides.</td></tr>
+<tr><td>Growth form<br><code>iPlantRootProfile_pft</code></td><td>0 bryophyte; 1 grasslike; 2 treelike</td><td>Controls structural pathways and some stress/reserve calculations. Woody vascular behavior also requires secondary growth.</td></tr>
+<tr><td>Botanical group<br><code>iEmbryophyteType_pft</code></td><td>0 bryophytes; 1 pteridophytes; 2 gymnosperms; 3 monocots; 4 eudicots</td><td>Selects some water-potential thresholds. It is a different index from growth form.</td></tr>
+<tr><td>Tissue turnover<br><code>iPlantTurnoverPattern_pft</code></td><td>0–3, independent of the seasonal strategy</td><td>Determines which structures are retained/reset and selects tissue-to-storage transfer rates.</td></tr>
+</tbody></table></div>
+<p>C3/C4 photosynthesis changes carbon assimilation, but is not itself a phenology strategy. A species name is also insufficient to infer the active rules: inspect the selected PFT parameters and any climate-dependent parameter selection.</p>
+<div class="note gold"><strong>Support has boundaries.</strong> The main named seasonal strategies are codes 0–3. The phenology routine also contains code paths for 4 and 5, described as subtropical/tropical evergreen placeholders, but they should not be presented as equally complete named strategies. In addition, the drought-only leaf-out threshold array is indexed 2–4, so that path is not a general valid combination with botanical groups 0 or 1.</div>
+</section>
+
+<section id="establishment">
+<h2>1. Establishment and emergence are structural events</h2>
+<p>Planting dates and live-state flags determine when a configured PFT can start. Establishment draws on initialized seed/reserve pools and the associated input accounting. Planting is not equivalent to immediately supplying mature leaves or a developed root system.</p>
+<p><code>TestPlantEmergence</code> records emergence when <strong>both shoot and root geometry pass their checks</strong>:</p>
+<div class="equation"><code>HypocotHeight + 0.001 m &gt; SeedDepth</code><br>and <code>CanopyLeafArea + CanopyStemSurfArea &gt; ZERO4LeafVar</code><br>and <code>Root1stDepz_raxes(1,NZ) &gt; SeedDepth + 10⁻⁸ m</code>.</div>
+<p>The branch calendar stores the current day of year when this condition is satisfied. Emergence is therefore coupled to biomass and structural development rather than a fixed number of days after sowing. An initialization flag can also permit the emerged-plant pathway.</p>
+<p>Subsequent shoot branching is constrained by root turgor at the planting layer, reserves or canopy nonstructural carbon, node spacing and branch limits. Annual shoot branching is restricted to the period before floral initiation; perennials can branch beyond that stage. New branches have their own calendar and inherit part of the main branch’s leaf-out progress, so not all branches need be synchronized.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/PlantPhenolMod.F90">set_plant_flags, TestPlantEmergence, root_shoot_branching, live_branch_phenology</a>.</p>
+</section>
+
+<section id="development">
+<h2>2. Vegetative and reproductive development</h2>
+<h3>The developmental clock is temperature dependent</h3>
+<p><code>calc_leave_grow_tempf</code> computes a nonlinear temperature response using growth temperature plus thermal offset. Node initiation and leaf appearance use separate reference rates, each multiplied by that response.</p>
+<div class="equation"><code>node increment = max(0, RefNodeInitRate × TFNP)</code><br><code>leaf-number increment = max(0, RateRefLeafAppearance × TFNP)</code><br>For annuals, multiply both by <code>√PlantO2Stress</code> before floral initiation, and by <code>exp[0.025 × max(PSICanopy, −1000)]</code> before anthesis.</div>
+<p>These water and oxygen factors can delay annual development. The corresponding factors in this particular routine are set to one for perennials; perennial growth, seasonal counters and survival remain subject to resource and environmental constraints elsewhere.</p>
+<p>Evergreen branches can continue node updates through their seasonal bookkeeping cycle. For other strategies, node updates stop when the leaf-off counter reaches its requirement.</p>
+<h3>The calendar contains dates, not a single continuous stage number</h3>
+<p><code>iPlantCalendar_brch(stage,NB,NZ)</code> stores a day-of-year date; zero means that stage has not been recorded. The ordered stage chain advances at most one of its stages per hourly call. Let <code>Nv</code> be nodes added since floral initiation divided by <code>MatureGroup_pft</code>, and <code>Nr</code> be nodes added since anthesis divided by the same maturity group.</p>
+<div class="table-wrap"><table><thead><tr><th>Calendar index</th><th>Event</th><th>Ordinary trigger / meaning</th></tr></thead><tbody>
+<tr><td>0</td><td>Planting</td><td>Configured establishment event.</td></tr>
+<tr><td>1</td><td>Emergence</td><td>Shoot-area, shoot-height and primary-root depth checks.</td></tr>
+<tr><td>2</td><td>Floral initiation</td><td>Node threshold, seasonal/planting permission and photoperiod test; see below.</td></tr>
+<tr><td>3</td><td>Jointing</td><td><code>Nv &gt; 0.25 × 2.0 = 0.5</code>.</td></tr>
+<tr><td>4</td><td>Stem elongation</td><td><code>Nv &gt; 0.50 × 2.0 = 1.0</code>.</td></tr>
+<tr><td>5</td><td>Heading</td><td><code>Nv &gt; 1.00 × 2.0 = 2.0</code>.</td></tr>
+<tr><td>6</td><td>Anthesis</td><td>Appeared leaf number exceeds node number recorded at floral initiation; perennial and main-branch conditions also affect the transition.</td></tr>
+<tr><td>7</td><td>Begin seed filling</td><td><code>Nr &gt; 0.50 × 0.667 = 0.3335</code>.</td></tr>
+<tr><td>8</td><td>Set seed number</td><td><code>Nr &gt; 1.00 × 0.667 = 0.667</code>.</td></tr>
+<tr><td>9</td><td>Set seed mass</td><td><code>Nr &gt; 1.50 × 0.667 = 1.0005</code>.</td></tr>
+<tr><td>10</td><td>End seed filling / physiological maturity</td><td>Recorded by the grain-filling routine after prolonged failure of carbon transfer to grain.</td></tr>
+</tbody></table></div>
+<p class="small">The values 2.0 and 0.667 are the current vegetative and reproductive normalization constants. These are branch-development rules, not a universal calendar duration or a guarantee that all botanical groups reproduce through literal flowers and grain.</p>
+<h3>How floral initiation is permitted</h3>
+<p>The ordinary route requires enough nodes above the branch’s baseline and either completed leaf-out hours or planting in the current year with the planting date reached and day length strictly increasing. Photoperiod then filters that route:</p>
+<ul><li><strong>Neutral:</strong> passes the photoperiod test.</li><li><strong>Short-day:</strong> <code>PPD &gt; PhotoPeriodSens</code>, where <code>PPD = max(0, CriticPhotoPeriod − DayLength)</code>. On nonshortening days, the code sets this short-day PPD to zero.</li><li><strong>Long-day:</strong> the same day-length deficit must be <code>&lt; PhotoPeriodSens</code>.</li></ul>
+<p>A separate seasonal override can initiate flowering for cold-responsive perennials (types 1 or 3) and annuals with type 0 when the canopy is above the snow and days are shortening. This route bypasses the ordinary node/leaf-out and photoperiod tests. Later stage routines also contain leaf-off-driven shortcuts; thresholds in the table are the ordinary routes, not the only possible routes.</p>
+<p><strong>Determinate annuals</strong> fix their final vegetative leaf number at floral initiation. <strong>Indeterminate annuals</strong> defer that assignment until stem elongation, permitting more overlap between vegetative and reproductive development.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/PlantPhenolMod.F90">CalcPhenolEnvfactor, UpdateBranchNodeNumber, CheckBranchNodeState and InitiateBranchFloral</a>; <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">calc_leave_grow_tempf</a>.</p>
+</section>
+
+<section id="seasons">
+<h2>3. Four main seasonal strategies</h2>
+<p><code>Hours4Leafout_brch</code> and <code>Hours4LeafOff_brch</code> are accumulated state variables. Their requirements are <code>HourReq4LeafOut_brch</code> and <code>HourReq4LeafOff_brch</code>. Favorable conditions do not have to be consecutive unless an explicit counter reset or reversal makes them so.</p>
+<div class="note"><strong>Read the executable flag tests.</strong> <code>EnablePlantLeafOut_brch = itrue</code> enables leaf-out accumulation; <code>doPlantLeaveOff_brch = itrue</code> enables the relevant leaf-off pathway. Here <code>itrue = 1</code> and <code>ifalse = 0</code>. Some nearby inherited comments reverse that meaning.</div>
+<div class="two">
+<article class="card"><div class="kicker">Type 0</div><h3>Evergreen and crop bookkeeping</h3><p>On nondecreasing-daylength days, leaf-out hours equal the accumulated hours in the lengthening-day phase. Once the requirement is reached, leaf-off hours reset and leaf-off is enabled.</p><p>On shortening-daylength days, leaf-off hours follow the accumulated shortening-phase hours. Reaching the requirement resets leaf-out hours and enables the next leaf-out phase.</p><p>Hemisphere-specific day-of-year overrides occur at days 173 and 355, within the respective day-length branches. These counters measure <strong>elapsed simulation hours during a seasonal trend</strong>, not the number of daylight hours received.</p><p class="small">“Evergreen” does not mean constant leaf area. Managed annual crops also use this type in the code’s intended convention.</p></article>
+<article class="card"><div class="kicker">Type 1</div><h3>Cold deciduous</h3><p>When leaf-out is enabled, warm hours with <code>TCGroth ≥ TC4LeafOut</code> add one hour. Before completion, chilling below <code>TCChill4Seed</code> removes one hour, bounded at zero.</p><p>The leaf-out gate accepts nondecreasing days, or shortening days while leaf-off remains incomplete. Completion—or the relevant day 173/355 override—clears leaf-off hours.</p><p>Leaf-off can be enabled after floral initiation or on shortening days shorter than 12 hours. Actual cold-hour accumulation additionally requires floral initiation and shortening days: <code>TCGroth ≤ TC4LeafOff</code> adds one hour.</p><p class="small">Full leaf-off re-enables leaf-out and resets its counter when it was disabled. Enabling a flag alone does not satisfy all the accumulation gates.</p></article>
+<article class="card"><div class="kicker">Type 2</div><h3>Drought deciduous</h3><p>With leaf-out enabled, canopy total water potential at or above the botanical-group leaf-out threshold adds one hour. While incomplete, water potential below the leaf-off threshold subtracts <strong>12 hours</strong>, bounded at zero.</p><p>Completion clears leaf-off hours. Floral initiation enables leaf-off. When leaf-out is disabled and leaf-off enabled, water potential below the leaf-off threshold adds one leaf-off hour.</p><p>Full leaf-off resets leaf-out hours and enables a new wet-season response. The main type-2 climate rule has no temperature or day-length gate.</p><p class="small">Leaf-out thresholds: gymnosperms −0.5 MPa; monocots −1.5 MPa; eudicots −0.5 MPa. These vascular groups share a −2 MPa leaf-off threshold.</p></article>
+<article class="card"><div class="kicker">Type 3</div><h3>Cold + drought deciduous</h3><p>Leaf-out is allowed when days are nondecreasing or day length is within two hours of its annual maximum. Enabled branches add one hour if <code>TCGroth ≥ TC4LeafOut</code> and <strong>canopy turgor &gt; 0.1 MPa</strong>.</p><p>Before completion, chilling or turgor below 0.1 MPa subtracts <strong>1.5 hours</strong>, bounded at zero. Completion clears leaf-off hours.</p><p>Enabled leaf-off accumulates under shortening days or day length below <code>24 − annual maximum + 2</code> hours. Either cool temperature or low total water potential adds an hour.</p><p class="small">Spring uses turgor; leaf-off uses total water potential. Those are different hydraulic quantities. Full leaf-off permits the next leaf-out cycle.</p></article>
+</div>
+<h3>Requirements and thermal acclimation</h3>
+<p>The input requirements <code>VRNLI</code> and <code>VRNXI</code> supply the branch leaf-out and leaf-off thresholds. For evergreen perennials, later branches receive an additional <code>144 × PlantInitThermoAdaptZone × (NB−1)</code> hours, capped at 4380 hours. Other combinations use the base requirements directly.</p>
+<p>The thermal-acclimation setup assigns <code>TC4LeafOut = 5 − TempOffset</code> and <code>TC4LeafOff = min(15, 12 − TempOffset)</code>, in °C. Therefore 5 °C and 12 °C are not universal fixed thresholds for every acclimated PFT.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/PlantPhenolMod.F90">branch_specific_phenology, CropEvergreenPhenology, ColdDeciduousBranchPhenology, ColdDroughtDeciduPhenology</a>; <a href="../f90src/IOutils/PlantInfoMod.F90">ReadPlantProperties</a>; <a href="../f90src/Ecosim_mods/StartqMod.F90">PFTThermalAcclimation</a>.</p>
+</section>
+
+<section id="plant-types">
+<h2>4. How the rules combine for different plants</h2>
+<div class="table-wrap"><table><thead><tr><th>Plant configuration</th><th>Typical modeled sequence</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>Managed annual crop</td><td>Planting → structural emergence → node/leaf development → floral initiation → anthesis → grain filling → maturity → harvest or death.</td><td>The code comments designate managed annual crops as annual + type 0. Determinate/indeterminate and photoperiod traits modify the sequence; type 0 does not imply perennial foliage.</td></tr>
+<tr><td>Self-seeding seasonal annual</td><td>Establishment → favorable-season growth → reproduction → cold/drought-driven senescence → reset/reseeding if reserves and flags permit.</td><td>Types 2 and 3 have explicit annual seasonal-reset and false-break handling. Do not assume every nonzero seasonal type has identical reseeding logic.</td></tr>
+<tr><td>Evergreen perennial grass or tree</td><td>Persistent plant → branch development and seasonal counter cycling → reserve redistribution and tissue turnover → renewed branch growth.</td><td>Evergreen branches can keep developing nodes. Branch-specific seasonal requirements help distribute renewal in time.</td></tr>
+<tr><td>Cold-deciduous perennial</td><td>Retained reserves/structures → warm-hour leaf-out → canopy and branch development → short-day/cold response → remobilization and leaf loss → next-season reset.</td><td>Life span preserves the plant through branch-level seasonal cycles. Turnover and woody traits determine which organs remain.</td></tr>
+<tr><td>Drought-deciduous perennial</td><td>Recovery of water potential → wet-season leaf-out → growth/reproduction → persistent low water potential → remobilization and leaf-off → recovery cycle.</td><td>Dry interruptions strongly reverse incomplete leaf-out. Temperature is not the direct gate in the type-2 counter routine.</td></tr>
+<tr><td>Combined cold/drought perennial</td><td>Seasonal light window + warmth + turgor → leaf-out → growth → cold or drought in the leaf-off window → reserve storage and turnover.</td><td>Both climate limitations matter, but the seasonal day-length gates still apply.</td></tr>
+<tr><td>Moss / lichen through nonvascular pathways</td><td>Initialized establishment reserves → development of represented photosynthetic structure → environmental/resource limitation → turnover and persistence under the configured traits.</td><td>Shared planting, branch and calendar names are model bookkeeping. They do not establish a mechanistic flower, grain, spore or lichen reproductive life cycle.</td></tr>
+</tbody></table></div>
+<p>Grasslike and treelike plants share the seasonal clocks; their persistence differs through structure and turnover. Woody vascular behavior requires the treelike growth form together with secondary growth. <strong>Medium roots are optional and active only for trees when lignification/secondary growth is considered</strong>; they are not an additional phenology class.</p>
+<div class="note gold"><strong>Nonvascular interpretation needs care.</strong> The bryophyte growth-form pathway omits the vascular turgor multiplier from one reserve-mobilization clock, but that does not remove all water sensitivity. Botanical group, growth form and seasonal strategy must remain compatible; in particular, the type-2 leaf-out threshold table does not cover botanical indices 0 and 1.</div>
+</section>
+
+<section id="reserves">
+<h2>5. Reserve mobilization connects seasons to biomass</h2>
+<h3>Reserve-supported leaf-out has its own clock</h3>
+<p><code>Hours2LeafOut_brch</code> is distinct from <code>Hours4Leafout_brch</code>. The former accumulates physiological time used during reserve-supported development; the latter accumulates climate permission for a seasonal transition.</p>
+<p>For the main branch, the physiological increment combines the routine’s photoperiod factor <code>ATRPPD</code>, a canopy growth-temperature response and a water/turgor response. The bryophyte growth-form path sets that water multiplier to one. <code>doInitLeafOut_brch</code> resets this clock for a new mobilization cycle.</p>
+<p>In the eligible window, seasonal reserve carbon is oxidized at a rate proportional to the increment and <code>GVMX × SeasonalNonstC</code>; associated C/N/P transfers support developing shoots and roots. Current annual/perennial values of <code>GVMX</code> are 0.010/0.0025 and physiological-time limits are 68.96/276.9. The code operates within this window, with an annual-evergreen exception; the parameter’s inherited “initiate after” wording should not be used to reverse that condition.</p>
+<h3>Eligibility and active senescence are different flags</h3>
+<p>The current <code>CalcPartitionCoeff</code> logic initializes both flags each call. <code>BegRemoblize</code> means the branch has reached the seasonal/developmental eligibility condition. <code>LRemob_brch</code> means the additional condition for active remobilization is satisfied.</p>
+<div class="table-wrap"><table><thead><tr><th>Plant</th><th>Eligibility: BegRemoblize</th><th>Additional condition: LRemob_brch</th></tr></thead><tbody>
+<tr><td>Annual</td><td>Seed-number-setting date has been recorded.</td><td>No extra cold/drought test once eligible.</td></tr>
+<tr><td>Evergreen perennial</td><td>Leaf-off hours ≥ 0.75 × leaf-off requirement.</td><td>No extra cold/drought test once eligible.</td></tr>
+<tr><td>Cold-deciduous perennial</td><td>Leaf-off hours ≥ 0.50 × requirement.</td><td>Actual canopy temperature below <code>TCChill4Seed</code>.</td></tr>
+<tr><td>Drought-deciduous perennial</td><td>Leaf-off hours ≥ 0.50 × requirement.</td><td>Total canopy water potential below <code>PSILY(growth form)</code>.</td></tr>
+<tr><td>Combined perennial</td><td>Leaf-off hours ≥ 0.50 × requirement.</td><td>Either the cold condition or the drought condition.</td></tr>
+</tbody></table></div>
+<p>For grasslike and treelike forms, <code>PSILY</code> is −2 MPa; the bryophyte-form entry is −200 MPa. This threshold table is indexed by <strong>growth form</strong>, unlike the botanical-group table used in seasonal leaf-out/off.</p>
+<p><code>HoursDoingRemob_brch</code> increases while active, holds its value when eligible but temporarily inactive, and resets when eligibility is lost. Eligible deciduous perennials stop allocating new growth to leaves and petioles in this partition calculation; their former allocation is divided equally between stalk and reserve before normalization.</p>
+<p>For perennials with both flags true, phenological senescence demand is proportional to leaf/sheath carbon, a turnover-pattern-specific rate, and <code>min(1, HoursDoingRemob / 240)</code>. Maintenance deficits can supply additional remobilization demand. Other transfers into seasonal storage use eligibility itself, so “eligible but inactive” does not mean every reserve-related transfer is zero.</p>
+<div class="panel" id="flag-explorer">
+<h3>Explore the two remobilization decisions</h3>
+<p class="small">A Boolean rule explorer for the table above—not a growth simulation. “Eligible” stands for the relevant annual stage or perennial counter threshold already being met.</p>
+<div class="two"><div class="controls">
+<div class="control"><label for="life">Life span</label><select id="life"><option value="perennial">Perennial</option><option value="annual">Annual</option></select></div>
+<div class="control"><label for="strategy">Seasonal strategy</label><select id="strategy"><option value="0">0 · Evergreen</option><option value="1">1 · Cold deciduous</option><option value="2">2 · Drought deciduous</option><option value="3" selected>3 · Cold + drought deciduous</option></select></div>
+<label><input id="eligible" type="checkbox" checked>Eligibility threshold met</label>
+<label><input id="cold" type="checkbox">Canopy below chilling threshold</label>
+<label><input id="dry" type="checkbox">Water potential below PSILY</label>
+</div><div class="result" aria-live="polite"><p><code>BegRemoblize</code> <span id="beg-state" class="status">true</span></p><p><code>LRemob_brch</code> <span id="active-state" class="status off">false</span></p><p id="clock-result">Eligible, but neither stress trigger is active: the accumulated remobilization clock holds.</p><p class="small" id="eligibility-note">Perennial eligibility: leaf-off hours have reached 50% of their requirement.</p></div></div>
+<noscript><p>The table immediately above gives the complete rules; JavaScript is required only for this explorer.</p></noscript>
+</div>
+<p class="source">Source: <a href="../f90src/Plant_bgc/PlantBranchMod.F90">CalcPartitionCoeff, DevelopMainBranch, RemobilizeBranch, BranchElmntTransfer</a>; <a href="../f90src/Plant_bgc/PlantNonstElmDynMod.F90">seasonal root reserve transfers</a>; <a href="../f90src/Modelpars/PlantBGCPars.F90">reserve and senescence parameters</a>.</p>
+</section>
+
+<section id="reset">
+<h2>6. Maturity, seasonal reset and failed establishment</h2>
+<h3>Maturity follows the success of grain filling</h3>
+<p>After seed number has been set, <code>GrainFillOnBranch</code> counts consecutive calls with carbon transfer to grain no greater than <code>10⁻⁹ × PlantPopuLive</code>. Successful filling resets the counter. At 168 hours of failure, the end-of-seed-fill date is recorded. Thus physiological maturity can reflect exhaustion or stress-induced cessation of filling, rather than a fixed date after anthesis.</p>
+<p>For non-evergreen annuals, continued failure beyond the maturity interval plus a type-dependent senescence interval forces the leaf-off counter above its requirement. The current additional intervals are 1440 hours for type 1 and 720 hours for types 2 and 3.</p>
+<h3>Perennial branch renewal</h3>
+<p><code>ResetBranchPhenology</code> evaluates completed leaf-out and leaf-off for perennials and for annual types 2 and 3. In the perennial renewal path, eligible leaf-out resets the reproductive calendar entries, records a new emergence date and renews development baselines. Organ turnover depends on tissue-retention and woody-growth settings.</p>
+<p>At completed leaf-out, the code disables the leaf-out phase, enables leaf-off and clears the preparation-for-litterfall flag. The alternative seasonal transition enables leaf-out, disables leaf-off, prepares litterfall and requests a reset of the reserve-use clock. Old tissues are routed through litter accounting; resetting stage dates does not itself erase or manufacture biomass.</p>
+<p>The litterfall preparation path applies progressive tissue loss, with a reference loss coefficient of 0.002884 per call and a termination-counter parameter of 960. These code counters should be traced with their actual call frequency before interpreting every stored “hour” as elapsed wall-clock simulation time.</p>
+<h3>Death and reseeding are additional gates</h3>
+<p>Dead branches and roots are processed through the litterfall/death routines. Annual death can terminate both shoot and roots; perennial survival depends on the remaining structures and state flags. <code>ReSeedPlants</code> requires a reseeding flag and sufficient seasonal reserve carbon, then calls plant initialization and seed accounting. This is not, by itself, a population-level recruitment or seed-bank model, and its initialization accounting should not be assumed to be a closed internal seed transfer.</p>
+<h3>“False break” means a failed start to the growing season</h3>
+<p>For annual drought-deciduous and combined-strategy plants, <code>RemoveDeadAnnual</code> detects a stalled establishment condition: branch nonstructural carbon remains, reserve-supported development has passed its allowed window, seasonal reserve carbon remains effectively unchanged, and canopy height is negligible. The test uses the daily mean reserve state and is evaluated at the end of the day.</p>
+<p>It must hold for <strong>10 consecutive days</strong>; a day failing the predicate resets the counter. The reset transfers affected tissues through litter handling and reinitializes the plant’s shoot/root state. This is a failed-establishment mechanism, separate from normal seasonal leaf-off or grain maturity.</p>
+<p class="source">Source: <a href="../f90src/Plant_bgc/PlantBranchMod.F90">GrainFillOnBranch, ResetBranchPhenology, ResetNonAnnualBranch</a>; <a href="../f90src/Plant_bgc/LitterFallMod.F90">ResetDeadPlant and SetDeadPlant</a>; <a href="../f90src/Plant_bgc/PlantDisturbsMod.F90">RemoveDeadAnnual</a>.</p>
+</section>
+
+<section id="diagnostics">
+<h2>Reading a simulation’s progression</h2>
+<div class="table-wrap"><table><thead><tr><th>Question</th><th>Inspect</th><th>What it separates</th></tr></thead><tbody>
+<tr><td>Why has the plant not emerged?</td><td>Planting/active flags; seed depth; hypocotyl height; shoot area; primary-root depth.</td><td>Calendar activation versus constructed geometry.</td></tr>
+<tr><td>Why is flowering late?</td><td>Node and leaf numbers; maturity group; stage dates; oxygen/water factors for annuals; leaf-out requirement; day length and photoperiod sensitivity.</td><td>Slow development versus a blocked transition.</td></tr>
+<tr><td>Why no spring/wet-season leaf-out?</td><td><code>EnablePlantLeafOut_brch</code>, <code>Hours4Leafout_brch</code>, requirement, climate gates and reversal conditions.</td><td>Disabled phase versus insufficient favorable hours.</td></tr>
+<tr><td>Why no new leaves despite completed leaf-out?</td><td>Reserve-use clock, available C/N/P, growth stress, allocation and existing biomass.</td><td>Permission to grow versus resources to construct tissue.</td></tr>
+<tr><td>Why is senescence occurring?</td><td>Leaf-off counters; <code>BegRemoblize</code>; <code>LRemob_brch</code>; grain-fill failure; maintenance deficits; disturbance flags.</td><td>Seasonal aging, reproductive completion, starvation and management.</td></tr>
+<tr><td>Why do branches differ?</td><td>Branch-specific stage dates, inherited leaf-out progress, branch requirements and main-branch dependencies.</td><td>Asynchronous branch development versus a PFT-wide trait.</td></tr>
+</tbody></table></div>
+<details><summary>Key variables and units</summary><ul>
+<li><code>iPlantCalendar_brch</code>: stage dates, day of year; zero means not reached.</li>
+<li><code>ShootNodeNum_brch</code> / <code>NumOfLeaves_brch</code>: developmental counts; can evolve continuously between integers.</li>
+<li><code>Hours4Leafout_brch</code> / <code>Hours4LeafOff_brch</code>: climate-condition counters, accumulated hours with explicit reversals/resets.</li>
+<li><code>Hours4LenthenPhotoPeriod_brch</code> / <code>Hours4ShortenPhotoPeriod_brch</code>: simulation hours spent in the current day-length trend, not photoperiod in hours per day.</li>
+<li><code>Hours2LeafOut_brch</code>: physiological reserve-mobilization time, not the climate leaf-out counter.</li>
+<li><code>HoursDoingRemob_brch</code>: accumulated active remobilization hours while eligibility persists.</li>
+<li><code>TCGroth_pft</code> / <code>TdegCCanopy_pft</code>: growth temperature versus actual canopy temperature, °C; different routines use different fields.</li>
+<li><code>PSICanopy_pft</code> / <code>PSICanopyTurg_pft</code>: total canopy water potential versus turgor, MPa.</li>
+<li><code>_brch</code> quantities vary by branch and PFT; <code>_pft</code> quantities describe the PFT. Calendar indices are not branch numbers.</li>
+</ul></details>
+<h3>Prescribed phenology is a different execution mode</h3>
+<p>With <code>ldo_sp_mode</code>, <code>PlantModel</code> takes a prescribed-structure/uptake path instead of the prognostic phenology-and-growth sequence described above. <code>PrescribePhenologyInterp</code> interpolates monthly leaf and stem area and sets canopy/root structure.</p>
+<div class="note gold"><strong>Current implementation limitation:</strong> that interpolation routine contains fixed single-PFT monthly values, canopy height and population. Its non-ATS calendar fallback is January 1 with a 31-day month. Treat this as an implementation requiring case-specific inspection, not a general claim that arbitrary supplied monthly phenology is already honored in every driver.</div>
+<p class="source">Source: <a href="../f90src/APIs/PlantMod.F90">PlantModel</a>; <a href="../f90src/Plant_bgc/PrescribePhenolMod.F90">PrescribePhenologyInterp</a>.</p>
+</section>
+
+<section id="sources">
+<h2>Source map</h2>
+<p>This document describes the current Fortran implementation, including its explicit gates and approximations. It is not a calibration guide or evidence that every combination of trait codes is biologically appropriate.</p>
+<div class="table-wrap"><table><thead><tr><th>Source</th><th>What to look for</th></tr></thead><tbody>
+<tr><td><a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod.F90</a></td><td>Authoritative trait codes and stage identifiers.</td></tr>
+<tr><td><a href="../f90src/APIs/PlantMod.F90">PlantMod.F90</a></td><td>PlantModel execution order; prognostic versus prescribed mode.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantPhenolMod.F90">PlantPhenolMod.F90</a></td><td>Plant activation, emergence, branching, node development, stage transitions and seasonal counters.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantBranchMod.F90">PlantBranchMod.F90</a></td><td>Partitioning, remobilization flags, reserve use, grain maturity and branch reset.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a></td><td>Temperature functions and growth-form predicates.</td></tr>
+<tr><td><a href="../f90src/Modelpars/PlantBGCPars.F90">PlantBGCPars.F90</a></td><td>Senescence intervals, remobilization fractions, reserve-use parameters and false-break duration.</td></tr>
+<tr><td><a href="../f90src/IOutils/PlantInfoMod.F90">PlantInfoMod.F90</a> · <a href="../f90src/Ecosim_mods/StartqMod.F90">StartqMod.F90</a></td><td>Input-derived branch requirements and thermal acclimation.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantNonstElmDynMod.F90">PlantNonstElmDynMod.F90</a></td><td>Nonstructural C/N/P and seasonal storage transfers.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/LitterFallMod.F90">LitterFallMod.F90</a> · <a href="../f90src/Plant_bgc/PlantDisturbsMod.F90">PlantDisturbsMod.F90</a></td><td>Death, litter transfer and failed-establishment handling.</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PrescribePhenolMod.F90">PrescribePhenolMod.F90</a></td><td>Alternative prescribed canopy structure.</td></tr>
+</tbody></table></div>
+<p>Related explanations: <a href="root_categories.html">root categories and structural scales</a> · <a href="root_gas_transport.html">root gas transport and oxygen limitation</a> · <a href="cytokinin.html">cytokinin representation</a> · <a href="canopy_water_potential.html">canopy water potential</a>.</p>
+</section>
+<footer>Prepared from the solphys repository working tree. All diagrams and the rule explorer are embedded; no external services or libraries are required. Relative source links work when this file stays in <code>ecosim_knowledge/</code>. Documentation only; no model equations or parameter files were changed for this explanation.</footer>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  function update() {
+    const annual = $('life').value === 'annual';
+    const kind = Number($('strategy').value);
+    const eligible = $('eligible').checked;
+    const cold = $('cold').checked, dry = $('dry').checked;
+    const active = eligible && (annual || kind === 0 || ((kind === 1 || kind === 3) && cold) || ((kind === 2 || kind === 3) && dry));
+    for (const [id, value] of [['beg-state',eligible],['active-state',active]]) {
+      $(id).textContent = String(value);
+      $(id).classList.toggle('off', !value);
+    }
+    $('clock-result').textContent = !eligible ? 'Not eligible: both flags are false and the remobilization clock resets to zero.' : active ? 'Eligible and active: the remobilization clock increases by one hour.' : 'Eligible, but the required stress trigger is absent: the accumulated remobilization clock holds.';
+    $('eligibility-note').textContent = annual ? 'Annual eligibility: the seed-number-setting date has been recorded. Cold and drought do not add a gate here.' : `Perennial eligibility: leaf-off hours have reached ${kind === 0 ? '75%' : '50%'} of their requirement.`;
+  }
+  ['life','strategy','eligible','cold','dry'].forEach(id => $(id).addEventListener('change', update));
+  update();
+})();
+</script>
+</body>
+</html>

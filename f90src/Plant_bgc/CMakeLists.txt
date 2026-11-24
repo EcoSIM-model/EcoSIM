@@ -1,12 +1,12 @@
 set(PLANT_BGC_SOURCES
   PlantMathFuncMod.F90
+  PlantBalMod.F90  
   PlantDebugMod.F90  
   PlantDisturbByFireMod.F90
   PlantDisturbByTillageMod.F90 
   PlantDisturbByGrazingMod.F90
   InitVegBGC.F90
   RootGasMod.F90
-  PlantBalMod.F90
   NutUptakeMod.F90
 	UptakesMod.F90
   NoduleBGCMod.F90
@@ -24,6 +24,8 @@ set(PLANT_BGC_SOURCES
   UptakePars.F90
   InitPlantMod.F90
   PlantPhenolMod.F90
+  PrescribePhenolMod.F90
+  PrescribedLeafBiochemMod.F90
 )
 include(add_ecosim_library)
 add_ecosim_library(plant_bgc ${PLANT_BGC_SOURCES})
@@ -38,8 +40,7 @@ target_include_directories(plant_bgc  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/APIData/
   ${CMAKE_BINARY_DIR}/f90src/Modelpars/
   ${CMAKE_BINARY_DIR}/f90src/IOutils/
-  ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Layers_Micmodel      
-  ${CMAKE_BINARY_DIR}/f90src/Prescribed_pheno/)
+  ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Layers_Micmodel)
 
 set(ECOSIM_LIBRARIES ${ECOSIM_LIBRARIES};plant_bgc PARENT_SCOPE)
 set(ECOSIM_LIBRARIES ${ECOSIM_LIBRARIES};plant_bgc)

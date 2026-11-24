@@ -1,6 +1,7 @@
 set(LAYERS_SOURCES
   InitSOMBGCMod.F90
 	SoilBGCNLayMod.F90
+  SoilPARAttenuationMod.F90
 )
 include(add_ecosim_library)
 add_ecosim_library(Layers_Micmodel ${LAYERS_SOURCES})
@@ -9,9 +10,10 @@ target_include_directories(Layers_Micmodel  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Utils/
   ${CMAKE_BINARY_DIR}/f90src/Minimath/
   ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
-  ${CMAKE_BINARY_DIR}/f90src/DebugTools/   
-  ${CMAKE_BINARY_DIR}/f90src/Mesh/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/     
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/  
   ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/ModelDiags/   
   ${CMAKE_BINARY_DIR}/f90src/IOutils/
   ${CMAKE_BINARY_DIR}/f90src/Modelpars/
   ${CMAKE_BINARY_DIR}/f90src/Disturbances/

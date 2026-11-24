@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Microbial competition in EcoSIM — rationale and limitations</title>
+<style>
+:root{--ink:#20342e;--green:#195b46;--muted:#596c64;--paper:#f5f7f2;--line:#ccd7ce;--amber:#835016}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.65 system-ui,-apple-system,sans-serif}header,main,footer{max-width:1100px;margin:auto;padding:32px}header{padding-top:58px}h1{font-size:clamp(32px,5vw,54px);line-height:1.08;max-width:850px;margin:12px 0 22px;letter-spacing:-.035em}h2{font-size:28px;line-height:1.25;margin:0 0 20px}h3{font-size:20px;line-height:1.3}p{margin:12px 0 18px}a{color:var(--green);text-underline-offset:3px}code{font-size:.88em;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf2eb;padding:20px;border-radius:8px;line-height:1.6}.meta,.source,figcaption{color:var(--muted);font-size:14px}.eyebrow{font-size:13px;text-transform:uppercase;letter-spacing:.13em;color:var(--green);font-weight:700}.lead{font-size:21px;max-width:900px}.callout{padding:20px 24px;border-left:4px solid var(--green);background:#e7efe5;border-radius:0 8px 8px 0}.caution{border-color:#aa7026;background:#fcf0db}nav{display:flex;gap:10px 22px;flex-wrap:wrap;padding:24px 0 0;border-top:1px solid var(--line);margin-top:30px;font-size:15px}section{margin-bottom:54px;scroll-margin-top:24px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{padding:22px;background:white;border:1px solid var(--line);border-radius:12px}.card h3{margin:0 0 10px}.step{font-size:13px;font-weight:750;color:var(--green);display:block;margin-bottom:12px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:15px 13px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#e5ece2}ul,ol{padding-left:24px}li{margin:10px 0}.equation{font:18px/1.8 ui-monospace,monospace;background:#e8eee5;padding:20px;border-radius:10px;overflow-wrap:anywhere}.two{display:grid;grid-template-columns:1fr 1fr;gap:22px}.badge{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:4px 12px;font-size:13px}.demo{padding:26px;background:white;border:1px solid var(--line);border-radius:12px}.demo label{display:block;font-weight:650}input[type=range]{width:min(100%,520px);accent-color:var(--green);margin:18px 0}output{font-weight:750;font-variant-numeric:tabular-nums}.track{height:32px;background:#edf1eb;border-radius:5px;overflow:hidden;display:flex}.basebar{background:#33785d}.overbar{background:#c88935}.barlabel{display:flex;justify-content:space-between;font-size:14px;margin:5px 0 16px}.fine{font-size:15px;color:var(--muted)}footer{border-top:1px solid var(--line);font-size:14px;padding-bottom:50px}button{font:inherit;font-size:14px;border:1px solid var(--line);background:white;padding:7px 15px;border-radius:6px;cursor:pointer}
+@media(max-width:720px){header,main,footer{padding:24px 18px}.grid,.two{grid-template-columns:1fr}h2{font-size:25px}th,td{padding:10px}header{padding-top:32px}}
+@media print{body{background:white;font-size:11pt}header,main,footer{max-width:none;padding:12pt}h1{font-size:30pt}h2{font-size:19pt}section{margin-bottom:25pt}nav,button,input[type=range]{display:none}.card,.callout,tr{break-inside:avoid}.demo{break-inside:avoid}a{color:inherit}pre{font-size:10pt}}
+</style>
+</head>
+<body>
+<header>
+<div class="eyebrow">EcoSIM knowledge • microbial biogeochemistry</div>
+<h1>Who gets the substrate?</h1>
+<p class="lead">EcoSIM combines physiological demand, competition shares, transport constraints, and local donor limits. This is an efficient way to represent resource competition, but it is not a single, simultaneous allocation of every substrate across every reaction.</p>
+<p class="meta">Reviewed 30 September 2026 · <code>solphys</code> checkout, commit <code>7f4a2b7f</code> · Current implementation and proposed improvements are distinguished below.</p>
+<div class="callout"><strong>Main conclusion.</strong> A competition share expresses access or priority; it does not by itself prove conservation. Each accepted reaction must also withdraw all required reactants and credit consistent products. As functional groups and reactions multiply, that second obligation becomes difficult to maintain with separate process-specific rules.</div>
+<nav aria-label="Contents"><a href="#architecture">Architecture</a><a href="#shares">Shares and fallbacks</a><a href="#resources">Resource map</a><a href="#rationale">Rationale</a><a href="#limits">Shortcomings</a><a href="#demo">Explore the floor</a><a href="#future">A scalable direction</a><a href="#sources">Source guide</a></nav>
+</header>
+<main>
+<section id="architecture">
+<h2>1. Three distinct decisions</h2>
+<div class="grid">
+<div class="card"><span class="step">01 · PHYSIOLOGY</span><h3>Potential demand</h3><p>Active biomass, maximum rates, substrate concentration, temperature, water stress, nutrient status, energy yield, and transport determine how much a guild could use.</p></div>
+<div class="card"><span class="step">02 · COMPETITION</span><h3>Access to a shared pool</h3><p>Previous-hour demand ratios commonly supply the allocation weights. When history is negligible, biomass fractions provide a fallback. Many weights have a minimum floor.</p></div>
+<div class="card"><span class="step">03 · ACCOUNTING</span><h3>Accepted consumption</h3><p>Process routines combine potential rates with donor budgets and other constraints. Consumption, maintenance, growth, and product formation must remain consistent after limitation.</p></div>
+</div>
+<p><strong>Indices matter:</strong> <code>K</code> identifies an organic matter–microbe complex, <code>N</code> a functional group, and <code>NGL</code> a guild within that group. A guild and its substrate complex are distinct entities. Surface litter calculates three complexes; soil calculates five. Autotrophic biomass is represented separately from the heterotrophic complex array.</p>
+<p>Competition domains vary. DOC and acetate have complex-specific pools, whereas dissolved gases and mineral nutrients connect consumers across complexes within a layer. Litter microbes can also access nutrients in the underlying soil. Roots and mycorrhizae contribute to the relevant ecosystem demand totals.</p>
+<p>The layer driver stages environmental conditions and biomass, calculates heterotrophic then autotrophic catabolism, evaluates chemical denitrification, performs priming and decomposition, redistributes products and sorption, and updates microbial biomass. Demand totals are gathered into ecosystem arrays; hourly preparation carries these into <code>*Prev*</code> fields for the following calculation. Some gas calculations use smaller internal substeps, so the hourly competition memory and the gas integration step are not interchangeable.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>, <code>SoilBGCOneLayer</code> and <code>ActiveMicrobeCatabolism</code>; <a href="../f90src/APIs/MicBGCAPI.F90">MicBGCAPI.F90</a>; <a href="../f90src/Modelforc/Hour1Mod.F90">Hour1Mod.F90</a>; <a href="../f90src/Balances/RedistMod.F90">RedistMod.F90</a>. See also <a href="microbial_complexes.html">microbial complexes</a>.</p>
+</section>
+<section id="shares">
+<h2>2. How the shares are constructed</h2>
+<p>A common pattern is the following. It is a schematic of several routines, not an assertion that every substrate uses an identical equation:</p>
+<div class="equation">w<sub>g,s</sub> = max(FMN, D<sup>previous</sup><sub>g,s</sub> / D<sup>previous</sup><sub>ecosystem,s</sub>)<br>if the denominator is negligible: use a biomass-based fallback instead.</div>
+<p><code>FMN = 0.005</code> in <code>initNitroPars</code>. For mineral nutrients, the fallback may also include the nonband or fertilizer-band fraction. Certain routines clamp shares to one; many use the lower floor without an explicit upper clamp. These are allocation weights, not universally normalized probabilities.</p>
+<div class="two">
+<div><h3>History-based allocation</h3><p>For DOC, <code>FOQC</code> uses <code>RDOCUptkHeterPrev / RDOMEcoDmndPrev(K)</code>. Acetate uses <code>FOQA</code> and a separate acetate demand denominator. Distinct donors therefore have distinct shares.</p><p>“Demand” is not uniform across pathways: some arrays store potential uptake, while others carry uptake or redox demand assembled by their process routine. The array name alone does not establish that all numerators have identical semantics.</p></div>
+<div><h3>Biomass fallback</h3><p><code>FracHeterBiomOfActK</code> compares a guild with active heterotrophic biomass in its complex. <code>FracOMActHeter</code> and <code>FracOMActAutor</code> compare it with layer-wide active microbial biomass. Nitrite has a more specific denominator containing active microbial nitrite consumers.</p><p>Active biomass is estimated from the kinetic biomass component and its prescribed fraction, rather than simply summing every living biomass pool.</p></div>
+</div>
+<p>For a simple donor-limited flux, the resulting calculation resembles:</p>
+<div class="equation">accepted uptake ≤ min(potential uptake, w<sub>g,s</sub> × available donor)</div>
+<p>The “available donor” can be a pool after retaining a minimum concentration, a compartment-specific mass, or a budget after transport and other withdrawals. Carbon substrate routines can first convert an allocated mass into a respiration capacity using a yield. Oxygen routines additionally resolve delivery and phase exchange.</p>
+<p class="source">Sources: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a>, <code>StageFuncGuild</code>, <code>StageAutotroph</code>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>, <code>StageBGCEnvironCondition</code>, <code>SubstrateAttenf4Compet</code>; <a href="../f90src/Modelpars/NitroPars.F90">NitroPars.F90</a>.</p>
+</section>
+<section id="resources">
+<h2>3. Which organisms and processes compete?</h2>
+<div class="table-wrap"><table><thead><tr><th>Resource / domain</th><th>Current representation</th><th>Important qualification</th></tr></thead><tbody>
+<tr><td>DOC and acetate<br>Within complex K</td><td>Separate <code>FOQC</code> and <code>FOQA</code> shares among heterotrophic pathways, including mixotrophic carbon uptake where enabled.</td><td>One donor's unused allocation cannot justify consuming extra of the other. Mixed-donor respiration and growth require consistent donor-specific yields and withdrawals.</td></tr>
+<tr><td>O₂<br>Layer and transport domains</td><td><code>FOXYX</code> commonly uses previous microbial demand divided by ecosystem O₂ demand, with biomass fallback. Roots and microbial processes contribute to ecosystem competition.</td><td>A share does not guarantee delivered O₂. Diffusion, gas–liquid exchange, local dissolved mass, and substep limits constrain actual respiration.</td></tr>
+<tr><td>NH₄ / NO₃ / phosphate<br>Nonband and fertilizer band</td><td>Assimilation and relevant redox pathways use demand shares, kinetic limits, and available mass. Litter access to underlying soil has separate band/nonband accounting.</td><td>Maintain separate donors, water volumes, concentrations, and credited/debited fluxes. A spatial band fraction is not a replacement for a competition share.</td></tr>
+<tr><td>NO₂<br>Across complexes and pathways</td><td>Fallback biomass includes active heterotrophic denitrifiers, ammonia oxidizers using nitrifier denitrification, nitrite oxidizers, and NC10 methane oxidizers. Chemical denitrification has its own demand-based weight and small fallback.</td><td>The microbial biomass denominator is not the entire biological-plus-chemical competition budget. Chemical consumption must still enter shared demand accounting.</td></tr>
+<tr><td>CH₄<br>Layer methane supply</td><td>Methanotroph pathways use previous CH₄-demand shares or biomass fallback, together with their electron-acceptor and kinetic constraints.</td><td>Aerobic and anaerobic oxidation require coupled limits for CH₄ and O₂, NO₂, or NO₃ as applicable.</td></tr>
+<tr><td>H₂<br>Hydrogenotrophic methanogenesis</td><td><code>H2GSX</code> starts from dissolved H₂ plus fermentation production. Guilds sequentially reserve H₂ for methane formation and biomass growth from the remaining budget.</td><td>The code explicitly marks an H₂ competition factor as future work. The present reservation prevents those guilds from independently reusing the same H₂, but assigns priority by iteration order.</td></tr>
+<tr><td>Intracellular N/P reserves</td><td><code>LimitReserveNutrientTransfers</code> limits structural growth transfers, then release, against reserves plus accepted supplies.</td><td>This is a local donor constraint within an organism, not competition for an external pool. It complements external uptake limits.</td></tr>
+</tbody></table></div>
+<p class="source">Source modules: <a href="../f90src/Microbial_bgc/Box_Micmodel/AerobicBacteriaMod.F90">AerobicBacteriaMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/NitrifierMod.F90">NitrifierMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/DenitrifierMod.F90">DenitrifierMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/MethanotrophMod.F90">MethanotrophMod</a>, <a href="../f90src/Microbial_bgc/Box_Micmodel/MethanogenMod.F90">MethanogenMod</a>, and the staging/math modules above.</p>
+</section>
+<section id="rationale">
+<h2>4. Why this design is useful</h2>
+<p>The following rationale is inferred from the implementation; it is not a claim about undocumented author intent.</p>
+<ul>
+<li><strong>Low computational cost.</strong> Previous-hour shares avoid a simultaneous nonlinear allocation solve over all organisms and reactions.</li>
+<li><strong>Physiology affects access.</strong> Demand history incorporates the effects of biomass, environmental responses, and uptake capacity from the preceding calculation. It is more responsive than fixed fractions alone.</li>
+<li><strong>Recovery from little demand history.</strong> Biomass fallbacks and a small floor allow an existing low-demand guild to attempt uptake after conditions change. A nonzero share still cannot produce uptake without the required biomass, capacity, and substrates.</li>
+<li><strong>Spatial and functional differentiation.</strong> Complex-specific organic donors, fertilizer bands, litter-to-soil access, and different metabolic pathways represent more than one homogeneous competition pool.</li>
+<li><strong>Local process clarity.</strong> Explicit reaction-specific budgets can expose missing withdrawals, wrong units, or inconsistent yield conversions and are useful immediate corrections.</li>
+</ul>
+</section>
+<section id="limits">
+<h2>5. Where the approach falls short</h2>
+<h3>A. Previous-hour demand is a lagged predictor</h3>
+<p>A rewetting event, fertilizer pulse, rapid O₂ loss, or metabolic switch can make old shares poorly matched to current demand. A guild can retain a large allocation it cannot use, while another remains restricted. Smaller timesteps can reduce some lag effects, but do not remove the need for consistent competition definitions.</p>
+<h3>B. A per-consumer floor breaks automatic normalization</h3>
+<p>Even if raw demand ratios sum to one, replacing every ratio below <code>FMN</code> with <code>FMN</code> increases their sum. If different routines independently multiply a shared donor by those weights, their permitted budgets can exceed the donor. Kinetic constraints may prevent an actual overdraw in a given hour; the weights alone provide no guarantee. Splitting one functional group into more guilds can also change the aggregate floor entitlement.</p>
+<h3>C. Fallback denominators encode ecological assumptions</h3>
+<p>Within-complex biomass, all microbial biomass in a layer, and biomass of actual consumers are different denominators. A biomass fallback is only a proxy for resource-specific demand. Each additional guild or chemical reaction requires a decision about which denominator it joins. The targeted nitrite consumer set is an improvement, but it does not automatically generalize to a newly added substrate or pathway.</p>
+<h3>D. A reaction needs several donors at once</h3>
+<p>A methane-oxidation rate must respect methane and electron-acceptor supply; biomass production also requires carbon and nutrients. Independently clipping each withdrawal after products have been computed can disconnect the reaction. Limiting total carbon does not ensure that separate DOC and acetate allocations are respected. Every product and coupled demand must follow the final accepted reaction rate.</p>
+<h3>E. Conservation and allocation fairness are different</h3>
+<p>The remaining <code>H2GSX</code> budget enforces a shared local H₂ limit, including biomass demand. Nevertheless, a guild evaluated first can reserve H₂ before later guilds see it. A nonnegative, conservative update can therefore still be sensitive to guild ordering. Conversely, apparently fair weights can still overallocate if they are not normalized over all relevant consumers.</p>
+<h3>F. Deferred withdrawal is not a reaction-rate limiter</h3>
+<p><code>SubstrateDribbling</code> adds the current requested withdrawal to a carried deficit. It removes what is available and records the unmet amount for later:</p>
+<pre><code>total_request = current_request + previous_debt
+new_pool      = max(0, old_pool - total_request)
+new_debt      = max(0, total_request - old_pool)</code></pre>
+<p>For nonnegative inputs, the bookkeeping identity is <code>new_pool − new_debt = old_pool − previous_debt − current_request</code>. Thus the method retains a withdrawal obligation rather than simply forgetting an overdraw. But it does not revise already calculated growth or products, and a debt is not substrate physically available to support a reaction now. It can mask temporal inconsistency if only nonnegative pools are inspected.</p>
+<p class="source">Source: <a href="../f90src/Minimath/MiniMathMod.F90">MiniMathMod.F90</a>, <code>SubstrateDribbling_scal/vec</code>; calls in <code>RedistDecompProduct</code> in <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>.</p>
+<div class="callout caution"><strong>The extensibility problem.</strong> With more guilds and reactions, any pool can become a donor. Every new consumption pathway must be added to demand totals, fallbacks, donor caps, product accounting, API transfers, and any persistent history needed by the scheme. Local fixes remain useful, but repeated manual coordination is a fragile long-term architecture. This is a structural limitation, not a claim that every current pathway violates conservation.</div>
+</section>
+<section id="demo">
+<h2>6. Explore the share floor</h2>
+<div class="demo">
+<p>Illustrative case: one guild supplied all previous demand; the others supplied zero. All now have sufficient potential demand to use their allowed shares of a 100-unit donor pool. Apply <code>max(0.005, previous share)</code> independently.</p>
+<label for="guilds">Number of current consumers: <output id="ng" for="guilds">10</output></label>
+<input id="guilds" type="range" min="2" max="100" value="10" step="1">
+<div class="track" role="img" id="budgetbar" aria-label="100 units available and 4.5 units overallocated"><div class="basebar" id="basebar"></div><div class="overbar" id="overbar"></div></div>
+<div class="barlabel"><span>Green: available donor = 100</span><span>Amber: excess permitted budget</span></div>
+<p>Sum of shares: <output id="sum">1.045</output><br>Total permitted withdrawal: <output id="withdraw">104.5</output> units<br>Excess: <output id="excess">4.5</output> units</p>
+<p class="fine">This demonstrates the algebra of a representative floored share, not a simulation of EcoSIM's complete kinetics. Normalizing these weights would enforce a shared budget for this single donor; it would not by itself solve coupled limitations involving other substrates.</p>
+<noscript><p>With 10 consumers, weights are 1 for the original consumer and 0.005 for each of nine others: total 1.045, permitting 104.5 units from a 100-unit pool.</p></noscript>
+</div>
+</section>
+<section id="future">
+<h2>7. A scalable direction: constrain reactions together</h2>
+<p><span class="badge">Proposed architecture — not currently implemented as a global allocator</span></p>
+<p>Keep EcoSIM's biological rate laws, energy yields, and transport calculations. Have them propose reactions, then apply a common allocation step before updating any affected pools or products. Explicitly distinguish pool identity by layer, complex, aqueous/gas phase, and fertilizer compartment.</p>
+<ol>
+<li><strong>List complete reactions.</strong> Record each reaction's reactants and products in a stoichiometric matrix, including biomass and relevant external exchanges. Convert mass units consistently.</li>
+<li><strong>Calculate potential extents.</strong> Obtain proposed reaction amounts over the timestep from existing physiology. If yields vary, form the corresponding coefficients consistently for that step.</li>
+<li><strong>Collect all donor demands.</strong> Include every consumer of each pool. Assign explicit priorities or weights if required; conservation alone does not select the ecological allocation.</li>
+<li><strong>Determine accepted extents.</strong> Constrain the whole reaction by its limiting donor and the shared resource budgets.</li>
+<li><strong>Apply one consistent update.</strong> Use accepted extents to debit substrates and credit products. Retain separate potential-demand diagnostics if they are needed for competition memory.</li>
+</ol>
+<h3>A simple conservative illustration</h3>
+<p>Let <code>p[r]</code> be a nonnegative potential reaction amount, <code>C[i,r]</code> its gross consumption coefficient for donor <code>i</code>, and <code>b[i]</code> the available donor amount. One conservative, potentially underutilizing starting point is:</p>
+<pre><code>D[i]     = sum over reactions r of C[i,r] * p[r]
+alpha[i] = min(1, b[i] / D[i])           ! use 1 when D[i] = 0
+q[r]     = p[r] * min alpha[i] over donors consumed by r
+x_new    = x_old + S * q                ! S: products minus reactants</code></pre>
+<p>Every consumer of a donor receives at most that donor's common scaling, so total gross consumption cannot exceed its budget. A reaction is scaled as a unit. However, limitation by another donor may leave unused supply; redistribution or an iterative method may be needed. This illustration assumes no borrowing from unaccepted same-step products. Fermentation-to-methanogen cross-feeding, transport, and cyclic reaction networks need an explicit update strategy. It is not presented as the exact published algorithm below.</p>
+<p>Tang and Riley (2016) provide a relevant reference for a generic substrate limiter: their abstract describes a stoichiometric-matrix formulation and a law-of-the-minimum constraint addressing arbitrary numbers of substrates, conservation, and nonnegative solutions. The paper is a direction for evaluating a replacement, not evidence that EcoSIM already implements it. <a href="https://bg.copernicus.org/articles/13/723/2016/">Technical Note: A generic law-of-the-minimum flux limiter for simulating substrate limitation in biogeochemical models</a>.</p>
+<h3>What a replacement must demonstrate</h3>
+<ul>
+<li>Element balances close and all affected donors remain nonnegative without hidden unfunded production.</li>
+<li>Substrate-limited behavior remains consistent when guild order is permuted or one otherwise identical guild is subdivided.</li>
+<li>Single-donor and coupled-donor cases, zero history, rapid environmental changes, and band/nonband transfers are covered.</li>
+<li>Unconstrained cases reproduce the intended biological potential rates; maintenance and growth priorities are explicit.</li>
+<li>Unmet demand, carried debt, and accepted uptake are reported separately. Old debt needs an explicit transition plan if dribbling is retired.</li>
+</ul>
+</section>
+<section id="sources">
+<h2>8. Source guide</h2>
+<p>Relative links open the source files in this checkout. Routine names are the stable navigation points; line numbers may change.</p>
+<div class="table-wrap"><table><thead><tr><th>Question</th><th>Where to look</th></tr></thead><tbody>
+<tr><td>Layer execution and active biomass</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>: <code>SoilBGCOneLayer</code>, <code>StageBGCEnvironCondition</code>, <code>ActiveMicrobeCatabolism</code>.</td></tr>
+<tr><td>DOC/acetate shares and biomass fractions</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a>: <code>StageFuncGuild</code>, <code>StageAutotroph</code>.</td></tr>
+<tr><td>Mineral nutrient shares</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>: <code>SubstrateAttenf4Compet</code>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">MicAutoCplxFGMod.F90</a>: <code>SubstrateCompetAuto</code>.</td></tr>
+<tr><td>Litter access and reserve safeguards</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a>: <code>LitterSoilNutrientUptake</code>, <code>LimitReserveNutrientTransfers</code>.</td></tr>
+<tr><td>O₂ delivery</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MicrobMathFuncMod.F90">MicrobMathFuncMod.F90</a>: <code>AerobicHeterO2Uptake</code>; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicAutoCplxFGMod.F90">MicAutoCplxFGMod.F90</a>.</td></tr>
+<tr><td>H₂ reservation and open competition TODO</td><td><a href="../f90src/Microbial_bgc/Box_Micmodel/MethanogenMod.F90">MethanogenMod.F90</a>: <code>H2GSX</code>, <code>H2Demand</code>.</td></tr>
+<tr><td>Shared demand accounting and history</td><td><a href="../f90src/Balances/RedistMod.F90">RedistMod.F90</a>; <a href="../f90src/Modelforc/Hour1Mod.F90">Hour1Mod.F90</a>; <a href="../f90src/APIs/MicBGCAPI.F90">MicBGCAPI.F90</a>.</td></tr>
+<tr><td>Minimum share and deferred withdrawals</td><td><a href="../f90src/Modelpars/NitroPars.F90">NitroPars.F90</a>: <code>FMN</code>; <a href="../f90src/Minimath/MiniMathMod.F90">MiniMathMod.F90</a>: <code>SubstrateDribbling</code>.</td></tr>
+</tbody></table></div>
+<p>Related process notes: <a href="nitrifiers.html">nitrifiers</a> · <a href="methanotrophs.html">methanotrophs</a> · <a href="cyanobacteria.html">cyanobacteria</a> · <a href="chemodenitrification.html">chemical denitrification</a>.</p>
+</section>
+</main>
+<footer>This document describes inspected code and identifies architectural limitations. Numerical examples are explanatory; they are not a whole-model validation or a claim that every stated risk occurs in every simulation. Standalone HTML: no external scripts, fonts, or data required. <button onclick="window.print()">Print / save PDF</button></footer>
+<script>
+'use strict';
+function update(){const n=Number(document.getElementById('guilds').value);const excess=100*.005*(n-1);const total=100+excess;document.getElementById('ng').value=n;document.getElementById('sum').value=(total/100).toFixed(3);document.getElementById('withdraw').value=total.toFixed(1);document.getElementById('excess').value=excess.toFixed(1);document.getElementById('basebar').style.width=(100/total*100)+'%';document.getElementById('overbar').style.width=(excess/total*100)+'%';document.getElementById('budgetbar').setAttribute('aria-label','100 units available; '+excess.toFixed(1)+' units overallocated');}
+document.getElementById('guilds').addEventListener('input',update);update();
+</script>
+</body></html>

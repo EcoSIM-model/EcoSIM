@@ -56,6 +56,8 @@
 ! **************************************************************************** !
 
 module EcoContainers_module
+  ! Description:
+  ! Define interoperable ATS/EcoSIM environment, heat-reference and state containers.
 
   use, intrinsic :: iso_c_binding
 
@@ -129,10 +131,15 @@ module EcoContainers_module
      real (c_double) :: heat_capacity
      real (c_double) :: field_capacity
      real (c_double) :: wilting_point
+     real (c_double) :: latitude
+     real (c_double) :: solar_noon
      logical (c_bool) :: p_bool
      logical (c_bool) :: a_bool
      logical (c_bool) :: pheno_bool
      logical (c_bool) :: microbe_bool
+     real (c_double) :: wind_speed_ref_height
+     real (c_double) :: soil_surface_roughness
+     logical(c_bool) :: ponded_aware
      type (c_ptr) :: pft_file
   end type EcoConfig
 
@@ -180,6 +187,8 @@ module EcoContainers_module
      type (EcoVectorDouble) :: slope
      type (EcoVectorDouble) :: vegetation_type
      type (EcoVectorDouble) :: snow_albedo
+     type (EcoVectorDouble) :: ponded_depth
+     type (EcoVectorDouble) :: surface_temperature
      ! atmosphere composition
      real (c_double) :: atm_n2
      real (c_double) :: atm_o2
@@ -191,6 +200,7 @@ module EcoContainers_module
      ! clock
      integer (c_int) :: current_day
      integer (c_int) :: current_year
+     integer (c_int) :: current_hour
   end type EcoEnvironment
 
   ! --------------------------------------------------------------------------
@@ -201,6 +211,8 @@ module EcoContainers_module
      type (EcoMatrixDouble) :: subsurface_energy_source
      type (EcoVectorDouble) :: surface_water_source
      type (EcoVectorDouble) :: surface_energy_source
+     type (EcoVectorDouble) :: surface_energy_source_dtemperature
+     type (EcoVectorDouble) :: surface_energy_reference_temperature
      type (EcoVectorDouble) :: snow_depth
      type (EcoMatrixDouble) :: canopy_snow
      type (EcoTensorDouble) :: subsurface_mole_fraction_source  ! ncells x num_columns x num_components; microbes only

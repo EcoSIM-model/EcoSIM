@@ -303,7 +303,7 @@ implicit none
           MOE(:)=0.0_r8
           
           D3580: DO K=1,jcplx
-            DO NO=1,NumMicbFunGrupsPerCmplx
+            DO NO=1,NumMicbHFunGrupsPerCmplx
               DO M=1,nlbiomcp
                 DO NGL=JGniH(NO),JGnfH(NO)
                   MID=micpar%get_micb_id(M,NGL)                
@@ -314,7 +314,7 @@ implicit none
               enddo
             enddo
           ENDDO D3580
-          DO NO=1,NumMicbFunGrupsPerCmplx
+          DO NO=1,NumMicbAFunGrupsPerCmplx
             DO M=1,nlbiomcp
               DO NGL=JGniA(NO),JGnfA(NO)
                 MID=micpar%get_micb_id(M,NGL)

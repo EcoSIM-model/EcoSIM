@@ -1,6 +1,7 @@
 module PlantMgmtDataType
 
   use data_kind_mod, only : r8 => DAT_KIND_R8
+  use ElmIDMod, only : ifalse  
   use GridConsts
   implicit none
   character(len=*), private, parameter :: mod_filename = &
@@ -30,7 +31,7 @@ module PlantMgmtDataType
   integer,target,allocatable ::  NP_col(:,:)                                   !number of plant species,[-]
   integer,target,allocatable ::  NP0_col(:,:)                                  !intitial number of plant species,[-]
   integer,target,allocatable ::  LSG_pft(:,:,:)                                !match PFT from different scenarios,[-]
-
+  INTEGER, target, allocatable :: FireReSet_pft(:,:,:)                         !flag to skill startq for fire rejuvenation  
   private :: InitAllocate
   contains
 
@@ -71,7 +72,7 @@ module PlantMgmtDataType
   allocate(NP_col(JY,JX));          NP_col=0
   allocate(NP0_col(JY,JX));         NP0_col=0  
   allocate(LSG_pft(JP,JY,JX));      LSG_pft=0
-
+  allocate(FireReSet_pft(JP,JY,JX)); FireReSet_pft=ifalse
   end subroutine InitAllocate
 
 !----------------------------------------------------------------------
@@ -79,6 +80,7 @@ module PlantMgmtDataType
   use abortutils, only : destroy
   implicit none
 
+  call destroy(FireReSet_pft)
   call destroy(flag_active_pft)
   call destroy(THIN_pft)
   call destroy(FracBiomHarvsted)

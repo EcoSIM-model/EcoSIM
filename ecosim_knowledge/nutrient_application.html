@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EcoSIM · Nutrient application</title><style>
+:root{--ink:#20352f;--green:#175b49;--muted:#60746b;--bg:#f7f9f5;--line:#dbe5dc;--tint:#eaf3ec;--blue:#286fba;--amber:#fff3da}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,sans-serif}main{max-width:1100px;margin:auto;padding:44px 28px 70px}h1{font-size:clamp(32px,5vw,52px);line-height:1.12;letter-spacing:-1.2px;margin:16px 0}h2{font-size:25px;line-height:1.3;color:var(--green);margin:2.3em 0 .8em}h3{font-size:18px;color:var(--green)}p{max-width:95ch}.lead{font-size:20px;max-width:78ch}.eyebrow,.meta,.source{font-size:13px;color:var(--muted)}.eyebrow{font-weight:700;letter-spacing:2px;text-transform:uppercase}a{color:var(--green)}nav{display:flex;flex-wrap:wrap;gap:8px 20px;border-block:1px solid var(--line);padding:16px 0;margin:28px 0;font-size:14px}.cards,.split{display:grid;gap:16px;grid-template-columns:repeat(3,1fr)}.split{grid-template-columns:1fr 1fr}.card,.panel{background:white;padding:20px;border:1px solid var(--line);border-radius:12px;min-width:0}.card strong{display:block;color:var(--green)}.note,.eq{background:var(--tint);padding:16px 20px;border-radius:9px;margin:18px 0}.note.amber{background:var(--amber)}.eq{font:17px/1.9 "Cambria Math",Georgia,serif;overflow-x:auto}.source{margin:8px 0}code{font:13px/1.5 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}pre{background:white;border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;font-size:13px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{background:var(--tint)}.scroll,.chart-scroll{overflow-x:auto}.chart-scroll svg{min-width:640px}.flow{display:grid;grid-template-columns:1fr 35px 1.25fr 35px 1fr;align-items:center;gap:8px;margin:20px 0}.flow .arrow{text-align:center;font-size:27px;color:var(--green)}.flow .box{padding:18px;background:white;border:1px solid var(--line);border-radius:10px}.flow small{display:block;color:var(--muted);line-height:1.5}.flow .box strong{display:block}.flow .merge{display:grid;gap:10px}.flow .box.accent{background:var(--tint)}input{font:inherit;width:100%;max-width:120px;border:1px solid #a7bcb2;border-radius:5px;padding:6px;background:white;color:var(--ink)}input:focus{outline:2px solid var(--blue);outline-offset:2px}.controls{display:flex;gap:24px;flex-wrap:wrap;margin:20px 0}.controls label{display:flex;flex-direction:column;gap:5px;font-size:14px}.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:13px;margin:8px 0}.dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.metric{padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--tint)}.metric output{display:block;font-size:23px;font-weight:700}.metric span{font-size:12px;color:var(--muted)}svg{display:block;width:100%;height:auto}#input-error{color:#a12b20;min-height:25px;font-size:14px}li{margin:7px 0}footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:20px;margin-top:45px}details{margin-top:16px}summary{cursor:pointer;color:var(--green)}@media(max-width:750px){main{padding:26px 16px 50px}.cards,.split{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg)}.metrics{grid-template-columns:1fr 1fr}.scroll table{min-width:640px}}@media print{body{background:white}main{padding:0;max-width:none}nav{display:none}.card,.eq,.note,tr{break-inside:avoid}h2{break-after:avoid}input{border:0}a{color:inherit}}
+
+select{font:inherit;border:1px solid #a7bcb2;border-radius:5px;background:white;padding:8px;color:var(--ink);max-width:180px}.controls label{min-width:0}</style></head><body><main>
+<div class="eyebrow">EcoSIM process walkthrough</div>
+<h1>Nutrient application</h1>
+<p class="lead">Management supplies elemental C, N, P, and Ca to specified cells and dates. EcoSIM converts those inputs into fertilizer reservoirs, dissolved nutrients, precipitated minerals, and organic pools. Nutrient application, subsequent release, and plant uptake are distinct steps.</p>
+<p class="meta">Source-based description · 19 October 2026 · Standalone model · Includes duplicate-date validation in the fertilizer reader.</p>
+<div class="cards"><div class="card"><strong>One combined daily amendment record</strong>Fertilizer, plant residue, and manure share one dated record. The active application routine executes at the integer solar-noon hour.</div><div class="card"><strong>Elemental inputs</strong>Rates are g N, P, C, or Ca per m², depending on the field. Multiply by cell area before adding cell-total pools; use stoichiometry for molar pools.</div><div class="card"><strong>Several receiving pools</strong>Mineral N → fertilizer reservoirs.<br>Explicit PO₄ → dissolved P.<br>Mineral P → precipitates.<br>Organic C/N/P → biomass, DOM, residue.</div></div>
+<nav aria-label="Contents"><a href="#sequence">Pathways and timing</a><a href="#records">Input record</a><a href="#placement">Placement</a><a href="#mineral">Mineral N/P/Ca</a><a href="#explorer">Placement explorer</a><a href="#organic">Organic amendments</a><a href="#bands">Band domains</a><a href="#other">Other nutrient inputs</a><a href="#ledger">Accounting</a><a href="#sources">Sources</a></nav>
+<section id="sequence"><h2>1 · Read annually, apply at noon, release later</h2>
+<div class="flow" role="img" aria-label="Annual management records feed the daily fertilizer schedule. At the integer solar-noon hour, the model applies mineral fertilizer, then organic amendments, then inhibitor settings. Reservoir release, geochemistry, and biological processing subsequently govern nutrient availability.">
+<div class="box"><strong>Management NetCDF</strong><small>Topographic-unit rectangle<br>Selected fertilizer table<br>Date + amounts + placement + types</small></div><div class="arrow" aria-hidden="true">→</div><div class="box accent"><strong>Daily schedule → noon application</strong><small><code>FERT(:,day,NY,NX)</code><br>Mineral inputs → organic inputs → inhibitors</small></div><div class="arrow" aria-hidden="true">→</div><div class="box"><strong>Receiving pools</strong><small>Release / hydrolysis / speciation<br>Microbial transformations<br>Transport and plant uptake</small></div></div>
+<p><code>ReadManagementFiles</code> chooses the fertilizer table for each topographic unit and applies its records over <code>NH1:NH2, NV1:NV2</code>. The unit count does not limit its cell coordinates: a unit can cover several cells. Amounts and application settings are stored by day and cell. The annual forcing setup clears and rereads these schedules.</p>
+<p><code>Hour1Mod</code> calls <code>ApplyFertilizerAtNoon</code> during hourly preparation. For each cell, application occurs when <code>J == INT(SolarNoonHour_col(NY,NX))</code>. The routine calls <code>ApplyMineralFertilizer</code>, <code>ApplyManure</code>, and <code>ApplyUreaNitrifierInhibitor</code>, in that order. There is no application-hour field in the fertilizer record.</p>
+<div class="note"><strong>Application is not immediate availability.</strong> The mineral N pools are subsequently depleted by dissolution/release and urea hydrolysis in <code>SoluteMod</code>. Precipitated P minerals participate in geochemical reactions; organic inputs require biological processing to release mineral nutrients.</div>
+<p class="source">Sources: <a href="../f90src/IOutils/ReadManagementMod.F90">management reader</a>, <a href="../f90src/Modelforc/Hour1Mod.F90">hourly caller</a>, <a href="../f90src/Disturbances/FertilizerMod.F90">application routines</a>, <a href="../f90src/Geochem/Layers_chem/SoluteMod.F90">subsequent release</a>.</p></section>
+
+<section id="records"><h2>2 · A record combines fertilizer, residue, and manure</h2>
+<p>The selected table contains up to 12 records, bounded by <code>nfert</code>. An empty table applies nothing, and a blank row ends the records. The following layout wraps for readability; each input record contains these fields in this order:</p>
+<pre>DDMMYYYY
+NH4Soil NH3Soil UreaSoil NO3Soil NH4Band NH3Band UreaBand NO3Band
+MonocalciumPhosphateSoil MonocalciumPhosphateBand hydroxyapatite
+LimeStone Gypsum
+PlantResC PlantResN PlantResP ManureC ManureN ManureP
+AppDepth BandWidth PO4Soil PO4Band IR0 IR1 IR2</pre>
+<div class="scroll"><table><thead><tr><th>Fields</th><th>Input basis</th><th>Interpretation</th></tr></thead><tbody>
+<tr><td>N forms, broadcast and banded</td><td>g N m⁻²</td><td>NH₄-N, NH₃-N, urea-N, and NO₃-N. Urea input is N mass, not total urea-product mass.</td></tr>
+<tr><td>Monocalcium phosphate, hydroxyapatite, explicit PO₄</td><td>g P m⁻²</td><td>Elemental phosphorus. The destination differs between mineral P and explicit soluble P; do not substitute P₂O₅ mass or total product mass.</td></tr>
+<tr><td>Limestone and gypsum</td><td>g Ca m⁻² in the implemented conversion</td><td>Both are divided by 40 after area scaling, then added as CaCO₃ or CaSO₄ formula-unit amounts.</td></tr>
+<tr><td>PlantResC/N/P and ManureC/N/P</td><td>g C, N, or P m⁻²</td><td>Separate elemental amounts, not dry organic-material mass. Input C:N:P controls the donor budgets.</td></tr>
+<tr><td>AppDepth</td><td>m</td><td>Depth relative to the current topsoil upper boundary; mineral and organic placement are diagnosed separately.</td></tr>
+<tr><td>BandWidth</td><td>m</td><td>The reader stores this field in <code>ROWI</code>; fertilizer placement uses it as band-row spacing. The name “BandWidth” in the reader does not describe its subsequent role.</td></tr>
+<tr><td>IR0 / IR1 / IR2</td><td>Integer selectors</td><td>Fertilizer/inhibitor treatment; residue composition; manure composition/provenance.</td></tr>
+</tbody></table></div>
+<div class="note"><strong>One combined record per day in each selected table.</strong> Duplicate day indices are rejected with the table name and both record numbers. For example, NH₄-N and NO₃-N intended for the same application day belong in their corresponding columns of one record. Multiple fertilizer records cannot represent separate morning and evening applications.</div>
+<p class="source">The 21 <code>FERT</code> slots and composition identifiers are defined in <a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod</a>. <code>IR1</code> supports maize (1), wheat (2), soybean (3), old straw (4), straw (5), compost (6), green manure (7), and simple residue (10). <code>IR2</code> distinguishes ruminant manure (1), nonruminant manure (2), and grazing returns (3).</p></section>
+
+<section id="placement"><h2>3 · Choose the receiving layer before adding mass</h2>
+<p>Let <i>d</i> be <code>FDPTH(day,NY,NX)</code>, and let <i>z</i><sub>b</sub> be <code>CumDepz2LayBottom_vr(NU_col−1,NY,NX)</code>. The absolute placement coordinate is <i>d</i>* = <i>d</i> + <i>z</i><sub>b</sub>.</p>
+<div class="split"><div class="panel"><h3>Mineral fertilizer</h3><p>If <i>d</i>* ≤ 0 and the application has no banded material, the code selects surface layer 0. It partitions most broadcast material between litter and topsoil:</p><div class="eq">f<sub>litter</sub> = 1 − exp[−0.008 (C<sub>litter</sub>/A₀)]<br>f<sub>topsoil</sub> = 1 − f<sub>litter</sub>.</div><p><i>C</i><sub>litter</sub> is <code>SoilOrgM_vr(ielmc,0,NY,NX)</code> [g C per cell] and <i>A</i>₀ is the layer-zero area [m²]. The coefficient follows the implemented g C m⁻² basis. At zero litter C, this fraction is zero.</p><p>Otherwise, the code chooses the first eligible soil layer whose bottom reaches <i>d</i>*. The full application enters that layer. A depth below the profile produces an explicit error.</p></div>
+<div class="panel"><h3>Organic amendments</h3><p><code>ApplyManure</code> recomputes placement from the same prescribed depth. If <i>d</i>* ≤ 0, it selects layer 0; otherwise it searches active layers <code>NU_col:NL_col</code> and rejects a depth below the profile.</p><p>There is no exponential litter/topsoil split for organic material: the selected layer receives the amendment’s organic pools. Recomputing organic placement does not change the mineral destinations already recorded for inhibitor treatment.</p><p>The organic block runs when the combined plant-residue and manure C input is positive.</p></div></div>
+<div class="note amber"><strong>Two material-specific exceptions:</strong> surface NH₃ fertilizer bypasses litter and enters topsoil. Limestone and gypsum are added to the current topsoil precipitate pools, even when a different mineral application layer was diagnosed.</div>
+<p class="source">Source: <a href="../f90src/Disturbances/FertilizerMod.F90">ApplyMineralFertilizer and ApplyManure</a>. Layer 0 represents surface litter; <code>NU_col</code> identifies current topsoil.</p></section>
+
+<section id="mineral"><h2>4 · Elemental rates become different kinds of pools</h2>
+<p>For an application rate <i>r</i><sub>E</sub> [g element m⁻²] and receiving-layer area <i>A</i> [m²], the cell input is <i>m</i><sub>E</sub> = <i>r</i><sub>E</sub><i>A</i> [g element]. Use the actual receiving-layer area in the source; equal-area layers simplify the examples below.</p>
+<div class="scroll"><table><thead><tr><th>Material</th><th>Conversion after area scaling</th><th>Receiving pools</th></tr></thead><tbody>
+<tr><td>NH₄-N, NH₃-N, urea-N, NO₃-N</td><td>n<sub>N</sub> = m<sub>N</sub>/14</td><td><code>FertN_mole_soil_vr</code> and <code>FertN_mole_Band_vr</code>. For urea, this is an N-equivalent amount, not a count of urea molecules.</td></tr>
+<tr><td>Explicit PO₄-P</td><td>n<sub>P</sub> = m<sub>P</sub>/31</td><td>Added to <code>trcs_solml_vr(ids_H2PO4...)</code> after multiplying by 31 again. These nutrient pools store g P, not mol P.</td></tr>
+<tr><td>Monocalcium phosphate</td><td>n<sub>mineral</sub> = m<sub>P</sub>/(2 × 31)</td><td><code>trcp_saltpml_vr(idsp_CaH4P2O8...)</code>; two P atoms per formula unit.</td></tr>
+<tr><td>Hydroxyapatite</td><td>n<sub>mineral</sub> = m<sub>P</sub>/(3 × 31)</td><td><code>trcp_saltpml_vr(idsp_Apatite...)</code>; three P atoms per formula unit.</td></tr>
+<tr><td>Limestone / gypsum</td><td>n<sub>mineral</sub> = m<sub>Ca</sub>/40</td><td>Topsoil <code>idsp_CaCO3</code> / <code>idsp_CaSO4</code> precipitate pools.</td></tr>
+</tbody></table></div>
+<p>For instance, 3.1 g P m⁻² over 10 m² supplies 31 g P: 1 mol of elemental P, 0.5 mol of monocalcium-phosphate formula units, or ⅓ mol of apatite formula units. These choices preserve the same P input but do not imply the same solubility or availability.</p>
+<p>The N fertilizer reservoirs release material later. For broadcast NH₄ in a soil layer, the source contains terms of the form:</p>
+<div class="eq">R<sub>NH₄→unbanded</sub> = k<sub>NH₄</sub> F<sub>NH₄</sub> f<sub>unbanded</sub> θ<sub>water</sub><br>R<sub>NH₄→band</sub> = k<sub>NH₄</sub> F<sub>NH₄</sub> f<sub>band</sub> θ<sub>water</sub>.</div>
+<p>These are the terms as assembled in the geochemical update; its solver controls time integration and coupling to solution pools. NH₃ release and urea hydrolysis have their own equations. Application alone therefore does not place all N immediately into the dissolved NH₄/NO₃ pools.</p>
+<p class="source">Sources: <a href="../f90src/Disturbances/FertilizerMod.F90">application conversions</a>, <a href="../f90src/Geochem/Layers_chem/SoluteMod.F90">fertilizer release and solution updates</a>.</p></section>
+
+<section id="explorer"><h2>5 · Explore a surface broadcast application</h2>
+<p>This calculator illustrates the implemented litter fraction for a surface application without new banded material. It assumes equal surface and topsoil cell areas and reports total allocation across any pre-existing band/non-band zones. It does not simulate dissolution, reactions, or uptake.</p>
+<div class="panel"><div class="controls">
+<label>Cell area [m²]<input id="area" type="number" min="0.001" value="10" step="1"></label>
+<label>N application [g N m⁻²]<input id="rate-n" type="number" min="0" value="2" step="0.1"></label>
+<label>P application [g P m⁻²]<input id="rate-p" type="number" min="0" value="0.3" step="0.1"></label>
+<label>Litter organic C [g C m⁻²]<input id="litter-c" type="number" min="0" value="100" step="10"></label>
+<label>N form<select id="n-form"><option value="NH4">NH₄-N</option><option value="NH3">NH₃-N</option><option value="urea">Urea-N</option><option value="NO3">NO₃-N</option></select></label>
+</div><p id="input-error" role="alert"></p>
+<p class="source">On narrow screens, scroll the chart horizontally to see the full allocation bars.</p>
+<div class="chart-scroll"><svg viewBox="0 0 900 220" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">Allocation between surface litter and topsoil</title><desc id="chart-desc">Litter and topsoil receive complementary fractions, except that ammonia fertilizer bypasses litter.</desc><g id="chart-content"></g></svg></div>
+<div class="legend"><span><span class="dot" style="background:#bd7834"></span>Surface litter</span><span><span class="dot" style="background:#175b49"></span>Topsoil</span></div>
+<div class="metrics" aria-live="polite"><div class="metric"><output id="n-litter">—</output><span>N into litter fertilizer reservoir</span></div><div class="metric"><output id="n-soil">—</output><span>N into topsoil fertilizer reservoir</span></div><div class="metric"><output id="p-litter">—</output><span>Explicit PO₄-P into litter aqueous pool</span></div><div class="metric"><output id="p-soil">—</output><span>Explicit PO₄-P into topsoil aqueous pools</span></div></div>
+<p id="conversion" class="source"></p><p class="source">Conversion: 1 g m⁻² = 10 kg ha⁻¹. A fixed elemental input is conserved across the two destinations; the figure does not predict plant-available nutrient mass.</p>
+<noscript><p>At the defaults, f<sub>litter</sub> ≈ 0.5507: 20 g N per cell is split into 11.013 g in litter and 8.987 g in topsoil. The 3 g P input is split into 1.652 g and 1.348 g. NH₃-N instead sends all 20 g N to topsoil.</p></noscript>
+</div></section>
+
+<section id="organic"><h2>6 · Plant residues and animal manure carry joint C/N/P budgets</h2>
+<p><code>ApplyManure</code> handles two separate input slots: plant residues go to the fine-litter organic complex (<code>k_fine_comp</code>), and animal manure goes to the manure complex (<code>k_manure</code>). The residue/manure type selects the composition weights for protein, soluble carbohydrate, cellulose, and lignin, with associated N/P weighting parameters.</p>
+<div class="flow" role="img" aria-label="An amendment's carbon, nitrogen, and phosphorus budgets are first allocated to represented heterotrophic and autotrophic microbial biomass, then dissolved organic matter, and finally remaining solid residue components."><div class="box"><strong>Cell donor budgets</strong><small>C₀ = rC × A<br>N₀ = rN × A<br>P₀ = rP × A</small></div><div class="arrow" aria-hidden="true">→</div><div class="box accent"><strong>Microbial biomass + DOM</strong><small>Represented heterotrophic guilds<br>Represented autotrophic shares<br>DOC, DON, DOP</small></div><div class="arrow" aria-hidden="true">→</div><div class="box"><strong>Remaining solid residue</strong><small>Protein / carbohydrate<br>Cellulose / lignin<br>Element-specific weights</small></div></div>
+<p>Microbial allocations are limited by the remaining C, N, and P donor budgets. The shared reservation factor includes represented autotroph shares so those additions cannot each consume an unrestricted copy of the same donor mass. Allocations within a functional group are divided among its represented guilds.</p>
+<p>After biomass allocation, the DOC/DON/DOP increments are separately limited to the remaining donor amounts:</p>
+<div class="eq">D<sub>E</sub> = max[0, min(0.1 B<sub>E</sub>, E₀ − B<sub>E</sub>)] &nbsp; for E ∈ {C,N,P}<br>E<sub>remaining</sub> = max(0, E₀ − B<sub>E</sub> − D<sub>E</sub>).</div>
+<p><i>B</i><sub>E</sub> denotes cumulative microbial allocation of element E. Remaining carbon is distributed by <code>CFOSC</code>; remaining N and P use separately normalized component weights involving <code>CNOFC</code> and <code>CPOFC</code>. This lets nutrient-rich residue retain N/P allocations even when little carbon remains after the earlier steps, provided the corresponding weights are nonzero.</p>
+<div class="note"><strong>Organic N/P are not immediately mineral fertilizer.</strong> These inputs enter microbial biomass, DOM, and solid organic pools. Subsequent decomposition, mineralization, immobilization, and transport govern when they become available to plants.</div>
+<p>The organic branch requires positive combined residue/manure C. Specify organic C, N, and P together; do not use an organic slot as a substitute for a carbon-free mineral nutrient input.</p>
+<p class="source">Source: <a href="../f90src/Disturbances/FertilizerMod.F90">ApplyManure</a>; composition identifiers in <a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod</a>.</p></section>
+
+<section id="bands"><h2>7 · Banding creates spatial domains within a layer</h2>
+<p>Band and non-band pools represent different chemical environments. They are not two interchangeable names for the same pool. New banded applications initialize or update band geometry for NH₄-related, nitrate-related, and phosphate-related domains.</p>
+<div class="eq">f<sub>band,L</sub> = min[0.999, (w<sub>band,L</sub>/s<sub>row</sub>) (h<sub>band,L</sub>/Δz<sub>L</sub>)]<br>f<sub>nonband,L</sub> = 1 − f<sub>band,L</sub>.</div>
+<p>The application code diagnoses widths and thicknesses using the prescribed placement and row spacing. When a band geometry changes, associated existing dissolved, exchangeable, and precipitated pools are redistributed using the new domain fractions. That redistribution is separate from adding the new fertilizer input.</p>
+<p>Broadcast explicit phosphate and broadcast phosphate minerals are partitioned across the current phosphate-domain fractions. The explicitly banded addition enters the band pool. For soluble P in one receiving layer, after applying its placement fraction <i>f</i>:</p>
+<div class="eq">ΔP<sub>nonband</sub> = f m<sub>P,broadcast</sub> f<sub>nonband</sub><br>ΔP<sub>band</sub> = f (m<sub>P,broadcast</sub> f<sub>band</sub> + m<sub>P,banded</sub>)<br>ΔP<sub>nonband</sub> + ΔP<sub>band</sub> = f (m<sub>P,broadcast</sub> + m<sub>P,banded</sub>).</div>
+<p>Do not read a banded pool as additional fertilizer on top of the total prescribed amount. Domain fractions partition broadcast material, while explicitly banded material is a separately prescribed portion.</p>
+<h3>Inhibitors follow the actual mineral destination</h3>
+<p><code>IR0</code> controls the urea-hydrolysis treatment and, for values 3 or 4, nitrification inhibition. The application routine records receiving-layer masks before organic placement can change <code>LFDPTH</code>. Inhibitor activity is initialized as an intensive activity of 1 in selected layers, rather than as a mass split by the litter fraction. The model then evolves those activities in its reaction calculations.</p>
+<p class="source">Source: <a href="../f90src/Disturbances/FertilizerMod.F90">band geometry, pool updates, and ApplyUreaNitrifierInhibitor</a>.</p></section>
+
+<section id="other"><h2>8 · Nutrients also enter with water and atmospheric deposition</h2>
+<div class="scroll"><table><thead><tr><th>Pathway</th><th>Timing / input basis</th><th>How it enters</th></tr></thead><tbody>
+<tr><td>Irrigation nutrients and salts</td><td>Hourly water with daily solution properties; g element m⁻³ inputs converted to molar concentrations.</td><td>Recipient water rate × concentration × ground-substep duration. Multiple pulses can share one daily solution; differing same-day chemistry is rejected.</td></tr>
+<tr><td>Rainwater nutrients and salts</td><td>Rain concentration and water delivery.</td><td>Rain and irrigation retain separate concentrations while following their water shares to snow, litter, and soil.</td></tr>
+<tr><td>Atmospheric gases</td><td>Gas concentrations and exchange pathways.</td><td>Gas transport includes exchange/deposition processes; gas exchange can be a source or a loss, not an unconditional positive fertilizer input.</td></tr>
+<tr><td>Organic bioaerosol deposition</td><td>Daily organic C forcing, multiplied by cell area and deposition scalars.</td><td><code>ApplyBioAerosol</code> adds live microbes, DOM, dead microbial residue, and other dead organic material to the fine-litter pathway, with N/P derived from the component assumptions.</td></tr>
+</tbody></table></div>
+<p>The general waterborne input of species <i>s</i> to recipient <i>r</i> is Δn<sub>s,r</sub> = Q<sub>r</sub> C<sub>s</sub> Δt [mol]. Multiply by the appropriate elemental or molecular mass when the receiving pool is mass-based. Canopy interception and recipient partitioning can make the amount delivered to a soil layer smaller than the gross atmospheric or irrigation input.</p>
+<p>See <a href="irrigation_application.html">irrigation application</a> for its complete schedule, area conversion, chemistry, and active surface-routing limitations. These waterborne pathways do not use the once-daily fertilizer application clock.</p>
+<p class="source">Sources: <a href="../f90src/Transport/Nonsalt/InitNoSaltTransportMod.F90">aqueous nutrient deposition</a>, <a href="../f90src/Transport/Salt/TranspSaltMod.F90">salt deposition</a>, <a href="../f90src/Transport/Nonsalt/TranspNoSaltSlowMod.F90">gas transport</a>, <a href="../f90src/Modelforc/DepositionMod.F90">bioaerosol deposition</a>.</p></section>
+
+<section id="ledger"><h2>9 · Input accounting and provenance</h2>
+<div class="scroll"><table><thead><tr><th>Quantity</th><th>Application accounting</th></tr></thead><tbody>
+<tr><td>Mineral N</td><td><code>TZIN</code> and <code>FertN_Flx_CumYr_col</code> receive the elemental N mass represented by all mineral N additions.</td></tr>
+<tr><td>Mineral P</td><td><code>TPIN</code> and <code>FerP_Flx_CumYr_col</code> recover explicit P plus 2 × P atomic mass per monocalcium-phosphate unit and 3 × P atomic mass per apatite unit.</td></tr>
+<tr><td>Organic C/N/P</td><td><code>tAmendOrgC_lnd</code>, <code>TORGN</code>, and <code>TORGP</code> record the corresponding organic inputs. Annual amendment-C and fertilizer-N/P accumulators also receive their respective organic additions.</td></tr>
+<tr><td>External versus internally returned C</td><td>Plant residue contributes its full added C to application-day NBP. Manure uses <code>ExternalManureC_col</code>, captured when inputs are read, so grazing returns merged into manure do not become a new external C input.</td></tr>
+</tbody></table></div>
+<p>These ledgers overlap in purpose: a total-input ledger and an annual summary can record the same input. Do not add them together as independent nutrient sources. Similarly, transfers from fertilizer reservoirs to solution or from organic matter to mineral nutrients are internal redistributions after the external input has already been booked.</p>
+<p>A useful elemental check is ΔE<sub>fertilizer reservoirs</sub> + ΔE<sub>solution</sub> + ΔE<sub>minerals</sub> + ΔE<sub>organic pools</sub> = E<sub>external input</sub> for an isolated application, with internally returned material and other simultaneous fluxes accounted for separately. Pool-specific units must be converted to elemental mass before summing.</p></section>
+
+<section id="sources"><h2>10 · Source map</h2><div class="scroll"><table><thead><tr><th>Source</th><th>Role</th></tr></thead><tbody>
+<tr><td><a href="../f90src/IOutils/ReadManagementMod.F90">ReadManagementMod.F90</a></td><td>Selected tables, elemental inputs, daily settings, duplicate-date check, external-manure provenance.</td></tr>
+<tr><td><a href="../f90src/Modelconfig/ElmIDMod.F90">ElmIDMod.F90</a></td><td>Fertilizer slots and residue/manure composition identifiers.</td></tr>
+<tr><td><a href="../f90src/Ecosim_datatype/FertilizerDataType.F90">FertilizerDataType.F90</a></td><td>Input schedules and fertilizer reservoir arrays.</td></tr>
+<tr><td><a href="../f90src/Disturbances/FertilizerMod.F90">FertilizerMod.F90</a></td><td>Noon application, placement, N/P/Ca conversions, band domains, organics, and inhibitors.</td></tr>
+<tr><td><a href="../f90src/Geochem/Layers_chem/SoluteMod.F90">SoluteMod.F90</a></td><td>Subsequent fertilizer release, urea hydrolysis, and solution preparation.</td></tr>
+<tr><td><a href="../f90src/Modelforc/Hour1Mod.F90">Hour1Mod.F90</a></td><td>Hourly application caller.</td></tr>
+<tr><td><a href="../f90src/Modelforc/DepositionMod.F90">DepositionMod.F90</a></td><td>Organic bioaerosol pathway.</td></tr>
+</tbody></table></div><p>This walkthrough describes the implemented application pathways and their accounting. It does not prescribe agronomic rates or establish fertilizer recovery efficiency. Subsequent nutrient uptake, sorption, precipitation, biological transformations, gaseous losses, and hydrological export require the corresponding process calculations.</p></section>
+<footer>EcoSIM knowledge document · Self-contained HTML with a local interactive calculator. Related: <a href="irrigation_application.html">irrigation</a> and <a href="ground_surface_energy_and_water.html">surface water and energy</a>.</footer>
+</main><script>
+'use strict';
+function calculateAllocation(area,n,p,litterC,form){
+ if(![area,n,p,litterC].every(Number.isFinite)||area<=0||n<0||p<0||litterC<0||!['NH4','NH3','urea','NO3'].includes(form))throw Error('Use a positive area and nonnegative rates and litter carbon.');
+ const f=-Math.expm1(-.008*litterC),fn=form==='NH3'?0:f;
+ return {f,fn,nTotal:n*area,pTotal:p*area,nLitter:n*area*fn,nSoil:n*area*(1-fn),pLitter:p*area*f,pSoil:p*area*(1-f)};
+}
+function update(){
+ try{
+  const value=id=>document.getElementById(id).valueAsNumber;
+  const form=document.getElementById('n-form').value;
+  const r=calculateAllocation(value('area'),value('rate-n'),value('rate-p'),value('litter-c'),form);
+  document.getElementById('input-error').textContent='';
+  for(const [id,key,unit] of [['n-litter','nLitter','g N'],['n-soil','nSoil','g N'],['p-litter','pLitter','g P'],['p-soil','pSoil','g P']])document.getElementById(id).textContent=r[key].toFixed(3)+' '+unit;
+  let svg='<text x="100" y="25" font-size="14" fill="#60746b">Allocation fraction of each elemental input</text>';
+  for(const [label,f,y] of [['N fertilizer',r.fn,55],['Explicit PO₄-P',r.f,135]]){
+   svg+=`<text x="8" y="${y+25}" font-size="14" fill="#20352f">${label}</text><rect x="145" y="${y}" width="${700*f}" height="35" fill="#bd7834"/><rect x="${145+700*f}" y="${y}" width="${700*(1-f)}" height="35" fill="#175b49"/><text x="145" y="${y+55}" font-size="13" fill="#60746b">Litter ${(100*f).toFixed(1)}% · Topsoil ${(100*(1-f)).toFixed(1)}%</text>`;
+  }
+  document.getElementById('chart-content').innerHTML=svg;
+  document.getElementById('chart-desc').textContent=`Nitrogen: ${(100*r.fn).toFixed(1)} percent to litter. Explicit phosphorus: ${(100*r.f).toFixed(1)} percent to litter. The remaining input goes to topsoil.`;
+  document.getElementById('conversion').textContent=`Total cell input: ${r.nTotal.toFixed(3)} g N = ${(r.nTotal/14).toFixed(4)} mol N equivalents; ${r.pTotal.toFixed(3)} g P = ${(r.pTotal/31).toFixed(4)} mol P. Selecting NH₃-N bypasses litter regardless of its organic carbon.`;
+ }catch(error){
+  document.getElementById('input-error').textContent=error.message;
+  document.getElementById('chart-content').innerHTML='';
+  ['n-litter','n-soil','p-litter','p-soil'].forEach(id=>document.getElementById(id).textContent='—');
+  document.getElementById('conversion').textContent='';
+  document.getElementById('chart-desc').textContent='Invalid input; correct the input message to display allocations.';
+ }
+}
+document.querySelectorAll('input,select').forEach(input=>input.addEventListener('input',update));
+update();
+</script></body></html>

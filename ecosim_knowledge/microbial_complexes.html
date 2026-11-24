@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Microbial complexes in EcoSIM litter and soil layers</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .note, pre { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; }
+    pre { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #ccd8cf; }
+    .table-wrap { overflow-x: auto; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Microbial complexes in litter and soil layers</h1>
+  <p class="meta">Code-based knowledge note · 18 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>EcoSIM defines five organic matter–microbe complexes. The surface litter layer uses complexes 1–3; non-litter (soil) layers use all five.</strong> These are substrate-associated complexes, with microbial biomass and related organic matter pools, rather than individual microbial functional groups.</p>
+
+  <h2>Complex indices and layer coverage</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Index K</th><th>Code name</th><th>Meaning</th><th>Surface litter layer</th><th>Soil layers</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><code>woodylitr</code></td><td>Woody litter (<code>k_woody_comp</code>)</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>2</td><td><code>folialitr</code></td><td>Fine/nonwoody plant litter (<code>k_fine_comp</code>)</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>3</td><td><code>manure</code></td><td>Manure (<code>k_manure</code>)</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>4</td><td><code>pom</code></td><td>Particulate organic matter (<code>k_POM</code>)</td><td>No</td><td>Yes</td></tr>
+        <tr><td>5</td><td><code>humus</code></td><td>Humus (<code>k_humus</code>)</td><td>No</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Source: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>, lines 139–167, defines the indices, names, and litter flags. <a href="../f90src/Modelconfig/EcoSIMConfig.F90">EcoSIMConfig.F90</a>, line 22, sets <code>jcplxc = 5</code>. Layer coverage indicates which complexes are included in the calculation, not that every complex necessarily has nonzero mass.</p>
+
+  <h2>How the layer selects its complexes</h2>
+  <p>In <code>StageBGCEnvironCondition</code>, the <code>LitrM</code> flag determines the number of organic matter–microbe complexes calculated:</p>
+  <pre><code>IF (litrm) THEN
+  KL = micpar%NumOfLitrCmplxs  ! 3: surface litter layer
+ELSE
+  KL = micpar%jcplx           ! 5: non-surface soil layer
+ENDIF</code></pre>
+  <p>Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>, lines 380–405. The microbial biomass loop also explicitly excludes <code>k_POM</code> and <code>k_humus</code> when <code>LitrM</code> is true, around lines 488–490.</p>
+  <p class="note"><strong>A non-litter layer is different from a non-litter complex.</strong> Soil layers contain litter complexes 1–3 as well as POM and humus. The term “non-litter complexes” refers specifically to indices 4–5. The <code>is_litter</code> flags are true for indices 1–3; <code>is_finelitter</code> is true only for index 2.</p>
+
+  <h2>Components and autotrophs are separate distinctions</h2>
+  <p>Protein, carbohydrate, cellulose, and lignin are the four substrate components named by <code>kiname</code>, not four additional complexes. Their indices are <code>iprotein = 1</code>, <code>icarbhyro = 2</code>, <code>icellulos = 3</code>, and <code>ilignin = 4</code>. Source: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>, lines 150–162.</p>
+  <p class="note">These chemical component names apply to litter. POM reuses component 1 for a single kinetic fraction; humus reuses components 1 and 2 for less- and more-resistant fractions. See <a href="solid_organic_matter_kinetics.html">solid organic matter kinetic components</a> for their meanings, partitioning, and decomposition coefficients.</p>
+  <p>The code also refers to an “autotrophic complex.” Autotrophic microbial biomass is handled separately in <code>mBiomeAutor</code>, without the substrate-complex index <code>K</code> used by <code>mBiomeHeter</code>. It is not another entry in the five-complex table. Source: <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>, the heterotrophic biomass loop around lines 488–525 and autotrophic loop starting at line 528.</p>
+  <p class="meta">Source line numbers may shift as the code changes. This note documents the inspected implementation; no model code or parameters were changed.</p>
+</body>
+</html>

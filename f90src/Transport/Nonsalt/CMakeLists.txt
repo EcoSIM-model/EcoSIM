@@ -20,6 +20,7 @@ target_include_directories(Nonsalt  PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/APIs/
   ${CMAKE_BINARY_DIR}/f90src/Plant_bgc/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Box_Micmodel
   ${CMAKE_BINARY_DIR}/f90src/Microbial_bgc/Layers_Micmodel)
 

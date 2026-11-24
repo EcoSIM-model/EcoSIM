@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bioaerosol partitioning in EcoSIM</title>
+<style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .note, pre { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; }
+    pre { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #ccd8cf; }
+    .table-wrap { overflow-x: auto; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+<h1>Partitioning deposited bioaerosols in EcoSIM</h1>
+<p class="meta">Modeling knowledge note · 18 September 2026 · Proposed application to Biosphere 2 LEO</p>
+<p><strong>Partition deposited material by its biological and chemical identity first, then separate microbial material into viable and dead fractions.</strong> A viable/dead split alone does not describe plant debris, mineral dust, or dissolved inputs.</p>
+<p class="note"><strong>Status:</strong> The six input categories and their routing are present in the current reader and deposition source. This note distinguishes that implementation from proposed LEO fractions and chemistry; it does not establish a measured LEO partition or validated simulation behavior. The numerical fractions and stoichiometry below are proposed sensitivity-study assumptions, not measured LEO values. Absolute deposition magnitude remains an independent input. Associated mineral dust and dissolved inputs are included for deposition bookkeeping; they are not all bioaerosols in the strict biological-particle sense.</p>
+
+<h2>Partitioning pathway</h2>
+<pre aria-label="Partitioning pathway"><code>Total deposited material
+├─ Microbial material
+│  ├─ Viable cells/spores → microbial functional groups
+│  │                        (active or dormant; establishment required)
+│  └─ Dead cells/fragments → microbial residue pools
+├─ Non-microbial biological material
+│  ├─ Viable propagules → appropriate establishment pathway
+│  └─ Dead tissue/pollen/fragments → litter pools
+├─ Dissolved organic material → DOC / DON / DOP
+└─ Associated inorganic material
+   ├─ Available nutrients → inorganic nutrient pools
+   └─ Mineral particles → mineral/soil inputs</code></pre>
+<p>Use mutually exclusive categories at the receiving boundary. For example, material already dissolved in deposition water should not also be counted as particulate dead biomass.</p>
+
+<h2>Quantitative baseline for LEO</h2>
+<p><strong>Normalize to 100 units of deposited organic carbon</strong>, including the organic material assigned to DOM at the receiving boundary. These percentages are carbon-mass fractions, not particle counts, viability counts, or percentages of total aerosol dry mass. Inorganic nutrients and mineral dust have separate fluxes and are outside this denominator.</p>
+<div class="table-wrap"><table id="baseline">
+<thead><tr><th>Material</th><th>Share of organic C</th><th>Allocation</th></tr></thead>
+<tbody>
+<tr data-carbon="10"><td>Viable microbial cells/spores</td><td>10%</td><td>Living microbial functional groups</td></tr>
+<tr data-carbon="60"><td>Dead microbial cells/fragments</td><td>60%</td><td>Microbial residues in fine-litter complex 2</td></tr>
+<tr data-carbon="8"><td>Dead non-microbial biological material</td><td>8%</td><td>Fine plant, moss, and lichen detritus; source-appropriate SolidOM chemistry</td></tr>
+<tr data-carbon="1"><td>Viable moss spores/fragments</td><td>1%</td><td>Moss establishment pathway</td></tr>
+<tr data-carbon="1"><td>Viable lichen propagules</td><td>1%</td><td>Lichen establishment pathway</td></tr>
+<tr data-carbon="20"><td>Dissolved organic material</td><td>20%</td><td>DOC, DON, DOP</td></tr>
+</tbody><tfoot><tr><th>Total organic C</th><th>100%</th><td>Each carbon unit counted once</td></tr></tfoot>
+</table></div>
+<p>The identity-first hierarchy is therefore <strong>70% microbial material, 10% other biological material, and 20% DOM</strong>. Within microbial C, 14.29% is viable and 85.71% dead. Within other biological C, 80% is dead detritus, 10% viable moss, and 10% viable lichen. “Non-microbial” is an operational EcoSIM label: intact lichens contain microbial partners but enter the nonvascular plant pathway. Do not count those partners again as free microbial deposition.</p>
+<p>This baseline deliberately emphasizes dead organic substrate while retaining a smaller living inoculum. The 1% moss and 1% lichen shares are exploratory establishment inputs; their equality is not evidence of equal atmospheric abundance. Deposition does not guarantee establishment. Set both to zero in a no-propagule control and transfer their combined 2% C to dead biological detritus. Woody debris is zero in this baseline.</p>
+
+<h2>Recommended stoichiometry and residue partition</h2>
+<p>These are proposed sensitivity-study values. See the implementation comparison below for the coefficients currently used by the deposition routine.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Fraction</th><th>C:N by mass</th><th>C:P by mass</th><th>Basis</th></tr></thead>
+<tbody>
+<tr><td>DOM</td><td>20</td><td>300</td><td>Provisional C:N:P = 300:15:1 by elemental mass (about 775:33:1 molar)</td></tr>
+<tr><td>Fresh dead microbial biomass</td><td>360/49 ≈ 7.35</td><td>720/31 ≈ 23.23</td><td>60:7:1 molar, converted using atomic masses 12, 14, and 31</td></tr>
+<tr><td>Viable microbes</td><td colspan="2">Use receiving functional-group composition</td><td>60:7:1 molar is a bulk comparison benchmark; do not force it onto incompatible model pools</td></tr>
+<tr><td>Dead plant/moss/lichen aerosol fragments</td><td>50</td><td>1,000</td><td>Provisional C:N:P = 1,000:20:1 by elemental mass for the particulate fraction after separating DOM and microbial material; not a measured LEO ratio</td></tr>
+<tr><td>Viable moss/lichen propagules</td><td colspan="2">Use source/PFT-specific composition</td><td>Retain establishment-pool chemistry; do not apply dead-fragment chemistry to viable inputs</td></tr>
+</tbody></table></div>
+<p>The microbial benchmark comes from <a href="https://doi.org/10.1007/s10533-007-9132-0">Cleveland and Liptzin (2007)</a>, a synthesis of soil microbial biomass, not airborne necromass. Its use assumes recently dead cells with little selective nutrient loss. The DOM choice is a modeling prior consistent with the broad atmospheric DOM variability reported by <a href="https://bg.copernicus.org/articles/17/3669/2020/index.html">Galletti et al. (2020)</a>; that marine-influenced deposition study does not establish a LEO-specific ratio or any of the carbon fractions above.</p>
+<p>As an initial residue allocation, put <strong>70% of dead microbial C/N/P into component 1 (kinetic) and 30% into component 2 (recalcitrant)</strong>. This gives 42% and 18% of total deposited organic C, respectively. Using the same split for each element preserves bulk stoichiometry; component-specific nutrient enrichment would require an additional constrained allocation. The 70:30 split is a scenario assumption.</p>
+<pre><code>For total organic-C deposition F_C:
+  DOM:          C = 0.20 F_C; N = 0.010 F_C; P = 0.0006667 F_C
+  Dead microbes:C = 0.60 F_C; N = 0.0816667 F_C; P = 0.0258333 F_C
+  Dead other:   C = 0.08 F_C; N = 0.0016 F_C; P = 0.00008 F_C
+  Residue component 1 receives 0.70 of each dead-microbial element
+  Residue component 2 receives 0.30 of each dead-microbial element</code></pre>
+<p>These N and P values cover DOM, dead microbes, and dead non-microbial fragments under the recommended chemistry. Add the element fluxes associated with the remaining biological fractions using their own chemistry to obtain the full budget. DOM here is already separated from particles at the receiving boundary; if generated by subsequent cell lysis, transfer it out of the parent pool rather than adding it again.</p>
+
+<h2>Carbon-conserving sensitivity scenarios</h2>
+<p>Each column below sums to 100% of organic C. These are illustrative alternatives, not confidence intervals or estimated LEO probabilities. Hold total organic-C deposition fixed when testing composition.</p>
+<div class="table-wrap"><table id="scenarios">
+<thead><tr><th>Fraction</th><th>Low viable input</th><th>Baseline</th><th>High viable input</th></tr></thead>
+<tbody>
+<tr data-scenario="1,10,20"><td>Viable microbes</td><td>1%</td><td>10%</td><td>20%</td></tr>
+<tr data-scenario="69,60,50"><td>Dead microbes</td><td>69%</td><td>60%</td><td>50%</td></tr>
+<tr data-scenario="9.8,8,6"><td>Dead other biological material</td><td>9.8%</td><td>8%</td><td>6%</td></tr>
+<tr data-scenario="0.1,1,2"><td>Viable moss</td><td>0.1%</td><td>1%</td><td>2%</td></tr>
+<tr data-scenario="0.1,1,2"><td>Viable lichen</td><td>0.1%</td><td>1%</td><td>2%</td></tr>
+<tr data-scenario="20,20,20"><td>DOM</td><td>20%</td><td>20%</td><td>20%</td></tr>
+</tbody></table></div>
+<p>Separately test DOM at 10%, 20%, and 40%, rescaling all particulate organic fractions by (1 − f_DOM)/0.80 relative to baseline. Test kinetic:recalcitrant residue splits of 50:50, 70:30, and 90:10. For DOM, independently vary mass C:N across 10, 20, 40 and mass C:P across 100, 300, 1000. For nutrient-depleted dead-cell residues, test mass C:N of 10–15 and C:P of 50–100 as additional assumptions. For dead plant/moss/lichen aerosol fragments, independently test mass C:N of 25–100 and C:P of 500–2,000 around the recommended 50 and 1,000. These are assumed scenario bounds. Changing stoichiometry at fixed C changes external N/P inputs and must be reflected in diagnostics.</p>
+
+<h2>Mapping to the current input fields</h2>
+<p><a href="../f90src/IOutils/readimod.F90">readimod.F90</a>, in <code>readsiteNC</code>, now reads six independent fractions and assigns each directly to its corresponding column variable. <strong>All six are fractions of total deposited organic C.</strong> Moss and lichen fractions are not multiplied by a shared live fraction.</p>
+<div class="table-wrap"><table id="input-mapping">
+<thead><tr><th>Grid input field</th><th>Baseline</th><th>Column variable</th></tr></thead><tbody>
+<tr><td><code>fAeroDOM</code></td><td>0.20</td><td><code>f_aerosol_DOM_col</code></td></tr>
+<tr><td><code>fAeroDeadMB</code></td><td>0.60</td><td><code>f_aerosol_DeadMB_col</code></td></tr>
+<tr><td><code>fAeroLiveMB</code></td><td>0.10</td><td><code>f_aerosol_LiveMB_col</code></td></tr>
+<tr><td><code>fAeroMoss</code></td><td>0.01</td><td><code>f_aerosol_MossB_col</code></td></tr>
+<tr><td><code>fAeroLich</code></td><td>0.01</td><td><code>f_aerosol_LichB_col</code></td></tr>
+<tr><td><code>fAeroDeadNMB</code></td><td>0.08</td><td><code>f_aerosol_DeadNMB_col</code></td></tr>
+</tbody></table></div>
+<pre><code>fAeroDOM + fAeroDeadMB + fAeroLiveMB
++ fAeroMoss + fAeroLich + fAeroDeadNMB = 1.00</code></pre>
+<p><code>read_aerosol_vars</code> sets a missing field to zero. The inspected reader does not normalize these fractions or check their sum or bounds. Supply each value in [0, 1] and verify the six sum to one for complete organic-C allocation. The old <code>fAeroDead</code>, <code>fAeroLive</code>, and <code>fAeroMicb</code> fields are no longer read by this code. In particular, replace the former conditional moss/lichen values with direct fractions 0.01 and 0.01. The table is a proposed input set; this documentation edit does not update NetCDF inputs.</p>
+
+<h2>Current deposition chemistry versus recommendations</h2>
+<p><a href="../f90src/Modelforc/DepositionMod.F90">ApplyBioAerosol in DepositionMod.F90</a> now routes dead non-microbial C into <code>SolidOM_vr</code> at surface layer 0 in the fine-litter complex. The earlier missing-category gap is resolved in source. Reading the fractions does not select stoichiometry: the routine currently uses the following coefficients.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Material</th><th>Current source behavior</th><th>Recommended scenario above</th></tr></thead><tbody>
+<tr><td>DOM</td><td>N/C = 0.05; P/C = 0.005. Mass C:N = 20, C:P = 200.</td><td>N/C = 0.05; P/C = 1/300. Mass C:P = 300.</td></tr>
+<tr><td>Dead microbes</td><td>Uses <code>micpar%FL(iLbiom_kinetic)</code> and <code>micpar%FL(iLbiom_struct)</code>. Kinetic N/C = 0.15, P/C = 0.015; recalcitrant N/C = 0.09, P/C = 0.009.</td><td>70:30 residue split, with the same 60:7:1 molar chemistry in both components.</td></tr>
+<tr><td>Dead plant/moss/lichen fragments</td><td>N/C = 0.02; P/C = 0.002. Mass C:N = 50, C:P = 500. Carbon allocation across four SolidOM components is 0.075, 0.125, 0.550, 0.250; N and P use the same component fractions.</td><td>N/C = 0.02; P/C = 0.001. Mass C:P = 1,000.</td></tr>
+<tr><td>Live microbes</td><td>97.5% of live microbial C goes to <code>MicrobeByLitterFall</code>; 2.5% goes to <code>InoculateCyanoBacter</code>.</td><td>Functional-group chemistry; the 10% total-C allocation alone does not specify community composition.</td></tr>
+<tr><td>Live moss/lichen</td><td>Assigns the corresponding fraction of <code>DryDepoOMC(I)</code> to <code>SeedCDeposition_pft</code> for each matching PFT.</td><td>1% of total organic C for each category, with establishment handled downstream.</td></tr>
+</tbody></table></div>
+<p>For dead microbes, write a = FL(kinetic) and b = FL(struct). Current bulk N/C = 0.15a + 0.09b and P/C = 0.015a + 0.009b, provided a + b = 1. Do not substitute the proposed 70:30 split when interpreting an actual run without checking its parameter values. The initializer in MicBGCPars.F90 sets FL to 0.55 and 0.45, which gives bulk N/C = 0.123 and P/C = 0.0123 (mass C:N ≈ 8.13 and C:P ≈ 81.30), if retained at runtime. At a hypothetical 70:30 split, the current coefficients imply C:N ≈ 7.58 and C:P ≈ 75.76 by mass, distinct from the recommended fresh-cell benchmark.</p>
+<p class="note"><strong>Scope:</strong> Current routing and coefficients are described from source inspection, not a build or simulation test. If several PFTs match the same moss or lichen prefix, the routine assigns the full category flux to each; a category-level budget therefore needs a within-category allocation. N/P accounting and downstream establishment also require verification before claiming full elemental closure. No Fortran or input dataset is changed by this documentation update.</p>
+
+<h2>Proposed pool destinations</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Material</th><th>Proposed destination</th><th>Required assumption or qualification</th></tr></thead>
+<tbody>
+<tr><td>Viable bacteria, cyanobacteria, fungi, and other represented microbes</td><td>Corresponding living microbial functional groups</td><td>Specify functional-group composition and physiological state. Viability does not imply immediate activity; dormant spores may require rewetting and establishment. A generic dormant-input pathway has not been verified here.</td></tr>
+<tr><td>Dead microbial cells and fragments</td><td><code>OMBioResdu(element,M,k_fine_comp)</code>, with <code>k_fine_comp = 2</code>, as a proposed surface allocation</td><td>Partition between residue components 1 (kinetic) and 2 (recalcitrant). This is an uncertain allocation, not a measured LEO value.</td></tr>
+<tr><td>Fine dead plant tissue, dead pollen, or dead moss/lichen fragments</td><td><code>SolidOM(element,M,k_fine_comp)</code></td><td>Choose source-appropriate effective fractions of protein, nonstructural carbohydrate, cellulose, and lignin. Do not assume default foliage chemistry applies to every source; mixed lichen material may need further separation.</td></tr>
+<tr><td>Recognizable woody debris</td><td>Woody litter, <code>K = 1</code></td><td>Use only where material identity supports this assignment.</td></tr>
+<tr><td>Viable moss spores/fragments, lichen propagules, or other non-microbial propagules</td><td>Appropriate nonvascular or other organism establishment pathway</td><td>Do not classify them as microbial biomass. The deposition routine supplies SeedCDeposition_pft; establishment and its nutrient accounting occur downstream.</td></tr>
+<tr><td>Dissolved organic inputs</td><td>DOC, DON, and DOP in the receiving compartment</td><td>Represent the measured dissolved fraction and its delivery in water separately from particles.</td></tr>
+<tr><td>Available inorganic nutrients</td><td>Corresponding inorganic chemical pools</td><td>Use chemical speciation and solubility, rather than assigning all nutrient-bearing dust directly to dissolved pools.</td></tr>
+<tr><td>Mineral dust</td><td>Mineral/soil inputs</td><td>Keep mineral mass separate from organic carbon. An atmospheric mineral-input mechanism has not been verified here.</td></tr>
+</tbody></table></div>
+
+<h2>Why fine litter for fresh dead microbial deposition?</h2>
+<p>Complex 2 provides an existing surface-active receiving complex. Within it, the microbial-residue pool offers kinetics designed for microbial remains. Assigning dead microbes there avoids forcing all microbial material into plant-litter chemistry.</p>
+<p><code>OMBioResdu</code> has two residue components, named <code>kinetic</code> and <code>recalcitrant</code>; these are distinct from the four <code>SolidOM</code> components. EcoSIM hydrolyzes residues with <code>SPORC(M)</code> and transfers their C/N/P to dissolved organic pools. Sources: <a href="../f90src/Modelpars/MicBGCPars.F90">MicBGCPars.F90</a>, lines 184–188; <a href="../f90src/Microbial_bgc/Box_Micmodel/MicBGCFGMod.F90">MicBGCFGMod.F90</a>, around lines 1433–1451 and 1642–1647.</p>
+<p>POM (<code>K = 4</code>) and humus (<code>K = 5</code>) are excluded from surface litter-layer calculations. They are therefore not default destinations for fresh surface deposition. Resuspended soil particles can carry previously processed organic matter resembling these pools, but that case needs an explicit receiving-layer and transformation treatment. See <a href="microbial_complexes.html">complexes and layer coverage</a> and <a href="solid_organic_matter_kinetics.html">solid organic matter kinetics</a>.</p>
+<p class="note">The receiving pools are now represented in the deposition source. Simulation validation must still verify layer availability, state/API mapping, units, and balance diagnostics. In particular, adding dead substrate does not seed living decomposers: residue hydrolysis depends on microbial activity, so a model starting with zero viable microbes may not decompose the added material.</p>
+
+<h2>Mass and elemental accounting</h2>
+<p>State whether the supplied flux is total particle mass, biological dry mass, or carbon mass. They are not interchangeable. For each element E (C, N, or P), conserve deposition across the selected destinations:</p>
+<pre><code>F_E,total = F_E,viable microbes + F_E,dead microbes
+          + F_E,other biological material + F_E,dissolved organic
+          + F_E,inorganic</code></pre>
+<p>This is an elemental budget, not a sum of all dry particle mass: mineral matter can contain little organic carbon. Include relevant inorganic carbon separately if present.</p>
+<p>Within microbial material, define <code>F_E,viable = f_v,E × F_E,microbial</code> and <code>F_E,dead = (1 − f_v,E) × F_E,microbial</code>. Applying one viable fraction to C, N, and P assumes identical elemental composition in viable and dead material. A viability estimate based on cell counts also needs biomass weighting before it can be used as a carbon fraction.</p>
+<p>For a flux in g E m⁻² h⁻¹, multiply by receiving area and timestep in hours only when the destination stores total elemental mass. If it stores mass per area, omit the area multiplier. Record deposited C/N/P as external inputs and avoid double counting nutrients already included in an existing deposition forcing.</p>
+
+<h2>What is established for LEO?</h2>
+<p>Sengupta et al. (2019) inferred air as a likely source of some archaea in miniLEO because they were absent from sampled parent material and irrigation water. This supports a possible airborne immigration pathway; it does not quantify viable/dead deposition, organic-matter composition, or deposition flux. <a href="https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2017JG004315">Assessing Microbial Community Patterns During Incipient Soil Formation From Basalt</a>.</p>
+<p>The broader biological-aerosol literature describes microbes, spores, pollen, and biological fragments, supporting the need to distinguish material categories. It does not supply a LEO-specific partition. <a href="https://doi.org/10.3402/tellusb.v64i0.15598">Després et al. (2012), Primary biological aerosol particles in the atmosphere: a review</a>.</p>
+<p>For an initial LEO sensitivity study, vary deposition magnitude, viable microbial fraction, microbial versus plant-derived organic fraction, residue resistance partition, and C:N:P composition. Label these as scenario assumptions until constrained by measurements.</p>
+<p class="meta">Source line numbers may shift. This document records recommendations and inspected pool behavior; no model code or parameters were changed.</p>
+</body>
+</html>

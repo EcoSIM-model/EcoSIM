@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EcoSIM — relative water-table slope</title>
+<style>
+:root{color-scheme:light dark;--bg:#f5f7fa;--fg:#172635;--panel:#fff;--muted:#506171;--grid:#d5dee5;--ground:#885021;--water:#076aa4;--soil:#eedbc7;--wet:#b6e0f4;--accent:#00679d}
+@media(prefers-color-scheme:dark){:root{--bg:#141d25;--fg:#e4edf5;--panel:#1c2934;--muted:#b0bfcc;--grid:#455665;--ground:#e3ad70;--water:#65c6ff;--soil:#443729;--wet:#203f56;--accent:#65c6ff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:32px 24px}h1{font-size:clamp(25px,4vw,36px);line-height:1.2;margin:0 0 12px}h2{font-size:20px;margin:0 0 12px}p{margin:10px 0}.intro,.muted{color:var(--muted)}.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:26px 0}label{display:block;font-weight:600}output{font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--accent);margin:12px 0;min-height:26px}.presets{display:flex;flex-wrap:wrap;gap:8px}button{background:var(--panel);color:var(--fg);border:1px solid var(--grid);border-radius:7px;padding:8px 12px;font:inherit;cursor:pointer}button[aria-pressed=true]{background:var(--accent);color:var(--bg)}button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}.plot{background:var(--panel);border-radius:12px;padding:16px 12px}svg{display:block;width:100%;height:auto;overflow:visible}svg text{fill:var(--fg);font:14px system-ui,sans-serif}.legend{display:flex;gap:24px;flex-wrap:wrap;margin:0 16px 8px}.swatch{display:inline-block;width:28px;border-top:3px solid;vertical-align:middle;margin-right:7px}.ground{color:var(--ground)}.water{color:var(--water)}.reference{color:var(--muted);border-top-style:dashed}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}.metric{border-left:3px solid var(--grid);padding-left:14px}.value{display:block;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}.details{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:28px}.equation{font:18px/1.9 ui-monospace,monospace;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{text-align:right;border-bottom:1px solid var(--grid);padding:9px 5px}th:first-child,td:first-child{text-align:left}a{color:var(--accent)}footer{margin-top:28px;border-top:1px solid var(--grid);padding-top:16px;font-size:14px}code{overflow-wrap:anywhere}@media(max-width:650px){main{padding:24px 16px}.controls,.details{grid-template-columns:1fr;gap:16px}.metrics{grid-template-columns:1fr}.legend{font-size:14px;gap:10px}}
+.reference-figure{margin:32px 0 0}.reference-figure img{display:block;width:100%;height:auto;border-radius:8px}.reference-figure figcaption{margin-top:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<h1>How closely does the water table follow the terrain?</h1>
+<p class="intro">EcoSIM’s relative slope <b>r</b> is the ratio of water-table elevation gradient to ground elevation gradient. The diagram anchors both surfaces at the left-hand reference location, then shows how their separation changes uphill.</p>
+<div class="controls">
+<div><label for="ratio">Relative water-table slope r = <output id="ratioValue">0.50</output></label><input id="ratio" type="range" min="0" max="1.5" step="0.01" value="0.5"><div class="presets" aria-label="Relative slope presets"><button type="button" data-r="0">r = 0</button><button type="button" data-r="0.5">r = 0.5</button><button type="button" data-r="1">r = 1</button></div></div>
+<div><label for="rise">Ground rise over 100 m: <output id="riseValue">10.0 m</output></label><input id="rise" type="range" min="0" max="20" step="0.5" value="10"><span class="muted" id="angle"></span></div>
+<div><label for="depth">Reference water-table depth D: <output id="depthValue">2.0 m</output></label><input id="depth" type="range" min="0" max="10" step="0.5" value="2"><span class="muted">Depth below ground at x = 0 m.</span></div>
+</div>
+<div class="plot">
+<div class="legend"><span><i class="swatch ground"></i>Ground h</span><span><i class="swatch water"></i>Water table H<sub>w</sub></span><span><i class="swatch reference"></i>Reference elevation h<sub>ref</sub> = 0 m</span></div>
+<svg id="diagram" viewBox="0 0 960 470" role="img" aria-labelledby="chartTitle chartDesc"><title id="chartTitle">Ground and external water-table elevations along a 100 meter transect</title><desc id="chartDesc">Use the sliders to compare water-table slope and depth below ground.</desc><defs><clipPath id="plotClip"><rect x="76" y="30" width="750" height="352"/></clipPath><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fg)"/></marker></defs><g id="grid"></g><g clip-path="url(#plotClip)"><path id="soil" fill="var(--soil)"/><path id="wet" fill="var(--wet)" opacity="0.8"/><path id="datum" fill="none" stroke="var(--muted)" stroke-dasharray="6 5"/><path id="groundLine" fill="none" stroke="var(--ground)" stroke-width="3"/><path id="waterLine" fill="none" stroke="var(--water)" stroke-width="3"/></g><g id="annotations"></g><text x="451" y="454" text-anchor="middle">Horizontal distance x (m)</text><text transform="translate(20 206) rotate(-90)" text-anchor="middle">Elevation relative to reference (m)</text></svg>
+<p class="muted">Vertical scale adjusts automatically; the drawing is vertically exaggerated. Blue shading indicates the region below the prescribed water table.</p>
+</div>
+<p id="interpretation" aria-live="polite"></p>
+<div class="metrics"><div class="metric">Water-table rise<span id="waterRise" class="value"></span>Across the 100 m transect</div><div class="metric">Change in depth below ground<span id="depthChange" class="value"></span>Right depth minus reference depth</div><div class="metric">Water-table depth at right<span id="rightDepth" class="value"></span>Positive below ground; negative above</div></div>
+<div class="details"><section><h2>Elevation and depth use different factors</h2><div class="equation">h(x) = h<sub>ref</sub> + Sx<br>H<sub>w</sub>(x) = h<sub>ref</sub> − D + rSx<br>d<sub>w</sub>(x) = D + (1 − r)Sx</div><p>Here S = tan(θ), the signed horizontal ground gradient along this uphill transect. Because d<sub>w</sub> = h − H<sub>w</sub>, <b>r</b> controls water-table elevation change, while <b>1 − r</b> controls depth change.</p><p id="numericEquation" class="equation"></p></section><section><h2>Read the same geometry as numbers</h2><table><thead><tr><th>x (m)</th><th>Ground (m)</th><th>Water table (m)</th><th>Depth (m)</th></tr></thead><tbody id="samples"></tbody></table><p class="muted">At r = 0, the water table is horizontal. At r = 1, it is parallel to the terrain. Values above 1 illustrate a water table rising faster than the terrain.</p></section></div>
+<figure class="reference-figure">
+<h2>Relating the slope ratio to field measurements</h2>
+<a href="water_table_slope_vs_surface_slope.png" aria-label="Open the field measurement diagram at full size"><img src="water_table_slope_vs_surface_slope.png" width="1376" height="768" loading="lazy" alt="Field diagram showing surveyed ground and well-casing elevations, depth-to-water measurements, and water-table elevation differences over a horizontal transect."></a>
+<figcaption>Use a common elevation datum and the same horizontal distance L: S<sub>surface</sub> = Δh/L, S<sub>wt</sub> = ΔH<sub>w</sub>/L, and r = S<sub>wt</sub>/S<sub>surface</sub>. If depth to water is measured from the top of the well casing, H<sub>w</sub> = Z<sub>casing</sub> − DTW; depth below ground is instead d<sub>w</sub> = h − H<sub>w</sub>. In this illustration, the left-hand label “Water Table Elevation (S<sub>surface</sub>) = Z<sub>casing</sub>” is mislabeled: Z<sub>casing</sub> is the casing elevation, not the water-table elevation.</figcaption>
+</figure>
+<footer><p><b>Connection to EcoSIM.</b> The baseline depth conversion is <code>D − (h_ref − h)(1 − r)</code>. It appears in <a href="../f90src/Ecosim_mods/StartsMod.F90">StartsMod.F90</a>, in <code>InitSoilVars</code>, currently as <code>ExtWaterTableLocDepz_col</code> (previously <code>ExtWaterTablet0_col</code>). The input parameter is <code>WaterTable2GroundSlope_col</code>, read from <code>DTBLGG</code>.</p><p>This illustrates prescribed geometry with constant r and reference depth D. It does not simulate water movement, pressure profiles, soil-surface datum offsets, or mobile water-table updates. When ground is flat, both surfaces remain horizontal regardless of r; their slope ratio is then undefined, although the parameter can still be supplied.</p></footer>
+</main>
+<script>
+'use strict';
+const ns='http://www.w3.org/2000/svg';
+const el=id=>document.getElementById(id);
+function geometry(r,rise,D,x){const h=rise*x/100;return {h,H:-D+r*h,d:D+(1-r)*h};}
+function svgNode(tag,attrs,text){const n=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))n.setAttribute(key,value);if(text!==undefined)n.textContent=text;return n;}
+function fmt(v){return (Math.abs(v)<0.00001?0:v).toFixed(2);}
+function update(){
+ const r=Number(el('ratio').value),rise=Number(el('rise').value),D=Number(el('depth').value);
+ const left=geometry(r,rise,D,0),right=geometry(r,rise,D,100);
+ el('ratioValue').textContent=r.toFixed(2);el('riseValue').textContent=rise.toFixed(1)+' m';el('depthValue').textContent=D.toFixed(1)+' m';
+ el('angle').textContent='S = '+(rise/100).toFixed(3)+'; θ = '+(Math.atan(rise/100)*180/Math.PI).toFixed(2)+'°';
+ document.querySelectorAll('[data-r]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.r)===r)));
+ const bottom=Math.min(-D,right.H,0),top=Math.max(rise,right.H,0),span=Math.max(top-bottom,4),lo=bottom-span*.15,hi=top+span*.2;
+ const X=x=>76+750*x/100,Y=y=>382-352*(y-lo)/(hi-lo);
+ const grid=el('grid');grid.replaceChildren();
+ for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5,y=Y(v);grid.append(svgNode('line',{x1:76,y1:y,x2:826,y2:y,stroke:'var(--grid)'}),svgNode('text',{x:65,y:y+5,'text-anchor':'end'},v.toFixed(1)));}
+ for(const x of [0,25,50,75,100])grid.append(svgNode('text',{x:X(x),y:410,'text-anchor':'middle'},String(x)));
+ grid.append(svgNode('path',{d:'M76 30 V382 H826',fill:'none',stroke:'var(--muted)'}));
+ el('soil').setAttribute('d',`M76 ${Y(0)} L826 ${Y(rise)} V382 H76 Z`);
+ el('wet').setAttribute('d',`M76 ${Y(left.H)} L826 ${Y(right.H)} V382 H76 Z`);
+ el('datum').setAttribute('d',`M76 ${Y(0)} H826`);
+ el('groundLine').setAttribute('d',`M76 ${Y(0)} L826 ${Y(rise)}`);
+ el('waterLine').setAttribute('d',`M76 ${Y(left.H)} L826 ${Y(right.H)}`);
+ const ann=el('annotations');ann.replaceChildren();
+ if(Math.abs(Y(rise)-Y(right.H))>18){ann.append(svgNode('line',{x1:850,y1:Y(rise),x2:850,y2:Y(right.H),stroke:'var(--fg)','marker-start':'url(#arrow)','marker-end':'url(#arrow)'}));ann.append(svgNode('text',{x:863,y:(Y(rise)+Y(right.H))/2+5},fmt(right.d)+' m'));}
+ else ann.append(svgNode('text',{x:838,y:Y(rise)-12},'d = '+fmt(right.d)+' m'));
+ el('chartDesc').textContent=`Ground rises ${rise} meters. With relative water-table slope ${r}, water table rises ${fmt(r*rise)} meters, and depth changes from ${fmt(D)} to ${fmt(right.d)} meters.`;
+ el('waterRise').textContent=fmt(r*rise)+' m';el('depthChange').textContent=fmt((1-r)*rise)+' m';el('rightDepth').textContent=fmt(right.d)+' m';
+ let message=rise===0?'Flat ground: changing r does not change either surface elevation.':r===0?'r = 0: the water table is horizontal, so depth increases uphill by the full ground rise.':r===1?'r = 1: the water table follows the terrain exactly, so depth below ground stays constant.':r<1?'0 < r < 1: the water table rises more slowly than the ground, so depth below ground increases uphill.':'r > 1: the water table rises faster than the ground, so depth below ground decreases uphill.';
+ if(right.d<0)message+=' The prescribed water table is above ground at the right; that implies surface inundation, whose dynamics are not modeled here.';
+ el('interpretation').textContent=message;
+ el('numericEquation').textContent=`At x = 100 m: d = ${D.toFixed(1)} + (1 − ${r.toFixed(2)}) × ${rise.toFixed(1)} = ${fmt(right.d)} m`;
+ el('samples').replaceChildren();for(const x of [0,50,100]){const p=geometry(r,rise,D,x),tr=document.createElement('tr');for(const v of [String(x),fmt(p.h),fmt(p.H),fmt(p.d)]){const td=document.createElement('td');td.textContent=v;tr.append(td);}el('samples').append(tr);}
+}
+for(const id of ['ratio','rise','depth'])el(id).addEventListener('input',update);
+document.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{el('ratio').value=b.dataset.r;update();}));
+update();
+</script>
+</body>
+</html>

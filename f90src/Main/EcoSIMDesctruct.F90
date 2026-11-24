@@ -1,4 +1,5 @@
 module EcoSIMDesctruct
+  ! Release model state and transport workspaces at the end of a simulation.
 
   implicit none
 
@@ -8,6 +9,7 @@ module EcoSIMDesctruct
   contains
 
   subroutine DestructEcoSIM
+  ! Pair model and workspace cleanup with the corresponding initialization paths.
   use EcoSimSumDataType   , only : DestructEcoSimSum
   use FlagDataType        , only : DestructFlagData
   use WatsubDataMod       , only : DestructWatSubData
@@ -41,9 +43,11 @@ module EcoSIMDesctruct
   use SedimentDataType    , only : DestructSedimentData
   use SoilWaterDataType   , only : DestructSoilWater
   use PlantAPIData        , only : DestructPlantAPIData
+  use PlantPhaseWorkMod   , only : DestroyPlantPhaseWork
   use PlantMgmtDataType   , only : DestructPlantMngmtData
   use InitSOMBGCMOD       , only : DestructSOMBGC
   use TranspNoSaltMod     , only : DestructTranspNoSalt
+  use TranspSaltDataMod   , only : DestructTranspSaltData
   use SnowPhysData        , only : DestructSnowPhysData
   use HydroThermData      , only : DestructHydroThermData
   use BalanceCheckDataType, only : DestructBalanceCheckData
@@ -53,6 +57,7 @@ module EcoSIMDesctruct
   use PlantTraitTableMod  , only : DestructPlantTraitTable
   use MicBGCAPI           , only : MicAPI_cleanup  
   use RadiationDataMod    , only : DestroyRadiationData
+  use MLDataDiagType      , only : DestructMLDataType
   implicit none
 
   call MicAPI_cleanup
@@ -75,6 +80,7 @@ module EcoSIMDesctruct
 
   call DestructSoilWater
 
+  call DestroyPlantPhaseWork
   call DestructPlantAPIData
 
   call DestructPlantMngmtData
@@ -87,9 +93,9 @@ module EcoSIMDesctruct
 
   call DestructFlagData
 
-  if(.not.salt_model)then
-    call DestructTranspNoSalt
-  endif
+  ! Non-salt transport is also active in salt-enabled standalone simulations.
+  call DestructTranspNoSalt
+  if(salt_model)call DestructTranspSaltData
 
   call DestructPlantTraitTable()
 
@@ -132,6 +138,8 @@ module EcoSIMDesctruct
   call destructSoilWarming()
 
   call DestructNumericAux()
+  
+  call DestructMLDataType
   
   call DestroyRadiationData
   call CleanUpTracerIDs

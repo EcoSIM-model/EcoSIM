@@ -1,5 +1,9 @@
 module TranspNoSaltFastMod
 
+  ! Description:
+  ! Advance fast gas transport, gas-water exchange, and tracer source/sink accounting.
+
+  use SoilFaceMappingMod, only: SoilFaceSlot,SoilFaceIncomingRange
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use abortutils,    only: destroy, endrun
   use EcoSIMCtrlMod, only: iVerbLevel
@@ -91,6 +95,8 @@ implicit none
   end subroutine TransptFastNoSaltMM
 !------------------------------------------------------------------------------------------  
   subroutine ApplyFastSourceSink(I,J,M,NHE,NHW,NVS,NVN,MM)  
+  ! Description:
+  ! Apply staged gas sources and sinks and accumulate their column mass budgets.
   implicit none
   integer, intent(in) :: I,J,NHE,NHW,NVS,NVN,M,MM
 
@@ -120,9 +126,12 @@ implicit none
 !          endif
         ENDDO
         idg=idg_NH3
+        ! NH3 fertilizer release enters the gas pool; other gas sources enter water.
+        trcg_gasml2_vr(idg,L,NY,NX)=trcg_gasml2_vr(idg,L,NY,NX)+RBGCSrceGasMM_vr(idg,L,NY,NX)
         call SubstrateDribbling(RBGCSinkGasMM_vr(idg,L,NY,NX),trcs_solml_drib_vr(idg,L,NY,NX),trcg_gasml2_vr(idg,L,NY,NX))
-        trcg_NetPro_fast_col(idg,NY,NX)=trcg_NetPro_fast_col(idg,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
-        RGasNetProdSoil_col(idg,NY,NX)=RGasNetProdSoil_col(idg,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
+        flux=RBGCSrceGasMM_vr(idg,L,NY,NX)-RBGCSinkGasMM_vr(idg,L,NY,NX)
+        trcg_NetPro_fast_col(idg,NY,NX)=trcg_NetPro_fast_col(idg,NY,NX)+flux
+        RGasNetProdSoil_col(idg,NY,NX)=RGasNetProdSoil_col(idg,NY,NX)+flux
       ENDDO  
     ENDDO
   ENDDO  
@@ -551,6 +560,7 @@ implicit none
   integer, intent(in) :: N4,N5,N6
   character(len=*), parameter :: subname='GasDissolutionMM'
   integer :: idg
+  real(r8) :: NH3GasMassZone
 !
 !
   call PrintInfo('beg '//subname)
@@ -566,15 +576,21 @@ implicit none
       enddo    
 
       IF(VLsoiAirPMA_vr(N6,N5,N4).GT.ZEROS2(N5,N4).AND.VLWatMicPXA_vr(N6,N5,N4).GT.ZEROS2(N5,N4))THEN
+        ! Both dissolved zones exchange with one gas pool. Allocate its mass by
+        ! zone air volume so the zone-specific equation uses the common gas concentration.
+        NH3GasMassZone=AZMAX1(trcg_gasml2_vr(idg_NH3,N6,N5,N4)) &
+          *VLsoiAirPMA_vr(N6,N5,N4)/VLsoiAirPM_vr(M,N6,N5,N4)
         RGas_Disol_FlxMM_vr(idg_NH3,N6,N5,N4)=DiffusivitySolutEffM_vr(M,N6,N5,N4)* &
-         (AZMAX1(trcg_gasml2_vr(idg_NH3,N6,N5,N4))*trcg_VLWatMicP_vr(idg_NH3,N6,N5,N4) &
+         (NH3GasMassZone*trcg_VLWatMicP_vr(idg_NH3,N6,N5,N4) &
           -(trcs_solml2_vr(idg_NH3,N6,N5,N4)-0._r8*trcs_solml_drib_vr(idg_NH3,N6,N5,N4))*VLsoiAirPMA_vr(N6,N5,N4)) &
           /(trcg_VLWatMicP_vr(idg_NH3,N6,N5,N4)+VLsoiAirPMA_vr(N6,N5,N4))
       ENDIF
 
       IF(VLsoiAirPMB_vr(N6,N5,N4).GT.ZEROS2(N5,N4).AND.VLWatMicPXB_vr(N6,N5,N4).GT.ZEROS2(N5,N4))THEN
+        NH3GasMassZone=AZMAX1(trcg_gasml2_vr(idg_NH3,N6,N5,N4)) &
+          *VLsoiAirPMB_vr(N6,N5,N4)/VLsoiAirPM_vr(M,N6,N5,N4)
         RGas_Disol_FlxMM_vr(idg_NH3B,N6,N5,N4)=DiffusivitySolutEffM_vr(M,N6,N5,N4)* &
-          (AZMAX1(trcg_gasml2_vr(idg_NH3,N6,N5,N4))*trcg_VLWatMicP_vr(idg_NH3B,N6,N5,N4) &
+          (NH3GasMassZone*trcg_VLWatMicP_vr(idg_NH3B,N6,N5,N4) &
           -(trcs_solml2_vr(idg_NH3B,N6,N5,N4)-0._r8*trcs_solml_drib_vr(idg_NH3B,N6,N5,N4))*VLsoiAirPMB_vr(N6,N5,N4)) &
           /(trcg_VLWatMicP_vr(idg_NH3B,N6,N5,N4)+VLsoiAirPMB_vr(N6,N5,N4))
       ENDIF
@@ -601,7 +617,7 @@ implicit none
 !     by assuming volume conservation, gases and water flow in opposite direction
 !
   call PrintInfo('beg '//subname)
-  FLQW=WaterFlow2SoilMM_3D(N,N6,N5,N4)  
+  FLQW=WaterFlow2SoilMM_3D(N,SoilFaceSlot(N,N3,N6),N5,N4)
   
   !water flow into grid (N6,N5,N4), so gas out of grid
   IF(FLQW.GT.0.0_r8)THEN
@@ -615,7 +631,7 @@ implicit none
 
     DO idg=idg_beg,idg_NH3
       RGasAdv                             = VFLW*AZMAX1(trcg_gasml2_vr(idg,N6,N5,N4))
-      Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4)+RGasAdv
+      Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4)+RGasAdv
     ENDDO
     !water flow out of source grid, gas into grid (N6,N5,N4)  
   ELSE
@@ -626,7 +642,7 @@ implicit none
     ENDIF
     DO idg=idg_beg,idg_NH3
       RGasAdv                             = VFLW*AZMAX1(trcg_gasml2_vr(idg,N3,N2,N1))
-      Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4)+RGasAdv
+      Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4)+RGasAdv
     ENDDO
   ENDIF
   call PrintInfo('end '//subname)
@@ -758,13 +774,15 @@ implicit none
 
   integer, intent(in) :: N,M,N1,N2,N3,N4,N5,N6
   integer :: K,LL,idg,idom
+  integer :: first_face,last_face
   real(r8) :: flux
 !
 !     NET GAS FLUX
 !
+  call SoilFaceIncomingRange(N,N3,N2,N1,first_face,last_face)
   IF(VLSoilPoreMicP_vr(N3,N2,N1).GT.ZEROS2(N2,N1))THEN
     DO idg=idg_beg,idg_NH3
-      flux =Gas_AdvDif_FlxMM_3D(idg,N,N3,N2,N1)-Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4)
+      flux =sum(Gas_AdvDif_FlxMM_3D(idg,N,first_face:last_face,N2,N1))-Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4)
       Gas_AdvDif_FlxMM_vr(idg,N3,N2,N1)=Gas_AdvDif_FlxMM_vr(idg,N3,N2,N1)+flux
 
       if(N.NE.iVerticalDirection)then
@@ -787,14 +805,19 @@ implicit none
   real(r8) :: CNDC2   !conductance in destination grid
   real(r8) :: DFLG2   !air-filled porosity effect on gaseous diffusivity in source
   real(r8) :: DFLGL   !air-filled porosity effect on gaseous diffusivity in destination
+  real(r8) :: FaceArea
   integer :: idg
   real(r8):: GasDifuscoefMM_3D
 
   call PrintInfo('beg '//subname)
 
-  DFLG2=2.0_r8*POROQ*AZMAX1(FracAirFilledSoilPoreM_vr(M,N3,N2,N1))**2/POROS_vr(N3,N2,N1)*AREA_3D(N,N3,N2,N1)/DLYR_3D(N,N3,N2,N1)
+  ! The traversal fixes (N3,N2,N1) as the face owner, independently of the
+  ! flux sign. Use its area on both sides, matching water/solute transport.
+  ! This ownership convention does not calculate unequal layers' geometric overlap.
+  FaceArea=AREA_3D(N,N3,N2,N1)
+  DFLG2=2.0_r8*POROQ*AZMAX1(FracAirFilledSoilPoreM_vr(M,N3,N2,N1))**2/POROS_vr(N3,N2,N1)*FaceArea/DLYR_3D(N,N3,N2,N1)
 
-  DFLGL=2.0_r8*POROQ*AZMAX1(FracAirFilledSoilPoreM_vr(M,N6,N5,N4))**2/POROS_vr(N6,N5,N4)*AREA_3D(N,N6,N5,N4)/DLYR_3D(N,N6,N5,N4)
+  DFLGL=2.0_r8*POROQ*AZMAX1(FracAirFilledSoilPoreM_vr(M,N6,N5,N4))**2/POROS_vr(N6,N5,N4)*FaceArea/DLYR_3D(N,N6,N5,N4)
   !
   DO idg=idg_beg,idg_NH3
     !     GASOUS CONDUCTANCES
@@ -806,7 +829,7 @@ implicit none
     !
     trc_gasc1(idg)                      = AZMAX1(trcg_gasml2_vr(idg,N3,N2,N1)/VLsoiAirPM_vr(M,N3,N2,N1))
     trc_gasc2(idg)                      = AZMAX1(trcg_gasml2_vr(idg,N6,N5,N4)/VLsoiAirPM_vr(M,N6,N5,N4))
-    Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,N6,N5,N4)+GasDifuscoefMM_3D*(trc_gasc1(idg)-trc_gasc2(idg))
+    Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4) = Gas_AdvDif_FlxMM_3D(idg,N,SoilFaceSlot(N,N3,N6),N5,N4)+GasDifuscoefMM_3D*(trc_gasc1(idg)-trc_gasc2(idg))
   ENDDO
   call PrintInfo('end '//subname)
   end subroutine GasDiffusionMM
@@ -1040,6 +1063,7 @@ implicit none
               exit
             ENDIF
           ENDDO
+          if(LL>NL_col(N5,N4))cycle D120
           !
           !     SOLUTE FLUXES BETWEEN ADJACENT GRID CELLS FROM
           !     WATER CONTEnsolutes AND WATER FLUXES 'WaterFlow2SoilMM_3D' FROM 'WATSUB'

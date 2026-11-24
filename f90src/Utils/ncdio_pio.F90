@@ -86,6 +86,13 @@ module ncdio_pio
     module procedure ncd_putvar_logical_all_1d    
   end interface ncd_putvar
 
+  interface AZERO1
+    module procedure AZERO1_s
+    module procedure AZERO1_v
+    module procedure AZERO1_m
+
+  end interface AZERO1
+
   interface ncd_getvar
     module procedure ncd_getvar_int
     module procedure ncd_getvar_logical
@@ -204,7 +211,13 @@ module ncdio_pio
 
   type, public :: file_desc_t
     integer(i4) :: fh
-    character(len=128) :: filename
+    ! --- Jing Tao --- widened 128 -> 512 (upstream 0ffe5a06 now ships 256). Every NetCDF open funnels its path through this buffer
+    !(ncd_pio_openfile: write(file%filename,'(A)')trim(fname)); at len=128 a >128-char input
+    !path overflowed with a Fortran 'End of record' crash at file open. A2MC HPC case paths
+    !(/global/cfs/cdirs/.../<case>/<pft>.nc) run ~100-130 chars; the namelist input buffers
+    !are already len=300 (EcoSIMCtrlMod). Pure buffer widening -> numerically inert (bit-for-bit
+    !identical output for any path that already fit); only removes the crash for long paths.
+    character(len=512) :: filename
   end type file_desc_t
 
   type, public :: Var_desc_t
@@ -237,6 +250,7 @@ module ncdio_pio
   integer,parameter,public :: ncd_nofill    = nf90_nofill
   integer,parameter,public :: ncd_unlimited = nf90_unlimited
   integer,parameter,public :: ncd_log       = -nf90_int
+  real(r8),parameter :: tiny_zero=1.e-16_r8
   logical :: single_column
   integer :: iulog
 !
@@ -259,6 +273,43 @@ module ncdio_pio
     iulog = biulog
     end subroutine ncd_init
 !
+!-----------------------------------------------------------------------
+  FUNCTION AZERO1_s(x)result(y)
+  
+  real(r8), intent(in) :: x
+  real(r8) :: y
+  
+  if(abs(x)<tiny_zero)then
+    y = 0._r8
+  else
+    y = x
+  endif  
+  END FUNCTION AZERO1_s
+
+!-----------------------------------------------------------------------
+  FUNCTION AZERO1_v(x)result(y)
+  
+  real(r8), dimension(:), intent(in) :: x
+  real(r8) :: y(size(x))
+
+  where (abs(x) < tiny_zero)
+    y = 0._r8
+  elsewhere
+    y = x
+  end where
+  END FUNCTION AZERO1_v
+!-----------------------------------------------------------------------
+  FUNCTION AZERO1_m(x)result(y)
+  
+  real(r8), dimension(:,:), intent(in) :: x
+  real(r8) :: y(size(x,1),size(x,2))
+
+  where (abs(x) < tiny_zero)
+    y = 0._r8
+  elsewhere
+    y = x
+  end where
+  END FUNCTION AZERO1_m
 
 !-----------------------------------------------------------------------
 !BOP
@@ -639,7 +690,7 @@ module ncdio_pio
   type(Var_desc_t)  :: vardesc
 
   call check_var(ncid, trim(varname), vardesc, readvar)
-  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, data,  &
+  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, AZERO1(data),  &
     start = (/rec/)),'ncd_putvar_real_sp '//trim(varname))
 
   end subroutine ncd_putvar_real_sp
@@ -781,8 +832,8 @@ module ncdio_pio
   integer :: j
   character(len=*), parameter :: subname=trim(mod_filename)//'::ncd_putvar_real_sp_1d'
   call check_var(ncid, trim(varname), vardesc, readvar)
-
-  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, data, &
+  
+  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, AZERO1(data), &
      start = (/1,rec/)),trim(subname)//'::'//trim(varname))
 
   end subroutine ncd_putvar_real_sp_1d
@@ -984,7 +1035,7 @@ module ncdio_pio
 
   call check_var(ncid, trim(varname), vardesc, readvar)
 
-  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, data,  &
+  call check_ret( nf90_put_var(ncid%fh, vardesc%varid, AZERO1(data),  &
      start = (/1,1,rec/)),'ncd_putvar_real_sp_2d '//trim(varname))
 
   end subroutine ncd_putvar_real_sp_2d

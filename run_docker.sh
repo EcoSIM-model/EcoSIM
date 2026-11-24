@@ -8,7 +8,7 @@ FRESH_BUILD=false
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --ubuntu          Use Ubuntu 22.04 base image"
+    echo "  --ubuntu          Use Ubuntu 24.04 base image"
     echo "  --rocky           Use Rocky Linux 9 base image (Default)"
     echo "  --fresh           Build the image without using cache"
     echo "  -h, --help        Show this help message"

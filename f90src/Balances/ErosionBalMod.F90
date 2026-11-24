@@ -1,6 +1,6 @@
 module ErosionBalMod
   use data_kind_mod,    only: r8 => DAT_KIND_R8
-  use EcoSIMConfig,     only: nlbiomcp=>NumLiveMicrbCompts
+  use EcoSIMConfig,     only: nlbiomcp=>NumLiveMicrbCompts,NumMicbAFunGrupsPerCmplx,NumMicbHFunGrupsPerCmplx
   use EcoSiMParDataMod, only: micpar
   use SoilPropertyDataType
   use RootDataType
@@ -132,7 +132,7 @@ implicit none
 !         OHC,OHN,OHP,OHA=adsorbed C,N,P,acetate
 !         OSC,OAA,OSN,OSP=SOC,colonized SOC,SON,SOP
 !
-        D1960: DO N=1,NumMicbFunGrupsPerCmplx
+        D1960: DO N=1,NumMicbHFunGrupsPerCmplx
           DO NGL=JGniH(N),JGnfH(N)
             DO M=1,nlbiomcp
               MID=micpar%get_micb_id(M,NGL)
@@ -151,7 +151,7 @@ implicit none
 !         OHC,OHN,OHP,OHA=adsorbed C,N,P,acetate
 !         OSC,OAA,OSN,OSP=SOC,colonized SOC,SON,SOP
 !
-      DO N=1,NumMicbFunGrupsPerCmplx
+      DO N=1,NumMicbAFunGrupsPerCmplx
         DO NGL=JGniA(N),JGnfA(N)
           DO M=1,nlbiomcp
             MID=micpar%get_micb_id(M,NGL)        
@@ -221,6 +221,8 @@ implicit none
     TNH3ErosBand_molN_col(NY,NX)     = 0.0_r8
     TNUreaErosBand_molN_col(NY,NX)   = 0.0_r8
     TNO3ErosBand_molN_col(NY,NX)     = 0.0_r8
+    TPO4Erosed_molP_col(NY,NX)      = 0._r8
+    TPO4ErosBand_molP_col(NY,NX)    = 0._r8
 
     trcx_TER_col(idx_beg:idx_end,NY,NX)   = 0.0_r8
     trcp_TER_col(idsp_beg:idsp_end,NY,NX) = 0.0_r8

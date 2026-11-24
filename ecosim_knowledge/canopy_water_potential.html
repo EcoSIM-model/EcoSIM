@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canopy water potential in EcoSIM</title>
+  <style>
+    body { max-width: 900px; margin: 48px auto; padding: 0 24px; font: 17px/1.65 system-ui, sans-serif; color: #20302b; background: #fafbf8; }
+    h1, h2 { line-height: 1.25; color: #164c3a; }
+    h2 { margin-top: 2em; }
+    a { color: #12644f; }
+    code { overflow-wrap: anywhere; font-size: .9em; }
+    .equation, .note { padding: 16px 20px; background: #eaf1eb; border-radius: 8px; overflow-wrap: anywhere; }
+    .meta { color: #607068; font-size: .9em; }
+    @media print { body { margin: 0; max-width: none; background: white; } }
+  </style>
+</head>
+<body>
+  <h1>Canopy water potential in EcoSIM</h1>
+  <p class="meta">Code-based knowledge note · 11 September 2026 · Sources refer to this repository checkout.</p>
+  <p><strong>EcoSIM computes canopy water potential by iteratively balancing root water uptake, transpiration, and changes in water stored in plant tissue.</strong> The result is <code>PSICanopy_pft</code>, in MPa. The main canopy solver couples this water balance to canopy temperature and energy exchange.</p>
+  <div class="equation">ΔW<sub>canopy</sub> / Δt = Σ<sub>l</sub> U<sub>l</sub> − E</div>
+  <p>Here U<sub>l</sub> is uptake from a rooted soil layer, expressed as positive into the plant, and E is transpiration expressed as a positive loss. Both depend on canopy water potential. Tissue water storage also depends on that potential, so the solver finds a mutually consistent state.</p>
+
+  <h2>1. Root water supply</h2>
+  <p>Before flux limits are applied, root water supply can be expressed as:</p>
+  <div class="equation">U<sub>l</sub> = [Ψ<sub>soil,l</sub> − (Ψ<sub>canopy</sub> + Ψ<sub>gravity</sub>)] / (R<sub>soil,l</sub> + R<sub>root,l</sub>)</div>
+  <p>The gravitational correction depends on effective canopy height. The total hydraulic resistance includes soil and root resistance. The implementation sums across rooted layers and root/mycorrhizal categories.</p>
+  <p>Uptake is capped by available soil water and the plant’s allocated fraction. Reverse flow from plant to soil is allowed, but constrained by soil pore space and available plant water.</p>
+  <p class="note"><strong>Sign convention:</strong> the code calculates <code>psi_H2O_flx = (PSILC − TotalSoilPSIMPa_vr) / SoilRootResist4H2O_pvr</code>, with <code>PSILC = PSICanopy_pft + PSIGravCanopyHeight</code>. Thus uptake into the plant is negative in the code, the opposite of U above.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 942–1016 for uptake and its limits; lines 1222 and 1312 for gravity and combined resistance.</p>
+
+  <h2>2. Tissue water storage</h2>
+  <p>The function <code>get_FDM</code> calculates an empirical dry-mass-to-symplasmic-water ratio:</p>
+  <div class="equation">F(Ψ) = 0.16 + 0.10 |Ψ| / (0.05 |Ψ| + 2)</div>
+  <p>The canopy solver then calculates tissue water capacity as:</p>
+  <div class="equation">W(Ψ) = 10<sup>−6</sup> × <code>CanopyMassC4H2OStorage</code> / F(Ψ)</div>
+  <p>More negative canopy water potential increases F and reduces tissue water storage for a given storage-associated biomass. This represents the canopy’s ability to supply transpiration temporarily by losing stored water. Changes in biomass can also affect the storage calculation.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, approximately lines 31–47; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, lines 1031–1036.</p>
+
+  <h2>3. Osmotic potential, turgor, and stomata</h2>
+  <p>For each trial canopy water potential, <code>update_osmo_turg_pressure</code> calculates osmotic potential using hydration, temperature, the PFT osmotic parameter, and nonstructural solute concentration:</p>
+  <div class="equation">
+    OSWT = 36 + 840 max(0, CCPOLT)<br>
+    Ψ<sub>osmotic</sub> = F(Ψ) [OSMO / 0.16 − R T CCPOLT / OSWT]<br>
+    Ψ<sub>turgor</sub> = max(0, Ψ<sub>canopy</sub> − Ψ<sub>osmotic</sub>)
+  </div>
+  <p><code>OSMO</code> is the PFT baseline osmotic parameter, <code>CCPOLT</code> is the nonstructural elemental concentration supplied to the routine, T is organ temperature in kelvin, and R is the code’s <code>RGASC</code> constant.</p>
+  <p>Canopy stomatal resistance to water vapor is then:</p>
+  <div class="equation">r<sub>s</sub> = r<sub>min</sub> + (r<sub>cuticle</sub> − r<sub>min</sub>) exp(−Ψ<sub>turgor</sub> / RCS)</div>
+  <p>Lower turgor raises stomatal resistance toward the cuticular limit and reduces transpiration. Transpiration also depends on leaf vapor concentration, atmospheric humidity, aerodynamic resistance, and canopy temperature. The energy balance and water balance therefore interact during the iteration.</p>
+  <p>Sources: <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>, approximately lines 50–73 and 569–586; <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, lines 815–878.</p>
+
+  <h2>4. Iterative water-balance closure</h2>
+  <p>Using its internal sign convention, the solver forms:</p>
+  <div class="equation">
+    DIFFZ = SymplasmicWater − CanopyBiomWater_pft<br>
+    DIFFU = Transpiration_pft − cumPRootH2OUptake<br>
+    DIFFW = DIFFU − DIFFZ
+  </div>
+  <p><code>DIFFZ</code> is the tissue water change implied by the trial potential. <code>DIFFU</code> is net water gain from root supply and transpiration in the solver’s hourly accounting; both uptake and transpiration are negative in their respective code variables. The residual <code>DIFFW</code> measures the mismatch between supply-minus-loss and the required storage change.</p>
+  <p>The model uses estimated sensitivities of water storage and fluxes to potential to adjust <code>PSICanopy_pft</code>, with damping and bounds on the update. It repeats the calculation until the relative water-balance residual is below 0.005, or other stopping conditions apply.</p>
+  <p>Additional stopping conditions include a potential increment smaller than 0.001 MPa after at least 30 iterations, and an iteration limit. Therefore, termination alone does not establish that the relative water-balance criterion was met. The solver also calls <code>StomatalDynamics</code> during its final convergence sequence.</p>
+  <p>Source: <a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>, approximately lines 1034–1120.</p>
+
+  <h2>Physical interpretation and photosynthesis</h2>
+  <p>When transpiration exceeds root supply, canopy tissue loses water and its water potential becomes more negative. This increases the soil-to-canopy driving gradient while lowering turgor and promoting stomatal closure. When supply exceeds loss, tissue can rehydrate.</p>
+  <p>This feedback links plant hydraulics to photosynthesis: stomatal closure restricts CO₂ supply, while EcoSIM also applies non-stomatal water-stress effects in its photosynthesis calculations. See the related <a href="leaf_respiration.html">leaf CO₂ and respiration note</a>.</p>
+  <p class="meta">Scope: the main active-canopy calculation. Initialization, bare-soil handling, and divergence handling have separate assignments and fallbacks. Source line numbers may shift as the code changes.</p>
+</body>
+</html>
