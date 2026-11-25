@@ -55,15 +55,15 @@ hist_fincl1='CH4_cumerr_col','Hygrogen_methanogenC_vr','Acetic_methanogenC_vr',
   'CH2OSunsha_pft','Root_OXYSTRESS_pvr','PARSunlit_pft','PARSunsha_pft','Root1stSinkWeight_pvr',
   'Root2ndSinkWeight_pvr','C_PARTS_brch_01'
 
-hist_fincl3='TEMP60cm_col', 'THETW60cm_col','O2wConc60cm_col', 'AcetConc60cm_col',
-  'H2wConc60cm_col','CH4wConc60cm_col','DOCConc60cm_col','AcetMGC60cm_col',
-  'H2MGC60cm_col','FermC60cm_col','AeroMOC60cm_col','AeroHRFungC60cm_col',
-  'AeroHRBactC60cm_col','RAeroCH4Oxi60cm_col','CH4Prod_Acet60cm_col','CH4Prod_HG60cm_col',
-  'Ferment_60cm_col','CO2Ht_60cm_col'
-hist_fincl2='TEMP30cm_col', 'THETW30cm_col','O2wConc30cm_col', 
-  'AcetConc30cm_col','H2wConc30cm_col','CH4wConc30cm_col','DOCConc30cm_col','AcetMGC30cm_col',
-  'H2MGC30cm_col','FermC30cm_col','AeroMOC30cm_col','AeroHRFungC30cm_col','AeroHRBactC30cm_col',
-  'RAeroCH4Oxi30cm_col','CH4Prod_Acet30cm_col','CH4Prod_HG30cm_col','Ferment_30cm_col','CO2Ht_30cm_col'
+!hist_fincl3='TEMP60cm_col', 'THETW60cm_col','O2wConc60cm_col', 'AcetConc60cm_col',
+!  'H2wConc60cm_col','CH4wConc60cm_col','DOCConc60cm_col','AcetMGC60cm_col',
+!  'H2MGC60cm_col','FermC60cm_col','AeroMOC60cm_col','AeroHRFungC60cm_col',
+!  'AeroHRBactC60cm_col','RAeroCH4Oxi60cm_col','CH4Prod_Acet60cm_col','CH4Prod_HG60cm_col',
+!  'Ferment_60cm_col','CO2Ht_60cm_col'
+!hist_fincl2='TEMP30cm_col', 'THETW30cm_col','O2wConc30cm_col', 
+!  'AcetConc30cm_col','H2wConc30cm_col','CH4wConc30cm_col','DOCConc30cm_col','AcetMGC30cm_col',
+!  'H2MGC30cm_col','FermC30cm_col','AeroMOC30cm_col','AeroHRFungC30cm_col','AeroHRBactC30cm_col',
+!  'RAeroCH4Oxi30cm_col','CH4Prod_Acet30cm_col','CH4Prod_HG30cm_col','Ferment_30cm_col','CO2Ht_30cm_col'
 
 hist_mfilt=3650,3650,3650
 hist_nhtfrq=-24,-24,-24

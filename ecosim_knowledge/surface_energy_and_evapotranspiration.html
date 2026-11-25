@@ -5,6 +5,7 @@
 .diagram svg{min-width:850px}.diagram{overflow-x:auto}.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}.key{display:inline-block;width:30px;border-top:3px solid #386d56;vertical-align:middle;margin-right:6px}.key.dash{border-color:#a8782d;border-top-style:dashed}.key.blue{border-color:#356f9a}.resistors td:first-child{min-width:190px}.pill{display:inline-block;background:#eaf1f7;color:#285c80;border-radius:30px;padding:4px 11px;font-size:12px;font-weight:700}.figure-caption{font-size:14px;color:var(--muted)}details{border:1px solid var(--line);border-radius:9px;padding:16px 20px;margin:20px 0}summary{cursor:pointer;color:var(--green)}
 
 .network{display:grid;grid-template-columns:1fr 1fr;gap:18px}.network article{border:1px solid var(--line);border-radius:12px;background:white;padding:22px}.node{padding:12px;background:var(--tint);border-radius:8px;text-align:center}.path{text-align:center;padding:12px 5px;font-size:14px}.branch{display:flex;gap:8px}.branch>div{flex:1;min-width:0}.branch code{font-size:11px}.network h3{margin-top:0}@media(max-width:720px){.network{grid-template-columns:1fr}}
+.grid > *{min-width:0}.box,.node{min-width:0;overflow-wrap:anywhere}p,li{overflow-wrap:anywhere}
 </style></head><body><main>
 <div class="eyebrow">EcoSIM · Resistance and energy accounting</div>
 <h1>Surface energy and<br>evapotranspiration</h1>
@@ -44,7 +45,7 @@
 
 <section id="vapor"><h2>4 · Vapor exchange and donor limits</h2>
 <div class="eq">ΔVⱼ,proposal = Aⱼ Δtⱼ (ρ_endpoint − ρ_surface,j)/(r_exchange,j + r_material,j)<br>Q_LE = L_v ΔV_liquid + L_s ΔV_sublimation</div>
-<p>Soil and litter surface concentration depends on saturation concentration, current temperature and water potential; snow uses saturation at its current temperature. The standalone soil branch adds <code>RZ</code>. ATS soil evaporation can instead use the saturation-dependent surface resistance, bounded below by RZ. Snow and litter retain their own surface resistance and donor limits.</p>
+<p>Standalone porous soil and litter use a common equilibrium vapor-density helper and state-dependent Tang–Riley internal resistance, added to each patch’s assembled air-side path. The material resistance combines pore-vapor diffusion and capillary liquid supply in parallel; it is not added to sensible heat. Soil uses the selected soil hydraulics; litter uses independent native litter hydraulics and its physical porosity / retained-water capacity. Below freezing, connected ice sets source equilibrium and the merged demand is partitioned between liquid and ice with separate donor limits and latent heats. Standalone pond/lake and snow retain RZ; ATS soil retains its saturation-dependent resistance with an RZ floor and ATS litter retains RZ. See the <a href="sensible_latent_heat_resistances.html#porous">updated resistance equations, limits and calculator</a> (November 19, 2026).</p>
 <p>Evaporation or sublimation cannot withdraw more than the accepted available donor water. A donor-limited branch has zero frozen derivative with respect to air vapor concentration. Condensation can add water. Vapor mass also carries sensible enthalpy in addition to latent heat; those terms remain separate in the energy ledger.</p></section>
 
 <section id="energy"><h2>5 · What energy closure means here</h2>

@@ -3,6 +3,7 @@ module SurfPhysMod
 ! Description:
 ! code for doing surface physics
 !
+  use LitterHydraulicMod, only: LitterMoistureClass
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use TracerIDMod, only: idg_beg,idg_NH3,idg_CO2
   use ChemTracerParsMod, only: WGSG,CGSG,CHSG,OGSG,ZGSG,Z2SG,HGSG,ARSG,ZHSG
@@ -42,7 +43,10 @@ module SurfPhysMod
   use SurfLitterPhysMod
   use EcoSIMSolverPar
   use EcoSIMCtrlMod
+  use SurfaceVaporExchangeMod, only: SurfaceVaporDensity,PartitionSurfaceVapor
   use SoilPhysParaMod
+  use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
+  use SoilHydraulicSchemeMod, only: GetSoilHydraulicModel,GetSoilHydraulicParameters
   use SnowBalanceMod
 implicit none
   private
@@ -68,7 +72,6 @@ implicit none
 ! RACX,ResistanceLitrSurf=minimum boundary layer resistances of canopy,litter (h m-1)
 
   real(r8), parameter :: FEnergyImpact4Erosion_col = 1.0E-03_r8
-  real(r8), parameter :: SatHydroCondLitR      = 25.0_r8      !saturated hydraulic conductivity of surface litter [x h-1], unit needs double check
   real(r8), parameter :: ResistanceLitrSurf    = 0.0139_r8    !minimum boundary layer resistances of litter [h m-1]
   real(r8), parameter :: SoilEmisivity         = 0.97_r8      !soil emissivity
   real(r8), parameter :: SnowEmisivity         = 0.97_r8      !snowpack emissivity
@@ -98,6 +101,9 @@ contains
   integer :: L
 !     begin_execution
   call PrintInfo('beg '//subname)
+  RSoilEvap_col(NY,NX)         = SurfaceResistanceMissing
+  RLitterEvap_col(NY,NX)       = SurfaceResistanceMissing
+  QSUBLIM_col(NY,NX)          = 0._r8
   WatFLo2Litr_col(NY,NX)         = 0.0_r8
   HeatFLoByWat2LitR_col(NY,NX)   = 0.0_r8
   TLitrIceFlxThaw_col(NY,NX)     = 0.0_r8
@@ -170,6 +176,7 @@ contains
       TEvapXAir2Toplay_col(NY,NX)       = 0._r8
       TEvapXAir2LitR_col(NY,NX)         = 0._r8
       TEvapXAir2Snow_col(NY,NX)         = 0._r8
+      QSUBLIM_col(NY,NX)               = 0._r8
       TXGridSurfRunoff_2DH(NY,NX)       = 0.0_r8
       THeatXGridBySurfRunoff_2DH(NY,NX) = 0.0_r8
 
@@ -738,6 +745,15 @@ contains
   real(r8) :: tHeatAir2Grnd   !residual heat flux into soil from incoming radiation minus sensible and latent heat [MJ]
   real(r8) :: AlbedoGrnd      !albedo at the ground
   real(r8) :: RadSWbySoil     !shortwave radiation absorbed by exposed soil [MJ]
+  real(r8) :: ThetaLiquidSurface !current liquid content [m3 water m-3 micropore soil]
+  real(r8) :: AirPorositySurface !current air content [m3 air m-3 micropore soil]
+  real(r8) :: BulkVaporDiffusivity !air fraction times effective vapor diffusivity [m2 h-1]
+  real(r8) :: BunsenWater        !liquid/soil-vapor density ratio [-]
+  real(r8) :: VaporDemand,LiquidVapor,IceVapor,IceAvailable,LatentDerivative
+  real(r8) :: VaporHeatCapacity ! accepted vapor donor sensible capacity [MJ/K]
+  integer :: TopSoilLayer,MoistureClass
+  type(SoilHydraulicParameters) :: soil_parameters !surface layer's selected retention parameters
+  class(SoilHydraulicModel), pointer :: soil_model !borrowed selected hydraulic implementation
 
   character(len=*), parameter :: subname='SoilSRFEnerbyBalanceM'
 
@@ -832,42 +848,72 @@ contains
   ! VAP=latent heat of evaporation
   ! HeatSensVapAir2Grnd=convective heat of evaporation flux
   !
+  TKX1                  = TKSoil1_vr(NUM_col(NY,NX),NY,NX)
+  IceAvailable=0._r8
+  if(.not.ats_cpl_mode)IceAvailable=AZMAX1(VLiceMicP1_vr(NUM_col(NY,NX),NY,NX))
+  VaporSoi1=SurfaceVaporDensity(TKX1,PSISV1,IceAvailable)
+
   if(ats_cpl_mode)then
     !A coarse ATS top cell cannot resolve the dry surface crust that limits
     !bare-soil evaporation, so use a surface resistance from its liquid
     !saturation (THETW_vr = a_LSAT): r = exp(8.206-4.255*s) [s m-1] (Sellers et
     !al., 1992, SiB2). It is about RZ when saturated and ~1500 s m-1 at s=0.2.
     RSoilEvap = AMAX1(RZ, EXP(8.206_r8-4.255_r8*AMIN1(1._r8,AZMAX1(THETW_vr(NUM_col(NY,NX),NY,NX))))/3600._r8)
+  elseif(.not.IsPondLayer(SoilBulkDensity_vr(NUM_col(NY,NX),NY,NX)))then
+    ! Tang and Riley (2013), Eqs. 13-14: use current substep contents on the
+    ! micropore-domain basis, without the dry-content floor used for vapor activity.
+    TopSoilLayer    = NUM_col(NY,NX)
+    soil_parameters = GetSoilHydraulicParameters(TopSoilLayer,NY,NX,DTHETW)
+    soil_model => GetSoilHydraulicModel()
+    ThetaLiquidSurface=MAX(0._r8,MIN(soil_parameters%porosity, &
+      safe_adb(VLWatMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
+    AirPorositySurface=MAX(0._r8,MIN(soil_parameters%porosity, &
+      safe_adb(VLairMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
+    BulkVaporDiffusivity=WVapDifusvitySoil_vr(TopSoilLayer,NY,NX) &
+      *AirPorositySurface**2*POROQ/soil_parameters%porosity
+    MoistureClass=getMoistK(ThetaLiquidSurface,soil_parameters%porosity)
+    ! vapsat returns Mg water m-3; liquid density is 1 Mg m-3. Protect only
+    ! the partition ratio against underflow, retaining VaporSoi1 in the flux.
+    BunsenWater = 1._r8/MAX(VaporSoi1,tiny(1._r8))
+    RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaLiquidSurface, &
+      DLYR_3D(3,TopSoilLayer,NY,NX),HydroCond_3D(3,MoistureClass,TopSoilLayer,NY,NX), &
+      BulkVaporDiffusivity,BunsenWater)
   else
-    RSoilEvap = RZ
+    ! A pond/lake is an open-water surface, not a porous topsoil control volume.
+    RSoilEvap=RZ
   endif
-  ExchangeResistance=SurfaceExchangeResistance(NY,NX,TKSoil1_vr(NUM_col(NY,NX),NY,NX),RawH2OSoil2CanAir_col(NY,NX))
+  ExchangeResistance    = SurfaceExchangeResistance(NY,NX,TKSoil1_vr(NUM_col(NY,NX),NY,NX),RawH2OSoil2CanAir_col(NY,NX))
+  if(AScaledCdWOverSoil_col(NY,NX)>0._r8)RSoilEvap_col(NY,NX)=RSoilEvap
   CdSoiEvap             = AScaledCdWOverSoil_col(NY,NX)/(ExchangeResistance+RSoilEvap)
   CdSoiHSens_col(NY,NX) = AScaledCdHOverSoil_col(NY,NX)/ExchangeResistance
-  TKX1                  = TKSoil1_vr(NUM_col(NY,NX),NY,NX)
-  VaporSoi1             = vapsat(TKX1)*EXP(18.0_r8*PSISV1/(RGASC*TKX1))
 
-  !evaporation, no more than what is available, g H2O
-  if(TopLayWatVol<1.0e-30) TopLayWatVol=0.0
-  VapXAir2TopLay=AMAX1(CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1),-AZMAX1(TopLayWatVol*dts_wat))
-  ! Freeze water availability: a donor-limited evaporation branch has zero
-  ! local derivative. CdSoiEvap already includes area and substep duration.
-  if(CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)>-AZMAX1(TopLayWatVol*dts_wat))then
-    SurfLatHeatVapDeriv_col(NY,NX)=SurfLatHeatVapDeriv_col(NY,NX)+EvapLHTC*CdSoiEvap
+  ! One merged-resistance demand, partitioned by physical liquid/ice volume.
+  if(TopLayWatVol<1.0e-30_r8)TopLayWatVol=0._r8
+  VaporDemand=CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)
+  if(.not.ats_cpl_mode)then
+    call PartitionSurfaceVapor(VaporDemand,TopLayWatVol,IceAvailable,TKX1,dts_wat, &
+      LiquidVapor,IceVapor,LatentDerivative, &
+      CdSoiEvap*(VPQ_col(NY,NX)-SurfaceVaporDensity(TKX1,PSISV1,1._r8)))
+  else
+    ! ATS owns soil ice; preserve its existing liquid-only boundary contract.
+    LiquidVapor      = MAX(VaporDemand,-MAX(0._r8,TopLayWatVol*dts_wat))
+    IceVapor         = 0._r8
+    LatentDerivative = 0._r8
+    if(VaporDemand>-MAX(0._r8,TopLayWatVol*dts_wat))LatentDerivative=EvapLHTC
   endif
-  !VapXAir2TopLay=0.0
-
-  !latent heat > 0 into soil/ground
-  LatentHeatEvapAir2Grnd=VapXAir2TopLay*EvapLHTC
-  IF(VapXAir2TopLay.LT.0.0_r8)THEN
-    !evaporation (<0 into atmosphere)
-    HeatSensVapAir2Grnd=VapXAir2TopLay*cpw*TKSoil1_vr(NUM_col(NY,NX),NY,NX)*HeatAdv_scal
-  ELSE
-    !condensation (>0 into ground)
-    HeatSensVapAir2Grnd=VapXAir2TopLay*cpw*TKQ_col(NY,NX)*HeatAdv_scal
-  ENDIF
-  !
-  TopLayWatVol=TopLayWatVol+VapXAir2TopLay
+  IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)=IceVapor
+  ! Record only ice loss, before any deposition in later substeps can cancel it.
+  QSUBLIM_col(NY,NX)=QSUBLIM_col(NY,NX)+MAX(0._r8,-IceVapor)
+  VapXAir2TopLay=LiquidVapor+IceVapor
+  SurfLatHeatVapDeriv_col(NY,NX)=SurfLatHeatVapDeriv_col(NY,NX)+LatentDerivative*CdSoiEvap
+  LatentHeatEvapAir2Grnd=LiquidVapor*EvapLHTC+IceVapor*SublmHTC
+  VaporHeatCapacity=cpw*LiquidVapor+cpi*IceVapor/DENSICE
+  if(VapXAir2TopLay<0._r8)then
+    HeatSensVapAir2Grnd=VaporHeatCapacity*TKX1*HeatAdv_scal
+  else
+    HeatSensVapAir2Grnd=VaporHeatCapacity*TKQ_col(NY,NX)*HeatAdv_scal
+  endif
+  TopLayWatVol=TopLayWatVol+LiquidVapor
   !
   !
   ! SOLVE FOR SOIL SURFACE TEMPERATURE AT WHICH ENERGY
@@ -1130,7 +1176,7 @@ contains
       !surface litter holds water
       ThetaWLitR=AMIN1(VWatLitRHoldCapcity_col(NY,NX),VLWatLitR)/VLitR_col(NY,NX)
     ELSE
-      ThetaWLitR=POROS0_col(NY,NX)
+      ThetaWLitR=fLitRPore4WatHold_col(NY,NX)
     ENDIF
     THETW1=AMAX1(SoilWatAirDry_vr(NUM_col(NY,NX),NY,NX),AMIN1(POROS_vr(NUM_col(NY,NX),NY,NX) &
       ,safe_adb(VLWatMicP1_vr(NUM_col(NY,NX),NY,NX),VLSoilMicP_vr(NUM_col(NY,NX),NY,NX))))
@@ -1138,7 +1184,7 @@ contains
     !K1 topsoil layer
     !DarcyFlxLitR2Soil = water flux from litter layer into the topsoil
     
-    K0   = getMoistK(ThetaWLitR,POROS0_col(NY,NX))
+    K0   = LitterMoistureClass(ThetaWLitR,fLitRPore4WatHold_col(NY,NX))
     K1   = getMoistK(THETW1,POROS_vr(NUM_col(NY,NX),NY,NX))
     CNDR = HydroCond_3D(3,K0,0,NY,NX)
     CND1 = HydroCond_3D(3,K1,NUM_col(NY,NX),NY,NX)*RainEkReducedKsat
@@ -1198,7 +1244,7 @@ contains
     !soil to litter
   ELSE
     !top layer is water
-    TotalLitRWaterIce=AvailableLitRWater+VLiceMicP1_vr(0,NY,NX)
+    TotalLitRWaterIce=AvailableLitRWater+MAX(0._r8,VLiceMicP1_vr(0,NY,NX)+IceVaporMicPM_vr(0,NY,NX)/DENSICE)
     MobileLitRWater=0._r8
     IF(TotalLitRWaterIce.GT.ZEROS(NY,NX))MobileLitRWater=AvailableLitRWater &
       *AZMAX1(1._r8-VWatLitRHoldCapcity_col(NY,NX)/TotalLitRWaterIce)
@@ -1222,7 +1268,7 @@ contains
 !     WaterFlow2Micpt_3D,HFLWL=micropore water,heat flux
 !     WatFLow2LitR,HFLWRL=total litter water,heat flux
 !
-  TotalLitRWaterIce=AvailableLitRWater+VLiceMicP1_vr(0,NY,NX)
+  TotalLitRWaterIce=AvailableLitRWater+MAX(0._r8,VLiceMicP1_vr(0,NY,NX)+IceVaporMicPM_vr(0,NY,NX)/DENSICE)
   MobileLitRWater=0._r8
   IF(TotalLitRWaterIce.GT.ZEROS(NY,NX))MobileLitRWater=AvailableLitRWater &
     *AZMAX1(1._r8-VWatLitRHoldCapcity_col(NY,NX)/TotalLitRWaterIce)
@@ -1253,7 +1299,7 @@ contains
   integer, intent(in) :: M,NY,NX
   character(len=*), parameter :: subname='UpdateLitterPhaseChangeM'
   real(r8) :: LitrIceHeatFlxFrezPt,TK1X,ENGYR,VLWatMicP1X,VLHeatCapacityX
-  real(r8) :: TFREEZ,TFLX
+  real(r8) :: TFREEZ,TFLX,IceVolumePending
 
 
   !     begin_execution
@@ -1280,9 +1326,10 @@ contains
   endif
   !TFREEZ          = -9.0959E+04_r8/(PSISM1_vr(0,NY,NX)-LtHeatIceMelt)
   TFREEZ          = get_Tfrez(PSISM1_vr(0,NY,NX))
+  IceVolumePending=MAX(0._r8,VLiceMicP1_vr(0,NY,NX)+IceVaporMicPM_vr(0,NY,NX)/DENSICE)
   VLWatMicP1X     = AZMAX1(VLWatMicP1_vr(0,NY,NX)+WatFLo2LitrM_col(NY,NX))
   ENGYR           = VHeatCapacity1_vr(0,NY,NX)*TKSoil1_vr(0,NY,NX)
-  VLHeatCapacityX = cpo*m3OM_col(NY,NX)+cpw*VLWatMicP1X+cpi*VLiceMicP1_vr(0,NY,NX)
+  VLHeatCapacityX = cpo*m3OM_col(NY,NX)+cpw*VLWatMicP1X+cpi*IceVolumePending
 
   IF(VLHeatCapacityX.GT.ZEROS(NY,NX))THEN
     TK1X=(ENGYR+HeatFLoByWat2LitRM_col(NY,NX))/VLHeatCapacityX
@@ -1292,13 +1339,13 @@ contains
 
   !do freeze thaw of litter water
   IF((TK1X.LT.TFREEZ .AND. VLWatMicP1_vr(0,NY,NX).GT.ZERO*VGeomLayer_vr(0,NY,NX)) &
-    .OR. (TK1X.GT.TFREEZ .AND. VLiceMicP1_vr(0,NY,NX).GT.ZERO*VGeomLayer_vr(0,NY,NX)))THEN
+    .OR. (TK1X.GT.TFREEZ .AND. IceVolumePending.GT.ZERO*VGeomLayer_vr(0,NY,NX)))THEN
     LitrIceHeatFlxFrezPt = VHeatCapacity1_vr(0,NY,NX)*(TFREEZ-TK1X) &
       /((1.0_r8+(TFREEZ-TFICE)*6.2913E-03_r8)*(1.0_r8-0.10_r8*PSISM1_vr(0,NY,NX)))*dts_wat
 
     IF(LitrIceHeatFlxFrezPt.LT.0.0_r8)THEN
       !ice thaw, current temperature above freezing TFREEZ<TK1X
-      TFLX=AMAX1(-LtHeatIceMelt*DENSICE*VLiceMicP1_vr(0,NY,NX)*dts_wat,LitrIceHeatFlxFrezPt)
+      TFLX=AMAX1(-LtHeatIceMelt*DENSICE*IceVolumePending*dts_wat,LitrIceHeatFlxFrezPt)
     ELSE
       !water freeze (TFLX > 0._r8)
       TFLX=AMIN1(LtHeatIceMelt*VLWatMicP1X*dts_wat,LitrIceHeatFlxFrezPt)
@@ -1424,6 +1471,10 @@ contains
   WaterFlow2MacPM_3D(M,3,NUM_col(NY,NX),NY,NX) = WaterFlow2Macpt_3D(3,NUM_col(NY,NX),NY,NX)
   TEvapXAir2Toplay_col(NY,NX)              = TEvapXAir2Toplay_col(NY,NX)+VapXAir2TopLay
   TEvapXAir2Snow_col(NY,NX)                = TEvapXAir2Snow_col(NY,NX)+VapXAir2Sno_col(NY,NX)
+  !
+  ! EVAPS contains only dry-snow loss, summed over this soil step's snow iterations.
+  ! Soil and litter ice losses are recorded where their accepted fluxes are formed.
+  QSUBLIM_col(NY,NX)                      = QSUBLIM_col(NY,NX)+MAX(0._r8,-EVAPS_col(NY,NX))
 
   call PrintInfo('end '//subname)
   end subroutine AccumWaterVaporHeatFluxesM
@@ -1704,7 +1755,6 @@ contains
 !     HCNDLitr_col=litter saturated hydraulic conductivity
 !     DLYRR=litter depth
 !
-!  HCNDLitr_col(NY,NX) = SatHydroCondLitR
   DLYRR_COL(NY,NX)    = AMAX1(2.5E-03_r8,DLYR_3D(3,0,NY,NX))
 !
 !     DISTRIBUTION OF PRECIPITATION AND ITS HEAT AMONG SURFACE
@@ -1873,8 +1923,9 @@ contains
   ! NetWatFlxAir2LitR=water flux from atm to litter
   ! CumHeatSensAir2LitR=convective heat flux from atm to litter
   !
-  NetWatFlxAir2SoiMicP  = PrecNet2SoiMicP+VapXAir2TopLay+EvapLitR2Soi1
-  NetWatXFlxAir2SoiMicP = PrecNet2SoiMicP+VapXAir2TopLay+EvapLitR2Soi1
+  NetWatFlxAir2SoiMicP  = PrecNet2SoiMicP+VapXAir2TopLay &
+    -IceVaporMicPM_vr(NUM_col(NY,NX),NY,NX)+EvapLitR2Soi1
+  NetWatXFlxAir2SoiMicP = NetWatFlxAir2SoiMicP
   NetWatFlxAir2SoiMacP  = PrecNet2SoiMacP
   cumHeatSensAir2Soil   = PrecHeat2SoiNet+HeatFluxAir2Soi+HeatSensVapLitR2Soi1+HeatSensLitR2Soi1
   !write(*,*) "PrecHeat2SoiNet: ", PrecHeat2SoiNet
@@ -1883,7 +1934,7 @@ contains
   !write(*,*) "HeatSensLitR2Soi1: ", HeatSensLitR2Soi1
 
   !total water and heat fluxes to litter
-  NetWatFlxAir2LitR   = RainPrecAir2LitR+VapXAir2LitR-EvapLitR2Soi1
+  NetWatFlxAir2LitR   = RainPrecAir2LitR+VapXAir2LitR-IceVaporMicPM_vr(0,NY,NX)-EvapLitR2Soi1
   CumHeatSensAir2LitR = RainPrecHeatAir2LitR+HeatFluxAir2LitR-HeatSensVapLitR2Soi1-HeatSensLitR2Soi1
 
   !
@@ -1998,6 +2049,9 @@ contains
   D9895: DO  NX=NHW,NHE
     D9890: DO  NY=NVN,NVS
 
+      RSoilEvap_col(NY,NX)=SurfaceResistanceMissing
+      RLitterEvap_col(NY,NX)=SurfaceResistanceMissing
+      IceVaporMicPM_vr(:,NY,NX)=0._r8
       ! No exposed-soil sensible derivative survives a snow-covered step.
       CdSoiHSens_col(NY,NX)=0._r8
       call SurfaceEnergyModelM(I,J,M,NX,NY,ResistVapThroughLitr(NY,NX),RainEkReducedKsat(NY,NX),&
@@ -2313,9 +2367,9 @@ contains
     ! Each exposed patch now connects directly to reference air. Add its
     ! current atmospheric segment before mixing patches, not again afterward.
     ! Extract the molecular litter film above, before adding any atmosphere.
-    BareResistance=SurfaceExchangeResistance(NY,NX,TKSoil1_vr(NUM_col(NY,NX),NY,NX),BareResistance)
-    LitterResistance=SurfaceExchangeResistance(NY,NX,TKSoil1_vr(0,NY,NX),LitterResistance)
-    LitterTurbResistance=LitterResistance-LitterFilmResistance
+    BareResistance       = SurfaceExchangeResistance(NY,NX,TKSoil1_vr(NUM_col(NY,NX),NY,NX),BareResistance)
+    LitterResistance     = SurfaceExchangeResistance(NY,NX,TKSoil1_vr(0,NY,NX),LitterResistance)
+    LitterTurbResistance = LitterResistance-LitterFilmResistance
     if(FracSurfSnowCovered_col(NY,NX)>0._r8) &
       SnowFilmResistance=SurfaceExchangeResistance(NY,NX,TKSnow1_snvr(1,NY,NX),SnowFilmResistance)
     AtmosResistance=0._r8

@@ -183,6 +183,9 @@ contains
   allocate(this%h1D_Snofall_col(beg_col:end_col))         ;this%h1D_Snofall_col(:)=spval
   allocate(this%h1D_SOIL_RN_col(beg_col:end_col))         ;this%h1D_SOIL_RN_col(:)=spval
   allocate(this%h1D_LWSky_col(beg_col:end_col))           ;this%h1D_LWSky_col(:)=spval
+  allocate(this%h1D_RSoilEvap_col(beg_col:end_col)); this%h1D_RSoilEvap_col(:)=spval
+  allocate(this%h1D_RLitterEvap_col(beg_col:end_col)); this%h1D_RLitterEvap_col(:)=spval
+  allocate(this%h1D_QSUBLIM_col(beg_col:end_col)); this%h1D_QSUBLIM_col(:)=spval
   allocate(this%h1D_SOIL_LE_col(beg_col:end_col))         ;this%h1D_SOIL_LE_col(:)=spval
   allocate(this%h1D_SOIL_H_col(beg_col:end_col))          ;this%h1D_SOIL_H_col(:)=spval
   allocate(this%h1D_SOIL_G_col(beg_col:end_col))          ;this%h1D_SOIL_G_col(:)=spval

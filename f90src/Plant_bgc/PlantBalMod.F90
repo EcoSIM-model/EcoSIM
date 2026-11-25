@@ -1,7 +1,8 @@
 module PlantBalMod
 !
-!Description
-!code to do mass balance calculation for plant bgc
+! Description:
+! Account for plant biomass and completed timestep fluxes, including transfers
+! during disturbance and changes to the living root and branch population.
 
   use data_kind_mod,    only: r8 => DAT_KIND_R8,yearIJ_type
   use EcoSiMParDataMod, only: pltpar
@@ -40,6 +41,8 @@ implicit none
   ![header]
 !----------------------------------------------------------------------------------------------------
   subroutine SumPlantBiome(yearIJ,NZ,header,tvegE,canopyE,RootE)
+  ! Description:
+  ! Sum current biomass and all completed timestep fluxes for a PFT.
 
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ
@@ -88,7 +91,9 @@ implicit none
   !sum fluxes
   !     NH3Dep2Can_brch,NH3Dep2Can_pft=PFT NH3 flux between atmosphere and branch,canopy
   NH3Dep2Can_pft(NZ)=0._r8
-  DO NB=1,NumOfBranches_pft(NZ)
+  ! A disturbance can remove branches after their exchange already occurred.
+  ! ZeroGrosub clears every branch flux slot at the start of the timestep.
+  DO NB=1,SIZE(NH3Dep2Can_brch,1)
     NH3Dep2Can_pft(NZ)=NH3Dep2Can_pft(NZ)+NH3Dep2Can_brch(NB,NZ)
   ENDDO    
 
@@ -153,19 +158,19 @@ implicit none
 !----------------------------------------------------------------------------------------------------
 
   subroutine SumRootAR(NZ)
+  ! Description:
+  ! Retain respiration completed before harvest or tillage changes root extent.
   implicit none
   integer, intent(in) :: NZ
   integer :: N,L
   associate(                                                         &  
-    NU                       => plt_site%NU                         ,& !input  :current soil surface layer number, [-]  
-    Myco_pft                 => plt_morph%Myco_pft                  ,& !input  :mycorrhizal type (no or yes),[-] 
+    MaxNumRootLays           => plt_site%MaxNumRootLays             ,& !input  :fixed soil layer extent for accounting, [-]
     RootCO2Autor_pvr         => plt_rbgc%RootCO2Autor_pvr           ,& !input  :root respiration constrained by O2, [g d-2 h-1]  
-    RootAutoCO2_pft          => plt_bgcr%RootAutoCO2_pft            ,& !inoput :root autotrophic respiraiton, [gC d-2]
-    NMaxRootBotLayer_pft     => plt_morph%NMaxRootBotLayer_pft       & !input  :maximum soil layer number for all root axes,[-]    
+    RootAutoCO2_pft          => plt_bgcr%RootAutoCO2_pft             & !output :completed root autotrophic respiration, [gC d-2]
   )
   RootAutoCO2_pft(NZ)=0._r8
-  DO N=1,Myco_pft(NZ)
-    DO L=1,NMaxRootBotLayer_pft(NZ)
+  DO N=1,SIZE(RootCO2Autor_pvr,1)
+    DO L=1,MaxNumRootLays
       RootAutoCO2_pft(NZ)=RootAutoCO2_pft(NZ)+RootCO2Autor_pvr(N,L,NZ)
     ENDDO     
   ENDDO  
@@ -395,6 +400,9 @@ implicit none
 
 !----------------------------------------------------------------------------------------------------
   subroutine ZeroGrosub(NP)
+  ! Description:
+  ! Clear timestep flux accumulators, including slots whose roots or branches
+  ! were removed during the preceding timestep.
   
   implicit none
   integer, intent(in) :: NP
@@ -511,7 +519,7 @@ implicit none
     CH2OSunlit_pft(NZ)                                          = 0._r8
     CH2OSunsha_pft(NZ)                                          = 0._r8
     RootMaintDef_CO2_pvr(:,:,NZ)                                = 0._r8
-    RootCO2Autor_pvr(1:Myco_pft(NZ),NU:MaxSoilLays4Root_pft(NZ),NZ) = 0._r8
+    RootCO2Autor_pvr(:,:,NZ)                                    = 0._r8
     NH3Dep2Can_pft(NZ)                                          = 0._r8
     GrossResp_pft(NZ)                                           = 0._r8
     GrossCO2Fix_pft(NZ)                                         = 0._r8

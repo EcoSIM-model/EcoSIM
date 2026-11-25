@@ -3,6 +3,8 @@ module Hour1Mod
   ! Prepare hourly forcing, reset transfer/diagnostic accumulators and record
   ! starting balances. Synchronize prescribed canopy thermal stocks before exchange.
   use AtmosCompositionMod, only: UpdateAtmosGasMassConcentrations
+  use LitterHydraulicMod, only: LitterHydroproperty,UpdateLitterHydraulicLimits, &
+    LitterMatricPotential,GetLitterHydraulicParameters
   use data_kind_mod,     only: r8 => DAT_KIND_R8
   use data_const_mod,    only: GravAcceleration=>DAT_CONST_G
   use minimathmod,       only: isclose, AZMAX1, AZMIN1,Viscosity_H2O
@@ -675,7 +677,7 @@ module Hour1Mod
       IF(iResetSoilProf_col(NY,NX).NE.ifalse)THEN
 
         if(lverb)write(*,*)'LitterHydroproperty'
-        call LitterHydroproperty(NY,NX)
+        call LitterHydroproperty(NY,NX,use_ecosys_drainage)
     !
     !   'RESET SOIL PHYSICAL PROPERTIES (DENSITY, TEXTURE)'
     !     AFTER DISTURBANCES (E.G. TILLAGE, EROSION)
@@ -1389,34 +1391,18 @@ module Hour1Mod
   real(r8) :: XVOLW0
   real(r8) :: XVOLI0
   integer  :: idg,NTN
-! begin_execution
-! PHYSICAL PROPERTIES, AND WATER, GAS, AND MINERAL CONTENTS
-! OF SURFACE RESIDUE
-!
-! VWatLitRHoldCapcity=liter water holding capacity
-! THETRX,RC0=specific WHC,mass of woody(0),fine(1),manure(2) litter
-! VLitR=dry litter volume
-! BulkDensLitR=dry bulk density of woody(0),fine(1),manure(2) litter
-! VxcessWatLitR=excess litter water+ice
-! VOLT,VLSoilPoreMicP_vr=wet litter volume
-! BKVL=litter mass
-! VOLW,VOLI,VOLA,VOLP=litter water,ice,porosity,air volume
-! THETW,THETI,THETA,THETP=litter water,ice,porosity,air concentration
-! POROS=litter porosity
-! THETW0,THETI0,DepthSurfWatIce=litter excess water,ice,water+ice depth
-! DLYR=litter thickness
-! PSISM,PSISE=litter matric,saturation water potential
-!
-  !write(*,*) "In GetSurfResidualProperties: "
-  VxcessWatLitR          = AZMAX1(VLWatMicP_vr(0,NY,NX)+VLiceMicP_vr(0,NY,NX)-VWatLitRHoldCapcity_col(NY,NX))
-  VGeomLayer_vr(0,NY,NX) = VxcessWatLitR+VLitR_col(NY,NX)
+  character(len=*), parameter :: subname='GetSurfResidualProperties'
+
+  ! begin_execution
+  call PrintInfo('beg '//subname)
+  ! PHYSICAL PROPERTIES, AND WATER, GAS, AND MINERAL CONTENTS
+  ! OF SURFACE RESIDUE
+  !
   IF(VGeomLayer_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
-    VLSoilPoreMicP_vr(0,NY,NX) = VGeomLayer_vr(0,NY,NX)
-    VLSoilMicPMass_vr(0,NY,NX) = gC2MgOM*SoilOrgM_vr(ielmc,0,NY,NX)
-    VLMicP_vr(0,NY,NX)         = AZMAX1(VLitR_col(NY,NX)-VLSoilMicPMass_vr(0,NY,NX)/1.30_r8)
+
     VLsoiAirP_vr(0,NY,NX)      = AZMAX1(VLMicP_vr(0,NY,NX)-VLWatMicP_vr(0,NY,NX)-VLiceMicP_vr(0,NY,NX))
+
     IF(VLitR_col(NY,NX).GT.ZEROS(NY,NX))THEN
-      POROS_vr(0,NY,NX)    = VLMicP_vr(0,NY,NX)/VLitR_col(NY,NX)
       THETW_vr(0,NY,NX)    = AZMAX1(AMIN1(1.0_r8,VLWatMicP_vr(0,NY,NX)/VLitR_col(NY,NX)))
       THETI_vr(0,NY,NX)    = AZMAX1(AMIN1(1.0_r8,VLiceMicP_vr(0,NY,NX)/VLitR_col(NY,NX)))
       ThetaAir_vr(0,NY,NX) = AZMAX1(AMIN1(1.0_r8,VLsoiAirP_vr(0,NY,NX)/VLitR_col(NY,NX)))
@@ -1426,6 +1412,7 @@ module Hour1Mod
       THETI_vr(0,NY,NX)    = 0._r8
       ThetaAir_vr(0,NY,NX) = 0._r8
     ENDIF
+
     TVOLWI=VLWatMicP_vr(0,NY,NX)+VLiceMicP_vr(0,NY,NX)
     IF(TVOLWI.GT.ZEROS(NY,NX))THEN
       VWatLitrZ = VLWatMicP_vr(0,NY,NX)/TVOLWI*VWatLitRHoldCapcity_col(NY,NX)    !water helding capacity by litter
@@ -1436,20 +1423,13 @@ module Hour1Mod
       XVOLW0=0._r8
       XVOLI0=0._r8
     ENDIF
+
     DepthSurfWatIce    = XVOLW0+XVOLI0
     DLYR_3D(3,0,NY,NX) = VLSoilPoreMicP_vr(0,NY,NX)/AREA_3D(3,0,NY,NX)
 
     IF(VLitR_col(NY,NX).GT.ZEROS(NY,NX) .AND. VLWatMicP_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
       ThetaWLitR=AMIN1(VWatLitRHoldCapcity_col(NY,NX),VLWatMicP_vr(0,NY,NX))/VLitR_col(NY,NX)
-      IF(ThetaWLitR.LT.FieldCapacity_vr(0,NY,NX))THEN
-        PSISoilMatricP_vr(0,NY,NX)=AMAX1(PSIHY,-EXP(LOGPSIFLD_col(NY,NX)+((LOGFldCapacity_vr(0,NY,NX)-LOG(ThetaWLitR)) &
-          /FCD_vr(0,NY,NX)*LOGPSIMND_col(NY,NX))))
-      ELSEIF(ThetaWLitR.LT.POROS_vr(0,NY,NX))THEN
-        PSISoilMatricP_vr(0,NY,NX)=-EXP(LOGPSIAtSat(NY,NX)+(((LOGPOROS_vr(0,NY,NX)-LOG(ThetaWLitR)) &
-          /PSD_vr(0,NY,NX))**SRP_vr(0,NY,NX)*LOGPSIMXD_col(NY,NX)))
-      ELSE
-        PSISoilMatricP_vr(0,NY,NX)=PSI_at_Sautration_vr(0,NY,NX)
-      ENDIF
+      PSISoilMatricP_vr(0,NY,NX)=LitterMatricPotential(GetLitterHydraulicParameters(NY,NX),ThetaWLitR)
       PSISoilOsmotic_vr(0,NY,NX)          = 0._r8
       PSIGrav_vr(0,NY,NX)                 = mGravAccelerat*(SurfElevation_col(NY,NX)-CumDepz2LayBottom_vr(NU_col(NY,NX)-1,NY,NX)+0.5_r8*DLYR_3D(3,0,NY,NX))
       ElvAdjstedSoilH2OPSIMPa_vr(0,NY,NX) = AZMIN1(PSISoilMatricP_vr(0,NY,NX)+PSISoilOsmotic_vr(0,NY,NX)+PSIGrav_vr(0,NY,NX))
@@ -1481,6 +1461,7 @@ module Hour1Mod
     trc_solcl_vr(ids_nut_beg:ids_nuts_end,0,NY,NX) = 0._r8
     trc_solcl_vr(idg_beg:idg_NH3,0,NY,NX)        = 0._r8
   ENDIF
+  call PrintInfo('end '//subname)
   end subroutine GetSurfResidualProperties
 
 
@@ -1641,8 +1622,9 @@ module Hour1Mod
   subroutine UpdateLiterPropertz(NHW,NHE,NVN,NVS)
   implicit none
   integer, intent(in) :: NHW,NHE,NVN,NVS
-  real(r8) :: FVLitR  !litter porosity
+  real(r8) :: FracLitRVolHeldWater  !litter porosity for water holding
   integer :: NY,NX
+  character(len=*), parameter :: subname='UpdateLiterPropertz'
 !
 !     VWatLitRHoldCapcity=liter water holding capacity
 !     VLitR=dry litter volume
@@ -1650,36 +1632,50 @@ module Hour1Mod
 !
   real(r8) :: VWatLitRHoldCapcity0     !litter water holding capacity
   real(r8) :: VLitR0                   !litter volume
+  real(r8) :: WatVxcessLitRV           !WatVxcessLitRV=water+ice volume exceeding litter layer water holding capacities
   integer  :: K
 
+  call PrintInfo('beg '//subname)
+  !     THETRX=litter water retention capacity (m3 g C-1)
   DO  NX=NHW,NHE
     DO  NY=NVN,NVS
-      VWatLitRHoldCapcity0 = 0._r8
-      VLitR0               = 0._r8
+      VWatLitRHoldCapcity0       = 0._r8
+      VLitR0                     = 0._r8
+      SoilOrgM_vr(ielmc,0,NY,NX) = 0._r8
+      !
+      !bulk density fine litter biomass: 10-100 kg/m3, if 0.48 is C, then
+      !bulk density woody litter biomass:  150 to 200 kg/m3
+      !bulk density of manure biomass: 400 to 900 kg/m³
       DO K=1, micpar%NumOfLitrCmplxs
         VWatLitRHoldCapcity0 = VWatLitRHoldCapcity0+THETRX(K)*SurfLitterC_col(K,NY,NX)
         VLitR0               = VLitR0+SurfLitterC_col(K,NY,NX)/BulkDensLitR(K)
+        SoilOrgM_vr(ielmc,0,NY,NX)=SoilOrgM_vr(ielmc,0,NY,NX)+SurfLitterC_col(K,NY,NX)
       ENDDO
 
       VWatLitRHoldCapcity_col(NY,NX) = AZMAX1(VWatLitRHoldCapcity0)
       VLitR_col(NY,NX)               = AZMAX1(VLitR0*ppmc)
+      VLSoilMicPMass_vr(0,NY,NX)     = gC2MgOM*SoilOrgM_vr(ielmc,0,NY,NX)
+
+      !1.30 is the particle density of organic matter
+      VLMicP_vr(0,NY,NX)         = AZMAX1(VLitR_col(NY,NX)-VLSoilMicPMass_vr(0,NY,NX)/1.30_r8)
 
       IF(AMIN1(VLitR_col(NY,NX),VWatLitRHoldCapcity_col(NY,NX)).GT.ZEROS(NY,NX))THEN
-        FVLitR=VWatLitRHoldCapcity_col(NY,NX)/VLitR_col(NY,NX)
+        POROS_vr(0,NY,NX)    = VLMicP_vr(0,NY,NX)/VLitR_col(NY,NX)
+        FracLitRVolHeldWater = VWatLitRHoldCapcity_col(NY,NX)/VLitR_col(NY,NX)
       ELSE
-        FVLitR=THETRX(micpar%k_fine_comp)/BulkDensLitR(micpar%k_fine_comp)
+        FracLitRVolHeldWater=THETRX(micpar%k_fine_comp)/BulkDensLitR(micpar%k_fine_comp)
       ENDIF      
-      POROS0_col(NY,NX)          = FVLitR      
-      FieldCapacity_vr(0,NY,NX)  = 0.500_r8*FVLitR
-      WiltPoint_vr(0,NY,NX)      = 0.125_r8*FVLitR
-      LOGPOROS_vr(0,NY,NX)       = LOG(POROS0_col(NY,NX))
-      LOGFldCapacity_vr(0,NY,NX) = LOG(FieldCapacity_vr(0,NY,NX))
-      LOGWiltPoint_vr(0,NY,NX)   = LOG(WiltPoint_vr(0,NY,NX))
-      PSD_vr(0,NY,NX)            = LOGPOROS_vr(0,NY,NX)-LOGFldCapacity_vr(0,NY,NX)
-      FCD_vr(0,NY,NX)            = LOGFldCapacity_vr(0,NY,NX)-LOGWiltPoint_vr(0,NY,NX)
-      SRP_vr(0,NY,NX)            = 1.00_r8
+      !
+      call UpdateLitterHydraulicLimits(NY,NX,FracLitRVolHeldWater)
+
+      WatVxcessLitRV         = AZMAX1(VLWatMicP_vr(0,NY,NX)+VLiceMicP_vr(0,NY,NX)-VWatLitRHoldCapcity_col(NY,NX))
+      VGeomLayer_vr(0,NY,NX) = WatVxcessLitRV+VLitR_col(NY,NX) !total geometric volume [m3]
+      IF(VGeomLayer_vr(0,NY,NX).GT.ZEROS2(NY,NX))THEN
+        VLSoilPoreMicP_vr(0,NY,NX) = VGeomLayer_vr(0,NY,NX)
+      endif
     enddo
   enddo
+  call PrintInfo('end '//subname)
   end subroutine UpdateLiterPropertz
 
   !------------------------------------------------------------------------------------------

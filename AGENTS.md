@@ -42,6 +42,9 @@ take precedence over repository guidance.
 - Inside `ecosim_knowledge/`, stage and commit only HTML files and the content
   they reference (images, CSS, data files they load). Leave everything else
   there untracked, including `.DS_Store` and intermediate or scratch files.
+- Never stage or commit Markdown (`.md`) knowledge notes, such as the dated
+  analysis notes in `ecosim_knowledge/`. They stay local and untracked. Stage
+  files by explicit path, never with a wildcard that matches `*.md`.
 - Keep relative source links valid from that directory when creating or moving
   a document.
 
@@ -65,6 +68,14 @@ take precedence over repository guidance.
   handling as needed when adding persistent state or flux variables.
 - Every Fortran module must include a header comment describing its purpose and
   responsibilities.
+- When creating a new `.F90` source file, include the following source-file
+  identifier in the module specification section, after `implicit none` and
+  before `contains`. Use the preprocessor macro `__FILE__`, not a hard-coded
+  filename:
+  ```fortran
+  character(len=*),private, parameter :: mod_filename = &
+  __FILE__
+  ```
 - Every subroutine and function must include a description comment explaining
   its purpose.
 - Each module or procedure description must start with a standalone comment line

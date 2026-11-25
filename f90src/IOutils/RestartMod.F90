@@ -3,6 +3,7 @@ module RestartMod
 ! Description:
 ! code to write restart/check point files
 ! code to read/write restart files
+  use ElmIDMod, only: iplt_annual, iphenotyp_evgreen, iphotop_neutral, ipltcal_InitFloral, iTrue
   use data_kind_mod     , only : r8 => DAT_KIND_R8
   use data_const_mod    , only : spval => DAT_CONST_SPVAL, ispval => DAT_CONST_ISPVAL  
   use EcoSIMConfig      , only : jcplx=> jcplxc, NumMicbAFunGrupsPerCmplx, NumMicbHFunGrupsPerCmplx,nlbiomcp=>NumLiveMicrbCompts
@@ -139,6 +140,9 @@ implicit none
   integer :: senesc_varid
   type(var_desc_t) :: senesc_vardesc
   logical :: has_senesc_snapshot
+  integer :: floral_varid
+  type(var_desc_t) :: floral_vardesc
+  logical :: has_floral_nodes
   integer :: np0_varid
   type(var_desc_t) :: np0_vardesc
   logical :: has_np0
@@ -2313,7 +2317,7 @@ implicit none
   if(flag=='read')then
     dat2pr => datip_2d(1:npfts,1:MaxNumBranches)
     call restartvar(ncid, flag, varname='KVSTG', dim1name='pft',dim2name='nbranches',&
-     long_name='leaf growth stage counter', units='none', &
+     long_name='highest retained absolute node in current cycle', units='none', &
      interpinic_flag='skip', data=dat2pr, missing_value=ispval, fill_value=ispval)
     call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,KHiestGroLeafNode_brch,datip_2d,NumActivePlants=restart_num_plants,&
       IsPlantActive_pft=restart_active_pft)
@@ -2323,7 +2327,7 @@ implicit none
       IsPlantActive_pft=restart_active_pft)
     dat2pr => datip_2d(1:npfts,1:MaxNumBranches)
     call restartvar(ncid, flag, varname='KVSTG', dim1name='pft',dim2name='nbranches',&
-     long_name='leaf growth stage counter', units='none', &
+     long_name='highest retained absolute node in current cycle', units='none', &
      interpinic_flag='skip', data=dat2pr, missing_value=ispval, fill_value=ispval)
   endif  
 
@@ -5086,6 +5090,52 @@ implicit none
       dim3name='levsoi',long_name='root layer nodule element', units='g d-2', &
       interpinic_flag='skip', data=datpr3, missing_value=spval, fill_value=spval) 
     endif  
+  endif
+  ! Read after physical nodes and calendar state so legacy node-only history can be recovered.
+  if(flag=='read')then
+    call ncd_inqvid(ncid,'FloralDevNodes_brch',floral_varid,floral_vardesc,readvar=has_floral_nodes)
+    if(has_floral_nodes)then
+      datpr2 => datrp_2d(1:npfts,1:MaxNumBranches)
+      call restartvar(ncid,flag,varname='FloralDevNodes_brch',dim1name='pft',dim2name='nbranches', &
+        long_name='accumulated annual crop floral development',units='node equivalents', &
+        interpinic_flag='skip',data=datpr2,missing_value=spval,fill_value=spval)
+      call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,FloralDevNodes_brch,datrp_2d, &
+        NumActivePlants=restart_num_plants,IsPlantActive_pft=restart_active_pft)
+    else
+      FloralDevNodes_brch=0._r8
+      DO NX=NHW,NHE
+        DO NY=NVN,NVS
+          DO NZ=1,NP0_col(NY,NX)
+            if(iPlantPhenolPattern_pft(NZ,NY,NX)/=iplt_annual .or. &
+              iPlantPhenolType_pft(NZ,NY,NX)/=iphenotyp_evgreen)cycle
+            DO NB=1,MaxNumBranches
+              if(isPlantBranchAlive_brch(NB,NZ,NY,NX)/=iTrue)cycle
+              if(PlantPopuLive_pft(NZ,NY,NX)<=0._r8)cycle
+              if(iPlantCalendar_brch(ipltcal_InitFloral,NB,NZ,NY,NX)/=0)then
+                FloralDevNodes_brch(NB,NZ,NY,NX)=MAX(0._r8,MatureGroup_brch(NB,NZ,NY,NX))
+                cycle
+              endif
+              if(FloralPhotoSens_pft(NZ,NY,NX)>0._r8 .and. &
+                iPlantPhotoperiodType_pft(NZ,NY,NX)/=iphotop_neutral .and. &
+                ShootNodeNum_brch(NB,NZ,NY,NX)>ShootNodeNumAtInitFloral_brch(NB,NZ,NY,NX))then
+                write(iulog,*) 'Cannot recover photoperiod induction history for branch/PFT=',NB,NZ
+                call endrun('Restart lacks FloralDevNodes_brch for a developing photoperiod-sensitive annual crop')
+              endif
+              FloralDevNodes_brch(NB,NZ,NY,NX)=MAX(0._r8, &
+                ShootNodeNum_brch(NB,NZ,NY,NX)-ShootNodeNumAtInitFloral_brch(NB,NZ,NY,NX))
+            ENDDO
+          ENDDO
+        ENDDO
+      ENDDO
+      write(iulog,*) 'Legacy restart: recovered node-only annual floral history; sensitive history is not inferred.'
+    endif
+  else
+    if(flag=='write')call cppft(flag,NHW,NHE,NVN,NVS,NP0_col,FloralDevNodes_brch,datrp_2d, &
+      NumActivePlants=restart_num_plants,IsPlantActive_pft=restart_active_pft)
+    datpr2 => datrp_2d(1:npfts,1:MaxNumBranches)
+    call restartvar(ncid,flag,varname='FloralDevNodes_brch',dim1name='pft',dim2name='nbranches', &
+      long_name='accumulated annual crop floral development',units='node equivalents', &
+      interpinic_flag='skip',data=datpr2,missing_value=spval,fill_value=spval)
   endif
   call destroy(datrp_2d)
   call destroy(datrp_3d)

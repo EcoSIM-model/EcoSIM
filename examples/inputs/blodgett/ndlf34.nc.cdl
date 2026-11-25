@@ -2,6 +2,7 @@ netcdf ndlf34 {
 dimensions:
 	npfts = UNLIMITED ; // (1 currently)
 	JLI = 4 ;
+	JR2 = 2 ;
 	nchars1 = 10 ;
 	npft = 35 ;
 	nchars2 = 4 ;
@@ -34,6 +35,9 @@ variables:
 	float STDENS(npfts) ;
 		STDENS:long_name = "Stem mass density (considering voids)" ;
 		STDENS:units = "gC cm-3" ;
+	float CYTOS(npfts) ;
+		CYTOS:long_name = "cytokinin sensitivity of corase root thickening" ;
+		CYTOS:units = "" ;
 	byte ISNTYP(npfts) ;
 		ISNTYP:long_name = "snow interception vegetation class" ;
 		ISNTYP:units = "none" ;
@@ -65,7 +69,7 @@ variables:
 	byte MY(npfts) ;
 		MY:long_name = "mycorrhizal" ;
 		MY:units = "none" ;
-		MY:flags = "1=no,2=yes" ;		
+		MY:flags = "1=no,2=yes" ;
 	float ZTYPI(npfts) ;
 		ZTYPI:long_name = "thermal adaptation zone" ;
 		ZTYPI:units = "none" ;
@@ -73,9 +77,6 @@ variables:
 	float VCMX(npfts) ;
 		VCMX:long_name = "specific C3 rubisco carboxylase" ;
 		VCMX:units = "umol C g-1 s-1" ;
-	float CYTOS(npfts) ;
-		CYTOS:long_name = "cytokinin sensitivity of corase root thickening" ;
-		CYTOS:units = "" ;
 	float VOMX(npfts) ;
 		VOMX:long_name = "specific rubisco oxygenase activity" ;
 		VOMX:units = "umol O g-1 s-1" ;
@@ -212,9 +213,15 @@ variables:
 	float RSRR(npfts) ;
 		RSRR:long_name = "radial root resistivity" ;
 		RSRR:units = "m2 MPa-1 h-1" ;
-	float RSRA(npfts) ;
-		RSRA:long_name = "axial root resistivity" ;
-		RSRA:units = "m2 MPa-1 h-1" ;
+	float ARSRA(npfts) ;
+		ARSRA:long_name = "Axial resistance corrector from lumen to acutal vessel" ;
+		ARSRA:units = "[-]" ;
+	float RVSR(npfts) ;
+		RVSR:long_name = "Root vessel radius" ;
+		RVSR:units = "m" ;
+	float RSSA(npfts) ;
+		RSSA:long_name = "Stalk axial root resistance" ;
+		RSSA:units = "MPa h m-4" ;
 	float PTSHT(npfts) ;
 		PTSHT:long_name = "rate constant for equilibrating shoot-root nonstructural C concentration" ;
 		PTSHT:units = "h-1" ;
@@ -224,8 +231,11 @@ variables:
 	float KLGMM(npfts) ;
 		KLGMM:long_name = "Half saturation rate for coarse root lignification" ;
 		KLGMM:units = "h-1" ;
+	float MRTFQ(npfts, JR2) ;
+		MRTFQ:long_name = "medium root branching frequency on [coarse, medium]" ;
+		MRTFQ:units = "m-1" ;
 	float RTFQ(npfts) ;
-		RTFQ:long_name = "root branching frequency" ;
+		RTFQ:long_name = "fine root branching frequency" ;
 		RTFQ:units = "m-1" ;
 	float UPMXZH(npfts) ;
 		UPMXZH:long_name = "NH4 max uptake" ;
@@ -308,6 +318,12 @@ variables:
 	float CNRTLIG(npfts) ;
 		CNRTLIG:long_name = "NC ratio in plant lignified root" ;
 		CNRTLIG:units = "gN gC-1" ;
+	float CNLCRT(npfts) ;
+		CNLCRT:long_name = "NC ratio of live coarse root" ;
+		CNLCRT:units = "gN gC-1" ;
+	float CNDCRT(npfts) ;
+		CNDCRT:long_name = "NC ratio of dead coarse root" ;
+		CNDCRT:units = "gN gC-1" ;
 	float CNRSV(npfts) ;
 		CNRSV:long_name = "NC ratio in plant stalk reserve" ;
 		CNRSV:units = "gN gC-1" ;
@@ -344,6 +360,12 @@ variables:
 	float CPRTLIG(npfts) ;
 		CPRTLIG:long_name = "PC ratio in plant lignified root" ;
 		CPRTLIG:units = "gP gC-1" ;
+	float CPLCRT(npfts) ;
+		CPLCRT:long_name = "PC ratio of live coarse root" ;
+		CPLCRT:units = "gN gC-1" ;
+	float CPDCRT(npfts) ;
+		CPDCRT:long_name = "PC ratio of dead coarse root" ;
+		CPDCRT:units = "gP gC-1" ;
 	float CPRSV(npfts) ;
 		CPRSV:long_name = "PC ratio in plant stalk reserve" ;
 		CPRSV:units = "gP gC-1" ;
@@ -384,13 +406,17 @@ variables:
 	char koppen_clim_no(nkopenclms, nchars4) ;
 	char koppen_clim_short(nkopenclms, nchars5) ;
 	char koppen_clim_long(nkopenclms, nchars6) ;
+	double HYPA(npfts) ;
+		HYPA:long_name = "Hypocotyl-leaf area allometry coefficient" ;
+		HYPA:units = "1" ;
+		HYPA:comment = "Explicit historical coefficient 100; read through the standard PFT trait loader." ;
 
 // global attributes:
 		:description = "plant trait parameterization for ecosim created on 2024/03/14/10:02:16" ;
 		:history = "Sat Oct 18 12:06:29 2025: ncrcat ecosim_pftpar_20240723.nc /Users/jinyuntang/work/github/ecosim_benchmark/RiceUSTWT/Rice_pftpar_20251017.nc ecosim_pftpar_20251018.nc\n",
-			"2026-06-20T04:38:58Z: extracted PFT ndlf34 from /Users/jinyuntang/work/github/ecosim_workspace/uptk/input_data/ecosim_pftpar_20260520.nc source npfts index 26" ;
+			"2026-07-31T20:47:23Z: extracted PFT ndlf34 from /Users/jinyuntang/work/github/ecosim_workspace/uptk/input_data/ecosim_pftpar_20260722.nc source npfts index 26" ;
 		:NCO = "netCDF Operators version 5.3.5 (Homepage = http://nco.sf.net, Code = http://github.com/nco/nco, Citation = 10.1016/j.envsoft.2008.03.004)" ;
-		:source_pftpar_file = "/Users/jinyuntang/work/github/ecosim_workspace/uptk/input_data/ecosim_pftpar_20260520.nc" ;
+		:source_pftpar_file = "/Users/jinyuntang/work/github/ecosim_workspace/uptk/input_data/ecosim_pftpar_20260722.nc" ;
 		:selected_pft_code = "ndlf34" ;
 		:selected_pft_index_zero_based = 26 ;
 data:
@@ -406,6 +432,8 @@ data:
  I2EXP = 1 ;
 
  STDENS = 0.2 ;
+
+ CYTOS = 0.1 ;
 
  ISNTYP = 4 ;
 
@@ -427,7 +455,6 @@ data:
 
  VCMX = 35 ;
 
- CYTOS = 0.9;
  VOMX = 10 ;
 
  VCMX4 = 0 ;
@@ -472,7 +499,7 @@ data:
 
  PB = 0.25 ;
 
- GROUPX = 7 ;
+ GROUPX = 6 ;
 
  XTLI = 2.5 ;
 
@@ -480,11 +507,11 @@ data:
 
  XPPD = 0 ;
 
- SLA1 = 0.007 ;
+ SLA1 = 0.01 ;
 
  SSL1 = 0.05 ;
 
- SNL1 = 0.12 ;
+ SNL1 = 0.08 ;
 
  CLASS =
   0.25, 0.25, 0.25, 0.25 ;
@@ -519,15 +546,22 @@ data:
 
  RSRR = 2500 ;
 
- RSRA = 4e+09 ;
+ ARSRA = 2.5 ;
 
- PTSHT = 0.04 ;
+ RVSR = 1.5e-05 ;
+
+ RSSA = 4e+09 ;
+
+ PTSHT = 0.01 ;
 
  KLGMAX = 0.003 ;
 
  KLGMM = 0.04 ;
 
- RTFQ = 250 ;
+ MRTFQ =
+  30, 30 ;
+
+ RTFQ = 600 ;
 
  UPMXZH = 0.004 ;
 
@@ -583,6 +617,10 @@ data:
 
  CNRTLIG = 0.005 ;
 
+ CNLCRT = 0.005 ;
+
+ CNDCRT = 0.002 ;
+
  CNRSV = 0.02 ;
 
  CNHSK = 0.02 ;
@@ -606,6 +644,10 @@ data:
  CPSTK = 0.00025 ;
 
  CPRTLIG = 0.0005 ;
+
+ CPLCRT = 0.0005 ;
+
+ CPDCRT = 0.0002 ;
 
  CPRSV = 0.002 ;
 
@@ -806,4 +848,6 @@ data:
   "Monsoon-influenced extremely cold subarctic climate             ",
   "Tundra climate                                                  ",
   "Ice cap climate                                                 " ;
+
+ HYPA = 100 ;
 }

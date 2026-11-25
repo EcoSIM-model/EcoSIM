@@ -140,7 +140,7 @@ implicit none
     if(VGeomLayer_vr(0,NY,NX).EQ.0.0)then
       VGeomLayer_vr(0,NY,NX) = 0.1
     endif
-    POROS0_col(NY,NX) = 0.5
+    fLitRPore4WatHold_col(NY,NX) = 0.5
 
     DO L=NU_col(NY,NX),NL_col(NY,NX)
       TKSoil1_vr(L,NY,NX) = a_TEMP(L,NY)

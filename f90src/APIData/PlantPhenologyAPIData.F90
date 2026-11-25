@@ -13,6 +13,12 @@ module PlantPhenologyAPIData
   real(r8), pointer :: ShootRootNonstElmConduts_pft(:)   => null()     !shoot-root rate constant for nonstructural C exchange,               [h-1]
   real(r8), pointer :: GrainFillRate25C_pft(:)            => null()     !maximum rate of fill per grain,                                      [g h-1]
   real(r8), pointer :: TempOffset_pft(:)                  => null()     !adjustment of Arhhenius curves for plant thermal acclimation,        [oC]
+  real(r8), pointer :: RootGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, root growth, [J mol-1], PFT
+  real(r8), pointer :: RootGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, root growth, [J mol-1], PFT
+  real(r8), pointer :: CanopyGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, canopy growth, [J mol-1], PFT
+  real(r8), pointer :: CanopyGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, canopy growth, [J mol-1], PFT
+  real(r8), pointer :: LeafGrowEnergyLow_pft(:) => null() !input: low-temperature inactivation, leaf/node phenology, [J mol-1], PFT
+  real(r8), pointer :: LeafGrowEnergyHigh_pft(:) => null() !input: high-temperature inactivation, leaf/node phenology, [J mol-1], PFT
   real(r8), pointer :: CanPhenoMoistStress_pft(:)         => null()     !moisture stress for plant phenology development,[-]
   real(r8), pointer :: CanPhenoTempStress_pft(:)          => null()     !temperature stress for plant phenology development,[-]
   real(r8), pointer :: PlantO2Stress_pft(:)               => null()     !plant O2 stress indicator,                                           [-]
@@ -39,6 +45,8 @@ module PlantPhenologyAPIData
   real(r8), pointer :: RateRefLeafAppearance_pft(:)      => null()     !rate of leaf initiation,                                [h-1 at 25 oC]
   real(r8), pointer :: CriticPhotoPeriod_pft(:)      => null()     !critical daylength for phenological progress,           [h]
   real(r8), pointer :: PhotoPeriodSens_pft(:)        => null()     !difference between current and critical daylengths used to calculate  phenological progress, [h]
+  real(r8), pointer :: FloralPhotoSens_pft(:) => null() !exponential floral photoperiod sensitivity, [h-1]
+  real(r8), pointer :: FloralPhotoOpt_pft(:) => null() !fully inductive floral photoperiod; -1 uses resolved XDL, [h]
   integer,  pointer :: iEmbryophyteType_pft(:)       => null()      !plant embrophyte
   integer,  pointer :: iPlantStateLive_pft(:)            => null()  !flag for species death, [-]
   integer,  pointer :: FireReSet_pft(:)              => null()      !flag to skill startq for fire rejuvenation, [-]
@@ -53,7 +61,7 @@ module PlantPhenologyAPIData
   integer,  pointer :: doSenescence_brch(:,:)            => null()  !branch phenology flag,                            [-]
   integer,  pointer :: Prep4Literfall_brch(:,:)          => null()  !branch phenology flag,                            [-]
   integer,  pointer :: Hours4LiterfalAftMature_brch(:,:) => null()  !branch phenology flag,                            [h]
-  integer,  pointer :: KHiestGroLeafNode_brch(:,:)       => null()  !leaf growth stage counter,                        [-]
+  integer,  pointer :: KHiestGroLeafNode_brch(:,:)       => null()  !highest retained absolute node this cycle; growth cap applied separately, [-]
   integer,  pointer :: iPlantPhenolType_pft(:)           => null()  !climate signal for phenological progress: none,   temperature, water stress,[-]
   integer,  pointer :: Days4FalseBreak_pft(:)            => null()  !accumulated days to singifying false break, [day]
   integer,  pointer :: iPlantTurnoverPattern_pft(:)      => null()  !phenologically-driven above-ground turnover: all, foliar only, none,[-]
@@ -84,6 +92,7 @@ module PlantPhenologyAPIData
   real(r8), pointer :: HourlyNodeNumNormByMatgrp_brch(:,:)    => null()  !gain in normalized node number during vegetative growth stages,              [h-1]
   real(r8), pointer :: dReproNodeNumNormByMatG_brch(:,:)      => null()  !gain in normalized node number during reproductive growth stages,            [h-1]
   real(r8), pointer :: MatureGroup_brch(:,:)                  => null()  !plant maturity group,                                                        [-]
+  real(r8), pointer :: FloralDevNodes_brch(:,:) => null() !accumulated floral development, [node equivalents], branch/PFT
   real(r8), pointer :: NodeNumNormByMatgrp_brch(:,:)          => null()  !normalized node number during vegetative growth stages,                      [-]
   real(r8), pointer :: ReprodNodeNumNormByMatrgrp_brch(:,:)   => null()  !normalized node number during reproductive growth stages,                    [-]
   real(r8), pointer :: HourFailGrainFill_brch(:,:)            => null()  !flag to detect physiological maturity from  grain fill,                      [-]
@@ -112,6 +121,12 @@ contains
 
   allocate(this%TCChill4Seed_pft(JP1));this%TCChill4Seed_pft=spval
   allocate(this%TempOffset_pft(JP1));this%TempOffset_pft=spval
+  allocate(this%RootGrowEnergyLow_pft(JP1));this%RootGrowEnergyLow_pft=197500._r8
+  allocate(this%RootGrowEnergyHigh_pft(JP1));this%RootGrowEnergyHigh_pft=222500._r8
+  allocate(this%CanopyGrowEnergyLow_pft(JP1));this%CanopyGrowEnergyLow_pft=197500._r8
+  allocate(this%CanopyGrowEnergyHigh_pft(JP1));this%CanopyGrowEnergyHigh_pft=222500._r8
+  allocate(this%LeafGrowEnergyLow_pft(JP1));this%LeafGrowEnergyLow_pft=197500._r8
+  allocate(this%LeafGrowEnergyHigh_pft(JP1));this%LeafGrowEnergyHigh_pft=218500._r8
   allocate(this%MatureGroup_pft(JP1));this%MatureGroup_pft=spval
   allocate(this%CanPhenoMoistStress_pft(JP1));this%CanPhenoMoistStress_pft=1._r8
   allocate(this%CanPhenoTempStress_pft(JP1));this%CanPhenoTempStress_pft=1._r8
@@ -144,6 +159,7 @@ contains
   allocate(this%FireReSet_pft(JP1)); this%FireReSet_pft=ifalse
   allocate(this%NetCumElmntFlx2Plant_pft(NumPlantChemElms,JP1));this%NetCumElmntFlx2Plant_pft=spval
   allocate(this%MatureGroup_brch(MaxNumBranches,JP1));this%MatureGroup_brch=spval
+  allocate(this%FloralDevNodes_brch(MaxNumBranches,JP1));this%FloralDevNodes_brch=0._r8
   allocate(this%isPlantShootAlive_pft(JP1));this%isPlantShootAlive_pft=0
   allocate(this%Hours2LeafOut_brch(MaxNumBranches,JP1));this%Hours2LeafOut_brch=spval
   allocate(this%HoursDoingRemob_brch(MaxNumBranches,JP1));this%HoursDoingRemob_brch=spval
@@ -178,6 +194,8 @@ contains
   allocate(this%RefNodeInitRate_pft(JP1));this%RefNodeInitRate_pft=spval
   allocate(this%CriticPhotoPeriod_pft(JP1));this%CriticPhotoPeriod_pft=spval
   allocate(this%PhotoPeriodSens_pft(JP1));this%PhotoPeriodSens_pft=spval
+  allocate(this%FloralPhotoSens_pft(JP1));this%FloralPhotoSens_pft=0.0_r8
+  allocate(this%FloralPhotoOpt_pft(JP1));this%FloralPhotoOpt_pft=-1.0_r8
   allocate(this%isPlantBranchAlive_brch(MaxNumBranches,JP1));this%isPlantBranchAlive_brch=iFalse
   allocate(this%doRemobilization_brch(MaxNumBranches,JP1));this%doRemobilization_brch=0
   allocate(this%doPlantLeaveOff_brch(MaxNumBranches,JP1));this%doPlantLeaveOff_brch=0
@@ -206,6 +224,12 @@ contains
   if(associated(this%ShootRootNonstElmConduts_pft))deallocate(this%ShootRootNonstElmConduts_pft);nullify(this%ShootRootNonstElmConduts_pft)
   if(associated(this%GrainFillRate25C_pft))deallocate(this%GrainFillRate25C_pft);nullify(this%GrainFillRate25C_pft)
   if(associated(this%TempOffset_pft))deallocate(this%TempOffset_pft);nullify(this%TempOffset_pft)
+  if(associated(this%RootGrowEnergyLow_pft))deallocate(this%RootGrowEnergyLow_pft);nullify(this%RootGrowEnergyLow_pft)
+  if(associated(this%RootGrowEnergyHigh_pft))deallocate(this%RootGrowEnergyHigh_pft);nullify(this%RootGrowEnergyHigh_pft)
+  if(associated(this%CanopyGrowEnergyLow_pft))deallocate(this%CanopyGrowEnergyLow_pft);nullify(this%CanopyGrowEnergyLow_pft)
+  if(associated(this%CanopyGrowEnergyHigh_pft))deallocate(this%CanopyGrowEnergyHigh_pft);nullify(this%CanopyGrowEnergyHigh_pft)
+  if(associated(this%LeafGrowEnergyLow_pft))deallocate(this%LeafGrowEnergyLow_pft);nullify(this%LeafGrowEnergyLow_pft)
+  if(associated(this%LeafGrowEnergyHigh_pft))deallocate(this%LeafGrowEnergyHigh_pft);nullify(this%LeafGrowEnergyHigh_pft)
   if(associated(this%CanPhenoMoistStress_pft))deallocate(this%CanPhenoMoistStress_pft);nullify(this%CanPhenoMoistStress_pft)
   if(associated(this%CanPhenoTempStress_pft))deallocate(this%CanPhenoTempStress_pft);nullify(this%CanPhenoTempStress_pft)
   if(associated(this%PlantO2Stress_pft))deallocate(this%PlantO2Stress_pft);nullify(this%PlantO2Stress_pft)
@@ -232,6 +256,8 @@ contains
   if(associated(this%RateRefLeafAppearance_pft))deallocate(this%RateRefLeafAppearance_pft);nullify(this%RateRefLeafAppearance_pft)
   if(associated(this%CriticPhotoPeriod_pft))deallocate(this%CriticPhotoPeriod_pft);nullify(this%CriticPhotoPeriod_pft)
   if(associated(this%PhotoPeriodSens_pft))deallocate(this%PhotoPeriodSens_pft);nullify(this%PhotoPeriodSens_pft)
+  if(associated(this%FloralPhotoSens_pft))deallocate(this%FloralPhotoSens_pft);nullify(this%FloralPhotoSens_pft)
+  if(associated(this%FloralPhotoOpt_pft))deallocate(this%FloralPhotoOpt_pft);nullify(this%FloralPhotoOpt_pft)
   if(associated(this%iEmbryophyteType_pft))deallocate(this%iEmbryophyteType_pft);nullify(this%iEmbryophyteType_pft)
   if(associated(this%iPlantStateLive_pft))deallocate(this%iPlantStateLive_pft);nullify(this%iPlantStateLive_pft)
   if(associated(this%FireReSet_pft))deallocate(this%FireReSet_pft);nullify(this%FireReSet_pft)
@@ -276,6 +302,7 @@ contains
   if(associated(this%HourlyNodeNumNormByMatgrp_brch))deallocate(this%HourlyNodeNumNormByMatgrp_brch);nullify(this%HourlyNodeNumNormByMatgrp_brch)
   if(associated(this%dReproNodeNumNormByMatG_brch))deallocate(this%dReproNodeNumNormByMatG_brch);nullify(this%dReproNodeNumNormByMatG_brch)
   if(associated(this%MatureGroup_brch))deallocate(this%MatureGroup_brch);nullify(this%MatureGroup_brch)
+  if(associated(this%FloralDevNodes_brch))deallocate(this%FloralDevNodes_brch);nullify(this%FloralDevNodes_brch)
   if(associated(this%NodeNumNormByMatgrp_brch))deallocate(this%NodeNumNormByMatgrp_brch);nullify(this%NodeNumNormByMatgrp_brch)
   if(associated(this%ReprodNodeNumNormByMatrgrp_brch))deallocate(this%ReprodNodeNumNormByMatrgrp_brch);nullify(this%ReprodNodeNumNormByMatrgrp_brch)
   if(associated(this%HourFailGrainFill_brch))deallocate(this%HourFailGrainFill_brch);nullify(this%HourFailGrainFill_brch)

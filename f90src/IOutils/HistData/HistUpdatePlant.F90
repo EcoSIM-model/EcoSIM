@@ -2,7 +2,8 @@ submodule (HistDataType) HistUpdatePlant
   ! Populate plant and root history diagnostics from current model state.
   use GridConsts, only: JZ, MaxNodesPerBranch, MaxNumRootAxes, NumCanopyLayers, NumGrowthStages, &
     NumOfPlantMorphUnits
-  use ElmIDMod, only: ielmc, ielmn, ielmp, imycorr_arbu, imycorrhz, ipltroot, iTrue, NumPlantChemElms
+  use ElmIDMod, only: iplt_annual, iphenotyp_evgreen, &
+    ielmc, ielmn, ielmp, imycorr_arbu, imycorrhz, ipltroot, iTrue, NumPlantChemElms
   use EcosimConst, only: natomw, BndlResistCO2ToH2ORatio
   use data_const_mod, only: spval  => DAT_CONST_SPVAL
   use MiniMathMod, only: safe_adb, AZERO
@@ -15,6 +16,7 @@ submodule (HistDataType) HistUpdatePlant
     CanPhenoMoistStress_pft, CanPhenoTempStress_pft, ClumpFactorNow_pft, fTCanopyGroth_pft, &
     HoursTooLowPsiCan_pft, HypocotHeight_pft, iPlantCalendar_brch, LeafStalkAreaAct_pft, MainBranchNum_pft, &
     NumOfBranches_pft, NumOfLeaves_brch, PARTS_brch, PlantO2Stress_pft, PlantPopuLive_pft, PSICanPDailyMin_pft, &
+    FloralDevNodes_brch, MatureGroup_brch, iPlantPhenolPattern_pft, iPlantPhenolType_pft, &
     SeedDepth_pft, ShootNodeNum_brch, StalkAveRadius_pft, StalkHeight_pft, TCGroth_pft
   use PlantDataRateType, only: CanopyGrosRCO2_pft, CH4ByFire_CumYr_pft, CO2ByFire_CumYr_pft, &
     EcoHavstElmnt_CumYr_pft, ETCanopy_CumYr_pft, fRootGrowPSISense_pvr, GrossCO2Fix_CumYr_pft, GrossCO2Fix_pft, &
@@ -119,7 +121,12 @@ contains
         this%h1D_STANDING_DEAD_N_ptc(nptc)  = StandDeadStrutElms_pft(ielmn,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_STANDING_DEAD_P_ptc(nptc)  = StandDeadStrutElms_pft(ielmp,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
         this%h1D_STANDING_DEAD_C_ptc(nptc)  = StandDeadStrutElms_pft(ielmc,NZ,NY,NX)/AREA_3D(3,NU_col(NY,NX),NY,NX)
+        this%h1D_FloralDevProgress_ptc(nptc)=0._r8
         if(MainBranchNum_pft(NZ,NY,NX)>0) then
+          NB=MainBranchNum_pft(NZ,NY,NX)
+          if(iPlantPhenolPattern_pft(NZ,NY,NX)==iplt_annual .and. &
+            iPlantPhenolType_pft(NZ,NY,NX)==iphenotyp_evgreen .and. MatureGroup_brch(NB,NZ,NY,NX)>0._r8) &
+            this%h1D_FloralDevProgress_ptc(nptc)=FloralDevNodes_brch(NB,NZ,NY,NX)/MatureGroup_brch(NB,NZ,NY,NX)
           this%h1D_ShootNodeNumber_ptc(nptc)  = SUM(ShootNodeNum_brch(1:NumOfBranches_pft(NZ,NY,NX),NZ,NY,NX))
           this%h1D_MainBranchNodeNumber_ptc(nptc)=ShootNodeNum_brch(MainBranchNum_pft(NZ,NY,NX),NZ,NY,NX)
         else

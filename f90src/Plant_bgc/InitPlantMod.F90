@@ -1,4 +1,6 @@
 module InitPlantMod
+  ! Description:
+  ! Initialize plant cohorts, reserves, morphology and accounted water/heat inventories.
   use data_kind_mod,    only: r8 => DAT_KIND_R8
   use UnitMod,          only: units
   use minimathmod,      only: AZMAX1,isclose,isALeftinBC
@@ -642,6 +644,7 @@ module InitPlantMod
 
   integer :: K,L,M,N,NB
   real(r8) :: NumVessels
+  call PrintInfo('beg '//subname)
   associate(                                                                           &
     CanopyNonstOMConc_pft             => plt_biom%CanopyNonstOMConc_pft                 ,& !output :canopy nonstructural C+N+P concentration, [g gC-1]
     AREA3                             => plt_site%AREA3                               ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
@@ -695,6 +698,7 @@ module InitPlantMod
     LeafNumberAtFloralInit_brch       => plt_pheno%LeafNumberAtFloralInit_brch        ,& !output :leaf number at floral initiation, [-]
     StalkNodeHeight_brch              => plt_morph%StalkNodeHeight_brch               ,& !output :internode height, [m]
     MatureGroup_brch                  => plt_pheno%MatureGroup_brch                   ,& !output :plant maturity group, [-]
+    FloralDevNodes_brch => plt_pheno%FloralDevNodes_brch,& !output: floral development, [node equivalents], branch/PFT
     ShootNodeNumAtInitFloral_brch     => plt_morph%ShootNodeNumAtInitFloral_brch      ,& !output :shoot node number at floral initiation, [-]
     NodeNumNormByMatgrp_brch          => plt_pheno%NodeNumNormByMatgrp_brch           ,& !output :normalized node number during vegetative growth stages, [-]
     ShootNodeNumAtAnthesis_brch       => plt_morph%ShootNodeNumAtAnthesis_brch        ,& !output :shoot node number at anthesis, [-]
@@ -717,7 +721,6 @@ module InitPlantMod
   !
   !     PP=population (grid cell-1)
   !
-  call PrintInfo('beg '//subname)
   CanopyLeafAreaMAX_pft(NZ) = 0._R8
   plt_pheno%Days4FalseBreak_pft(NZ)  = 0
   plt_pheno%doInitPlant_pft(NZ)      = ifalse
@@ -740,6 +743,7 @@ module InitPlantMod
     plt_pheno%Prep4Literfall_brch(NB,NZ)          = ifalse
     plt_pheno%Hours4LiterfalAftMature_brch(NB,NZ) = 0
     MatureGroup_brch(NB,NZ)                       = MatureGroup_pft(NZ)
+    FloralDevNodes_brch(NB,NZ) = 0._r8
     ShootNodeNum_brch(NB,NZ)                      = ShootNodeNumAtPlanting_pft(NZ)
     ShootNodeNumAtInitFloral_brch(NB,NZ)          = ShootNodeNum_brch(NB,NZ)
     ShootNodeNumAtAnthesis_brch(NB,NZ)              = 0._r8
@@ -867,8 +871,8 @@ module InitPlantMod
   CanopyLeafArea_pft(NZ)                                  = 0._r8
   plt_biom%RootBiomCPerPlant_pft(NZ)                      = 0._r8
   CanopyStemSurfArea_pft(NZ)                              = 0._r8
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine InitPlantPhenoMorphoBio
 
 !----------------------------------------------------------------------------------------------------
@@ -935,13 +939,23 @@ module InitPlantMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine InitPlantHeatWater(NZ)
+  ! Description:
+  ! Initialize seed water and heat while retaining the temperature of standing
+  ! dead material and surface water already present in the planting slot.
 
   implicit none
-  integer, intent(in) :: NZ
+  integer, intent(in) :: NZ ! planting slot/PFT index [-]
   character(len=*), parameter :: subname='InitPlantHeatWater'
-  REAL(R8) :: FDM
+  REAL(R8) :: FDM,OldEnergy,OldWater,OldTemperature,RetainedCapacity,SeedCapacity
 
   associate(                                                    &
+    DeadC => plt_biom%StandDeadStrutElms_pft, & ! input: retained dead carbon [gC/cell], element/PFT
+    DeadArea => plt_morph%StandDeadSurfArea_pft, & ! input: retained dead area [m2/cell], PFT
+    SapwoodC => plt_biom%CanopySapwoodC_pft, & ! input: new live sapwood carbon [gC/cell], PFT
+    StemArea => plt_morph%CanopyStemSurfArea_pft, & ! input: new live stem area [m2/cell], PFT
+    SurfaceWater => plt_ew%WatHeldOnCanopy_pft, & ! input: retained liquid water [m3/cell], PFT
+    SurfaceSnow => plt_ew%SnowOnCanopy_pft, & ! input: retained snow [m3 SWE/cell], PFT
+    ExchangeTemperature => plt_ew%TKCanopy_pft, & ! output: canopy exchange temperature [K], PFT
     ATCA                    => plt_site%ATCA                   ,& !input  :mean annual air temperature, [oC]
     OrganOsmoPsi0pt_pft     => plt_ew%OrganOsmoPsi0pt_pft      ,& !input  :Organ osmotic potential when canopy water potential = 0 MPa, [MPa]
     CanopyLeafSheathC_pft   => plt_biom%CanopyLeafSheathC_pft  ,& !input  :canopy leaf + sheath C, [g d-2]
@@ -949,15 +963,15 @@ module InitPlantMod
     StemSpecVolume_pft      => plt_morph%StemSpecVolume_pft    ,& !input  :stalk specific volume, [m3 gC-1]        
     CanopyHeatLoss2Dist_col     => plt_ew%CanopyHeatLoss2Dist_col      ,& !inoput :canopy energy +/- due to disturbance, [MJ /d2]
     QCanopyWatLoss2Dist_col     => plt_ew%QCanopyWatLoss2Dist_col      ,& !inoput :canopy water +/- due to disturbance, [m3 H2O/d2]
-    CanopyBiomWater_pft     => plt_ew%CanopyBiomWater_pft      ,& !output :canopy water content, [m3 d-2]
+    CanopyBiomWater_pft     => plt_ew%CanopyBiomWater_pft      ,& !inoput :canopy water content, [m3 d-2]
     PSICanopyOsmo_pft       => plt_ew%PSICanopyOsmo_pft        ,& !output :canopy osmotic water potential, [Mpa]
     PSICanopy_pft           => plt_ew%PSICanopy_pft            ,& !output :canopy total water potential, [Mpa]
     TCGroth_pft             => plt_pheno%TCGroth_pft           ,& !output :canopy growth temperature, [oC]
-    TKC_pft                 => plt_ew%TKC_pft                  ,& !output :canopy temperature, [K]
+    TKC_pft                 => plt_ew%TKC_pft                  ,& !inoput :canopy temperature, [K]
     TdegCCanopy_pft         => plt_ew%TdegCCanopy_pft          ,& !output :canopy temperature, [oC]
     VHeatCapCanopy_pft      => plt_ew%VHeatCapCanopy_pft       ,& !output :canopy heat capacity, [MJ d-2 K-1]
     DeltaTKC_pft            => plt_ew%DeltaTKC_pft             ,& !output :change in canopy temperature, [K]
-    ENGYX_pft               => plt_ew%ENGYX_pft                ,& !output :canopy heat storage from previous time step, [MJ d-2]
+    ENGYX_pft               => plt_ew%ENGYX_pft                ,& !inoput :canopy heat storage retained across initialization, [MJ d-2]
     FracPARads2Canopy_pft     => plt_rad%FracPARads2Canopy_pft       ,& !output :fraction of incoming PAR absorbed by total canopy, [-]
     FracPARads2LiveCanopy_pft => plt_rad%FracPARads2LiveCanopy_pft   ,& !output :fraction of incoming PAR absorbed by live canopy, [-]
     PSICanopyTurg_pft       => plt_ew%PSICanopyTurg_pft        ,& !output :plant canopy turgor water potential, [MPa]
@@ -974,8 +988,9 @@ module InitPlantMod
   !     TCGroth_pft,TKGroth_pft=canopy temperature for phenology (oC,K)
   !     PSICanopy_pft,PSICanopyOsmo_pft,PSICanopyTurg_pft=canopy total,osmotic,turgor water potl(MPa)
   !
-  VHeatCapCanopy_pft(NZ)    = cpw*ShootElms_pft(ielmc,NZ)*10.0E-06
-  ENGYX_pft(NZ)             = 0._r8
+  OldEnergy=ENGYX_pft(NZ)
+  OldWater=CanopyBiomWater_pft(NZ)
+  OldTemperature=TKC_pft(NZ)
   DeltaTKC_pft(NZ)          = 0._r8
   TdegCCanopy_pft(NZ)       = ATCA
   TKC_pft(NZ)               = units%Celcius2Kelvin(TdegCCanopy_pft(NZ))
@@ -990,9 +1005,23 @@ module InitPlantMod
   FracPARads2LiveCanopy_pft(NZ) = 0._r8
   FDM                       = get_FDM(PSICanopy_pft(NZ))
   CanopyBiomWater_pft(NZ)   = ppmc*CanopyLeafSheathC_pft(NZ)/FDM
-  VHeatCapCanopy_pft(NZ)    = cpw*(ShootElms_pft(ielmc,NZ)*StemSpecVolume_pft(NZ)+CanopyBiomWater_pft(NZ))
-  QCanopyWatLoss2Dist_col       = QCanopyWatLoss2Dist_col-CanopyBiomWater_pft(NZ)
-  CanopyHeatLoss2Dist_col       = CanopyHeatLoss2Dist_col-VHeatCapCanopy_pft(NZ)*TKC_pft(NZ)
+  ! Use the same dry-material and water capacities as hourly canopy exchange.
+  ! Retained dead material/surface stores keep their donor temperature; new seed
+  ! tissue enters at the initialization temperature. Export/import the net stock
+  ! change through management, rather than treating a temperature reset as heat.
+  RetainedCapacity=cpo*gOC_to_m3_OM(CanopyStemThermalCarbon(DeadC(ielmc,NZ), &
+    DeadArea(NZ),StemSpecVolume_pft(NZ)))+cpw*SurfaceWater(NZ)+cps*SurfaceSnow(NZ)
+  SeedCapacity=cpo*gOC_to_m3_OM(CanopyLeafSheathC_pft(NZ)+CanopyStemThermalCarbon( &
+    SapwoodC(NZ),StemArea(NZ),StemSpecVolume_pft(NZ)))+cpw*CanopyBiomWater_pft(NZ)
+  VHeatCapCanopy_pft(NZ)=RetainedCapacity+SeedCapacity
+  if(RetainedCapacity>0._r8)then
+    TKC_pft(NZ)=(RetainedCapacity*OldTemperature+SeedCapacity*TKC_pft(NZ))/VHeatCapCanopy_pft(NZ)
+  endif
+  ExchangeTemperature(NZ)=TKC_pft(NZ)
+  TdegCCanopy_pft(NZ)=units%Kelvin2Celcius(TKC_pft(NZ))
+  ENGYX_pft(NZ)=VHeatCapCanopy_pft(NZ)*TKC_pft(NZ)
+  QCanopyWatLoss2Dist_col=QCanopyWatLoss2Dist_col+OldWater-CanopyBiomWater_pft(NZ)
+  CanopyHeatLoss2Dist_col=CanopyHeatLoss2Dist_col+OldEnergy-ENGYX_pft(NZ)
   call PrintInfo('end '//subname)
   end associate
   end subroutine InitPlantHeatWater

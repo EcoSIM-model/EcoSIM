@@ -85,6 +85,13 @@ program VanGenuchtenTest
   VGAlpha_vr(2,1,1)=200._r8
   theta=.25_r8
   call check_close('spatial alpha',model%matric_potential(other_layer,theta),-.008660254037844386468_r8)
+  call check_retention_derivative(model,other_layer)
+  call check_soil_resistance(model,other_layer)
+  do j=1,3
+    VGN_vr(1,1,1)=ns(j+2)
+    call check_retention_derivative(model,parameters)
+    call check_soil_resistance(model,parameters)
+  enddo
 
   ! Cover varied shape and scale, including pressure clipping and conductivity underflow.
   do j=1,size(ns)
@@ -115,6 +122,79 @@ program VanGenuchtenTest
   call FinalizeSoilHydraulicScheme()
   write(*,*) 'VanGenuchtenTest passed'
 contains
+!------------------------------------------------------------------------------------------
+  subroutine check_soil_resistance(scheme,context)
+    ! Description:
+    ! Validate the inherited resistance against Eq. 13 using analytic VG slopes
+    ! across shapes, spatial pressure scales and liquid contents.
+    class(SoilHydraulicModel), intent(in) :: scheme      ! selected VG implementation [-]
+    type(SoilHydraulicParameters), intent(in) :: context ! layer indices and hydraulic bounds
+    real(r8), parameter :: samples(5)=[.12_r8,.20_r8,.25_r8,.35_r8,.40_r8]
+    real(r8) :: theta,work,pressure,slope,expected,actual,se,m,n,residual
+    integer :: i
+    character(len=*), parameter :: subname='check_soil_resistance'
+
+    call PrintInfo('beg '//subname)
+    n=VGN_vr(context%layer,context%row,context%column)
+    m=(n-1._r8)/n
+    residual=VGThetaR_vr(context%layer,context%row,context%column)
+    do i=1,size(samples)
+      theta=samples(i);work=theta
+      pressure=scheme%matric_potential(context,work)
+      se=(theta-residual)/(context%porosity-residual)
+      slope=-pressure/(m*n*(theta-residual)*(1._r8-se**(1._r8/m)))
+      expected=.02_r8/(2._r8*(.004_r8+60000._r8*theta*1.e-6_r8*slope))
+      actual=scheme%soil_resistance(context,theta,.02_r8,1.e-6_r8,.004_r8,60000._r8)
+      call require('paper soil resistance with analytic VG slope',ieee_is_finite(actual).and. &
+        ABS(actual-expected)<2.e-7_r8*expected)
+      call require('VG soil resistance preserves liquid content',theta==samples(i))
+    enddo
+    actual=scheme%soil_resistance(context,context%porosity,.02_r8,1.e-6_r8,0._r8,60000._r8)
+    call require('finite wet VG soil resistance',ieee_is_finite(actual).and.actual>0._r8)
+    call PrintInfo('end '//subname)
+  end subroutine check_soil_resistance
+!------------------------------------------------------------------------------------------
+  subroutine check_retention_derivative(scheme,context)
+    ! Description:
+    ! Check inherited finite differences against independent VG slopes at several
+    ! water contents, with clipping and one-sided estimates at interval endpoints.
+    class(SoilHydraulicModel), intent(in) :: scheme          ! selected VG retention implementation [-]
+    type(SoilHydraulicParameters), intent(in) :: context     ! layer indices and retention bounds
+    real(r8), parameter :: samples(5)=[.12_r8,.20_r8,.25_r8,.35_r8,.40_r8]
+    real(r8) :: sample,work,pressure,slope,expected,se,m,n,dry,residual
+    integer :: i
+    character(len=*), parameter :: subname='check_retention_derivative'
+
+    call PrintInfo('beg '//subname)
+    n=VGN_vr(context%layer,context%row,context%column)
+    m=(n-1._r8)/n
+    residual=VGThetaR_vr(context%layer,context%row,context%column)
+    do i=1,size(samples)
+      sample=samples(i)
+      work=sample
+      pressure=scheme%matric_potential(context,work)
+      se=(sample-residual)/(context%porosity-residual)
+      expected=-pressure/(m*n*(sample-residual)*(1._r8-se**(1._r8/m)))
+      slope=scheme%matric_potential_derivative(context,sample)
+      call require('analytic VG retention slope',ieee_is_finite(slope).and. &
+        ABS(slope-expected)<2.e-7_r8*ABS(expected))
+      call require('VG derivative leaves water content unchanged',sample==samples(i))
+      call check_close('VG derivative preserves pressure evaluation',scheme%matric_potential(context,work),pressure)
+    enddo
+    dry=scheme%dry_content(context)
+    sample=.5_r8*(residual+dry)
+    call require('VG dry-pressure plateau slope',scheme%matric_potential_derivative(context,sample)==0._r8)
+    call require('VG residual plateau slope',scheme%matric_potential_derivative(context,residual)==0._r8)
+    call require('VG oversaturated plateau slope', &
+      scheme%matric_potential_derivative(context,1.1_r8*context%porosity)==0._r8)
+    slope=scheme%matric_potential_derivative(context,dry)
+    call require('VG finite one-sided dry endpoint',ieee_is_finite(slope).and.slope>0._r8)
+    sample=context%porosity
+    slope=scheme%matric_potential_derivative(context,sample)
+    call require('VG finite one-sided saturated endpoint',ieee_is_finite(slope).and.slope>0._r8)
+    call require('VG saturated derivative preserves content',sample==context%porosity)
+    call PrintInfo('end '//subname)
+  end subroutine check_retention_derivative
 !------------------------------------------------------------------------------------------
   function MakeParameters(layer) result(parameters)
     ! Description:

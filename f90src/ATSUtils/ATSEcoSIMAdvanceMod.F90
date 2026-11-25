@@ -538,19 +538,10 @@ implicit none
   !
   DO M=1,NPH
 
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,&
-    !  KSatReductByRainKineticEnergy,TopLayWatVol,HeatFluxAir2Soi,Qinfl2MicPM,Hinfl2SoilM)
-
-    !call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay, &
-    !KSatReductByRainKineticEnergy,TopLayWatVol_col,HeatFluxAir2Soi, &
-    !Qinfl2MicP_col,HeatInfl2Soil)
 
     call RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
       TopLayWatVol_col,HeatFluxAir2Soi,dLWRaddTKsoi1,Qinfl2MicP_col,HeatInfl2Soil,Qinfl2MacP_col)
     
-    !call subroutine RunSurfacePhysModelM(I,J,M,NHE,NHW,NVS,NVN,ResistanceLitRLay,RainEkReducedKsat,&
-    !  TopLayWatVol_col,HeatFluxAir2Soi,Qinfl2MicP,HeatInfl2Soil,Qinfl2MacP)
-
     !sum fluxes over iterations in each column
     do NY=1, NYS
       HeatFlx2Grnd_col(NY,NX) = HeatFlx2Grnd_col(NY,NX)+HeatInfl2Soil(NY,NX)

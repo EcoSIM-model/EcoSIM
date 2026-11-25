@@ -297,6 +297,12 @@ add_test(NAME van_genuchten_invalid_l COMMAND VanGenuchtenTest.x invalid_l)
 set_tests_properties(van_genuchten_invalid_l PROPERTIES PASS_REGULAR_EXPRESSION "Van Genuchten l must exceed -2/m")
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_Interpreter_FOUND)
+  add_test(NAME planting_thermal_inventory
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_planting_thermal_inventory.py
+      --fc ${CMAKE_Fortran_COMPILER})
+  add_test(NAME boundary_drainage_shared_donor
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_boundary_drainage_budget.py
+      --fc ${CMAKE_Fortran_COMPILER})
   add_test(NAME van_genuchten_decimal_reference
     COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/check_van_genuchten_reference.py
       --executable $<TARGET_FILE:VanGenuchtenTest.x>)
@@ -351,3 +357,11 @@ target_include_directories(ThinLitterEnergyTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SurfPhys/
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SnowPhys/)
+
+add_ecosim_executable(SurfaceVaporTest.x SurfaceVaporTest.F90)
+add_test(NAME surface_vapor_phase_partition COMMAND SurfaceVaporTest.x)
+target_include_directories(SurfaceVaporTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Minimath/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/)

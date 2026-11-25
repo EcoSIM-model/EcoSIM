@@ -27,6 +27,7 @@ module grosubsMod
   use PlantMathFuncMod
   use LitterFallMod
   use PlantBranchMod
+  use PlantPhenolMod, only : PhenologyUpdate
   use PlantBalMod
   implicit none
 
@@ -59,9 +60,9 @@ module grosubsMod
 
 !----------------------------------------------------------------------------------------------------
   subroutine GrowPlants(yearIJ)
-!
-!     THIS subroutine CALCULATES ALL PLANT BIOLOGICAL TRANSFORMATIONS
-!
+  ! Description:
+  ! Advance prepared cohorts with current uptake conditions, then perform plant
+  ! growth, allocation and turnover while retaining accepted hydraulic fluxes.
   use PlantDisturbsMod, only : RemoveBiomassByDisturbance
   implicit none
   type(yearIJ_type), intent(in) :: yearIJ  
@@ -73,6 +74,7 @@ module grosubsMod
   real(r8) :: tvegE(NumPlantChemElms),tvegE1(NumPlantChemElms)
 
   ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                               &
     IsPlantActive_pft            => plt_pheno%IsPlantActive_pft           ,& !input  :flag for living pft, [-]
     NP                           => plt_site%NP                           ,& !input  :current number of plant species,[-]
@@ -82,9 +84,11 @@ module grosubsMod
     StalkHeight_pft              => plt_morph%StalkHeight_pft             ,& !inoput :stalk height/length, [m]
     CanopyHeightLive_pft         => plt_morph%CanopyHeightLive_pft         & !inoput :canopy height, [m]
   )
-  call PrintInfo('beg '//subname)
-  !     TOTAL AGB FOR GRAZING IN LANDSCAPE SECTION
+  ! RootChemicalUptake has refreshed growth temperature after the water/energy
+  ! solve. Advance development before clearing the retained canopy geometry.
+  call PhenologyUpdate(yearIJ)
   !
+  !     TOTAL AGB FOR GRAZING IN LANDSCAPE SECTION
   !
   !     INITIALIZE SENESCENCE ARRAYS
   DO NZ=1,NP0
@@ -117,8 +121,8 @@ module grosubsMod
   call Live2DeadTransformation(yearIJ)     
   !call CheckPlantBalanceZ(yearIJ,NZ=1,header=subname//'L2DEAD')  
   !
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   END subroutine GrowPlants
 
 !----------------------------------------------------------------------------------------------------
@@ -133,7 +137,10 @@ module grosubsMod
   real(r8) :: StandingDeadKd
 !     begin_execution
 
+  call PrintInfo('beg '//subname)
   associate(                                                                    &
+    CanopyGrowEnergyLow_pft => plt_pheno%CanopyGrowEnergyLow_pft ,& !input: low-temperature inactivation, [J mol-1], PFT
+    CanopyGrowEnergyHigh_pft => plt_pheno%CanopyGrowEnergyHigh_pft ,& !input: high-temperature inactivation, [J mol-1], PFT
     CH4ByFire_CumYr_pft            => plt_distb%CH4ByFire_CumYr_pft            ,& !input  :plant CH4 emission from fire, [g d-2 ]
     CO2ByFire_CumYr_pft            => plt_distb%CO2ByFire_CumYr_pft            ,& !input  :plant CO2 emission from fire, [g d-2 ]
     CumSoilThickness_vr            => plt_site%CumSoilThickness_vr             ,& !input  :depth to bottom of soil layer from surface of grid cell, [m]
@@ -180,12 +187,12 @@ module grosubsMod
     iDayPlanting_pft               => plt_distb%iDayPlanting_pft               ,& !output :day of planting,[-]
     iYearPlanting_pft              => plt_distb%iYearPlanting_pft               & !output :year of planting,[-]
   )
-  call PrintInfo('beg '//subname)
   D9975: DO NZ=1,NP0
     if(NZ.GT.NP)then
       !fallow slot: residue only, so the canopy temperature function is not
       !updated by the uptake model; use the soil surface temperature instead
-      fTCanopyGroth_pft(NZ)=calc_canopy_grow_tempf(real_truncate(TKS_vr(NU)+TempOffset_pft(NZ),1.e-3_r8))
+      fTCanopyGroth_pft(NZ)=calc_canopy_grow_tempf(real_truncate(TKS_vr(NU)+TempOffset_pft(NZ),1.e-3_r8), &
+        CanopyGrowEnergyLow_pft(NZ),CanopyGrowEnergyHigh_pft(NZ))
     endif
     if(iPlantTurnoverPattern_pft(NZ).EQ.0 .OR. .NOT.is_plant_woody_vascular(iPlantRootProfile_pft(NZ),iPlant2ndGrothPattern_pft(NZ)))then
       StandingDeadKd=StandingDeadKd_decid
@@ -262,8 +269,8 @@ module grosubsMod
     NetPrimProduct_pft(NZ) = GrossCO2Fix_pft(NZ)+GrossResp_pft(NZ)
 
   ENDDO D9975
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine Live2DeadTransformation
 
 !----------------------------------------------------------------------------------------------------
@@ -283,7 +290,7 @@ module grosubsMod
   integer  :: BegRemoblizePlant  !main-branch eligibility controls root seasonal storage
   real(r8) :: TFN6_vr(JZ1)
   real(r8) :: CNLFW,CPLFW,CNSHW,CPSHW,CNRTW,CPRTW
-  real(r8) :: PTRT    !main branch growth allocated to leaf and PetolSheth
+  real(r8) :: PTRT    !main-branch leaf + petiole allocation before remobilization and normalization; exchange modifier, [-]
   real(r8) :: TFN5
   real(r8) :: WaterStress4Groth
   real(r8) :: Stomata_Stress
