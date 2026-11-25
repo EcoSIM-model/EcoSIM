@@ -118,7 +118,8 @@ implicit none
     TXCO2(NY,NX)            = 0.0_r8
     DORGE(NY,NX)            = 0.0_r8
     QRunSurf_col(NY,NX)     = 0.0_r8
-    ASP_col(NY,NX)          = a_ASP(NY)
+    ! ground slope and aspect from ATS: they set the solar geometry of the ground and the canopy (StartsMod)
+    call SetGroundSlopeAspect(a_SLOPE(NY), a_ASP(NY), SL_col(NY,NX), ASP_col(NY,NX))
     ! atm_* are mol/mol from ATS; EcoSIM *E_col are umol/mol (ppm)
     CO2E_col(NY,NX)  = atm_co2 * 1.0e6_r8
     CH4E_col(NY,NX)  = atm_ch4 * 1.0e6_r8

@@ -91,6 +91,7 @@ implicit none
   integer :: NY,NX,NZ,NK,L,NHW,NHE,NVN,NVS, I, J, M, heat_vec_size, NPH_Test, LS, npfts, NP
   integer :: nu_plt
   logical :: pft_changed
+  integer :: iveg
   real(r8) :: Wat_next
   real(r8) :: YSIN(NumOfSkyAzimuthSects),YCOS(NumOfSkyAzimuthSects),SkyAzimuthAngle(NumOfSkyAzimuthSects)
   real(r8) :: ResistanceLitRLay(JY,JX)
@@ -204,7 +205,6 @@ implicit none
     NU_col(NY,NX)               = a_NU(NY)
     NL_col(NY,NX)               = a_NL(NY)
 
-    ASP_col(NY,NX)=a_ASP(NY)
     !TairKClimMean_col(NY,NX) = a_ATKA(NY)
     ! atm_* are mol/mol from ATS; EcoSIM *E_col are umol/mol (ppm)
     CO2E_col(NY,NX)      = atm_co2 * 1.0e6_r8
@@ -264,7 +264,7 @@ implicit none
       CSoilOrgM_vr(ielmn,L,NY,NX)  = a_CORGN(L,NY)
       CSoilOrgM_vr(ielmp,L,NY,NX)  = a_CORGP(L,NY)
       !Convert ATS units (mols) to EcoSIM units (mH2O)
-      VLWatMicP1_vr(L,NY,NX)       = a_WC(L,NY)/(a_LDENS(L,NY)*AREA_3D(3,NU_col(NY,NX),NY,NX))
+      VLWatMicP1_vr(L,NY,NX)       = a_WC(L,NY)/a_LDENS(L,NY)     !m3 of the cell, as VGeomLayer_vr below
 
       VLiceMicP1_vr(L,NY,NX)       = 0.0
       TKSoil1_vr(L,NY,NX)          = a_TEMP(L,NY)
@@ -407,8 +407,9 @@ implicit none
     
     !if(ldo_sp_mode) call startq(NHW,NHE,NVN,NVS,1,num_pfts)
 
-    do i=1,5
-      a_VEG_test(i) = 1
+    !Fortran is case-insensitive: the loop variable must not be I, the day of year of this advance
+    do iveg=1,5
+      a_VEG_test(iveg) = 1
     enddo
     a_VEG_test(1) = a_VEG(1)
     
@@ -557,7 +558,7 @@ implicit none
       ! Accumulate its step-integrated slope using the same area as the heat.
       ! Water/latent, snow, and litter transfers remain in the reference flux.
       surf_e_source_dtemperature(NY)=surf_e_source_dtemperature(NY) &
-        +dLWRaddTKsoi1(NY,NX)/column_area(NY)
+        +dLWRaddTKsoi1(NY,NX)/ATSSurfaceArea(NY)
       Qinflx2Soil_col(NY,NX)  = Qinflx2Soil_col(NY,NX)+Qinfl2MicP_col(NY,NX)
       !EVAPW_col/EVAPS_col are reset at every substep (InitSnowAccumsM), so
       !add them over the substeps to get the hourly snow evaporation/sublimation
@@ -728,7 +729,7 @@ implicit none
     !internal energy is zero at TFice (IEM reference temperature, must match the
     !ATS input). Shift the energy of the exported water Qinflx2Soil_col to the
     !ATS reference, otherwise each m3 of infiltration adds ~cpw*273 MJ of heat.
-    flux_per_area = (HeatFlx2Grnd_col(NY,1) - cpw*TFice*Qinflx2Soil_col(NY,1)) / column_area(NY)
+    flux_per_area = (HeatFlx2Grnd_col(NY,1) - cpw*TFice*Qinflx2Soil_col(NY,1)) / ATSSurfaceArea(NY)
 
     surf_e_source(NY) = flux_per_area
 
@@ -736,8 +737,8 @@ implicit none
     dTexp = surf_e_source(NY)/heat_capacity
     Tfinal = TKsoil1_vr(1,NY,NX) + dTexp 
     
-    !per grid cell [m3 d-2 h-1] to per area [m h-1]; ATS converts h-1 to s-1
-    surf_w_source(NY) = Qinflx2Soil_col(NY,1) / column_area(NY)
+    !per grid cell [m3 d-2 h-1] to per area of the ATS surface cell [m h-1]; ATS converts h-1 to s-1
+    surf_w_source(NY) = Qinflx2Soil_col(NY,1) / ATSSurfaceArea(NY)
     surf_snow_depth(NY) = SnowDepth_col(NY,1)
     !Now update subsurface flux from roots
     LWRadCanGPrev_col(NY,NX) = LWRadCanG_col(NY,NX)
