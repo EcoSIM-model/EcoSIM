@@ -5819,6 +5819,9 @@ implicit none
   integer :: ncols, npfts  
   integer :: litter_band_varid
   type(var_desc_t) :: litter_band_vardesc
+  integer :: mineral_capacity_varid
+  type(var_desc_t) :: mineral_capacity_vardesc
+  logical :: has_mineral_capacity
   logical :: has_litter_band_demand
   integer :: gas_residual_varid
   type(Var_desc_t) :: gas_residual_vardesc
@@ -8463,6 +8466,29 @@ implicit none
        interpinic_flag='skip', data=datpr2, missing_value=spval, &
        fill_value=spval)  
   endif  
+
+  ! Preserve the noncombustible part of the accepted solid capacity. It must
+  ! follow relayering/tillage and survive restart independently of current SOM.
+  if(flag=='read')then
+    call ncd_inqvid(ncid,'VHeatCapMineralSoil_vr',mineral_capacity_varid,mineral_capacity_vardesc,&
+      readvar=has_mineral_capacity)
+    if(has_mineral_capacity)then
+      datpr2 => datrc_2d(1:ncols,1:JZ)
+      call restartvar(ncid,flag,varname='VHeatCapMineralSoil_vr',dim1name='column',dim2name='levsoi',&
+        long_name='Layer mineral solid heat capacity',units='MJ K-1',interpinic_flag='skip',&
+        data=datpr2,missing_value=spval,fill_value=spval)
+      call cpcol(flag,NHW,NHE,NVN,NVS,VHeatCapMineralSoil_vr,datrc_2d)
+    else
+      write(iulog,*)'Legacy restart lacks VHeatCapMineralSoil_vr; retaining grid-initialized mineral capacity. ',&
+        'Past mineral relayering/mixing cannot be reconstructed exactly.'
+    endif
+  else
+    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,VHeatCapMineralSoil_vr,datrc_2d)
+    datpr2 => datrc_2d(1:ncols,1:JZ)
+    call restartvar(ncid,flag,varname='VHeatCapMineralSoil_vr',dim1name='column',dim2name='levsoi',&
+      long_name='Layer mineral solid heat capacity',units='MJ K-1',interpinic_flag='skip',&
+      data=datpr2,missing_value=spval,fill_value=spval)
+  endif
 
   if(flag=='read')then
     datpr3 => datrc_3d(1:ncols,1:trc_confs%NGasTracers,1:JZ)    

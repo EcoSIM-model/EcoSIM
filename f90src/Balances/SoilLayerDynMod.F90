@@ -1177,6 +1177,7 @@ implicit none
   ENGY0                           = VHeatCapacity_vr(L0,NY,NX)*TKS_vr(L0,NY,NX)
   ENGY1                           = ENGY1+FX*ENGY0
   VHeatCapSolidSoil_vr(L1,NY,NX) = VHeatCapSolidSoil_vr(L1,NY,NX)+FX*VHeatCapSolidSoil_vr(L0,NY,NX)
+  if(L0>0)VHeatCapMineralSoil_vr(L1,NY,NX)=VHeatCapMineralSoil_vr(L1,NY,NX)+FX*VHeatCapMineralSoil_vr(L0,NY,NX)
   VHeatCapacity_vr(L1,NY,NX)      = VHeatCapSolidSoil_vr(L1,NY,NX) &
     +cpw*(VLWatMicP_vr(L1,NY,NX)+VLWatMacP_vr(L1,NY,NX)) &
     +cpi*(VLiceMicP_vr(L1,NY,NX)+VLiceMacP_vr(L1,NY,NX))
@@ -1361,6 +1362,7 @@ implicit none
   VLWatMicPX_vr(L0,NY,NX)         = VLWatMicP_vr(L0,NY,NX)
   ENGY0                           = FY*ENGY0
   VHeatCapSolidSoil_vr(L0,NY,NX) = FY*VHeatCapSolidSoil_vr(L0,NY,NX)
+  if(L0>0)VHeatCapMineralSoil_vr(L0,NY,NX)=FY*VHeatCapMineralSoil_vr(L0,NY,NX)
 
   ! Soil includes macropore heat capacity; surface litter does not.
   IF(L0.NE.0)THEN
@@ -2016,6 +2018,7 @@ implicit none
   real(r8), intent(out):: FWO      !mixing fraction of organic material
   real(r8) :: FXVOLW,FXVOLWH,FXVOLIH,FXVHC
   real(r8) :: FXENGY,FXVOLI,FXVLSoilMicP,FXVOLWX,FXVHCM
+  real(r8) :: MineralCapacityMoved ! noncombustible component of transferred solid capacity [MJ/K/cell]
   real(r8) :: ENGY0,ENGY1
 
   IF(L0.EQ.L .OR. POROSI_vr(L0,NY,NX).LE.ZERO)THEN
@@ -2059,6 +2062,11 @@ implicit none
   FXVHCM                          = FWO*VHeatCapSolidSoil_vr(L0,NY,NX)
   VHeatCapSolidSoil_vr(L1,NY,NX) = VHeatCapSolidSoil_vr(L1,NY,NX)+FXVHCM
   VHeatCapSolidSoil_vr(L0,NY,NX) = VHeatCapSolidSoil_vr(L0,NY,NX)-FXVHCM
+  if(L0>0)then
+    MineralCapacityMoved=FWO*VHeatCapMineralSoil_vr(L0,NY,NX)
+    VHeatCapMineralSoil_vr(L1,NY,NX)=VHeatCapMineralSoil_vr(L1,NY,NX)+MineralCapacityMoved
+    VHeatCapMineralSoil_vr(L0,NY,NX)=VHeatCapMineralSoil_vr(L0,NY,NX)-MineralCapacityMoved
+  endif
 
   ! Transfer macropore water/ice and their sensible heat before updating temperatures.
   FXVOLWH=0._r8
