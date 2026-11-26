@@ -256,6 +256,21 @@ target_include_directories(SoilHydraulicTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/HydroTherm/SoilPhys/)
 add_test(NAME soil_hydraulic_properties COMMAND SoilHydraulicTest.x)
 
+add_ecosim_executable(MoistureFactorTest.x MoistureFactorTest.F90)
+target_include_directories(MoistureFactorTest.x PRIVATE
+  ${CMAKE_BINARY_DIR}/f90src/Utils/
+  ${CMAKE_BINARY_DIR}/f90src/Modelconfig/
+  ${CMAKE_BINARY_DIR}/f90src/Mesh/
+  ${CMAKE_BINARY_DIR}/f90src/DebugTools/
+  ${CMAKE_BINARY_DIR}/f90src/Ecosim_datatype/
+  ${CMAKE_BINARY_DIR}/f90src/HydroTherm/PhysData/)
+add_test(NAME soil_evap_moisture_factor COMMAND MoistureFactorTest.x)
+foreach(mode negative nan infinite)
+  add_test(NAME soil_evap_dmeff_${mode} COMMAND MoistureFactorTest.x ${mode})
+  set_tests_properties(soil_evap_dmeff_${mode}
+    PROPERTIES PASS_REGULAR_EXPRESSION "soil_evap_dmeff must be finite and nonnegative")
+endforeach()
+
 add_ecosim_executable(SoilHydraulicSchemeTest.x SoilHydraulicSchemeTest.F90)
 target_include_directories(SoilHydraulicSchemeTest.x PRIVATE
   ${CMAKE_BINARY_DIR}/f90src/Utils/

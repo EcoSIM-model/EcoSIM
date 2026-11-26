@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ci Update, Two Stages</title>
+<style>
+:root{--ink:#20302b;--muted:#607068;--head:#164c3a;--link:#12644f;--bg:#fafbf8;--panel:#eaf1eb;--warn:#fbeee6;--warn-ink:#7a3410;--line:#cfdcd2}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#dfe7e2;--muted:#9aaaa2;--head:#8fd3b5;--link:#7cc9a8;--bg:#141a17;--panel:#1e2a24;--warn:#2e2119;--warn-ink:#f0b48c;--line:#2f3d36}}
+:root[data-theme="dark"]{--ink:#dfe7e2;--muted:#9aaaa2;--head:#8fd3b5;--link:#7cc9a8;--bg:#141a17;--panel:#1e2a24;--warn:#2e2119;--warn-ink:#f0b48c;--line:#2f3d36}
+body{max-width:920px;margin:48px auto;padding:0 16px;font:17px/1.65 system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+h1,h2,h3{line-height:1.25;color:var(--head)}h2{margin-top:2.2em}h3{margin-top:1.5em}
+a{color:var(--link)}code{overflow-wrap:anywhere;font-size:.9em}
+.eq,.note{padding:14px 18px;background:var(--panel);border-radius:8px;overflow-wrap:anywhere;margin:1em 0}
+.eq{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;line-height:1.8}
+.warn{background:var(--warn);color:var(--warn-ink)}
+.meta{color:var(--muted);font-size:.9em}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.93em;margin:1em 0}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--head)}
+ol.flow li{margin:.35em 0}
+@media print{body{margin:0;max-width:none;background:white}}
+</style>
+</head>
+<body>
+<h1>How Ci is updated in stage 1 and stage 2</h1>
+<p class="meta">Code-based note · 26 November 2026 · Source: EcoSIM working tree at <code>ba408150</code> plus uncommitted edits; line numbers refer to that checkout. Companion to <a href="ci_ca_transpiration_feedback.html">Ci/Ca and transpiration feedback</a>.</p>
+
+<div class="note"><strong>Summary.</strong> Stage 1 fixes the internal CO₂ as C<sub>i</sub>* = FCO2 · C<sub>a</sub> and derives stomatal resistance from it. Stage 2 solves a new C<sub>i</sub> on every leaf from a balance between supply (diffusion) and demand (carboxylation). Its leaf resistance is built from the rate at C<sub>i</sub>*, though, so for an unclamped leaf C<sub>i</sub>* is the solution exactly.
+<ul>
+<li><b>C4:</b> water stress and N/P limits scale supply and demand by the same factor, so C<sub>i</sub> departs from C<sub>i</sub>* only when the leaf resistance hits a bound (cuticular at low light, <code>RCMN</code> at high rates).</li>
+<li><b>C3:</b> water stress scales conductance by RS/RSL but carboxylation by √(RS/RSL). C3 C<sub>i</sub> therefore falls below C<sub>i</sub>* under turgor loss; this is the one physiological route by which stage-2 C<sub>i</sub> differs from C<sub>i</sub>*.</li>
+</ul>
+Stage-2 C<sub>i</sub> is only diagnosed (<code>DynCi2CaRatio_pft</code>) and never feeds back to stage 1.</div>
+
+<h2>1 · Where the two stages sit in the hour</h2>
+<ol class="flow">
+<li><b>WATSUB → <code>AdvancePlantHydraulics</code> (stage 1).</b> <code>UptakesMod</code> calls <code>StomatalDynamics</code> (<a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>: lines 204, 1598, 1652). This sets C<sub>i</sub>*, runs reference photosynthesis at C<sub>i</sub>*, and returns the canopy minimum stomatal resistance. The canopy energy–water solve then adds turgor stress and computes transpiration.</li>
+<li><b>Soil substeps.</b> Root uptake from stage 1 is applied.</li>
+<li><b>PlantModel → <code>ComputeGPP</code> (stage 2).</b> Called from <a href="../f90src/Plant_bgc/PlantBranchMod.F90">PlantBranchMod.F90</a>:921. For every leaf group (node × layer × inclination × azimuth × sunlit/shaded) it sets leaf resistance and iterates C<sub>i</sub> to fix carbon.</li>
+<li><b><code>ExitPlantBalance</code>.</b> The leaf-area-weighted mean stage-2 C<sub>i</sub> is diagnosed as <code>DynCi2CaRatio_pft</code> (<a href="../f90src/Plant_bgc/PlantBalMod.F90">PlantBalMod.F90</a>:763). Nothing reads it back.</li>
+</ol>
+
+<h2>2 · Stage 1: Ci fixed by the PFT ratio</h2>
+<p>All in <a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a>.</p>
+<div class="eq">
+C<sub>a</sub> = CO2E − 8.33×10⁴ · F<sub>net</sub> · r<sub>b,CO2</sub> / n<sub>air</sub>, clamped to CO2E ± 200 &nbsp;&nbsp;(lines 267–268)<br>
+C<sub>i</sub>* = FCO2 · C<sub>a</sub> &nbsp;&nbsp;(<code>LeafIntracellularCO2_pft</code>, line 277)<br>
+c<sub>i</sub>* = C<sub>i</sub>* · solubility; &nbsp; ΔC = n<sub>air</sub> (C<sub>a</sub> − C<sub>i</sub>*) &nbsp;&nbsp;(<code>aquCO2Intraleaf_pft</code>, <code>DiffCO2Atmos2Intracel_pft</code>, lines 950–952)<br>
+Per node, evaluated at c<sub>i</sub>*: CO₂-limited rate V<sub>c</sub>(c<sub>i</sub>*) and carboxylation efficiency ε(c<sub>i</sub>*) &nbsp;&nbsp;(C3: lines 456, 472; C4: lines 588, 605)<br>
+Canopy: RSX = f<sub>PAR</sub> · ΔC · Area / (CH2O · 3600) &nbsp;&nbsp;(line 1069)<br>
+r<sub>s,min,H2O</sub> = min(r<sub>cuticle</sub>, max(RSMY, RSX/1.56)) &nbsp;&nbsp;(<code>CanopyMinStomaResistH2O_pft</code>, line 1074)
+</div>
+<p>The canopy energy–water solve then applies turgor stress: r<sub>s</sub> = r<sub>s,min</sub> + (r<sub>cuticle</sub> − r<sub>s,min</sub>)·exp(−Ψ<sub>turgor</sub>/RCS). C<sub>i</sub> is a parameter here; it sets the conductance that delivers the reference carbon gain at that fixed drawdown.</p>
+
+<h2>3 · Stage 2: per-leaf Ci solve</h2>
+<p>In <a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a>: C3 in <code>ComputeGPP_C3</code> (lines 120–200), C4 in <code>ComputeGPP_C4</code> (lines 300–400). For each leaf group with PAR &gt; 0:</p>
+<div class="eq">
+V<sub>0</sub> = min(V<sub>c</sub>(c<sub>i</sub>*), J(PAR)·ε(c<sub>i</sub>*)) · N &nbsp;&nbsp;(N = <code>RubiscoActivity_brch</code> for C3, <code>NutrientCtrlonC4Carboxy_node</code> for C4)<br>
+RS = min(r<sub>cuticle,CO2</sub>, max(RCMN, ΔC / V<sub>0</sub>)) &nbsp;&nbsp;(RCMN = 15.6 s m⁻¹, <a href="../f90src/Modelpars/PlantBGCPars.F90">PlantBGCPars.F90</a>:235)<br>
+RSL = RS + (r<sub>cuticle,CO2</sub> − RS) · S &nbsp;&nbsp;(S = <code>Stomata_Stress</code> = exp(−Ψ<sub>turgor</sub>/RCS))<br>
+GSL = n<sub>air</sub> / RSL<br>
+Iterate from C<sub>i</sub> = C<sub>i</sub>*:<br>
+&nbsp;&nbsp;demand V<sub>L</sub>(C<sub>i</sub>) = min(V<sub>c</sub>(c<sub>i</sub>), J·ε(c<sub>i</sub>)) · N · W<br>
+&nbsp;&nbsp;supply V<sub>G</sub>(C<sub>i</sub>) = (C<sub>a</sub> − C<sub>i</sub>) · GSL<br>
+&nbsp;&nbsp;stop when |V<sub>L</sub> − V<sub>G</sub>| / (V<sub>L</sub> + V<sub>G</sub>) &lt; 0.005, otherwise C<sub>i</sub> ← C<sub>a</sub> − (0.95 V<sub>G</sub> + 0.05 V<sub>L</sub>)/GSL
+</div>
+<p>The water-stress factor W on demand differs by pathway:</p>
+<div class="scroll"><table>
+<thead><tr><th>Pathway</th><th>W in the C<sub>i</sub> loop</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>C4 mesophyll (PEP)</td><td>WFN4 = RS/RSL</td><td>PhotoSynsMod.F90:352, 383</td></tr>
+<tr><td>C3</td><td>WFNB = √(RS/RSL)</td><td>PhotoSynsMod.F90:149, 179</td></tr>
+<tr><td>C4 bundle sheath (rubisco)</td><td>WFNB = √(RS/RSL), outside the C<sub>i</sub> loop</td><td>PhotoSynsMod.F90:433</td></tr>
+<tr><td>Bryophyte (either)</td><td>W = <code>PsiCan4Photosyns</code></td><td>PhotoSynsMod.F90:151, 356</td></tr>
+</tbody></table></div>
+
+<h2>4 · Why Ci* is the stage-2 solution</h2>
+<p>Let s = RS/RSL (1 without turgor loss, &lt; 1 with it). If RS is not clamped, RS = ΔC/V<sub>0</sub>. At C<sub>i</sub> = C<sub>i</sub>*:</p>
+<div class="eq">
+supply = (C<sub>a</sub> − C<sub>i</sub>*) · n<sub>air</sub> / RSL = (ΔC / RS) · s = V<sub>0</sub> · s<br>
+demand = V<sub>0</sub> · W
+</div>
+<div class="scroll"><table>
+<thead><tr><th>Case</th><th>W</th><th>demand / supply at C<sub>i</sub>*</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>C4, any turgor, any N/P</td><td>s</td><td>1</td><td>C<sub>i</sub> = C<sub>i</sub>*. The loop exits on its first check, so the C4 δ is exactly 0.</td></tr>
+<tr><td>C3, no turgor loss (s = 1)</td><td>1</td><td>1</td><td>C<sub>i</sub> = C<sub>i</sub>*</td></tr>
+<tr><td>C3, turgor loss (s &lt; 1)</td><td>√s</td><td>1/√s &gt; 1</td><td>C<sub>i</sub> &lt; C<sub>i</sub>*: demand is cut less than conductance, so C<sub>i</sub> is drawn down</td></tr>
+<tr><td>Any, RS at cuticular bound (low light)</td><td>—</td><td>&lt; 1</td><td>C<sub>i</sub> &gt; C<sub>i</sub>*: conductance exceeds what the rate needs</td></tr>
+<tr><td>Any, RS at RCMN (very high rate)</td><td>—</td><td>&gt; 1</td><td>C<sub>i</sub> &lt; C<sub>i</sub>*: conductance is capped</td></tr>
+</tbody></table></div>
+<p>N/P limitation cancels in every case: the same factor N enters V<sub>0</sub>, and so RS, and the loop's demand. For C3 under stress, the new C<sub>i</sub> satisfies V<sub>L</sub>(C<sub>i</sub>)/V<sub>0</sub> = √s · (C<sub>a</sub> − C<sub>i</sub>)/(C<sub>a</sub> − C<sub>i</sub>*). How far it drops depends on how steeply V<sub>L</sub> responds to C<sub>i</sub>: little when light-limited, more when CO₂-limited.</p>
+<div class="note warn"><strong>Assumption to verify.</strong> The argument requires that stage 2 sees the same C<sub>a</sub>, n<sub>air</sub>, C<sub>i</sub>*, node rates and efficiencies as the last stage-1 call. These are stored plant-photo state set by the last <code>StomatalDynamics</code> call in the hour. Any state that changes between WATSUB and PlantModel would add a small, non-physiological δ.</div>
+
+<h2>5 · Evidence from Ne1 maize (C4), 2017</h2>
+<p>From the lagged-filter test (<code>ne1_run/experiments/ci2ca_filter_test_20261125T203548Z</code>; report section 8), filter off, FCO2 = 0.4:</p>
+<ul>
+<li>δ = <code>DynCi2CaRatio</code> − FCO2 is 0.34 at 05:00, 0.14 at 06:00 and 0.065 at 07:00, under 0.01 from 09:00 to 15:00, and 0.13–0.44 at 18:00–19:00.</li>
+<li>In the dawn and dusk hours, stomatal resistance is 400–2700 s m⁻¹, near the cuticular bound. This is the clamp case in section 4.</li>
+<li>Midday δ ≈ 0.004 comes from clamped shaded leaves within the leaf-area-weighted mean.</li>
+</ul>
+<p>This matches the C4 analysis: δ records when the bounds bind, not physiology. A filter x(t) = α·XS + (1−α)·x(t−1) on this signal acted as a raised FCO2 set by dawn conditions, and ratcheted upward without a daily reset.</p>
+
+<h2>6 · Options if Ci is to become dynamic</h2>
+<p>These options respect EcoSIM's design: no prescribed A–g<sub>s</sub>–VPD relationship (no Medlyn- or Prentice-type closure). None has been tested.</p>
+<ol>
+<li><b>Make C4 match C3:</b> use √(RS/RSL), or another non-stomatal factor, for C4 mesophyll demand. C4 C<sub>i</sub> would then fall under turgor loss, through hydraulics alone. Check first why C4 uses RS/RSL; this is a design question, not an obvious bug.</li>
+<li><b>Feed back only the physiological δ:</b> update a lagged C<sub>i</sub>/C<sub>a</sub> only from leaves whose RS is not clamped. For C4 this is identically zero today, so it only helps after option 1 or for C3.</li>
+<li><b>Base stage-2 conductance on something other than V(C<sub>i</sub>*)</b>, for example a hydraulically limited conductance from stage 1. The stage-2 C<sub>i</sub> would then carry independent information.</li>
+</ol>
+
+<h2>7 · Questions for later</h2>
+<ul>
+<li>Is the C3/C4 asymmetry in W (√s vs s) deliberate? Check the ecosys history and documentation.</li>
+<li>How large is C3 δ under real turgor loss? Check <code>DynCi2CaRatio_pft</code> for soybean 2022 at Ne1 and at a drought site.</li>
+<li>Does any state change between the last <code>StomatalDynamics</code> call and <code>ComputeGPP</code> (section 4 assumption)?</li>
+<li>Stage 1 applies one ratio to the whole canopy; stage 2 diagnoses per leaf group. Should a dynamic ratio be per PFT or per leaf class?</li>
+</ul>
+
+<h2>Source map</h2>
+<div class="scroll"><table>
+<thead><tr><th>Source</th><th>What to inspect</th></tr></thead>
+<tbody>
+<tr><td><a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a></td><td><code>StomatalDynamics</code> (C<sub>a</sub>, C<sub>i</sub>*), <code>PrepPhotosynthesis</code> (ΔC, c<sub>i</sub>*), <code>C3Photosynthesis</code>/<code>C4Photosynthesis</code> (rates at C<sub>i</sub>*), <code>PhotoActivePFT</code> (canopy r<sub>s,min</sub>)</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a></td><td><code>ComputeGPP_C3</code>, <code>ComputeGPP_C4</code>: leaf RS, stress factors, C<sub>i</sub> iteration</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a></td><td>Stage-1 call sites in the plant water solve</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantBranchMod.F90">PlantBranchMod.F90</a></td><td>Stage-2 call (<code>ComputeGPP</code>)</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/PlantBalMod.F90">PlantBalMod.F90</a></td><td><code>DynCi2CaRatio_pft</code> diagnosis</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/GrosubsMod.F90">GrosubsMod.F90</a>, <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a></td><td><code>Stomata_Stress</code> = exp(−Ψ<sub>turgor</sub>/RCS)</td></tr>
+</tbody></table></div>
+</body>
+</html>

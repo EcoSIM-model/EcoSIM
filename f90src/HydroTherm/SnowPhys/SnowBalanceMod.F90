@@ -54,7 +54,7 @@ implicit none
   integer, intent(in) :: I,J   !model day of year and hour [-]
   integer, intent(in) :: NY,NX !column row and column indices [-]
   character(len=*), parameter :: subname='RetireNumericalSnow'
-  real(r8) :: WaterWE,Energy,Capacity,ReturnedWater,ReturnedHeat
+  real(r8) :: WaterWE,FrozenWE,Energy,Capacity,ReturnedWater,ReturnedHeat
   integer :: L,Receiver
   logical :: Merged
 
@@ -63,7 +63,12 @@ implicit none
   if(.not.ats_cpl_mode.and..not.fixWaterLevel)then
     WaterWE=sum(VLDrySnoWE_snvr(:,NY,NX))+sum(VLWatSnow_snvr(:,NY,NX)) &
       +DENSICE*sum(VLIceSnow_snvr(:,NY,NX))
-    if(WaterWE>0._r8.and.WaterWE<=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))then
+    FrozenWE=sum(VLDrySnoWE_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow_snvr(:,NY,NX))
+    Capacity=cps*sum(VLDrySnoWE_snvr(:,NY,NX))+cpw*sum(VLWatSnow_snvr(:,NY,NX))+cpi*sum(VLIceSnow_snvr(:,NY,NX))
+    ! Retire tiny total stores and thin liquid films whose frozen skeleton has
+    ! vanished. Cold air alone must not keep meltwater in the snow solver.
+    if(WaterWE>0._r8.and.(WaterWE<=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX).or. &
+      (FrozenWE<=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX).and.Capacity<=VLHeatCapSnowMin_col(NY,NX))))then
       Energy=0._r8
       do L=1,JS
         Capacity=cps*VLDrySnoWE_snvr(L,NY,NX)+cpw*VLWatSnow_snvr(L,NY,NX)+cpi*VLIceSnow_snvr(L,NY,NX)
@@ -297,9 +302,11 @@ implicit none
   QWatinfl2Mic=0._r8
   QHeatInfl2Soil=0._r8
   IF(VLHeatCapSnow_snvr(1,NY,NX).GT.0.0_r8 .AND. VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) &
-    .AND. (TairK_col(NY,NX).GT.TFICE.or.(.not.test_exist.and..not.ats_cpl_mode.and..not.fixWaterLevel.and. &
+    .AND. (TairK_col(NY,NX).GT.TFICE.or.(.not.test_exist.and..not.ats_cpl_mode.and..not.fixWaterLevel.and.( &
       sum(VLDrySnoWE_snvr(:,NY,NX))+sum(VLWatSnow_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow_snvr(:,NY,NX)) &
-      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))))THEN
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX).or. &
+      sum(VLDrySnoWE_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow_snvr(:,NY,NX)) &
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX)))))THEN
 
     ! Retire a warm thin layer or a numerically unresolved native film.
     ! Frozen constituents enter the receiver as ice, including under cold air.

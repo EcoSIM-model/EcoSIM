@@ -39,7 +39,7 @@ implicit none
   public :: ComputePSIPond
   public :: getMoistK
   public :: IsPondLayer
-
+  public :: moisture_factor
   contains
 !------------------------------------------------------------------------------------------
   subroutine CalcSoilWatPotential(NY,NX,N1,N2,N3,PSISoilMatric,THETA1S)
@@ -362,6 +362,25 @@ implicit none
 
   K=MAX(1,MIN(100,101-INT(100.0_r8*thetawl/pores)))
   end function getMoistK
+!------------------------------------------------------------------------------------------
+  pure function moisture_factor(thetawl,pores,NY,NX)result(f)
+  ! Description:
+  ! Return a resistance-only liquid-supply factor using this column's DMeff.
+  ! Preserve the user-specified wet-tail cutoff; DMeff=0 gives exactly one.
+  ! This mapping changes no water inventory or physical air-filled porosity.
+  real(r8), intent(in) :: thetawl ! liquid content [m3 water m-3 micropore soil]
+  real(r8), intent(in) :: pores   ! porosity on the same micropore-soil basis [m3 m-3]
+  integer, intent(in) :: NY,NX    ! row and column indices [-]
+  real(r8) :: f                  ! effective/actual liquid content, bounded [0,1]
+  real(r8) :: S                  ! physical liquid saturation, bounded [0,1]
+  S=MAX(0._r8,MIN(safe_adb(thetawl,pores),1._r8))
+  !only apply the correction to wet tail
+  if(S>0.6_r8)then
+    f=AZMAX1(1._r8-DMeff_col(NY,NX)*S*(1._r8-S))
+  else
+    f= 1._r8
+  endif
+  end function moisture_factor
 
 !------------------------------------------------------------------------------------------
   pure function IsPondLayer(bulkDS)result(ans)

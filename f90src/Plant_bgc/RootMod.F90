@@ -1,3 +1,5 @@
+! Description:
+! Compute root and mycorrhizal growth, respiration, turnover and geometry.
 module RootMod
   use data_kind_mod,       only: r8 => DAT_KIND_R8, yearIJ_type
   use minimathmod,         only: safe_adb,  AZMAX1, AZMIN1, AZERO, sfexp
@@ -566,18 +568,18 @@ implicit none
   end associate      
   end subroutine DiagRootGeometry
 !----------------------------------------------------------------------------------------------------
-  subroutine Grow2ndRootAxes(I,J,L,NZ,N,NR,VMXCSpec, CNRTW,CPRTW,fdLext2nd,&
+  subroutine Grow2ndRootAxes(I,J,L,NZ,N,NR,CNRTW,CPRTW,fdLext2nd,&
     RespElongWatSens,DMRespEff,fRootGrowPSISense,TFN6_vr,RootSinkC_vr,Root2ndSink_pvr,&
     litrflx2,RCO2flx2,Root2ndStrutRemob)
   !
-  !Description:
-  !Grow fine roots and mycorrhizae
+  ! Description:
+  ! Grow fine roots and mycorrhizae. Fund their maintenance before
+  ! applying nutrient and grain-fill limitations to the remaining growth flux.
   !  
   implicit none
   integer, intent(in) :: I,J,L,NZ
   integer, intent(in) :: N                          !root type id
   integer, intent(in) :: NR                         !root axis id
-  real(r8), intent(in) :: VMXCSpec
   real(r8), intent(in) :: CNRTW,CPRTW  
   real(r8), intent(in) :: fdLext2nd                 !soil compaction modification of root extension
   real(r8), intent(in) :: RespElongWatSens          !respiration function of root water potential
@@ -592,6 +594,8 @@ implicit none
   real(r8), intent(out) :: Root2ndStrutRemob(NumPlantChemElms)      
   character(len=*), parameter :: subname='Grow2ndRootAxes'
   real(r8) :: Rmaint2nd_CO2                   !root maintenance respiration
+  real(r8) :: VMXCPot                         !fine-root/mycorrhizal C mobilization rate without growth modifiers, [h-1]
+  real(r8) :: FineRootGrowthFactor           !N/P and grain-fill constraints on fine-root/mycorrhizal growth, [-]
   real(r8) :: RNonstCO2_OUltd,RNonstCO2_Oltd  !respiration from non-structural C unlimited/limited by O2
   REAL(R8) :: RCO2MaintDef2ndStruct_Oltd      !maintenance deficit met up by structural root biomass remobilization under O2 limitation
   real(r8) :: RCO2MaintDef2ndStruct_OUltd     !maintenance deficit met up by structural root biomass remobilization without O2 limitation
@@ -635,6 +639,8 @@ implicit none
     GrainFillDowreg_brch           => plt_photo%GrainFillDowreg_brch             ,& !input  :grain fill down-regulation of annual plants, [-]
     RootMyco2ndStrutElms_rpvr      => plt_biom%RootMyco2ndStrutElms_rpvr         ,& !inoput :root layer element secondary axes, [g d-2]
     RootMycoNonstElms_rpvr         => plt_biom%RootMycoNonstElms_rpvr            ,& !inoput :root layer nonstructural element, [g d-2]
+    ROOTNLim_rpvr                 => plt_biom%ROOTNLim_rpvr                    ,& !input :root N growth multiplier by root type, layer and PFT, [-]
+    ROOTPLim_rpvr                 => plt_biom%ROOTPLim_rpvr                    ,& !input :root P growth multiplier by root type, layer and PFT, [-]
     RootCO2Autor_pvr               => plt_rbgc%RootCO2Autor_pvr                  ,& !inoput :root respiration constrained by O2, [g d-2 h-1]
     RootCO2EmisPot_pvr             => plt_rbgc%RootCO2EmisPot_pvr                ,& !inoput :root CO2 efflux unconstrained by root nonstructural C, [g d-2 h-1]
     RootRespPotent_pvr             => plt_rbgc%RootRespPotent_pvr                ,& !inoput :root respiration unconstrained by O2, [g d-2 h-1]
@@ -691,20 +697,22 @@ implicit none
     Rmaint2nd_CO2=Rmaint2nd_CO2*fRootGrowPSISense
   ENDIF
   !
-  !     O2-UNLIMITED SECONDARY ROOT RESPIRATION FROM NON-STRUCTURAL C
-  !     CONSTRAINED BY TEMPERATURE AND NON-STRUCTURAL C:N:P
-  !
-  !     VMXC=rate constant for nonstructural C oxidation in respiration C     
-  !  
-  RNonstCO2_OUltd=AZMAX1(RootMycoNonstElms_rpvr(ielmc,N,L,NZ)*AMIN1(VMXCSpec*FracRoot2ndCSinkL,1._R8))
+  ! Fine-root and mycorrhizal maintenance use potential C mobilization before
+  ! growth nutrient/grain-fill constraints, using each root type's own reserves.
+  VMXCPot       = VMXC*fTGrowRootP_vr(L,NZ)*fRootGrowPSISense
+  RNonstCO2_OUltd = AZMAX1(RootMycoNonstElms_rpvr(ielmc,N,L,NZ)* &
+    MIN(1._r8,MAX(0._r8,VMXCPot*FracRoot2ndCSinkL)))
+  FineRootGrowthFactor=MIN(ROOTNLim_rpvr(N,L,NZ),ROOTPLim_rpvr(N,L,NZ)) &
+    *GrainFillDowreg_brch(MainBranchNum_pft(NZ),NZ)
   !
   !     O2-LIMITED SECONDARY ROOT RESPIRATION FROM 'WFR' IN 'UPTAKE'
   !
   RNonstCO2_Oltd               = RNonstCO2_OUltd*RAutoRootO2Limter_rpvr(N,L,NZ)
   RPotCO2Groth2nd_OUltd        = RNonstCO2_OUltd-Rmaint2nd_CO2
   RPotCO2Groth2nd_Oltd         = RNonstCO2_Oltd-Rmaint2nd_CO2
-  RGrowCO2_OUltd               = AZMAX1(RPotCO2Groth2nd_OUltd)*RespElongWatSens
-  RGrowCO2_Oltd                = AZMAX1(RPotCO2Groth2nd_Oltd)*RespElongWatSens
+  ! Only the carbon remaining after maintenance is subject to growth modifiers.
+  RGrowCO2_OUltd               = AZMAX1(RPotCO2Groth2nd_OUltd)*RespElongWatSens*FineRootGrowthFactor
+  RGrowCO2_Oltd                = AZMAX1(RPotCO2Groth2nd_Oltd)*RespElongWatSens*FineRootGrowthFactor
   RootMaintDef_CO2_pvr(N,L,NZ) = RootMaintDef_CO2_pvr(N,L,NZ)+AMIN1(RPotCO2Groth2nd_Oltd,0._r8)
 
   !
@@ -1034,7 +1042,7 @@ implicit none
   real(r8), intent(out) :: MediumRootMaintCAlloc_OUltd(pltpar%MaxNumRootAxes)
   real(r8), intent(out) :: MediumRootMaintCAlloc_Oltd(pltpar%MaxNumRootAxes)
   real(r8) :: MediumDemand(pltpar%MaxNumRootAxes),TotalDemand,MaintRate,PrimaryN
-  real(r8) :: FracRootMCMaintL(pltpar%MaxNumRootAxes),AvailableC,MaintCapacity,VMXCMaint
+  real(r8) :: FracRootMCMaintL(pltpar%MaxNumRootAxes),AvailableC,MaintCapacity,VMXCPot
   integer :: NR
   logical :: TipMaintenance,ThickMaintenance
 
@@ -1100,8 +1108,8 @@ implicit none
   !Retain the temperature/water-dependent mobilization capacity, but exclude
   !the nutrient and grain-fill modifiers used for growth allocation.
   AvailableC                  = AZMAX1(RootMycoNonstElms_rpvr(ielmc,N,L,NZ))
-  VMXCMaint                   = VMXC*fTGrowRootP_vr(L,NZ)*fRootGrowPSISense
-  MaintCapacity               = MIN(TotalDemand,AvailableC*MIN(1._r8,MAX(0._r8,VMXCMaint)))
+  VMXCPot                     = VMXC*fTGrowRootP_vr(L,NZ)*fRootGrowPSISense
+  MaintCapacity               = MIN(TotalDemand,AvailableC*MIN(1._r8,MAX(0._r8,VMXCPot)))
   FracRootMCMaintL            = MediumDemand/TotalDemand
   MediumRootMaintCAlloc_OUltd = MaintCapacity*FracRootMCMaintL
 
@@ -1609,7 +1617,7 @@ implicit none
       call SumRootBiome(yearIJ,NZ,mass_inital)
       !
       !secondary roots can grow in any root layer that is not the deepest
-      call Grow2ndRootAxes(yearIJ%I,yearIJ%J,L,NZ,N,NR,VMXCSpec,CNRTW,CPRTW,fdLext2nd,RespElongWatSens,&
+      call Grow2ndRootAxes(yearIJ%I,yearIJ%J,L,NZ,N,NR,CNRTW,CPRTW,fdLext2nd,RespElongWatSens,&
         DMRespEff,fRootGrowPSISense,TFN6_vr,RootSinkC_vr,Root2ndSink_pvr,litrflx2,RCO2flx2,Root2ndStrutRemob)
 
 !      dlitrfall=plt_bgcr%LitrfallBlgrElms_pft(:,NZ)

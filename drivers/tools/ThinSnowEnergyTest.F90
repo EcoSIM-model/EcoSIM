@@ -11,7 +11,8 @@ program ThinSnowEnergyTest
   use EcoSIMCtrlDataType, only: ZERO,ZERO2,ZEROS,ZEROS2,ats_shared_surface_layer
   use EcoSIMSolverPar, only: NPH
   use EcoSimConst, only: cps,cpw,cpi,cpo,DENSICE,TFice,VLHeatCapSnoMin,LtHeatIceMelt,MinResolvedSnowSWE
-  use HydroThermData, only: TKSnow0_snvr,TKSoil1_vr,VHeatCapacity1_vr,VLWatMicP1_vr,VLiceMicP1_vr
+  use HydroThermData, only: TKSnow0_snvr,TKSoil1_vr,VHeatCapacity1_vr,VLWatMicP1_vr,VLiceMicP1_vr, &
+    VLHeatCapacityA_vr,VLHeatCapacityB_vr,VLWatMacP1_vr,VLiceMacP1_vr,Qinflx2SoilM_col
   use ElmIDMod, only: ielmc
   use MiniFuncMod, only: gOC_to_m3_OM
   use SnowDataType
@@ -23,7 +24,8 @@ program ThinSnowEnergyTest
   use AqueChemDatatype, only: trcSalt_solml_vr
   use ClimForcDataType, only: TairK_col,TCA_col
   use SoilHeatDataType, only: InitSoilHeatData,TKS_vr,VHeatCapacity_vr,XPhaseChangeHeatL_snvr,HeatFlx2Grnd_col
-  use SoilWaterDataType, only: VLWatMicP_vr,VLWatMacP_vr,VLiceMicP_vr,VLiceMacP_vr,Qinflx2Soil_col
+  use SoilWaterDataType, only: VLWatMicP_vr,VLWatMacP_vr,VLiceMicP_vr,VLiceMacP_vr,Qinflx2Soil_col, &
+    QSnoWatXfer2Soil_col,QSnoIceXfer2Soil_col
   use SoilPhysDataType, only: VHeatCapSolidSoil_vr
   use SoilPropertyDataType, only: SoilBulkDensity_vr
   use SOMDataType, only: SoilOrgM_vr
@@ -46,7 +48,10 @@ program ThinSnowEnergyTest
   allocate(TKSnow0_snvr(JS,1,1))
   allocate(TKSoil1_vr(0:JS,1,1),VHeatCapacity1_vr(0:JS,1,1))
   allocate(VLWatMicP1_vr(0:JS,1,1),VLiceMicP1_vr(0:JS,1,1))
+  allocate(VLHeatCapacityA_vr(0:JS,1,1),VLHeatCapacityB_vr(0:JS,1,1))
+  allocate(VLWatMacP1_vr(0:JS,1,1),VLiceMacP1_vr(0:JS,1,1))
   allocate(HeatFLoByWat2LitR_col(1,1))
+  allocate(QSnoWatXfer2Soil_col(1,1),QSnoIceXfer2Soil_col(1,1),Qinflx2SoilM_col(1,1))
   allocate(ZEROS(1,1),ZEROS2(1,1),AREA_3D(3,0:JS,1,1),NUM_col(1,1),NU_col(1,1))
   allocate(TairK_col(1,1),TCA_col(1,1),SoilBulkDensity_vr(0:JS,1,1),SoilOrgM_vr(3,0:JS,1,1))
   allocate(VLWatMicP_vr(0:JS,1,1),VLWatMacP_vr(0:JS,1,1),VLiceMicP_vr(0:JS,1,1),VLiceMacP_vr(0:JS,1,1))
@@ -86,38 +91,88 @@ program ThinSnowEnergyTest
   do iarea=1,2
     Scale=1000._r8**(iarea-1)
     do Receiver=0,1
-      call reset_state()
-      AREA_3D=Scale
-      salt_model=.true.
-      call set_layer(1,0.4_r8*MinResolvedSnowSWE*Scale,260._r8)
-      call set_layer(2,0.2_r8*MinResolvedSnowSWE*Scale,250._r8)
-      VLWatSnow_snvr(1,1,1)=0.2_r8*MinResolvedSnowSWE*Scale
-      VLIceSnow_snvr(1,1,1)=0.1_r8*MinResolvedSnowSWE*Scale/DENSICE
-      VLHeatCapSnow_snvr(1,1,1)=cps*VLDrySnoWE_snvr(1,1,1)+cpw*VLWatSnow_snvr(1,1,1)+cpi*VLIceSnow_snvr(1,1,1)
-      if(Receiver==0)then
-        SoilOrgM_vr(ielmc,0,1,1)=100._r8
-        VHeatCapacity_vr(0,1,1)=cpo*gOC_to_m3_OM(100._r8)+cpw*VLWatMicP_vr(0,1,1)+cpi*VLiceMicP_vr(0,1,1)
-      endif
-      trcg_solsml_snvr(:,1:2,1,1)=1.e-12_r8
-      trcn_solsml_snvr(:,1:2,1,1)=2.e-12_r8
-      trcSalt_ml_snvr(:,1:2,1,1)=3.e-12_r8
-      BeforeEnergy=sum(VLHeatCapSnow_snvr*TKSnow_snvr)+VHeatCapacity_vr(Receiver,1,1)*TKS_vr(Receiver,1,1)
-      BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+DENSICE*sum(VLIceSnow_snvr) &
-        +VLWatMicP_vr(Receiver,1,1)+DENSICE*VLiceMicP_vr(Receiver,1,1)
-      BeforeIce=sum(VLDrySnoWE_snvr)+DENSICE*sum(VLIceSnow_snvr)+DENSICE*VLiceMicP_vr(Receiver,1,1)
-      call RetireNumericalSnow(1,1,1,1)
-      call check_close('film retired under cold air',sum(VLHeatCapSnow_snvr),0._r8)
-      call check_close('film energy retained',VHeatCapacity_vr(Receiver,1,1)*TKS_vr(Receiver,1,1),BeforeEnergy)
-      call check_close('film water retained',VLWatMicP_vr(Receiver,1,1)+DENSICE*VLiceMicP_vr(Receiver,1,1),BeforeWater)
-      call check_close('film frozen water retained',DENSICE*VLiceMicP_vr(Receiver,1,1),BeforeIce)
-      call check_close('film gas transfer',trcs_solml_vr(idg_CO2,0,1,1),2.e-12_r8)
-      call check_close('film nutrient transfer',trcs_solml_vr(ids_NH4,0,1,1),4.e-12_r8)
-      call check_close('film salt transfer',trcSalt_solml_vr(idsalt_Ca,0,1,1),6.e-12_r8)
-      call check_close('film gas loss ledger',trcg_snowMassloss_col(idg_CO2,1,1),2.e-12_r8)
-      call check_close('film snow depth cleared',SnowDepth_col(1,1),0._r8)
+      do it=1,2
+        call reset_state()
+        AREA_3D=Scale
+        VLHeatCapSnowMin_col=VLHeatCapSnoMin*Scale
+        salt_model=.true.
+        call set_layer(1,0.4_r8*MinResolvedSnowSWE*Scale,260._r8)
+        call set_layer(2,0.2_r8*MinResolvedSnowSWE*Scale,250._r8)
+        VLWatSnow_snvr(1,1,1)=0.2_r8*MinResolvedSnowSWE*Scale
+        VLIceSnow_snvr(1,1,1)=0.1_r8*MinResolvedSnowSWE*Scale/DENSICE
+        if(it==2)then
+          ! Ne2 failure: liquid above the SWE cutoff but virtually no solid snow.
+          VLDrySnoWE_snvr(:,1,1)=0._r8
+          VLHeatCapSnow_snvr(:,1,1)=0._r8
+          VLIceSnow_snvr(:,1,1)=0._r8
+          VLDrySnoWE_snvr(1,1,1)=4.e-28_r8*Scale
+          VLWatSnow_snvr(1,1,1)=1.25_r8*MinResolvedSnowSWE*Scale
+          TKSnow_snvr(1,1,1)=282.6_r8
+        endif
+        VLHeatCapSnow_snvr(1,1,1)=cps*VLDrySnoWE_snvr(1,1,1)+cpw*VLWatSnow_snvr(1,1,1)+cpi*VLIceSnow_snvr(1,1,1)
+        if(Receiver==0)then
+          SoilOrgM_vr(ielmc,0,1,1)=100._r8
+          VHeatCapacity_vr(0,1,1)=cpo*gOC_to_m3_OM(100._r8)+cpw*VLWatMicP_vr(0,1,1)+cpi*VLiceMicP_vr(0,1,1)
+        endif
+        trcg_solsml_snvr(:,1:2,1,1)=1.e-12_r8
+        trcn_solsml_snvr(:,1:2,1,1)=2.e-12_r8
+        trcSalt_ml_snvr(:,1:2,1,1)=3.e-12_r8
+        BeforeEnergy=sum(VLHeatCapSnow_snvr*TKSnow_snvr)+VHeatCapacity_vr(Receiver,1,1)*TKS_vr(Receiver,1,1)
+        BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+DENSICE*sum(VLIceSnow_snvr) &
+          +VLWatMicP_vr(Receiver,1,1)+DENSICE*VLiceMicP_vr(Receiver,1,1)
+        BeforeIce=sum(VLDrySnoWE_snvr)+DENSICE*sum(VLIceSnow_snvr)+DENSICE*VLiceMicP_vr(Receiver,1,1)
+        Incoming=sum(VLHeatCapSnow_snvr*TKSnow_snvr)
+        ReturnedWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)+DENSICE*sum(VLIceSnow_snvr)
+        call RetireNumericalSnow(1,1,1,1)
+        call check_close('film heat loss ledger',QSnowHeatLoss_col(1,1),Incoming)
+        call check_close('film water loss ledger',QSnowH2Oloss_col(1,1),ReturnedWater)
+        call check_close('film retired under cold air',sum(VLHeatCapSnow_snvr),0._r8)
+        call check_close('film energy retained',VHeatCapacity_vr(Receiver,1,1)*TKS_vr(Receiver,1,1),BeforeEnergy)
+        call check_close('film water retained',VLWatMicP_vr(Receiver,1,1)+DENSICE*VLiceMicP_vr(Receiver,1,1),BeforeWater)
+        call check_close('film frozen water retained',DENSICE*VLiceMicP_vr(Receiver,1,1),BeforeIce)
+        call check_close('film gas transfer',trcs_solml_vr(idg_CO2,0,1,1),2.e-12_r8)
+        call check_close('film nutrient transfer',trcs_solml_vr(ids_NH4,0,1,1),4.e-12_r8)
+        call check_close('film salt transfer',trcSalt_solml_vr(idsalt_Ca,0,1,1),6.e-12_r8)
+        call check_close('film gas loss ledger',trcg_snowMassloss_col(idg_CO2,1,1),2.e-12_r8)
+        call check_close('film snow depth cleared',SnowDepth_col(1,1),0._r8)
+      enddo
     enddo
   enddo
   AREA_3D=1._r8; salt_model=.false.
+
+  ! Resolved cold snow and substantial liquid stores are not numerical films.
+  do it=1,2
+    call reset_state()
+    call set_layer(1,2._r8*MinResolvedSnowSWE,260._r8)
+    if(it==2)then
+      VLDrySnoWE_snvr=0._r8
+      VLWatSnow_snvr(1,1,1)=2._r8*VLHeatCapSnoMin/cpw
+      VLHeatCapSnow_snvr(1,1,1)=cpw*VLWatSnow_snvr(1,1,1)
+    endif
+    BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)
+    call RetireNumericalSnow(1,1,1,1)
+    call check_close('resolved cold store retained',sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr),BeforeWater)
+    call check_close('resolved store no transfer',QSnowH2Oloss_col(1,1),0._r8)
+  enddo
+
+  ! Newly formed cold-air melt films also retire at the outer substep boundary.
+  do Receiver=0,1
+    call reset_state()
+    call set_layer(1,4.e-28_r8,282.6_r8)
+    VLWatSnow_snvr(1,1,1)=1.25_r8*MinResolvedSnowSWE
+    VLHeatCapSnow_snvr(1,1,1)=cps*VLDrySnoWE_snvr(1,1,1)+cpw*VLWatSnow_snvr(1,1,1)
+    VLDrySnoWE0_snvr=VLDrySnoWE_snvr; VLWatSnow0_snvr=VLWatSnow_snvr
+    TKSnow0_snvr=TKSnow_snvr; VLSnowHeatCapM_snvr(1,:,:,:)=VLHeatCapSnow_snvr
+    TKSoil1_vr=270._r8; VHeatCapacity1_vr=VHeatCapacity_vr
+    VLWatMicP1_vr=VLWatMicP_vr; VLiceMicP1_vr=VLiceMicP_vr
+    if(Receiver==0)SoilOrgM_vr(ielmc,0,1,1)=100._r8
+    BeforeWater=sum(VLDrySnoWE_snvr)+sum(VLWatSnow_snvr)
+    BeforeEnergy=sum(VLHeatCapSnow_snvr*TKSnow_snvr)
+    call UpdateSnowAtM(1,1,1,1,1)
+    call check_close('substep film retired',sum(VLDrySnoWE0_snvr)+sum(VLWatSnow0_snvr),0._r8)
+    call check_close('substep film water ledger',QSnowH2Oloss_col(1,1),BeforeWater)
+    call check_close('substep film heat ledger',QSnowHeatLoss_col(1,1),BeforeEnergy)
+  enddo
 
   ! An unresolved top film joins the resolved snow below, without a ground flux.
   call reset_state()
@@ -285,12 +340,16 @@ contains
   VLDrySnoWE0_snvr=0._r8; VLIceSnow0_snvr=0._r8; VLWatSnow0_snvr=0._r8
   THeatSnowThaw_col=0._r8; XPhaseChangeHeatL_snvr=0._r8; HEATIN_lnd=12._r8
   HeatFLoByWat2LitR_col=0._r8; HeatFlx2Grnd_col=0._r8
+  QSnoWatXfer2Soil_col=0._r8; QSnoIceXfer2Soil_col=0._r8; Qinflx2SoilM_col=0._r8
   QSnowH2Oloss_col=0._r8; QSnowHeatLoss_col=0._r8; Qinflx2Soil_col=0._r8; WatFLo2LitR_col=0._r8
   TairK_col=240._r8; TCA_col=TairK_col-TFice
   SoilBulkDensity_vr=1._r8; SoilOrgM_vr=0._r8; VHeatCapSolidSoil_vr=1._r8
   VLWatMicP_vr=1.e-3_r8; VLWatMacP_vr=2.e-4_r8; VLiceMicP_vr=1.e-4_r8; VLiceMacP_vr=5.e-5_r8
   VHeatCapacity_vr=VHeatCapSolidSoil_vr+cpw*(VLWatMicP_vr+VLWatMacP_vr)+cpi*(VLiceMicP_vr+VLiceMacP_vr)
   VHeatCapacity_vr(0,:,:)=cpw*VLWatMicP_vr(0,:,:)+cpi*VLiceMicP_vr(0,:,:)
+  VLWatMacP1_vr=VLWatMacP_vr; VLiceMacP1_vr=VLiceMacP_vr
+  VLHeatCapacityA_vr=VHeatCapSolidSoil_vr+cpw*VLWatMicP_vr+cpi*VLiceMicP_vr
+  VLHeatCapacityB_vr=cpw*VLWatMacP_vr+cpi*VLiceMacP_vr
   TKS_vr=270._r8
   trcg_solsml_snvr=0._r8; trcn_solsml_snvr=0._r8
   trcSalt_ml_snvr=0._r8; trcs_solml_vr=0._r8; trcSalt_solml_vr=0._r8

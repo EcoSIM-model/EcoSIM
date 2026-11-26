@@ -20,6 +20,7 @@ module SnowPhysMod
   use SoilWaterDataType
   use HydroThermData
   use SurfaceAirExchangeMod, only: SurfaceExchangeResistance
+  use data_const_mod, only: SnowResistanceMissing => DAT_CONST_SPVAL
   use LitterHydraulicMod, only: LitterMatricPotential,GetLitterHydraulicParameters
   use SurfLitterDataType
   use SurfSoilDataType
@@ -634,6 +635,7 @@ contains
 
   D3000: DO MM = 1, NPS
 
+    RAeroSnow_col(NY,NX)=SnowResistanceMissing
     SnowSensibleDeriv=0._r8
     TopLaySnoVol=(VLDrySnoWE0M_snvr(1,NY,NX)+SnoFallWE)+(VLIceSnow0M_snvr(1,NY,NX)+IceFallVol) &
       +VLWatSnow0M_snvr(1,NY,NX)+Rainfall
@@ -924,6 +926,7 @@ contains
     AMIN1(1.2_r8*RawH2OSnow2CanAir_col(NY,NX),RawIsoTSoil2CanAir_col(NY,NX)/(1.0_r8-10.0_r8*RI)))
   RawH2OSnow2CanAir_col(NY,NX) = RAGX
   RAa = SurfaceExchangeResistance(NY,NX,TKSnow1_snvr(1,NY,NX),RAGX)
+  if(AScaledCdWOverSnow_col(NY,NX)>0._r8)RAeroSnow_col(NY,NX)=RAa
   !
   ! PARAMETERS FOR CALCULATING LATENT AND SENSIBLE HEAT FLUXES
   !
@@ -1250,12 +1253,16 @@ contains
     !     TK1=soil surface temperature, why not to litter layer
     !
   ! Test the current constituents, including redistribution, on every substep.
+  ! A thin meltwater film with no resolved frozen stock belongs to the surface
+  ! below even in cold air; otherwise its vanishing heat capacity stays exposed.
   VLHeatCapSnow_snvr(1,NY,NX) = cps*VLDrySnoWE0_snvr(1,NY,NX) &
     +cpw*VLWatSnow0_snvr(1,NY,NX)+cpi*VLIceSnow0_snvr(1,NY,NX)
   IF(VLHeatCapSnow_snvr(1,NY,NX).LE.VLHeatCapSnowMin_col(NY,NX) .AND. &
-    (TairK_col(NY,NX).GT.TFice.or.(.not.ats_cpl_mode.and..not.fixWaterLevel.and. &
+    (TairK_col(NY,NX).GT.TFice.or.(.not.ats_cpl_mode.and..not.fixWaterLevel.and.( &
       sum(VLDrySnoWE0_snvr(:,NY,NX))+sum(VLWatSnow0_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow0_snvr(:,NY,NX)) &
-      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX))))THEN
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX).or. &
+      sum(VLDrySnoWE0_snvr(:,NY,NX))+DENSICE*sum(VLIceSnow0_snvr(:,NY,NX)) &
+      <=MinResolvedSnowSWE*AREA_3D(3,NUM_col(NY,NX),NY,NX)))))THEN
     FLWS                      = VLDrySnoWE0_snvr(1,NY,NX)
     FLWW                      = VLWatSnow0_snvr(1,NY,NX)
     FLWI                      = VLIceSnow0_snvr(1,NY,NX)

@@ -68,6 +68,10 @@ implicit none
   ! Missing for inactive/covered paths. These diagnostics never drive a flux.
   real(r8),allocatable :: RSoilEvap_col(:,:)   ! internal exposed-soil/water resistance [h m-1]
   real(r8),allocatable :: RLitterEvap_col(:,:) ! internal exposed-litter resistance [h m-1]
+  ! Air-side resistance used by the heat/water exchange, before material resistance.
+  ! Endpoint is canopy air, or reference air when the canopy is not exposed.
+  real(r8),allocatable :: RAeroSoil_col(:,:)   ! exposed soil/open-water air-side resistance [h m-1]
+  real(r8),allocatable :: RAeroLitter_col(:,:) ! exposed litter air-side resistance [h m-1]
   public :: InitSurfPhysData,DestructSurfPhysData
 
   contains
@@ -77,6 +81,8 @@ implicit none
   ! Allocate and initialize surface-exchange work arrays.
   implicit none
 
+  allocate(RAeroSoil_col(JY,JX)); RAeroSoil_col=SurfaceResistanceMissing
+  allocate(RAeroLitter_col(JY,JX)); RAeroLitter_col=SurfaceResistanceMissing
   allocate(RSoilEvap_col(JY,JX)); RSoilEvap_col=SurfaceResistanceMissing
   allocate(RLitterEvap_col(JY,JX)); RLitterEvap_col=SurfaceResistanceMissing
   allocate(IceVaporMicPM_vr(0:JZ,JY,JX)); IceVaporMicPM_vr=0._r8
@@ -129,6 +135,8 @@ implicit none
   use abortutils, only : destroy
   implicit none
 
+  call destroy(RAeroSoil_col)
+  call destroy(RAeroLitter_col)
   call destroy(RSoilEvap_col)
   call destroy(RLitterEvap_col)
   call destroy(IceVaporMicPM_vr)

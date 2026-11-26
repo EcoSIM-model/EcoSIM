@@ -109,6 +109,9 @@ implicit none
   end subroutine config_fire
 !------------------------------------------------------------------------------------------
   function check_fire(year_model,fire_event_entry)result(fire_yesno)
+  ! Description:
+  ! Resolve the current year's fire schedule, including repeated reads after
+  ! restoring a January checkpoint. Loading a schedule does not execute it.
   implicit none
   integer, intent(in) :: year_model  !current model year
   character(len=21), intent(out) :: fire_event_entry  !retrieved fire_event
@@ -125,10 +128,11 @@ implicit none
   if(fire_event_loc>num_fire_events)return
   fire_yesno=(fire_years(fire_event_loc)==year_model)
 
-  !move to the next fire event
+  ! Keep the lookup idempotent within a year. Annual initialization can read
+  ! management both before and after the checkpoint restores the plant state.
+  ! Earlier events are advanced by the year comparison on the next lookup.
   if(fire_yesno)then
     fire_event_entry=fire_files(fire_event_loc)  
-    fire_event_loc=fire_event_loc+1
   endif  
 
   end function check_fire
