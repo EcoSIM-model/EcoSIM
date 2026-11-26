@@ -30,6 +30,7 @@ module SurfaceRadiationMod
   public :: CalcBoundaryLayerProperties
 
   real(r8), parameter :: RAM                    = 2.78E-03_r8                               !minimum boundary layer resistance (h m-1)
+  real(r8), parameter :: GravAccelHourly        = GravAcceleration*secsphour**2             !gravitational acceleration in hourly units, [m h-2]
   real(r8), parameter :: RadSWStemAlbedo(0:1)  = (/0.1_r8,0.1_r8/)                         !stalk albedo for shortwave
   real(r8), parameter :: RadPARStemAlbedo(0:1) = (/0.1_r8,0.1_r8/)                         !stalk albedo for PAR
   real(r8), parameter :: RadSWStemTransmitance(0:1) = (/0.12_r8,0.001_r8/)
@@ -179,8 +180,11 @@ module SurfaceRadiationMod
       RawCanopyH2SinkZ_col        = 0._r8
     endif  
     !
-    !1.27E+08_r8=g*(3600^2), from eq. (19) in Choudhury and Monteith (1988)
-    RIB  = 1.27E+08_r8*(ZWind-RoughnessLength)/(WindSpeedAtm_col**2*TairK)
+    !eq. (19) in Choudhury and Monteith (1988): RIB=g*(z-d)/(u**2*Ta) [K-1],
+    !with g in m h-2 because WindSpeedAtm_col is in m h-1.
+    !Height above the displaced surface, consistent with the neutral resistance
+    !above; both ZWind choices keep ZWind-ZeroPlaneDisplacem_col positive.
+    RIB  = GravAccelHourly*(ZWind-ZeroPlaneDisplacem_col)/(WindSpeedAtm_col**2*TairK)
   ELSE
     RawIsoTAtm2CanopySinkZ_col  = RAM
     RawIsoTSurf2CanopyHScal_col = 0._r8

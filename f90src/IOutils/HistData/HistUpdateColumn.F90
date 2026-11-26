@@ -35,6 +35,7 @@ submodule (HistDataType) HistUpdateColumn
   use SoilWaterDataType, only: WaterTableDepZi_col, PSISoilMatricP_vr, QDischarg2WTBL_col, QDrain_col, &
     QEvap_CumYr_col, Qinflx2Soil_col, QRain_CumYr_col, QRunSurf_col, ThetaH2OZ_vr, ThetaICEZ_vr, VLiceMicP_vr, &
     VLWatMicP_vr, WatMass_col
+  use SnowPhysData, only: RAeroSnow_col
   use SnowDataType, only: SnowDepth_col, TCSnow_snvr, VcumSnowWE_col
   use PlantMgmtDataType, only: CH4byFire_CumYr_col, CO2byFire_CumYr_col, PO4byFire_CumYr_col
   use EcosimBGCFluxType, only: Canopy_NEE_col, CumDryDepoOM_col, Eco_AutoR_CumYr_col, Eco_GPP_CumYr_col, &
@@ -43,7 +44,9 @@ submodule (HistDataType) HistUpdateColumn
     NetNH4Mineralize_CumYr_col, NetPO4Mineralize_CumYr_col
   use SoilPropertyDataType, only: VLSoilMicPMass_vr
   use SurfLitterDataType, only: FracSurfByLitR_col, VLitR_col
-  use SurfPhysData, only: RSoilEvap_col,RLitterEvap_col,QSUBLIM_col
+  use SurfPhysData, only: RSoilEvap_col,RLitterEvap_col,QSUBLIM_col, &
+    RAeroSoil_col,RAeroLitter_col, &
+    TEvapXAir2Toplay_col,TEvapXAir2LitR_col,TEvapXAir2Snow_col
   use SoilBGCDataType, only: AmendC_CumYr_flx_col, FerP_Flx_CumYr_col, FertN_Flx_CumYr_col, &
     Gas_Prod_TP_cumRes_col, Gas_WetDeposit_flx_col, GasDiff2Surf_flx_col, GasHydroLoss_cumflx_col, &
     HydroIonFlx_CumYr_col, Hydroloss_NH4_cumflx_col, Hydroloss_NO3_cumflx_col, HydroSubsDICFlx_col, &
@@ -58,7 +61,7 @@ submodule (HistDataType) HistUpdateColumn
     tRHydlyBioReSOM_vr, tRHydlySOM_vr, tRHydlySoprtOM_vr, tXPO4_col
   use AqueChemDatatype, only: TProd_CO2_geochem_soil_vr, trcg_mass_cumerr_col, trcx_solml_vr
   use SurfSoilDataType, only: FracSurfSnowCovered_col, HeatByRad2Surf_col, HeatEvapAir2Surf_col, HeatNet2Surf_col, &
-    HeatSensAir2Surf_col, HeatSensVapAir2Surf_col, VapXAir2GSurf_col
+    HeatSensAir2Surf_col, HeatSensVapAir2Surf_col, VapXAir2GSurf_col, PotEvapGrnd_col
   use TracerPropMod, only: GramPerHr2umolPerSec
   implicit none
 contains
@@ -234,6 +237,16 @@ contains
       this%h1D_LWSky_col(ncol)            = LWRadSky_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       ! Preserve zero wet-surface resistance; inactive/blocked/unrepresentable
       ! samples remain fill instead of overflowing single-precision history.
+      ! Sample the actual air-side exchange path, converting model h/m to history s/m.
+      this%h1D_RAeroSoil_col(ncol)=spval
+      if(RAeroSoil_col(NY,NX)>0._r8.and.RAeroSoil_col(NY,NX)<spval/secs1hour) &
+        this%h1D_RAeroSoil_col(ncol)=RAeroSoil_col(NY,NX)*secs1hour
+      this%h1D_RAeroLitter_col(ncol)=spval
+      if(RAeroLitter_col(NY,NX)>0._r8.and.RAeroLitter_col(NY,NX)<spval/secs1hour) &
+        this%h1D_RAeroLitter_col(ncol)=RAeroLitter_col(NY,NX)*secs1hour
+      this%h1D_RAeroSnow_col(ncol)=spval
+      if(RAeroSnow_col(NY,NX)>0._r8.and.RAeroSnow_col(NY,NX)<spval/secs1hour) &
+        this%h1D_RAeroSnow_col(ncol)=RAeroSnow_col(NY,NX)*secs1hour
       this%h1D_RSoilEvap_col(ncol)=spval
       this%h1D_RLitterEvap_col(ncol)=spval
       if(RSoilEvap_col(NY,NX)>=0._r8.and.RSoilEvap_col(NY,NX)<spval/secs1hour) &
@@ -279,6 +292,12 @@ contains
       this%h1D_NO3_hydloss_flx_col(ncol)  = (Hydroloss_NO3_cumflx_col(NY,NX))/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CO2_LITR_col(ncol)         = trc_solcl_vr(idg_CO2,0,NY,NX)
       this%h1D_EVAPG_col(ncol)            = VapXAir2GSurf_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      ! Accepted hourly, area-weighted exchanges; their sum equals EVAPGrnd_col.
+      ! Keep the existing inward-positive sign and include liquid plus ice vapor.
+      this%h1D_EVAPSoil_col(ncol)         = TEvapXAir2Toplay_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_EVAPLitr_col(ncol)         = TEvapXAir2LitR_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_EVAPSnow_col(ncol)         = TEvapXAir2Snow_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      this%h1D_PotEvapGrnd_col(ncol)      = PotEvapGrnd_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CondGasXSurf_col(ncol)     = CondGasXSurf_col(NY,NX)
       this%h1D_CanopyEvap_col(ncol)       = VapXAir2Canopy_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_CANET_col(ncol)            = QVegET_col(NY,NX)*m2mm/AREA_3D(3,NU_col(NY,NX),NY,NX)

@@ -1,4 +1,6 @@
 module SoilPropertyDataType
+  ! Description:
+  ! Own column/layer soil material properties and their allocation lifetime.
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use GridConsts
 implicit none
@@ -6,6 +8,12 @@ implicit none
   save
   character(len=*), private, parameter :: mod_filename = &
   __FILE__
+
+   ! Temporary uniform initialization for site tests; eventually supplied per
+   ! column by the soil grid reader. Zero retains the unscaled soil resistance.
+   real(r8), parameter :: DefaultDMeff=0._r8 ! no moisture heterogeneity correction [-]
+   real(r8) :: DMeff_initial=DefaultDMeff   ! temporary uniform test input, normally < 1 [-]
+   real(r8), allocatable :: DMeff_col(:,:) ! nonnegative moisture heterogeneity amplitude, (row,column) [-]
 
    real(r8) ,target,allocatable ::  CORGCI_vr(:,:,:)                    !soil organic C content   ,[g kg-1]
    real(r8) ,target,allocatable ::  POROSI_vr(:,:,:)                    !soil porosity            ,[m3 m-3]
@@ -41,9 +49,14 @@ contains
 
 
   subroutine InitSoilProperty
-
+  ! Description:
+  ! Validate uniform test input and allocate soil material properties.
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use abortutils, only: endrun
   implicit none
 
+  if(.not.ieee_is_finite(DMeff_initial))call endrun('soil_evap_dmeff must be finite and nonnegative')
+  if(DMeff_initial<0._r8)call endrun('soil_evap_dmeff must be finite and nonnegative')
   call InitAllocate
 
   end subroutine InitSoilProperty
@@ -53,6 +66,7 @@ contains
   subroutine InitAllocate
 
   implicit none
+  allocate(DMeff_col(JY,JX)); DMeff_col=DMeff_initial
   allocate(CORGCI_vr(JZ,JY,JX));    CORGCI_vr=0._r8
   allocate(POROSI_vr(0:JZ,JY,JX));  POROSI_vr=0._r8
   allocate(SoilFracAsMacPt0_vr(JZ,JY,JX));     SoilFracAsMacPt0_vr=0._r8
@@ -88,6 +102,7 @@ contains
 
   use abortutils, only : destroy
   implicit none
+  call destroy(DMeff_col)
   call destroy(CORGCI_vr)
   call destroy(POROSI_vr)
   call destroy(SoilFracAsMacPt0_vr)

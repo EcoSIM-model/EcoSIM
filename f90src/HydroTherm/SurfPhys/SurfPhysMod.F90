@@ -57,6 +57,7 @@ implicit none
   !surface model
   public :: UpdateSurfaceGasConductancesM
   public :: StageSurfacePhysModel
+  public :: SetCanopyProperty
   public :: LocalCopySoilVars
   public :: CorrectSoilSurfaceHeatM
   public :: RunSurfacePhysModelM
@@ -95,12 +96,17 @@ implicit none
 contains
 
   subroutine SetHourlyAccumulatorsATS(NY,NX)
+  ! Description:
+  ! Reset surface-exchange diagnostics and accumulators for an ATS advance.
 !     implicit none
   integer, intent(in) :: NX,NY
   character(len=*), parameter :: subname='SetHourlyAccumulatorsATS'
   integer :: L
 !     begin_execution
   call PrintInfo('beg '//subname)
+  RAeroSoil_col(NY,NX)        = SurfaceResistanceMissing
+  RAeroLitter_col(NY,NX)      = SurfaceResistanceMissing
+  RAeroSnow_col(NY,NX)        = SurfaceResistanceMissing
   RSoilEvap_col(NY,NX)         = SurfaceResistanceMissing
   RLitterEvap_col(NY,NX)       = SurfaceResistanceMissing
   QSUBLIM_col(NY,NX)          = 0._r8
@@ -114,6 +120,7 @@ contains
   HeatSensVapAir2Surf_col(NY,NX) = 0.0_r8
   HeatNet2Surf_col(NY,NX)        = 0.0_r8
   VapXAir2GSurf_col(NY,NX)       = 0.0_r8
+  PotEvapGrnd_col(NY,NX)        = 0.0_r8
 
   !TFLWCI(NY,NX)           = 0.0_r8
   RainIntceptByCanopy_col(NY,NX) = 0.0_r8
@@ -714,7 +721,7 @@ contains
 
   !------------------------------------------------------------------------------------------
 
-  subroutine SoilSRFEnerbyBalanceM(M,I,J,NY,NX,PSISV1,LWRadGrnd_col,TopLayWatVol,&
+  subroutine SoilSRFEnerbyBalanceM(M,I,J,NY,NX,RainEkReducedKsat,PSISV1,LWRadGrnd_col,TopLayWatVol,&
     VapXAir2TopLay,HeatFluxAir2Soi)
   !
   ! Description:
@@ -727,6 +734,7 @@ contains
   !VPQ_col,TKQ_col
   implicit none
   integer, intent(in) :: M,I,J,NY,NX
+  real(r8), intent(in) :: RainEkReducedKsat ! shared surface liquid-conductivity multiplier [0..1]
   real(r8), intent(out):: PSISV1      !surface soil suction pressure [MPa]
   real(r8), intent(out) :: LWRadGrnd_col  !outgoing long wave radiation from soil surface [MJ]
   real(r8), intent(inout) :: TopLayWatVol
@@ -746,10 +754,12 @@ contains
   real(r8) :: AlbedoGrnd      !albedo at the ground
   real(r8) :: RadSWbySoil     !shortwave radiation absorbed by exposed soil [MJ]
   real(r8) :: ThetaLiquidSurface !current liquid content [m3 water m-3 micropore soil]
+  real(r8) :: ThetaForResistance !effective liquid-supply content on the same basis [m3 m-3]
   real(r8) :: AirPorositySurface !current air content [m3 air m-3 micropore soil]
   real(r8) :: BulkVaporDiffusivity !air fraction times effective vapor diffusivity [m2 h-1]
   real(r8) :: BunsenWater        !liquid/soil-vapor density ratio [-]
   real(r8) :: VaporDemand,LiquidVapor,IceVapor,IceAvailable,LatentDerivative
+  real(r8) :: PotVaporDemand !aerodynamic-only signed vapor demand [m3 water equivalent/cell/step]
   real(r8) :: VaporHeatCapacity ! accepted vapor donor sensible capacity [MJ/K]
   integer :: TopSoilLayer,MoistureClass
   type(SoilHydraulicParameters) :: soil_parameters !surface layer's selected retention parameters
@@ -869,27 +879,42 @@ contains
       safe_adb(VLWatMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
     AirPorositySurface=MAX(0._r8,MIN(soil_parameters%porosity, &
       safe_adb(VLairMicP1_vr(TopSoilLayer,NY,NX),VLSoilMicP_vr(TopSoilLayer,NY,NX))))
+    ! Evaluate the liquid factor, K lookup and retention slope at effective
+    ! moisture. Gas diffusion and source vapor still use the physical state.
+    ThetaForResistance = moisture_factor(ThetaLiquidSurface,soil_parameters%porosity,NY,NX) * ThetaLiquidSurface
+
     BulkVaporDiffusivity=WVapDifusvitySoil_vr(TopSoilLayer,NY,NX) &
       *AirPorositySurface**2*POROQ/soil_parameters%porosity
-    MoistureClass=getMoistK(ThetaLiquidSurface,soil_parameters%porosity)
+    MoistureClass=getMoistK(ThetaForResistance,soil_parameters%porosity)
     ! vapsat returns Mg water m-3; liquid density is 1 Mg m-3. Protect only
     ! the partition ratio against underflow, retaining VaporSoi1 in the flux.
     BunsenWater = 1._r8/MAX(VaporSoi1,tiny(1._r8))
-    RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaLiquidSurface, &
-      DLYR_3D(3,TopSoilLayer,NY,NX),HydroCond_3D(3,MoistureClass,TopSoilLayer,NY,NX), &
-      BulkVaporDiffusivity,BunsenWater)
+    ! Use the same rainfall seal as surface liquid infiltration/exfiltration.
+    ! Reduce only the liquid transport path; pore-gas diffusion stays separate.
+    ! Keep the cached bulk K table unchanged for subsurface water flow.
+    RSoilEvap   = soil_model%soil_resistance(soil_parameters,ThetaForResistance, &
+      DLYR_3D(3,TopSoilLayer,NY,NX), &
+      HydroCond_3D(3,MoistureClass,TopSoilLayer,NY,NX)*RainEkReducedKsat, &
+      BulkVaporDiffusivity,BunsenWater,temperature=TKX1, &
+      source_potential=PSISM1_vr(TopSoilLayer,NY,NX),ice_volume=IceAvailable)
   else
     ! A pond/lake is an open-water surface, not a porous topsoil control volume.
     RSoilEvap=RZ
   endif
   ExchangeResistance    = SurfaceExchangeResistance(NY,NX,TKSoil1_vr(NUM_col(NY,NX),NY,NX),RawH2OSoil2CanAir_col(NY,NX))
-  if(AScaledCdWOverSoil_col(NY,NX)>0._r8)RSoilEvap_col(NY,NX)=RSoilEvap
+  if(AScaledCdWOverSoil_col(NY,NX)>0._r8)then
+    RSoilEvap_col(NY,NX)=RSoilEvap
+    RAeroSoil_col(NY,NX)=ExchangeResistance
+  endif
   CdSoiEvap             = AScaledCdWOverSoil_col(NY,NX)/(ExchangeResistance+RSoilEvap)
   CdSoiHSens_col(NY,NX) = AScaledCdHOverSoil_col(NY,NX)/ExchangeResistance
 
   ! One merged-resistance demand, partitioned by physical liquid/ice volume.
   if(TopLayWatVol<1.0e-30_r8)TopLayWatVol=0._r8
-  VaporDemand=CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)
+  VaporDemand    = CdSoiEvap*(VPQ_col(NY,NX)-VaporSoi1)
+  PotVaporDemand = AScaledCdWOverSoil_col(NY,NX)/ExchangeResistance*(VPQ_col(NY,NX)-VaporSoi1)
+  ! Conductance already includes the exposed area and substep duration.
+  PotEvapGrnd_col(NY,NX)=PotEvapGrnd_col(NY,NX)+PotVaporDemand
   if(.not.ats_cpl_mode)then
     call PartitionSurfaceVapor(VaporDemand,TopLayWatVol,IceAvailable,TKX1,dts_wat, &
       LiquidVapor,IceVapor,LatentDerivative, &
@@ -939,13 +964,16 @@ contains
 
 !------------------------------------------------------------------------------------------
 
-  subroutine ExposedSoilFluxM(I,J,M,NY,NX,CumSnowWatFlow2LitR,CumSnoHeatFlow2LitR,&
+  subroutine ExposedSoilFluxM(I,J,M,NY,NX,RainEkReducedKsat,CumSnowWatFlow2LitR,CumSnoHeatFlow2LitR,&
     CumWatFlx2SoiMicP,CumWatFlx2SoiMacP,cumSnoHeatFlow2Soil,Prec2LitR2,RainHeat2LitR2,&
     PrecNet2SoiMicP,PrecNet2SoiMacP, RainPrecHeatAir2LitR,TopLayWatVol,&
     VapXAir2TopLay,HeatFluxAir2Soi,NetWatFlxAir2SoiMicP,NetWatXFlxAir2SoiMicP,NetWatFlxAir2SoiMacP)
+  ! Description:
+  ! Exchange water and energy over exposed soil/litter using the current surface seal.
   implicit none
   integer, intent(in) :: M,I,J   !soil heat-flow iteration id
   integer, intent(in) :: NY,NX
+  real(r8), intent(in) :: RainEkReducedKsat ! shared surface liquid-conductivity multiplier [0..1]
   real(r8), intent(in)  :: CumSnowWatFlow2LitR,CumSnoHeatFlow2LitR
   real(r8), intent(in) :: CumWatFlx2SoiMicP,CumWatFlx2SoiMacP,cumSnoHeatFlow2Soil
   real(r8), intent(in) :: Prec2LitR2,RainHeat2LitR2
@@ -969,7 +997,7 @@ contains
   call PrintInfo('beg '//subname)
 
 ! Watch out for L, is its value defined?
-  call SoilSRFEnerbyBalanceM(M,I,J,NY,NX,PSISV1,LWRadGrnd_col,TopLayWatVol,&
+  call SoilSRFEnerbyBalanceM(M,I,J,NY,NX,RainEkReducedKsat,PSISV1,LWRadGrnd_col,TopLayWatVol,&
     VapXAir2TopLay,HeatFluxAir2Soi)
   !
   call SurfLitREnergyBalanceM(I,J,M,NY,NX,PSISV1,TopLayWatVol,Prec2LitR2,RainHeat2LitR2,CumSnowWatFlow2LitR,&
@@ -985,7 +1013,7 @@ contains
 
 !------------------------------------------------------------------------------------------
 
-  subroutine AtmLandSurfExchangeM(I,J,M,NY,NX,Prec2LitR2,RainHeat2LitR2,PrecNet2SoiMicP,&
+  subroutine AtmLandSurfExchangeM(I,J,M,NY,NX,RainEkReducedKsat,Prec2LitR2,RainHeat2LitR2,PrecNet2SoiMicP,&
     PrecNet2SoiMacP,RainPrecHeatAir2LitR,TopLayWatVol,LatentHeatAir2Sno,&
     HeatSensEvapAir2Snow,HeatSensAir2Snow,Radnet2Snow,VapXAir2TopLay,HeatFluxAir2Soi1)
   ! Description:
@@ -993,6 +1021,7 @@ contains
   implicit none
   integer, intent(in) :: M           !soil heat-flow iteration id
   integer, intent(in) :: NY,NX,I,J
+  real(r8), intent(in) :: RainEkReducedKsat ! shared surface liquid-conductivity multiplier [0..1]
   real(r8), intent(in) :: Prec2LitR2,RainHeat2LitR2
   real(r8), intent(in):: PrecNet2SoiMicP
   real(r8), intent(in):: PrecNet2SoiMacP
@@ -1056,7 +1085,7 @@ contains
   IF(FracSurfSnoFree_col(NY,NX).GT.0.0_r8)THEN
 
     !Ground partially covered by snow, focus on litter-soil interaction
-    call ExposedSoilFluxM(I,J,M,NY,NX,CumSnowWatFlow2LitR,CumSnoHeatFlow2LitR,&
+    call ExposedSoilFluxM(I,J,M,NY,NX,RainEkReducedKsat,CumSnowWatFlow2LitR,CumSnoHeatFlow2LitR,&
       CumWatFlx2SoiMicP,CumWatFlx2SoiMacP,cumSnoHeatFlow2Soil,Prec2LitR2,RainHeat2LitR2,&
       PrecNet2SoiMicP,PrecNet2SoiMacP,RainPrecHeatAir2LitR,TopLayWatVol,&
       VapXAir2TopLay,HeatFluxAir2Soi1,NetWatFlxAir2SoiMicP,NetWatXFlxAir2SoiMicP,NetWatFlxAir2SoiMacP)
@@ -1133,7 +1162,7 @@ contains
 ! PSISE,PSISM1_vr(0,=air entry,current litter water potential
 ! VLWatMicP1_vr(0,VWatLitRHoldCapcity=current,maximum litter water volume
 ! CND1,HydroCond_3D=soil hydraulic conductivity
-! RainEkReducedKsat=reduction in soil surface Ksat from rainfall energy impact
+! RainEkReducedKsat=bidirectional surface liquid-conductivity reduction from rainfall sealing
 ! K1=soil relative water-filled porosity
 ! THETWX,POROS=soil water content,porosity
 ! DarcyCondLitR2Soil=litter-soil hydraulic conductance
@@ -1607,7 +1636,7 @@ contains
   ! ZT=canopy height
   ! EnergyImpact4Erosion_colM=total energy impact for use in erosion.f
   ! EnergyImpact4Erosion_col=cumulative rainfall energy impact on soil surface
-  ! RainEkReducedKsat=reduction in soil surface Ksat from rainfall energy impact
+  ! RainEkReducedKsat=bidirectional surface liquid-conductivity reduction from rainfall sealing
   ! Note: A good reference for the following formula and alternatives
   ! is "Rainfall intensity-kinetic energy relationships for soil loss prediction",
   ! Kinnell, 1981
@@ -2049,6 +2078,9 @@ contains
   D9895: DO  NX=NHW,NHE
     D9890: DO  NY=NVN,NVS
 
+      RAeroSoil_col(NY,NX)=SurfaceResistanceMissing
+      RAeroLitter_col(NY,NX)=SurfaceResistanceMissing
+      RAeroSnow_col(NY,NX)=SurfaceResistanceMissing
       RSoilEvap_col(NY,NX)=SurfaceResistanceMissing
       RLitterEvap_col(NY,NX)=SurfaceResistanceMissing
       IceVaporMicPM_vr(:,NY,NX)=0._r8
@@ -2151,7 +2183,7 @@ contains
   call InitSurfModelM(I,J,M,NY,NX,RainEkReducedKsat,Prec2LitR2,&
     RainHeat2LitR2,PrecNet2SoiMicP,PrecNet2SoiMacP,RainPrecHeatAir2LitR)
 
-  call AtmLandSurfExchangeM(I,J,M,NY,NX,Prec2LitR2,RainHeat2LitR2,PrecNet2SoiMicP,&
+  call AtmLandSurfExchangeM(I,J,M,NY,NX,RainEkReducedKsat,Prec2LitR2,RainHeat2LitR2,PrecNet2SoiMicP,&
     PrecNet2SoiMacP,RainPrecHeatAir2LitR,TopLayWatVol,LatentHeatAir2Sno,&
     HeatSensEvapAir2Snow,HeatSensAir2Snow,Radnet2Snow,VapXAir2TopLay,HeatFluxAir2Soi1)
 
@@ -2431,7 +2463,7 @@ contains
   if(SnowFraction.GT.0._r8)then
     ! Convert column-mean snow depth to covered-patch depth. The exposed
     ! snow film replaces snow-free atmospheric films; subsnow pores remain.
-    SnowResistance = SnowFilmResistance+SnowPoreResistance/SnowFraction
+    SnowResistance    = SnowFilmResistance+SnowPoreResistance/SnowFraction
     GroundConductance = GroundConductance+SnowFraction*(FracAsExposedSoil_col(NY,NX)/SnowResistance &
       +FracEffAsLitR_col(NY,NX)/(SnowResistance+LitterPoreResistance))
     LitterConductance = LitterConductance+SnowFraction/SnowResistance

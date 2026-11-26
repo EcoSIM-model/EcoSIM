@@ -645,6 +645,24 @@ contains
   call hist_addfld1d(fname='LW_Sky_col',units='W/m2',avgflag='A',&
     long_name='Incoming sky long wave radiation',ptr_col=data1d_ptr)
 
+  data1d_ptr => this%h1D_RAeroSoil_col(beg_col:end_col)
+  call hist_addfld1d(fname='RAeroSoil_col',units='s/m',avgflag='A',&
+    long_name='Air-side soil/open-water exchange resistance to canopy air, or reference air without exposed canopy; '//&
+      'timestep-end sample; excludes internal resistance; missing when inactive',&
+    ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_RAeroLitter_col(beg_col:end_col)
+  call hist_addfld1d(fname='RAeroLitter_col',units='s/m',avgflag='A',&
+    long_name='Air-side litter exchange resistance to canopy air, or reference air without exposed canopy; '//&
+      'timestep-end sample; excludes internal resistance; missing when inactive',&
+    ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_RAeroSnow_col(beg_col:end_col)
+  call hist_addfld1d(fname='RAeroSnow_col',units='s/m',avgflag='A',&
+    long_name='Air-side snow exchange resistance to canopy air, or reference air without exposed canopy; '//&
+      'timestep-end sample; excludes internal resistance; missing when inactive',&
+    ptr_col=data1d_ptr)
+
   data1d_ptr => this%h1D_RSoilEvap_col(beg_col:end_col)
   call hist_addfld1d(fname='RSoilEvap_col',units='s/m',avgflag='A',&
     long_name='Internal soil or open-water evaporation resistance, timestep-end sample; excludes air-side resistance',&
@@ -828,8 +846,24 @@ contains
     long_name='CO2 solute concentration in litter',ptr_col=data1d_ptr,default='inactive')
 
   data1d_ptr => this%h1D_EVAPG_col(beg_col:end_col)
-  call hist_addfld1d(fname='EVAPGrnd_col',units='mm H2O/m2/hr',avgflag='A',&
+  call hist_addfld1d(fname='EVAPGrnd_col',units='mm H2O/hr',avgflag='A',&
     long_name='Column-integrated ground surface evaporation(>0 into soil)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_EVAPSoil_col(beg_col:end_col)
+  call hist_addfld1d(fname='EVAPSoil_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Net soil-surface vapor exchange including sublimation (>0 into surface)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_EVAPLitr_col(beg_col:end_col)
+  call hist_addfld1d(fname='EVAPLitr_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Net litter-surface vapor exchange including sublimation (>0 into surface)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_EVAPSnow_col(beg_col:end_col)
+  call hist_addfld1d(fname='EVAPSnow_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Net snow-surface vapor exchange including sublimation (>0 into surface)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_PotEvapGrnd_col(beg_col:end_col)
+  call hist_addfld1d(fname='PotEvapGrnd_col',units='mm H2O/hr',avgflag='A',&
+    long_name='Potential net soil/litter/snow vapor exchange before donor limits (>0 into surface)',ptr_col=data1d_ptr)
 
   data1d_ptr => this%h1D_CondGasXSurf_col(beg_col:end_col)
   call hist_addfld1d(fname='GasXSurfConduct_col',units='m/hr',avgflag='A',&

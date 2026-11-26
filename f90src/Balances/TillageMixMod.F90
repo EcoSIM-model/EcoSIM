@@ -214,6 +214,8 @@ module TillageMixMod
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,ENGYM(0:JZ),XCORP0)
 
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,VHeatCapSolidSoil_vr(0:JZ,NY,NX),XCORP0)
+  ! Keep the noncombustible component with the same mixed soil solids.
+  call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,VHeatCapMineralSoil_vr(1:JZ,NY,NX))
 
   call MixExtensive1D(XTillCorp_col(NY,NX),TI,FI,NU_col(NY,NX),LL,VLWatMacP_vr(1:JZ,NY,NX))
 

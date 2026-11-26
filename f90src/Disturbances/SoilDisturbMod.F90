@@ -4,13 +4,11 @@ module SoilDisturbMod
 ! accepted sensible energy and exporting the heat carried by withdrawn material.
 
 ! USES:
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use data_kind_mod, only : r8 => DAT_KIND_R8
   use abortutils  , only : endrun,iulog
   use minimathmod, only : safe_adb
   use EcoSiMParDataMod, only : micpar
-  use MiniFuncMod,    only: gOC_to_m3_OM
-  use EcoSIMCtrlMod,  only: plantOM4Heat
-  use RootDataType,   only: RootMycoMassElm_vr
   use EcoSIMConfig,  only : NumMicbAFunGrupsPerCmplx,NumMicbHFunGrupsPerCmplx  
   use DebugToolMod
   use MicrobialDataType  
@@ -57,7 +55,7 @@ module SoilDisturbMod
   real(r8) :: DC,DN,DP
   real(r8) :: DCORPC
   real(r8) :: FORGCX
-  real(r8) :: HFLXD,rootC
+  real(r8) :: HeatRemoved,OrganicCapacity,RemovedCapacity,CapacityTolerance
   real(r8) :: EnergyBefore,EnergyRemaining ! accepted and retained sensible energy [MJ/cell]
   real(r8) :: ONX
   REAL(R8) :: OPX,OCA,OAH
@@ -357,33 +355,43 @@ module SoilDisturbMod
         ENDIF
         SoilOrgM_vr(1:NumPlantChemElms,L,NY,NX)=dOMelm(1:NumPlantChemElms)
         
-        ! Export sensible heat with the actual organic C withdrawn by this
-        ! event, using the same capacity law as the remaining organic matter.
-        ! ORGCX is an earlier hourly snapshot and includes other C changes.
-        ! This accounts for carried sensible heat, not combustion heat release.
+        ! Withdraw the same fraction of represented organic capacity and C.
+        ! The accepted solid capacity can differ from cpo times current SOM
+        ! volume, especially in legacy states with accumulated organic matter.
+        ! Exporting that nominal material heat can exceed the entire store.
+        ! Mineral, water, ice and root capacities are not removed by this event.
         EnergyBefore = VHeatCapacity_vr(L,NY,NX)*TKS_vr(L,NY,NX)
-        HFLXD        = cpo*gOC_to_m3_OM(OMelm(ielmc))*TKS_vr(L,NY,NX)
-        HeatOut_lnds = HeatOut_lnds+HFLXD
+        if(L==0)then
+          OrganicCapacity=VHeatCapacity_vr(L,NY,NX)-cpw*VLWatMicP_vr(L,NY,NX)-cpi*VLiceMicP_vr(L,NY,NX)
+        else
+          OrganicCapacity=VHeatCapSolidSoil_vr(L,NY,NX)-VHeatCapMineralSoil_vr(L,NY,NX)
+        endif
+        CapacityTolerance=1.e-12_r8*MAX(1._r8,ABS(VHeatCapacity_vr(L,NY,NX)))
+        if(.not.ieee_is_finite(OrganicCapacity))call endrun('Nonfinite disturbed organic heat capacity',__LINE__)
+        if(OrganicCapacity < -CapacityTolerance)then
+          write(iulog,*)subname,': negative organic capacity I,J,L,NY,NX=',I,J,L,NY,NX,OrganicCapacity
+          call endrun('Disturbed organic heat capacity must be nonnegative',__LINE__)
+        endif
+        RemovedCapacity = RemovedOrganicHeatCapacity(OMelm(ielmc),dOMelm(ielmc),MAX(0._r8,OrganicCapacity))
+        HeatRemoved     = RemovedCapacity*TKS_vr(L,NY,NX)
+        HeatOut_lnds    = HeatOut_lnds+HeatRemoved
+
         ! This event follows hydrology. Book its export directly in the column
         ! ledger; a layer heat-source flux would be reapplied by thermal updates.
-        HeatSource_col(NY,NX)=HeatSource_col(NY,NX)-HFLXD
-        EnergyRemaining=EnergyBefore-HFLXD
-        IF(L.EQ.0)then
-          VHeatCapacity_vr(0,NY,NX)=cpw*VLWatMicP_vr(0,NY,NX)+cpi*VLiceMicP_vr(0,NY,NX)+cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,L,NY,NX))
-        else
-          VHeatCapSolidSoil_vr(L,NY,NX) = VHeatCapMineralSoil_vr(L,NY,NX)+cpo*gOC_to_m3_OM(SoilOrgM_vr(ielmc,L,NY,NX))
-          VHeatCapacity_vr(L,NY,NX)     = VHeatCapSolidSoil_vr(L,NY,NX)+cpw*(VLWatMicP_vr(L,NY,NX)+VLWatMacP_vr(L,NY,NX)) &
-            +cpi*(VLiceMicP_vr(L,NY,NX)+VLiceMacP_vr(L,NY,NX))
-          ! Roots are separate from the soil organic pools removed above.
-          if(plantOM4Heat .and. VHeatCapacity_vr(L,NY,NX)>0._r8)then
-            rootC=sum(RootMycoMassElm_vr(ielmc,:,L,NY,NX))
-            VHeatCapacity_vr(L,NY,NX)=VHeatCapacity_vr(L,NY,NX)+cpo*gOC_to_m3_OM(rootC)
-          endif
-        endif
-        ! Updating the summarized organic capacity supplies no extra heat.
-        ! Retain the accepted inventory minus the explicitly exported material
-        ! enthalpy, including organic-pool changes since its earlier estimate.
+        HeatSource_col(NY,NX)     = HeatSource_col(NY,NX)-HeatRemoved
+        EnergyRemaining           = EnergyBefore-HeatRemoved
+        VHeatCapacity_vr(L,NY,NX) = VHeatCapacity_vr(L,NY,NX)-RemovedCapacity
+
+        if(L>0)VHeatCapSolidSoil_vr(L,NY,NX)=VHeatCapSolidSoil_vr(L,NY,NX)-RemovedCapacity
+        ! Equal fractional loss of organic capacity and its sensible energy
+        ! preserves donor temperature without adding heat or clipping energy.
         if(VHeatCapacity_vr(L,NY,NX)>0._r8)then
+          if(.not.ieee_is_finite(EnergyRemaining).or.EnergyRemaining<=0._r8)then
+            write(iulog,*)subname,': invalid retained energy I,J,L,NY,NX=',I,J,L,NY,NX
+            write(iulog,*)'TKS, energy before/export/remaining, capacity, removed C=', &
+              TKS_vr(L,NY,NX),EnergyBefore,HeatRemoved,EnergyRemaining,VHeatCapacity_vr(L,NY,NX),OMelm(ielmc)
+            call endrun('Disturbed soil/litter retained energy must be positive',__LINE__)
+          endif
           TKS_vr(L,NY,NX)=EnergyRemaining/VHeatCapacity_vr(L,NY,NX)
           TCS_vr(L,NY,NX)=TKS_vr(L,NY,NX)-TC2K
         elseif(ABS(EnergyRemaining)>1.e-12_r8*MAX(1._r8,ABS(EnergyBefore)))then
@@ -422,6 +430,20 @@ module SoilDisturbMod
   end associate
   call PrintInfo('end '//subname)
   end subroutine SOMRemovalByDisturbance
+
+!------------------------------------------------------------------------------------------
+  pure function RemovedOrganicHeatCapacity(RemovedC,RemainingC,OrganicCapacity)result(RemovedCapacity)
+  ! Description:
+  ! Remove the carbon-withdrawal fraction of the represented organic thermal
+  ! inventory; this equals cpo times removed volume when that inventory uses
+  ! the current carbon mass, and remains conservative for legacy capacities.
+  real(r8), intent(in) :: RemovedC,RemainingC ! removed and retained organic carbon [gC/cell]
+  real(r8), intent(in) :: OrganicCapacity ! accepted organic heat capacity before removal [MJ/K/cell]
+  real(r8) :: RemovedCapacity ! heat capacity carried by the removed fraction [MJ/K/cell]
+
+  RemovedCapacity=0._r8
+  if(RemovedC+RemainingC>0._r8)RemovedCapacity=OrganicCapacity*RemovedC/(RemovedC+RemainingC)
+  end function RemovedOrganicHeatCapacity
 !------------------------------------------------------------------------------------------
 
 

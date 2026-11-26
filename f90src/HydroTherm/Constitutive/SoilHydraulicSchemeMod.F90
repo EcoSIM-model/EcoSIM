@@ -5,11 +5,14 @@ module SoilHydraulicSchemeMod
   use data_kind_mod, only: r8 => DAT_KIND_R8
   use abortutils, only: endrun,iulog
   use DebugToolMod, only: PrintInfo
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+  use BETResistanceMod, only: BETResistanceParameters
   use EcoSIMCtrlMod, only: soil_hydraulic_scheme,DefaultSoilHydraulicScheme,VanGenuchtenSchemeName
+  use PhysPars, only: soil_bet_c,litter_bet_c
   use EcoSimConst, only: PSIHY
   use SoilPhysDataType, only: FieldCapacity_vr,LOGPOROS_vr,LOGFldCapacity_vr,PSD_vr,FCD_vr, &
-    LOGPSIAtSat,LOGPSIFLD_col,LOGPSIMXD_col,LOGPSIMND_col,SRP_vr
-  use SoilPropertyDataType, only: POROS_vr
+    LOGPSIAtSat,LOGPSIFLD_col,LOGPSIMXD_col,LOGPSIMND_col,SRP_vr,VGThetaR_vr,VGAlpha_vr,VGN_vr,VGL_vr
+  use SoilPropertyDataType, only: POROS_vr,SoilBulkDensity_vr
   use SoilWaterDataType, only: PSI_at_Sautration_vr
   use SoilHydraulicModelMod, only: SoilHydraulicModel,SoilHydraulicParameters
   use EcoSIMSoilHydraulicMod, only: EcoSIMSoilHydraulicModel
@@ -17,6 +20,8 @@ module SoilHydraulicSchemeMod
   implicit none
   private
   class(SoilHydraulicModel), allocatable, target, save :: active_model
+  type(BETResistanceParameters), allocatable, save :: resistance_cache(:,:,:)
+  real(r8), allocatable, save :: resistance_signature(:,:,:,:) ! native input signatures, (20,layer,row,column)
   character(len=32), save :: active_name=''
   integer, save :: active_revision=0
   public :: InitializeSoilHydraulicScheme,FinalizeSoilHydraulicScheme,GetSoilHydraulicModel
@@ -32,6 +37,8 @@ contains
     character(len=*), parameter :: subname='InitializeSoilHydraulicScheme'
 
     call PrintInfo('beg '//subname)
+    if(.not.all(ieee_is_finite([soil_bet_c,litter_bet_c])).or.MIN(soil_bet_c,litter_bet_c)<=1._r8) &
+      call endrun('soil_bet_c and litter_bet_c must be finite and greater than one')
     name=adjustl(soil_hydraulic_scheme)
     do i=1,len_trim(name)
       code=iachar(name(i:i))
@@ -64,6 +71,7 @@ contains
 
     call PrintInfo('beg '//subname)
     if(allocated(active_model))deallocate(active_model)
+    if(allocated(resistance_cache))deallocate(resistance_cache,resistance_signature)
     active_name     = ''
     active_revision = 0
     call PrintInfo('end '//subname)
@@ -109,11 +117,14 @@ contains
   function GetSoilHydraulicParameters(L,NY,NX,saturation_tolerance) result(parameters)
     ! Description:
     ! Copy one layer's existing hydraulic parameters/caches into a scalar view.
-    ! No per-layer polymorphic objects or duplicate persistent arrays are allocated.
+    ! Cache derived resistance anchors per layer without polymorphic layer objects.
     integer, intent(in) :: L       ! vertical layer index, including litter at zero [-]
     integer, intent(in) :: NY,NX   ! row and column indices [-]
     real(r8), intent(in) :: saturation_tolerance ! near-saturation tolerance [m3 m-3]; unused by inverse/auxiliary methods
     type(SoilHydraulicParameters) :: parameters ! one-layer parameter view with units defined by its type
+    class(SoilHydraulicModel), pointer :: model ! borrowed native model for initial anchor derivation
+    real(r8) :: signature(20) ! current native inputs and configurable C [-; mixed units as parameter view]
+    logical :: cache_material ! ordinary soil rather than litter or a pond adapter [-]
     character(len=*), parameter :: subname='GetSoilHydraulicParameters'
 
     call PrintInfo('beg '//subname)
@@ -136,6 +147,37 @@ contains
       row                      = NY,                            &
       column                   = NX                             &
       )
+    ! These are derived caches, rebuilt deterministically after restart. Avoid
+    ! initializing litter, ponds (whose callers can bypass the selected model),
+    ! or incomplete pre-estimator parameter views.
+    cache_material=L>0
+    if(allocated(SoilBulkDensity_vr))cache_material=cache_material.and.SoilBulkDensity_vr(L,NY,NX)>0._r8
+    if(cache_material.and.parameters%porosity>0._r8.and.parameters%field_capacity>0._r8.and. &
+      parameters%log_dry_content_ratio>0._r8.and.parameters%log_dry_potential_ratio>0._r8)then
+      model=>GetSoilHydraulicModel()
+      if(allocated(resistance_cache))then
+        if(any(shape(resistance_cache)/=[ubound(POROS_vr,1),size(POROS_vr,2),size(POROS_vr,3)])) &
+          deallocate(resistance_cache,resistance_signature)
+      endif
+      if(.not.allocated(resistance_cache))then
+        allocate(resistance_cache(1:ubound(POROS_vr,1),size(POROS_vr,2),size(POROS_vr,3)))
+        allocate(resistance_signature(20,1:ubound(POROS_vr,1),size(POROS_vr,2),size(POROS_vr,3)))
+        resistance_signature=0._r8
+      endif
+      signature(17:20)=0._r8
+      if(active_name==VanGenuchtenSchemeName) &
+        signature(17:20)=[VGThetaR_vr(L,NY,NX),VGAlpha_vr(L,NY,NX),VGN_vr(L,NY,NX),VGL_vr(L,NY,NX)]
+      signature(1:16)=[parameters%porosity,parameters%field_capacity,parameters%log_porosity, &
+        parameters%log_field_capacity,parameters%log_wet_content_ratio,parameters%log_dry_content_ratio, &
+        parameters%log_saturation_potential,parameters%log_field_potential,parameters%log_wet_potential_ratio, &
+        parameters%log_dry_potential_ratio,parameters%curvature,parameters%saturation_potential, &
+        parameters%dry_potential,parameters%saturation_tolerance,soil_bet_c,real(active_revision,r8)]
+      if(.not.resistance_cache(L,NY,NX)%ready.or.any(signature/=resistance_signature(:,L,NY,NX)))then
+        resistance_cache(L,NY,NX)=model%resistance_parameters(parameters)
+        resistance_signature(:,L,NY,NX)=signature
+      endif
+      parameters%resistance=resistance_cache(L,NY,NX)
+    endif
     call PrintInfo('end '//subname)
   end function GetSoilHydraulicParameters
 end module SoilHydraulicSchemeMod

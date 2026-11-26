@@ -1,5 +1,6 @@
 set(SOIL_HYDRAULIC_SOURCES
   PorousSurfaceResistanceMod.F90
+  BETResistanceMod.F90
   SoilHydraulicModelMod.F90
   EcoSIMSoilHydraulicMod.F90
   VanGenuchtenSoilHydraulicMod.F90

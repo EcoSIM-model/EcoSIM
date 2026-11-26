@@ -123,7 +123,9 @@ implicit none
 !------------------------------------------------------------------------------------------
   subroutine readplantinginfo(pftinfo_nfid,ntopou,iyear,yearc,NHW,NHE,NVN,NVS)
   !
-  !read planting information
+  ! Description:
+  ! Read planting dates, population and depth, with optional maximum population
+  ! (four fields) or a GROUPX override flag followed by GROUPX (five fields).
   implicit none
   type(file_desc_t), intent(in) :: pftinfo_nfid
   integer, intent(in) :: ntopou
@@ -131,14 +133,18 @@ implicit none
   integer, intent(in) :: yearc    !current model year
   integer, intent(in) :: NHW,NHE,NVN,NVS
   character(len=*), parameter :: subname='readplantinginfo'
-  logical  :: readvar
+  logical  :: readvar,valid_group
   integer  :: NH1,NV1,NH2,NV2,NS
   integer :: NTOPO,NY,NX,NZ,lstr
   type(Var_desc_t) :: vardesc
   character(len=128) :: pft_pltinfo(JP),tstr,date_str
-  integer :: IYR,IDY,ierr
+  integer :: IYR,IDY,ierr,ReadGroupX
+  real(r8) :: Population,PlantingDepth,MaximumPopulation,PlantingGroupX
 
   call PrintInfo('beg '//subname)
+  ! These are source-derived inputs, refreshed with each selected annual record.
+  ! Do not carry a previous year's cultivar override into a legacy/blank record.
+  PlantingGroupX_pft(:,NVN:NVS,NHW:NHE)=-1._r8
   DO NX=NHW,NHE
     DO NY=NVN,NVS
       DO NZ=1,NP_col(NY,NX)
@@ -187,32 +193,59 @@ implicit none
     DO NX=NH1,NH2
       DO NY=NV1,NV2
         DO NZ=1,MIN(NS,NP_col(NY,NX))
-          if(PlantPopuLive_pft(NZ,NY,NX).GT.1.e-2_r8)cycle          
           tstr=pft_pltinfo(NZ)
           if (string_compaction(tstr) .EQ. "") then
             cycle
           endif
 
-          call CheckPlantRecordFields(tstr,3,4,NTOPO,NZ)
+          call CheckPlantRecordFields(tstr,3,5,NTOPO,NZ)
           date_str=''
+          ReadGroupX=0
+          PlantingGroupX=-1._r8
+          MaximumPopulation=0._r8
           select case(count_delimited_items(tstr, ' '))
           case(3)
             lstr=3
-            read(tstr,*,iostat=ierr)date_str,PPI_pft(NZ,NY,NX),PlantinDepz_pft(NZ,NY,NX)
+            read(tstr,*,iostat=ierr)date_str,Population,PlantingDepth
           case(4)
             lstr=4
-            read(tstr,*,iostat=ierr)date_str,PPI_pft(NZ,NY,NX),PlantinDepz_pft(NZ,NY,NX),PPmax_pft(NZ,NY,NX)
+            read(tstr,*,iostat=ierr)date_str,Population,PlantingDepth,MaximumPopulation
+          case(5)
+            lstr=5
+            read(tstr,*,iostat=ierr)date_str,Population,PlantingDepth,ReadGroupX,PlantingGroupX
           case default
             lstr=0
             ierr=1
           end select
           if(ierr/=0)then
             write(iulog,*)'lstr=',lstr
-            call endrun('Invalid planting record (expected DDMMYYYY population depth [maximum population]): '// &
+            call endrun('Invalid planting record (expected DDMMYYYY population depth '// &
+              '[maximum population | GROUPX flag GROUPX]): '// &
               trim(tstr)//' in '//subname,__LINE__)
           endif
-          PlantinDepz_pft(NZ,NY,NX)=AZMAX1(PlantinDepz_pft(NZ,NY,NX),1.e-6_r8)
+          if(ReadGroupX/=0.and.ReadGroupX/=1)then
+            write(iulog,*)'Invalid planting GROUPX flag: topo unit=',NTOPO,' PFT=',NZ,' record=',trim(tstr)
+            call endrun('Planting GROUPX flag must be 0 or 1 in '//subname,__LINE__)
+          endif
+          if(ReadGroupX==1)then
+            valid_group=ieee_is_finite(PlantingGroupX)
+            if(valid_group)valid_group=PlantingGroupX>=0._r8
+            if(.not.valid_group)then
+              write(iulog,*)'Invalid planting GROUPX: topo unit=',NTOPO,' PFT=',NZ,' record=',trim(tstr)
+              call endrun('Planting GROUPX must be finite and nonnegative in '//subname,__LINE__)
+            endif
+          endif
           call ParsePlantEventDate(date_str,yearc,NTOPO,NZ,IDY,IYR)
+
+          IF(iselect_plantZ==-1 .OR. (iselect_plantZ>0 .and. NZ==iselect_plantZ))THEN
+            if(ReadGroupX==1)PlantingGroupX_pft(NZ,NY,NX)=PlantingGroupX
+          ENDIF
+          ! Resolve the year's cultivar even for a surviving stand, without
+          ! replanting it or replacing its existing population/date information.
+          if(PlantPopuLive_pft(NZ,NY,NX).GT.1.e-2_r8)cycle
+          PPI_pft(NZ,NY,NX)=Population
+          PlantinDepz_pft(NZ,NY,NX)=AZMAX1(PlantingDepth,1.e-6_r8)
+          PPmax_pft(NZ,NY,NX)=MaximumPopulation
 
           IF(IDY.GT.0.AND.IYR.GT.0)THEN
             IF(iselect_plantZ==-1 .OR. (iselect_plantZ>0 .and. NZ==iselect_plantZ))THEN
@@ -913,6 +946,10 @@ implicit none
   NonstCMinConc2InitBranch_pft(NZ,NY,NX) = NonstCMinConc2InitBranch_tab(loc)
 
   GROUPX_pft(NZ,NY,NX)                 = GROUPX_tab(loc)
+  ! Apply source management after the trait-table default, before diagnostics
+  ! and ReadPlantProperties derive MatureGroup_pft from the resolved GROUPX.
+  if(PlantingGroupX_pft(NZ,NY,NX)>=0._r8) &
+    GROUPX_pft(NZ,NY,NX)=PlantingGroupX_pft(NZ,NY,NX)
   ShootNodeNumAtPlanting_pft(NZ,NY,NX) = ShootNodeNumAtPlanting_tab(loc)
   CriticPhotoPeriod_pft(NZ,NY,NX)      = CriticPhotoPeriod_tab(loc)
   PhotoPeriodSens_pft(NZ,NY,NX)        = PhotoPeriodSens_tab(loc)

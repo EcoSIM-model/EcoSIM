@@ -106,6 +106,8 @@ implicit none
   real(r8),target,allocatable ::  SineSunInclAnglNxtHour_col(:,:)        !sine of solar angle next hour, [-]
   real(r8),target,allocatable ::  TLEX_col(:,:)                          !total latent heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  TSHX_col(:,:)                          !total sensible heat flux x boundary layer resistance, [MJ m-1]
+  real(r8),target,allocatable ::  TSHXGrnd_col(:,:)                      !previous-hour ground sensible heat flux x boundary layer resistance, [MJ m-1]
+  real(r8),target,allocatable ::  TLEXGrnd_col(:,:)                      !previous-hour ground latent heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  Air_Heat_Latent_store_col(:,:)         !total latent heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  Air_Heat_Sens_store_col(:,:)           !total sensible heat flux x boundary layer resistance, [MJ m-1]
   real(r8),target,allocatable ::  dSensHeatdTKQ_col(:,:)                 !hourly resistance estimate of weighted sensible-heat derivative [MJ m-1 K-1]
@@ -243,6 +245,8 @@ implicit none
   allocate(SineSunInclAnglNxtHour_col(JY,JX));       SineSunInclAnglNxtHour_col=0._r8
   allocate(TLEX_col(JY,JX));        TLEX_col=0._r8
   allocate(TSHX_col(JY,JX));        TSHX_col=0._r8
+  allocate(TSHXGrnd_col(JY,JX));    TSHXGrnd_col=0._r8
+  allocate(TLEXGrnd_col(JY,JX));    TLEXGrnd_col=0._r8
   allocate(Air_Heat_Latent_store_col(JY,JX));        Air_Heat_Latent_store_col=0._r8
   allocate(Air_Heat_Sens_store_col(JY,JX));        Air_Heat_Sens_store_col=0._r8
   allocate(dSensHeatdTKQ_col(JY,JX)); dSensHeatdTKQ_col=0._r8
@@ -354,6 +358,8 @@ implicit none
   call destroy(SineSunInclAnglNxtHour_col)
   call destroy(TLEX_col)
   call destroy(TSHX_col)
+  call destroy(TSHXGrnd_col)
+  call destroy(TLEXGrnd_col)
   call destroy(Air_Heat_Latent_store_col)
   call destroy(Air_Heat_Sens_store_col)
   call destroy(dSensHeatdTKQ_col)

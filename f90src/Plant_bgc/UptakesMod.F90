@@ -2147,7 +2147,15 @@ module UptakesMod
   fTCanopyGroth_pft(NZ) = calc_canopy_grow_tempf(TKGO,CanopyGrowEnergyLow_pft(NZ),CanopyGrowEnergyHigh_pft(NZ))
 
   D100: DO L=NU,MaxNumRootLays
+    if(.not.ieee_is_finite(TKS_vr(L)+TempOffset_pft(NZ)))then
+      write(iulog,*)subname,': nonfinite root temperature NZ,L,TKS,offset=',NZ,L,TKS_vr(L),TempOffset_pft(NZ)
+      call endrun('Root growth requires a finite effective soil temperature',__LINE__)
+    endif
     TKSO                 = real_truncate(TKS_vr(L)+TempOffset_pft(NZ),1.e-3_r8)
+    if(TKSO<=0._r8)then
+      write(iulog,*)subname,': invalid root temperature NZ,L,TKS,offset=',NZ,L,TKS_vr(L),TempOffset_pft(NZ)
+      call endrun('Root growth requires a positive effective soil temperature',__LINE__)
+    endif
     fTgrowRootP_vr(L,NZ) = calc_root_grow_tempf(TKSO,RootGrowEnergyLow_pft(NZ),RootGrowEnergyHigh_pft(NZ))
   ENDDO D100
 

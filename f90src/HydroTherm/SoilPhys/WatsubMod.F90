@@ -132,6 +132,20 @@ module WatsubMod
 
   if(plant_model .and. .not.ldo_radiation_test .and. .not.ATS_cpl_mode)then
     call AdvancePlantHydraulics(yearIJ,NHW,NHE,NVN,NVS)
+    !Same-hour plant coupling of canopy air: the store now holds this hour's canopy
+    !exchange; add the ground's previous-hour exchange and re-diagnose TKQ/VPQ before
+    !the soil substeps, so the ground sees canopy air that reflects the current canopy.
+    !The canopy still exchanges with reference air and the previous hour's ground
+    !longwave. A joint canopy-ground-canopy-air solve would remove the remaining
+    !splitting, but is not used because it would restructure the separate plant and
+    !soil energy solvers and their call order (structural complexity).
+    DO NX=NHW,NHE
+      DO NY=NVN,NVS
+        TSHX_col(NY,NX)=Air_Heat_Sens_store_col(NY,NX)+TSHXGrnd_col(NY,NX)
+        TLEX_col(NY,NX)=Air_Heat_Latent_store_col(NY,NX)+TLEXGrnd_col(NY,NX)
+        call SetCanopyProperty(I,J,NY,NX)
+      ENDDO
+    ENDDO
   endif
 
   call BeginMassCheck(NHW,NHE,NVN,NVS,twatmass0)

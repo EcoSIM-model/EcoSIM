@@ -150,6 +150,8 @@ contains
   use readsmod       , only : clim_var  
   use MicrobeConfigMod,only : ReadMicrobeNamelist
   use SoilHydraulicSchemeMod, only: InitializeSoilHydraulicScheme
+  use SoilPropertyDataType, only: DefaultDMeff,DMeff_initial,DMeff_col
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   use HistFileMod
   implicit none
   character(len=*), parameter :: mod_filename = &
@@ -168,11 +170,13 @@ contains
   character(len=64) :: bgc_fname
   character(len=256):: FireEvents
   real(r8) :: airT_C,Wind_ms,vap_Kpa,Rain_mmhr,SRAD_Wm2,Atm_kPa
+  real(r8) :: soil_evap_dmeff ! temporary uniform column heterogeneity amplitude, normally < 1 [-]
   namelist /ecosim/case_name, prefix, do_regression_test, &
     num_of_simdays,lverbose,num_microbial_guilds,transport_on,column_mode,&
     do_instequil,salt_model, pft_file_in,grid_file_in,pft_mgmt_in, clm_factor_in,&
     clm_hour_file_in,clm_day_file_in,soil_mgmt_in,forc_periods,NCYC_LITR,NCYC_SNOW,&
     NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,use_ecosys_drainage,soil_hydraulic_scheme,&
+    soil_evap_dmeff,&
     clm_hour_file_in,clm_day_file_in,soil_mgmt_in,soil_mgmt_use_model_year,forc_periods,NCYC_LITR,NCYC_SNOW,&
     NPXS,NPYS,continue_run,restart_out,lsoilCompaction,LMacPoreOff,&
     finidat,restartFileFullPath,brnch_retain_casename,plant_model,microbial_model,&
@@ -245,6 +249,7 @@ contains
   LMacPoreOff          = .false.
   use_ecosys_drainage  = .false.
   soil_hydraulic_scheme = DefaultSoilHydraulicScheme
+  soil_evap_dmeff       = DefaultDMeff
   salt_model           = .false.
   laddband             = .false.
   do_regression_test   = .false.
@@ -351,6 +356,10 @@ contains
     clim_var%Atm_kPa   = Atm_kPa
   endif
 
+  if(.not.ieee_is_finite(soil_evap_dmeff))call endrun('soil_evap_dmeff must be finite and nonnegative')
+  if(soil_evap_dmeff<0._r8)call endrun('soil_evap_dmeff must be finite and nonnegative')
+  DMeff_initial=soil_evap_dmeff
+  if(allocated(DMeff_col))DMeff_col=soil_evap_dmeff
   call InitializeSoilHydraulicScheme()
   call ReadMicrobeNamelist(nml_buffer)
 
@@ -706,8 +715,10 @@ end subroutine regressiontest
 !------------------------------------------------------------------------------------------
   subroutine write_modelconfig()
   ! Description:
-  ! Write the selected process controls and soil hydraulic scheme to the run setup file.
+  ! Record process controls, hydraulic scheme and physical BET priors in the setup file.
   use fileUtil, only : getavu, relavu, opnfil
+  use PhysPars, only: soil_bet_c,litter_bet_c
+  use SoilPropertyDataType, only: DMeff_initial,DMeff_col
   use readiMod
   implicit none
   character(len=64) :: fnm_loc
@@ -725,6 +736,10 @@ end subroutine regressiontest
     write(nu_cfg,*)'grid_mode=',GridConectionMode(grid_mode)
     write(nu_cfg,*)'soil_mgmt_use_model_year=',soil_mgmt_use_model_year
     write(nu_cfg,*)'soil_hydraulic_scheme=',trim(soil_hydraulic_scheme)
+    write(nu_cfg,*)'soil_evap_dmeff=',DMeff_initial
+    if(allocated(DMeff_col))write(nu_cfg,*)'DMeff_col range=',MINVAL(DMeff_col),MAXVAL(DMeff_col)
+    write(nu_cfg,*)'soil_bet_c=',soil_bet_c
+    write(nu_cfg,*)'litter_bet_c=',litter_bet_c
     write(nu_cfg,*)'use_ecosys_drainage=',use_ecosys_drainage
     call relavu(nu_cfg)
   endif
