@@ -2463,7 +2463,7 @@ contains
   if(SnowFraction.GT.0._r8)then
     ! Convert column-mean snow depth to covered-patch depth. The exposed
     ! snow film replaces snow-free atmospheric films; subsnow pores remain.
-    SnowResistance = SnowFilmResistance+SnowPoreResistance/SnowFraction
+    SnowResistance    = SnowFilmResistance+SnowPoreResistance/SnowFraction
     GroundConductance = GroundConductance+SnowFraction*(FracAsExposedSoil_col(NY,NX)/SnowResistance &
       +FracEffAsLitR_col(NY,NX)/(SnowResistance+LitterPoreResistance))
     LitterConductance = LitterConductance+SnowFraction/SnowResistance
