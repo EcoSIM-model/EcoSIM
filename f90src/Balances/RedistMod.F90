@@ -241,9 +241,14 @@ module RedistMod
   Eco_Heat_Sens_col(NY,NX)     = Eco_Heat_Sens_col(NY,NX)+HeatSensAir2Surf_col(NY,NX)
   Eco_Heat_GrndSurf_col(NY,NX) = Eco_Heat_GrndSurf_col(NY,NX)-(HeatNet2Surf_col(NY,NX)-HeatSensVapAir2Surf_col(NY,NX))
 
+  !keep the ground part separately for same-hour canopy-air coupling in watsub
+  TLEXGrnd_col(NY,NX) = 0._r8
+  TSHXGrnd_col(NY,NX) = 0._r8
   if(.not.CanopyFreeSurface(NY,NX))then
     Air_Heat_Latent_store_col(NY,NX) = Air_Heat_Latent_store_col(NY,NX)+HeatEvapAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
     Air_Heat_Sens_store_col(NY,NX)   = Air_Heat_Sens_store_col(NY,NX)+HeatSensAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
+    TLEXGrnd_col(NY,NX) = HeatEvapAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
+    TSHXGrnd_col(NY,NX) = HeatSensAir2Surf_col(NY,NX)*RawTAtm2CanopySinkZ_col(NY,NX)
   endif
 
   Eco_NEE_col(NY,NX)               = Canopy_NEE_col(NY,NX)+SurfGasEmiss_all_flx_col(idg_CO2,NY,NX)

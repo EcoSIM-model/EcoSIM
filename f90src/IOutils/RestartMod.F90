@@ -5699,6 +5699,36 @@ implicit none
   end subroutine restartnc_soil_caches
 
 !------------------------------------------------------------------------------------------
+  subroutine restart_col_optional(ncid,flag,name,values,long_name,units,found)
+  ! Description:
+  ! Read or write one column field; on read, report whether the checkpoint has it
+  ! so legacy files can fall back without failing.
+  implicit none
+  type(file_desc_t), intent(inout) :: ncid           !restart file handle
+  character(len=*), intent(in) :: flag,name,long_name,units  !read/write flag, variable name, metadata
+  real(r8), intent(inout) :: values(:,:)              !column field, (NY,NX)
+  logical, intent(out) :: found                        !true when present in the file (always true on write)
+  character(len=*), parameter :: subname='restart_col_optional'
+  real(r8), target :: buffer(bounds%begc:bounds%endc)
+  real(r8), pointer :: data(:)
+  type(var_desc_t) :: vardesc
+  integer :: varid
+
+  associate(NHW => bounds%NHW, NHE => bounds%NHE, NVN => bounds%NVN, NVS => bounds%NVS)
+  call PrintInfo('beg '//subname)
+  found=.true.
+  if(flag=='read')call ncd_inqvid(ncid,name,varid,vardesc,readvar=found)
+  if(found)then
+    if(flag=='write')call cpcol(flag,NHW,NHE,NVN,NVS,values,buffer)
+    data=>buffer
+    call restartvar(ncid,flag,varname=name,dim1name='column',long_name=long_name,units=units, &
+      interpinic_flag='skip',data=data,missing_value=spval,fill_value=spval)
+    if(flag=='read')call cpcol(flag,NHW,NHE,NVN,NVS,values,buffer)
+  endif
+  call PrintInfo('end '//subname)
+  end associate
+  end subroutine restart_col_optional
+!------------------------------------------------------------------------------------------
   subroutine restart_soil_profile_cache(ncid,flag,name,values,long_name,units,complete,dimension_name)
   implicit none
   type(file_desc_t), intent(inout) :: ncid
@@ -5800,6 +5830,7 @@ implicit none
 !
 
   implicit none
+  logical :: found_cac   !optional restart field present, [-]
   character(len=*) , intent(in) :: flag
   type(file_desc_t), intent(inout) :: ncid ! netcdf id
   integer :: NHW,NHE,NVN,NVS
@@ -7442,6 +7473,13 @@ implicit none
        interpinic_flag='skip', data=datpr1, missing_value=spval, &
        fill_value=spval)      
   endif
+
+  !previous-hour ground part of the canopy-air exchange; legacy checkpoints fall
+  !back to the whole store, as the reference code used it
+  call restart_col_optional(ncid,flag,'TSHXGrnd_col',TSHXGrnd_col,'ground sensible heat flux x boundary layer resistance','MJ m-1',found_cac)
+  if(flag=='read'.and..not.found_cac)TSHXGrnd_col=Air_Heat_Sens_store_col
+  call restart_col_optional(ncid,flag,'TLEXGrnd_col',TLEXGrnd_col,'ground latent heat flux x boundary layer resistance','MJ m-1',found_cac)
+  if(flag=='read'.and..not.found_cac)TLEXGrnd_col=Air_Heat_Latent_store_col
 
   ! Preserve the climatological temperature used for atmospheric gas densities.
   ! Legacy checkpoints predate this field; recover the same site-input mean
