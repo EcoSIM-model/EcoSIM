@@ -132,9 +132,15 @@ module WatsubMod
 
   if(plant_model .and. .not.ldo_radiation_test .and. .not.ATS_cpl_mode)then
     call AdvancePlantHydraulics(yearIJ,NHW,NHE,NVN,NVS)
-    !Same-hour plant coupling of canopy air: the store now holds this hour's canopy
-    !exchange; add the ground's previous-hour exchange and re-diagnose TKQ/VPQ before
-    !the soil substeps, so the ground sees canopy air that reflects the current canopy.
+    !Same-hour plant coupling of the ground: plant hydraulics has stored this hour's
+    !canopy exchange and canopy longwave emission, so update what the ground sees
+    !before the soil substeps.
+    !Canopy air: add the ground's previous-hour exchange to the canopy's current-hour
+    !exchange and re-diagnose TKQ/VPQ.
+    !Canopy longwave: use the current-hour emission (LWRadCanG_col) for the ground's
+    !incoming longwave, so the canopy's downward emission and the ground's absorption
+    !fall in the same hour. Hour1 copies the same value into LWRadCanGPrev_col at the
+    !start of the next hour, so no extra restart state is needed.
     !The canopy still exchanges with reference air and the previous hour's ground
     !longwave. A joint canopy-ground-canopy-air solve would remove the remaining
     !splitting, but is not used because it would restructure the separate plant and
@@ -144,6 +150,8 @@ module WatsubMod
         TSHX_col(NY,NX)=Air_Heat_Sens_store_col(NY,NX)+TSHXGrnd_col(NY,NX)
         TLEX_col(NY,NX)=Air_Heat_Latent_store_col(NY,NX)+TLEXGrnd_col(NY,NX)
         call SetCanopyProperty(I,J,NY,NX)
+        LWRadCanGPrev_col(NY,NX)=LWRadCanG_col(NY,NX)
+        call Radiation2Surface(I,J,NY,NX)
       ENDDO
     ENDDO
   endif
