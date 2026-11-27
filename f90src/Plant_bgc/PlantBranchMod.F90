@@ -3178,7 +3178,9 @@ module PlantBranchMod
   subroutine ComputRAutoAfEmergence(I,J,NB,NZ,YCO2Gro_brch,CNLFM,CPLFM,CNSHX,CPSHX,CNLFX,CPLFX,CO2F,&
     CH2O,TFN5,WaterStress4Groth,TurgEff4CanopyResp,ShootStructN_brch,CanopyNonstElm4Gros,CNPG,RMxess_brch,&
     RNonstC4Groth_brch)
-
+  ! Description:
+  ! Fund branch maintenance from potential carbon mobilization after emergence,
+  ! then constrain the remaining growth flux by nutrients and grain filling.
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   real(r8), intent(in) :: YCO2Gro_brch
@@ -3206,6 +3208,7 @@ module PlantBranchMod
   real(r8) :: CNG,CPG,RFN1,RFP1
   character(len=*), parameter :: subname='ComputRAutoAfEmergence'
 ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                          &
     CanopyNonstElms_brch      => plt_biom%CanopyNonstElms_brch       ,& !input  :branch nonstructural element, [g d-2]
     LeafPetoNonstElmConc_brch => plt_biom%LeafPetoNonstElmConc_brch  ,& !input  :branch nonstructural C concentration, [g d-2]
@@ -3226,8 +3229,7 @@ module PlantBranchMod
     CanopyPLimFactor_brch     => plt_bgcr%CanopyPLimFactor_brch       & !output :Canopy P-limitation factor, [0->1] stronger limitation    
   )
 
-  call DebugPrint('beg '//subname//' NZ',NZ)
-  ! N,P CONSTRAINT ON RESPIRATION FROM NON-STRUCTURAL C:N:P
+  ! N,P CONSTRAINT ON GROWTH FROM NON-STRUCTURAL C:N:P
   !
   ! CNPG=N,P constraint on growth respiration
   ! CCPOLB,CZPOLB,CPPOLB=nonstructural C,N,P concn in branch(g g-1)
@@ -3248,19 +3250,19 @@ module PlantBranchMod
   CanopyPLimFactor_brch(NB,NZ)=CPG
 
   !
-  ! RESPIRATION FROM NON-STRUCTURAL C DETERMINED BY TEMPERATURE,
-  ! NON-STRUCTURAL C:N:P
+  ! Potential branch C mobilization for maintenance and growth. Nutrient and
+  ! grain-fill constraints apply only after maintenance has been subtracted.
   !
   ! RCO2NonstC_brch=respiration from non-structural C
   ! VMXC=rate constant for nonstructural C oxidation in respiration (h-1)
   ! CPOOL=non-structural C mass
   ! fTCanopyGroth_pft=temperature function for canopy growth
   ! WaterStress4Groth=growth function of canopy water potential
-  ! CNPG=N,P constraint on respiration
+  ! CNPG=N,P constraint on growth
   ! GrainFillDowreg_brch=termination feedback inhibition on C3 CO2
   !
-  RCO2NonstC_brch=AZMAX1(VMXC*CanopyNonstElms_brch(ielmc,NB,NZ) &
-    *fTCanopyGroth_pft(NZ))*CNPG*GrainFillDowreg_brch(NB,NZ)*WaterStress4Groth
+  RCO2NonstC_brch=AZMAX1(CanopyNonstElms_brch(ielmc,NB,NZ)) &
+    *MIN(1._r8,AZMAX1(VMXC*fTCanopyGroth_pft(NZ)*WaterStress4Groth))
 
   !
   ! MAINTENANCE RESPIRATION FROM TEMPERATURE, PLANT STRUCTURAL N
@@ -3284,19 +3286,19 @@ module PlantBranchMod
 ! IF > 0 DRIVES GROWTH, IF < 0 DRIVES REMOBILIZATION
 !
 ! RCO2X=difference between non-structural C respn and mntc respn
-! RCO2Y=growth respiration unlimited by N,P
+! RCO2Y=growth respiration after nutrient and grain-fill constraints
 ! TurgEff4CanopyResp=expansion,extension function of canopy water potential
 
 !
   RCO2X       = RCO2NonstC_brch-RCO2Maint_brch
-  RCO2Y       = AZMAX1(RCO2X)*TurgEff4CanopyResp  
+  RCO2Y       = AZMAX1(RCO2X)*TurgEff4CanopyResp*CNPG*GrainFillDowreg_brch(NB,NZ)
   RMxess_brch = AZMAX1(-RCO2X)
 
 !
 ! GROWTH RESPIRATION MAY BE LIMITED BY NON-STRUCTURAL N,P
 ! AVAILABLE FOR GROWTH
 !
-! RCO2Y,RgroCO2_ltd=growth respiration unlimited,limited by N,P
+! RCO2Y,RgroCO2_ltd=growth respiration before,after the N/P substrate cap
 ! CNLFX=diff between min and max leaf N prodn vs nonstruct C consumption
 ! CNSHX=N production vs nonstructural C consumption in rest of shoot
 ! ZPOOL,PPOOL=nonstructural N,P mass
@@ -3366,15 +3368,17 @@ module PlantBranchMod
   Eco_AutoR_CumYr_col       = Eco_AutoR_CumYr_col-Rauto_brch
   RCanMaintDef_CO2_pft(NZ)  = RCanMaintDef_CO2_pft(NZ)-RMxess_brch
   
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine ComputRAutoAfEmergence
 
 !----------------------------------------------------------------------------------------------------
   subroutine ComputRAutoB4Emergence(I,J,NB,NZ,TFN6_vr,YCO2Gro_brch,CNLFM,CPLFM,CNSHX,CPSHX,&
     CNLFX,CPLFX,ShootStructN_brch,WaterStress4Groth,TurgEff4CanopyResp,CanopyNonstElm4Gros,CNPG,&
     RMxess_brch,RNonstC4Groth_brch)
-
+  ! Description:
+  ! Fund pre-emergence branch maintenance from potential carbon mobilization,
+  ! retaining oxygen limitation and applying nutrient constraints only to growth.
   implicit none
   integer, intent(in) :: I,J,NB,NZ
   real(r8),intent(in) :: TFN6_vr(JZ1)
@@ -3405,6 +3409,7 @@ module PlantBranchMod
   real(r8) :: RMxess_Ulm,CNG,CPG
   
 ! begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                          &
     LeafPetoNonstElmConc_brch => plt_biom%LeafPetoNonstElmConc_brch  ,& !input  :branch nonstructural C concentration, [g d-2]
     CanopyNonstElms_brch      => plt_biom%CanopyNonstElms_brch       ,& !input  :branch nonstructural element, [g d-2]
@@ -3420,13 +3425,12 @@ module PlantBranchMod
     GrainFillDowreg_brch      => plt_photo%GrainFillDowreg_brch       & !input  :down-regulation of C4 photosynthesis, [-]
   )  
   !
-  ! N,P CONSTRAINT ON RESPIRATION FROM NON-STRUCTURAL C:N:P
+  ! N,P CONSTRAINT ON GROWTH FROM NON-STRUCTURAL C:N:P
   !
   ! CNPG=N,P constraint on growth respiration
   ! CCPOLB,CZPOLB,CPPOLB=nonstructural C,N,P concn in branch
   ! CNKI,CPKI=nonstructural N,P inhibition constant on growth
   !
-  call DebugPrint('beg '//subname//' NZ',NZ)
   IF(LeafPetoNonstElmConc_brch(ielmc,NB,NZ).GT.ZERO)THEN
     CNG=LeafPetoNonstElmConc_brch(ielmn,NB,NZ)/(LeafPetoNonstElmConc_brch(ielmn,NB,NZ) &
       +LeafPetoNonstElmConc_brch(ielmc,NB,NZ)*CNKI)
@@ -3437,20 +3441,20 @@ module PlantBranchMod
     CNPG=1.0_r8
   ENDIF
   !
-  ! RESPIRATION FROM NON-STRUCTURAL C DETERMINED BY TEMPERATURE,
-  ! NON-STRUCTURAL C:N:P, O2 UPTAKE
+  ! Potential branch C mobilization before growth nutrient/grain-fill limits.
+  ! Oxygen still constrains the carbon available for maintenance and growth.
   !
   ! RCO2NonstC_O2ulm,RCO2NonstC_brch=respiration from non-structural C unlimited,limited by O2
   ! VMXC=rate constant for nonstructural C oxidation in respiration (h-1)
   ! CPOOL=non-structural C mass
   ! fTgrowRootP_vr=temperature function for root growth
   ! WaterStress4Groth=growth function of canopy water potential
-  ! CNPG=N,P constraint on respiration
+  ! CNPG=N,P constraint on growth
   ! GrainFillDowreg_brch=termination feedback inhibition on C3 CO2
   ! RAutoRootO2Limter_rpvr=constraint by O2 consumption on all root processes
   !
-  RCO2NonstC_O2ulm=AZMAX1(VMXC*CanopyNonstElms_brch(ielmc,NB,NZ) &
-    *fTgrowRootP_vr(NGTopRootLayer_pft(NZ),NZ))*WaterStress4Groth*CNPG*GrainFillDowreg_brch(NB,NZ)
+  RCO2NonstC_O2ulm=AZMAX1(CanopyNonstElms_brch(ielmc,NB,NZ)) &
+    *MIN(1._r8,AZMAX1(VMXC*fTgrowRootP_vr(NGTopRootLayer_pft(NZ),NZ)*WaterStress4Groth))
 
   RCO2NonstC_brch=RCO2NonstC_O2ulm*RAutoRootO2Limter_rpvr(ipltroot,NGTopRootLayer_pft(NZ),NZ)  
   !
@@ -3474,14 +3478,14 @@ module PlantBranchMod
   ! IF > 0 DRIVES GROWTH, IF < 0 DRIVES REMOBILIZATION
   !
   ! RCO2X_O2ulm,RCO2X_O2ld=diff between C respn unltd,ltd by O2 and mntc respn
-  ! RCO2YM,RCO2Y=growth respiration unltd,ltd by O2 and unlimited by N,P
+  ! RCO2YM,RCO2Y=growth respiration unltd,ltd by O2 after nutrient/grain-fill limits
   ! TurgEff4CanopyResp=expansion,extension function of canopy water potential
   ! RMxess_Ulm,RMxess_brch=excess maintenance respiration unltd,ltd by O2
   !
   RCO2X_O2ulm = RCO2NonstC_O2ulm-RCO2Maint_brch
   RCO2X_O2ld  = RCO2NonstC_brch-RCO2Maint_brch
-  RCO2YM      = AZMAX1(RCO2X_O2ulm)*TurgEff4CanopyResp
-  RCO2Y       = AZMAX1(RCO2X_O2ld)*TurgEff4CanopyResp
+  RCO2YM      = AZMAX1(RCO2X_O2ulm)*TurgEff4CanopyResp*CNPG*GrainFillDowreg_brch(NB,NZ)
+  RCO2Y       = AZMAX1(RCO2X_O2ld)*TurgEff4CanopyResp*CNPG*GrainFillDowreg_brch(NB,NZ)
   RMxess_Ulm  = AZMAX1(-RCO2X_O2ulm)
   RMxess_brch = AZMAX1(-RCO2X_O2ld)
 
@@ -3489,7 +3493,7 @@ module PlantBranchMod
   ! GROWTH RESPIRATION MAY BE LIMITED BY NON-STRUCTURAL N,P
   ! AVAILABLE FOR GROWTH
   !
-  ! RCO2YM,RCO2Y=growth respiration unltd,ltd by O2 and unlimited by N,P
+  ! RCO2YM,RCO2Y=growth respiration before the N/P substrate cap, unltd,ltd by O2
   ! CNLFX=diff between min and max leaf N prodn vs nonstruct C consumption
   ! CNSHX=N production vs nonstructural C consumption in rest of shoot
   ! ZPOOL,PPOOL=nonstructural N,P mass
@@ -3567,8 +3571,8 @@ module PlantBranchMod
   RootCO2EmisPot_pvr(ipltroot,NGTopRootLayer_pft(NZ),NZ) = RootCO2EmisPot_pvr(ipltroot,NGTopRootLayer_pft(NZ),NZ)+Rauto_brch
   RootCO2Autor_pvr(ipltroot,NGTopRootLayer_pft(NZ),NZ)   = RootCO2Autor_pvr(ipltroot,NGTopRootLayer_pft(NZ),NZ)-Rauto_brch
 
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine ComputRAutoB4Emergence
 
 !----------------------------------------------------------------------------------------------------
