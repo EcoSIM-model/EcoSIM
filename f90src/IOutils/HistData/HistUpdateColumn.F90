@@ -258,6 +258,9 @@ contains
       this%h1D_SOIL_H_col(ncol)           = HeatSensAir2Surf_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_SOIL_G_col(ncol)           = -(HeatNet2Surf_col(NY,NX)-HeatSensVapAir2Surf_col(NY,NX))*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_ECO_RN_col(ncol)           = Eco_NetRad_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
+      !radiation leaving the ecosystem, derived from incoming, absorbed and net radiation
+      this%h1D_ECO_SWOUT_col(ncol)        = this%h1D_SOL_RADN_col(ncol)-this%h1D_ECO_RADSW_col(ncol)
+      this%h1D_ECO_LWOUT_col(ncol)        = this%h1D_LWSky_col(ncol)+this%h1D_ECO_RADSW_col(ncol)-this%h1D_ECO_RN_col(ncol)
       this%h1D_ECO_LE_col(ncol)           = Eco_Heat_Latent_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_Eco_HeatSen_col(ncol)      = Eco_Heat_Sens_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)
       this%h1D_ECO_Heat2G_col(ncol)       = Eco_Heat_GrndSurf_col(NY,NX)*MJ2W/AREA_3D(3,NU_col(NY,NX),NY,NX)

@@ -171,6 +171,8 @@ contains
   allocate(this%h1D_trcg_CH4_cumerr_col(beg_col:end_col)); this%h1D_trcg_CH4_cumerr_col(:)=spval
   allocate(this%h1d_CAN_NEE_col(beg_col:end_col))        ; this%h1d_CAN_NEE_col(:)=spval
   allocate(this%h1D_ECO_RADSW_col(beg_col:end_col))       ; this%h1D_ECO_RADSW_col(:)=spval
+  allocate(this%h1D_ECO_SWOUT_col(beg_col:end_col))       ; this%h1D_ECO_SWOUT_col(:)=spval
+  allocate(this%h1D_ECO_LWOUT_col(beg_col:end_col))       ; this%h1D_ECO_LWOUT_col(:)=spval
   allocate(this%h1D_N2O_LITR_col(beg_col:end_col))        ;this%h1D_N2O_LITR_col(:)=spval
   allocate(this%h1D_NH3_LITR_col(beg_col:end_col))        ;this%h1D_NH3_LITR_col(:)=spval
   allocate(this%h1D_SOL_RADN_col(beg_col:end_col))        ;this%h1D_SOL_RADN_col(:)=spval

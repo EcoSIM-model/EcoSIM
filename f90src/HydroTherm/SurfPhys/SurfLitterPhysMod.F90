@@ -159,7 +159,9 @@ implicit none
     !radiation incident on litter layer  
     RadSWByLitR          = (1.0_r8-LitRAlbedo)*RadSW2LitR_col(NY,NX)
     Radt2LitR            = RadSWByLitR+LWRad2LitR_col(NY,NX)
-    Eco_RadSW_col(NY,NX) = Eco_RadSW_col(NY,NX) + RadSWByLitR
+    !RadSW2LitR_col is per litter sub-cycle (scaled by XNPR) and is applied in each of
+    !the NPR sub-cycles of SurfLitterIterationM, so the substep total is NPR times it
+    Eco_RadSW_col(NY,NX) = Eco_RadSW_col(NY,NX) + RadSWByLitR*real(NPR,kind=r8)
     
     CNVR = safe_adb(VaporDiffusivityLitR_col(NY,NX)*FracAirFilledSoilPoreM_vr(M,0,NY,NX)**2*POROQ, &
       POROS_vr(0,NY,NX))

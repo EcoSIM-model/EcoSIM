@@ -25,14 +25,14 @@ ol.flow li{margin:.35em 0}
 </head>
 <body>
 <h1>How Ci is updated in stage 1 and stage 2</h1>
-<p class="meta">Code-based note · 26 November 2026 · Source: EcoSIM working tree at <code>ba408150</code> plus uncommitted edits; line numbers refer to that checkout. Companion to <a href="ci_ca_transpiration_feedback.html">Ci/Ca and transpiration feedback</a>.</p>
+<p class="meta">Code-based note · 26 November 2026, revised with the stage-1 analysis · Source: EcoSIM working tree at <code>ba408150</code> plus uncommitted edits; line numbers refer to that checkout. Companion to <a href="ci_ca_transpiration_feedback.html">Ci/Ca and transpiration feedback</a>.</p>
 
 <div class="note"><strong>Summary.</strong> Stage 1 fixes the internal CO₂ as C<sub>i</sub>* = FCO2 · C<sub>a</sub> and derives stomatal resistance from it. Stage 2 solves a new C<sub>i</sub> on every leaf from a balance between supply (diffusion) and demand (carboxylation). Its leaf resistance is built from the rate at C<sub>i</sub>*, though, so for an unclamped leaf C<sub>i</sub>* is the solution exactly.
 <ul>
 <li><b>C4:</b> water stress and N/P limits scale supply and demand by the same factor, so C<sub>i</sub> departs from C<sub>i</sub>* only when the leaf resistance hits a bound (cuticular at low light, <code>RCMN</code> at high rates).</li>
 <li><b>C3:</b> water stress scales conductance by RS/RSL but carboxylation by √(RS/RSL). C3 C<sub>i</sub> therefore falls below C<sub>i</sub>* under turgor loss; this is the one physiological route by which stage-2 C<sub>i</sub> differs from C<sub>i</sub>*.</li>
 </ul>
-Stage-2 C<sub>i</sub> is only diagnosed (<code>DynCi2CaRatio_pft</code>) and never feeds back to stage 1.</div>
+Stage-2 C<sub>i</sub> is only diagnosed (<code>DynCi2CaRatio_pft</code>) and never feeds back to stage 1. C<sub>i</sub> cannot be solved inside the stage-1 iteration either: conductance is defined from C<sub>i</sub>*, so FCO2 closes the system rather than starting it (section 7).</div>
 
 <h2>1 · Where the two stages sit in the hour</h2>
 <ol class="flow">
@@ -108,15 +108,64 @@ demand = V<sub>0</sub> · W
 <ol>
 <li><b>Make C4 match C3:</b> use √(RS/RSL), or another non-stomatal factor, for C4 mesophyll demand. C4 C<sub>i</sub> would then fall under turgor loss, through hydraulics alone. Check first why C4 uses RS/RSL; this is a design question, not an obvious bug.</li>
 <li><b>Feed back only the physiological δ:</b> update a lagged C<sub>i</sub>/C<sub>a</sub> only from leaves whose RS is not clamped. For C4 this is identically zero today, so it only helps after option 1 or for C3.</li>
-<li><b>Base stage-2 conductance on something other than V(C<sub>i</sub>*)</b>, for example a hydraulically limited conductance from stage 1. The stage-2 C<sub>i</sub> would then carry independent information.</li>
+<li><b>Base stage-2 conductance on something other than V(C<sub>i</sub>*)</b>, for example a hydraulically limited conductance from stage 1. The stage-2 C<sub>i</sub> would then carry independent information. Section 7 develops this as option 2.</li>
 </ol>
 
-<h2>7 · Questions for later</h2>
+<h2>7 · Can Ci be solved in the stage-1 iteration, with FCO2 as the first guess?</h2>
+<p>Short answer: not as stage 1 is built. In stage 1, FCO2 does not start an iteration; it is the equation that fixes stomatal conductance. C<sub>i</sub> can become a solved variable only if conductance gets a closure of its own.</p>
+
+<h3>What the stage-1 iteration solves</h3>
+<ol class="flow">
+<li><b>Before the loop.</b> <code>StomatalDynamics</code> (<a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a>:204) sets C<sub>i</sub>* = FCO2·C<sub>a</sub>, evaluates unstressed canopy A(C<sub>i</sub>*), and sets r<sub>min</sub> = ΔC/A (StomatesMod.F90:277, 1069–1074).</li>
+<li><b>The loop</b> (<code>D4000</code>, UptakesMod.F90:1286–1665) iterates canopy water potential Ψ and canopy temperature T<sub>c</sub>. Each pass:
+  <ul>
+  <li>sets r<sub>s</sub> = r<sub>min</sub> + (r<sub>cut</sub> − r<sub>min</sub>)·exp(−Ψ<sub>turgor</sub>/RCS) (<code>CalcStomataResist4H2O</code>, <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a>:716);</li>
+  <li>computes transpiration and root uptake;</li>
+  <li>closes the water balance (transpiration = uptake + storage change) and the canopy heat budget;</li>
+  <li>updates Ψ with damping (<code>0.5·DPSI</code>).</li>
+  </ul></li>
+<li><b>After convergence.</b> <code>StomatalDynamics</code> runs once more with the updated boundary layer and T<sub>c</sub> (lines 1598, 1652), followed by one more pass.</li>
+</ol>
+<p>C<sub>i</sub> enters the water and energy solution only through r<sub>min</sub>. For a given FCO2 and light, transpiration does not depend on any C<sub>i</sub> diagnosed later.</p>
+
+<h3>Why the solve is underdetermined</h3>
+<div class="eq">
+unknowns: C<sub>i</sub>, g &nbsp;&nbsp;·&nbsp;&nbsp; equation: A(C<sub>i</sub>) = g·(C<sub>a</sub> − C<sub>i</sub>)<br>
+stage 1 defines g = A(C<sub>i</sub>)/(C<sub>a</sub> − C<sub>i</sub>) &nbsp;⇒&nbsp; the equation holds for every C<sub>i</sub>
+</div>
+<p>Substituting r<sub>min</sub> = ΔC(C<sub>i</sub>)/A(C<sub>i</sub>) into the diffusion–demand balance turns it into an identity. An iteration started at FCO2 therefore has nothing to move it: it stays at FCO2, or drifts without a unique answer. Medlyn and Ball–Berry supply the second equation empirically, and optimality models supply it with an objective function. EcoSIM supplies it with the FCO2 parameter.</p>
+
+<h3>Options that respect the design</h3>
+<div class="scroll"><table>
+<thead><tr><th>Option</th><th>Closure for g</th><th>Effect</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><b>1 · Stress-adjusted C<sub>i</sub></b> (FCO2 is the unstressed ratio)</td><td>r<sub>min</sub> from FCO2, then turgor stress</td><td>C<sub>i</sub> &lt; C<sub>i</sub>* under turgor loss, through hydraulics alone. Changes GPP only; water and energy are untouched.</td><td>In place for <b>C3</b> through stage 2 (√s on demand, s on supply). Not for <b>C4</b>, which uses s on both, so C<sub>i</sub> stays at C<sub>i</sub>* (PhotoSynsMod.F90:352, 383).</td></tr>
+<tr><td><b>2 · Solved C<sub>i</sub></b> (FCO2 is only the first guess)</td><td>Hydraulic: the largest g whose transpiration the root–xylem path can supply above a Ψ threshold</td><td>C<sub>i</sub> from A(C<sub>i</sub>) = g·(C<sub>a</sub> − C<sub>i</sub>). Changes transpiration and energy, so it is the only option that could move the summer H bias.</td><td>Not implemented. When soil is wet, supply barely limits g and C<sub>i</sub> heads toward C<sub>a</sub>, so it needs a cap: an anatomical g<sub>max</sub>, which is a new PFT parameter. In effect FCO2 is swapped for g<sub>max</sub>, and FCO2 matters only in hours when water supply limits g.</td></tr>
+</tbody></table></div>
+
+<h3>Numerics are not the obstacle</h3>
+<p>Once g has an independent closure, C<sub>i</sub> comes from a well-posed one-dimensional root find. A(C<sub>i</sub>) rises with C<sub>i</sub> and g·(C<sub>a</sub> − C<sub>i</sub>) falls, so there is exactly one root between the compensation point and C<sub>a</sub>. A bracketed Newton step from FCO2·C<sub>a</sub> converges in a few canopy A evaluations; each one re-runs the leaf loop.</p>
+<p>A concurrent solve is needed only if g depends on C<sub>i</sub> or A. If g comes from Ψ and T<sub>c</sub>, as in option 2, C<sub>i</sub> feeds back to neither water nor energy, so solving C<sub>i</sub> after Ψ and T<sub>c</sub> converge is exact. The current two-stage order already does this.</p>
+
+<div class="note"><strong>Conclusion.</strong> The two-stage scheme is a consistent decoupling, not an approximation of a concurrent solve.
+<ul>
+<li>Stage 1 sets conductance from an FCO2-based ceiling plus hydraulic stress, and closes water and energy.</li>
+<li>Stage 2 diagnoses C<sub>i</sub> and carbon from that conductance.</li>
+</ul>
+Solving C<sub>i</sub>, turgor and T<sub>c</sub> together would be justified only if g depended on carbon, which is the A–g coupling EcoSIM deliberately avoids prescribing. The remaining levers are:
+<ul>
+<li>FCO2 per PFT, which is effectively the unstressed conductance ceiling (FCO2 0.5 lowered maize JJA H bias +32.4 → +27.0 W m⁻² at Ne1);</li>
+<li>C4 stress symmetry;</li>
+<li>a hydraulic g ceiling (option 2).</li>
+</ul></div>
+
+<h2>8 · Questions for later</h2>
 <ul>
 <li>Is the C3/C4 asymmetry in W (√s vs s) deliberate? Check the ecosys history and documentation.</li>
 <li>How large is C3 δ under real turgor loss? Check <code>DynCi2CaRatio_pft</code> for soybean 2022 at Ne1 and at a drought site.</li>
 <li>Does any state change between the last <code>StomatalDynamics</code> call and <code>ComputeGPP</code> (section 4 assumption)?</li>
 <li>Stage 1 applies one ratio to the whole canopy; stage 2 diagnoses per leaf group. Should a dynamic ratio be per PFT or per leaf class?</li>
+<li>For option 2: which Ψ threshold and which g<sub>max</sub> per PFT, and can the hydraulic ceiling be evaluated inside <code>D4000</code> without destabilising its damped Ψ update?</li>
 </ul>
 
 <h2>Source map</h2>
@@ -125,7 +174,7 @@ demand = V<sub>0</sub> · W
 <tbody>
 <tr><td><a href="../f90src/Plant_bgc/StomatesMod.F90">StomatesMod.F90</a></td><td><code>StomatalDynamics</code> (C<sub>a</sub>, C<sub>i</sub>*), <code>PrepPhotosynthesis</code> (ΔC, c<sub>i</sub>*), <code>C3Photosynthesis</code>/<code>C4Photosynthesis</code> (rates at C<sub>i</sub>*), <code>PhotoActivePFT</code> (canopy r<sub>s,min</sub>)</td></tr>
 <tr><td><a href="../f90src/Plant_bgc/PhotoSynsMod.F90">PhotoSynsMod.F90</a></td><td><code>ComputeGPP_C3</code>, <code>ComputeGPP_C4</code>: leaf RS, stress factors, C<sub>i</sub> iteration</td></tr>
-<tr><td><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a></td><td>Stage-1 call sites in the plant water solve</td></tr>
+<tr><td><a href="../f90src/Plant_bgc/UptakesMod.F90">UptakesMod.F90</a></td><td>Stage-1 call sites and the <code>D4000</code> Ψ–T<sub>c</sub> iteration (lines 1286–1665)</td></tr>
 <tr><td><a href="../f90src/Plant_bgc/PlantBranchMod.F90">PlantBranchMod.F90</a></td><td>Stage-2 call (<code>ComputeGPP</code>)</td></tr>
 <tr><td><a href="../f90src/Plant_bgc/PlantBalMod.F90">PlantBalMod.F90</a></td><td><code>DynCi2CaRatio_pft</code> diagnosis</td></tr>
 <tr><td><a href="../f90src/Plant_bgc/GrosubsMod.F90">GrosubsMod.F90</a>, <a href="../f90src/Plant_bgc/PlantMathFuncMod.F90">PlantMathFuncMod.F90</a></td><td><code>Stomata_Stress</code> = exp(−Ψ<sub>turgor</sub>/RCS)</td></tr>

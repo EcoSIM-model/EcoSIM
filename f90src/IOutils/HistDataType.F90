@@ -154,6 +154,8 @@ module HistDataType
   real(r8),pointer   :: h1D_trcg_NH3_cumerr_col(:)
   real(r8),pointer   :: h1D_trcg_H2_cumerr_col(:)
   real(r8),pointer   :: h1D_ECO_RADSW_col(:)
+  real(r8),pointer   :: h1D_ECO_SWOUT_col(:)   !shortwave reflected by the ecosystem, [W m-2]
+  real(r8),pointer   :: h1D_ECO_LWOUT_col(:)   !longwave leaving the ecosystem, [W m-2]
   real(r8),pointer   :: h1d_CAN_NEE_col(:)
   real(r8),pointer   :: h1D_N2O_LITR_col(:)     
   real(r8),pointer   :: h1D_NH3_LITR_col(:)     
