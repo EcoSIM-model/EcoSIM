@@ -52,26 +52,53 @@ def strip_inline_comment(line):
     return line
 
 
+NEW_ITEM = re.compile(r"^\s*([A-Za-z_]\w*(\([^)]*\))?\s*=|[/&])")
+
+
+def assignments(lines, key):
+    """Yield (start, end) line spans of each active assignment of key.
+
+    A value may continue over following lines (e.g. a long hist_fincl1 list);
+    the span runs to the last value line before the next assignment, group
+    end '/' or group start '&'. Comment and blank lines after the value are
+    left outside the span.
+    """
+    for i, line in enumerate(lines):
+        if not (active(line) and re.match(rf"^\s*{key}\s*=", line, re.IGNORECASE)):
+            continue
+        end = i + 1
+        for j in range(i + 1, len(lines)):
+            body = strip_inline_comment(lines[j]).strip()
+            if not active(lines[j]) or not body:
+                continue
+            if NEW_ITEM.match(body):
+                break
+            end = j + 1
+        yield i, end
+
+
 def get_value(text, key):
-    """Last active assignment wins, as in Fortran namelist reads."""
-    val = None
-    for line in text.splitlines():
-        line = strip_inline_comment(line)
-        m = re.match(rf"^\s*{key}\s*=\s*(.*?)\s*$", line, re.IGNORECASE)
-        if m and active(line):
-            val = m.group(1)
+    """Last active assignment wins, as in Fortran namelist reads.
+
+    Continuation lines are joined with a space, which Fortran list-directed
+    input also accepts as a value separator.
+    """
+    lines, val = text.splitlines(), None
+    for start, end in assignments(lines, key):
+        parts = [strip_inline_comment(l).strip() for l in lines[start:end] if active(l)]
+        parts[0] = re.sub(rf"^{key}\s*=\s*", "", parts[0], flags=re.IGNORECASE)
+        val = " ".join(p for p in parts if p)
     return val
 
 
 def set_value(text, key, value, group):
     """Replace every active assignment of key, or insert it at the top of group."""
-    lines, hit = text.splitlines(), False
-    for i, line in enumerate(lines):
-        m = re.match(rf"^(\s*){key}\s*=", line, re.IGNORECASE)
-        if m and active(line):
-            lines[i] = f"{m.group(1)}{key} = {value}"
-            hit = True
-    if not hit:
+    lines = text.splitlines()
+    spans = list(assignments(lines, key))
+    for start, end in reversed(spans):
+        indent = re.match(r"^(\s*)", lines[start]).group(1)
+        lines[start:end] = [f"{indent}{key} = {value}"]
+    if not spans:
         for i, line in enumerate(lines):
             if line.strip().lower() == f"&{group}":
                 lines.insert(i + 1, f"    {key} = {value}")
@@ -221,7 +248,8 @@ def main():
                            ("forc_periods", ",".join(map(str, fp))),
                            ("npxs", ", ".join(map(str, px))), ("npys", ", ".join(map(str, py)))):
             text = set_value(text, key, value, "ecosim")
-        fields = [f for f in (get_value(text, "hist_fincl1") or "").replace("'", "").replace('"', "").split(",") if f.strip()]
+        fields = [a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", get_value(text, "hist_fincl1") or "")]
+        fields = [f.strip() for f in fields if f.strip()]
         fields += [f.strip() for f in args.add_fields.split(",") if f.strip() and f.strip() not in fields]
         if fields:
             text = set_value(text, "hist_fincl1", ",".join(f"'{f}'" for f in fields), "ecosim")
