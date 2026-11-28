@@ -1,3 +1,5 @@
+! Description:
+! Compute canopy and root nodule growth, nitrogen fixation, turnover and exchange.
 module NoduleBGCMod
 
   use data_kind_mod, only: r8 => DAT_KIND_R8
@@ -26,8 +28,9 @@ module NoduleBGCMod
   ![header]
 !----------------------------------------------------------------------------------------------------
   subroutine CanopyNoduleBiochemistry(I,J,NZ,NB,TFN5,WFNG)
-  !
-  !Nodule update for branch NB on pft NZ
+  ! Description:
+  ! Update canopy nodules, funding maintenance before nutrient-limited growth
+  ! and nitrogen fixation while conserving host and nodule C/N/P transfers.
   implicit none
   integer, intent(in) :: I,J,NZ,NB
   real(r8), intent(in) :: TFN5,WFNG
@@ -63,6 +66,7 @@ module NoduleBGCMod
   REAL(R8) :: RCCC,RCCN,RCCP
   integer :: NE
 !     begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                          &
     NU                        => plt_site%NU                         ,& !input  :current soil surface layer number, [-]
     ZERO                      => plt_site%ZERO                       ,& !input  :threshold zero for numerical stability, [-]
@@ -91,7 +95,6 @@ module NoduleBGCMod
     RNFixCO2_pft              => plt_bgcr%RNFixCO2_pft               ,& !inoput :CO2 respired by nodules, [gC d-2]
     CanopyNodulStrutElms_brch => plt_biom%CanopyNodulStrutElms_brch   & !inoput :branch nodule structural element, [g d-2]
   )
-  call PrintInfo('beg '//subname)
 !     iPlantNfixType_pft=N2 fixation: 4,5,6=rapid to slow canopy symbiosis
 !
   
@@ -125,7 +128,7 @@ module NoduleBGCMod
     !     CPOLNB,ZPOLNB,PPOLNB=nonstructural C,N,P in bacteria
     !     NodulNonstElmConc(ielmc),NodulNonstElmConc(ielmn),NodulNonstElmConc(ielmp)=nonstructural C,N,P concn in bacteria
     !     CNKI,CPKI=nonstructural N,P inhibition constant on growth
-    !     FCNPF=N,P constraint to bacterial activity
+    !     FCNPF=N,P constraint to bacterial growth and N2 fixation
     !
     IF(CanopyNodulStrutElms_brch(ielmc,NB,NZ).GT.ZERO4Groth_pft(NZ))THEN
       DO NE=1,NumPlantChemElms
@@ -155,23 +158,23 @@ module NoduleBGCMod
     !MM factor for nodule maintenance respiration
     SPNDLI=NodulNonstElmConc(ielmc)/(NodulNonstElmConc(ielmc)+SPNDLK)
     !
-    !     RESPIRATION FROM NON-STRUCTURAL C DETERMINED BY TEMPERATURE,
-    !     NON-STRUCTURAL C:N:P
+    !     Potential C mobilization for maintenance, growth and N2 fixation.
+    !     Apply the structural N/P factor only after maintenance is funded.
     !
     !     RespNonst_Oltd=respiration from non-structural C
     !     CPOLNB,ZPOLNB,PPOLNB=nonstructural C,N,P in bacteria
     !     VMXO=specific respiration rate by bacterial N2 fixers
     !     WTNDB=bacterial C mass
     !     fTCanopyGroth_pft=temperature function for canopy growth
-    !     FCNPF=N,P constraint to bacterial activity
+    !     FCNPF=N,P constraint to growth and fixation, excluding maintenance
     !     WFNG=growth function of canopy water potential
     !
     !Cap the temperature- and water-adjusted demand against available nonstructural C.
     RespNonst_Oltd=AZMAX1(AMIN1(CanopyNodulNonstElms_brch(ielmc,NB,NZ),&
-      VMXO*CanopyNodulStrutElms_brch(ielmc,NB,NZ)*FCNPF*fTCanopyGroth_pft(NZ)*WFNG))*SPNDLI
+      VMXO*CanopyNodulStrutElms_brch(ielmc,NB,NZ)*fTCanopyGroth_pft(NZ)*WFNG))*SPNDLI
 
     !     CPOOLNX=CanopyNodulNonstElms_brch(ielmc,NB,NZ)
-    !     VMXOX=VMXO*CanopyNodulStrutElms_brch(ielmc,NB,NZ)*FCNPF*fTCanopyGroth_pft(NZ)*WFNG
+    !     VMXOX=VMXO*CanopyNodulStrutElms_brch(ielmc,NB,NZ)*fTCanopyGroth_pft(NZ)*WFNG
     !
     !     NODULE MAINTENANCE RESPIRATION FROM SOIL TEMPERATURE,
     !     NODULE STRUCTURAL N
@@ -187,11 +190,11 @@ module NoduleBGCMod
     !     IF > 0 DRIVES GROWTH, IF < 0 DRIVES REMOBILIZATION
     !
     !     RXNDL=difference between non-structural C respn and mntc respn
-    !     RGNDL=growth respiration unlimited by N,P
+    !     RGNDL=nutrient-limited respiration available for growth and N2 fixation
     !     RSNDL=excess maintenance respiration
     !
     RXNDL=RespNonst_Oltd-Rmaint
-    RGNDL=AZMAX1(RXNDL)
+    RGNDL=AZMAX1(RXNDL)*FCNPF
     RSNDL=AZMAX1(-RXNDL)
     !
     !     NODULE N2 FIXATION FROM GROWTH RESPIRATION, FIXATION ENERGY
@@ -202,7 +205,7 @@ module NoduleBGCMod
     !     WTNDB,WTNDBN=bacterial C,N mass
     !     rNCNodule_pft=bacterial N:C ratio from PFT file
     !     EN2F=N fixation yield from C oxidation (g N g-1 C)
-    !     RGNDL=growth respiration unlimited by N,P
+    !     RGNDL=nutrient-limited respiration available after maintenance
     !     Rauto4Nfix_brch=respiration for N2 fixation
     !     RCanopyN2Fix,CanopyN2Fix_pft=branch,total N2 fixation
     !
@@ -417,12 +420,15 @@ module NoduleBGCMod
       ENDIF
     ENDIF
   ENDIF
-  call PrintInfo('end '//subname)
   end associate
+  call PrintInfo('end '//subname)
   end subroutine CanopyNoduleBiochemistry
 
 !----------------------------------------------------------------------------------------------------
   subroutine RootNodulBiochemistry(I,J,NZ,TFN6_vr)
+  ! Description:
+  ! Update root nodules with maintenance-first carbon funding, oxygen-limited
+  ! growth and fixation, and conservative C/N/P turnover and host exchange.
   implicit none
   integer , intent(in) :: I,J,NZ
   real(r8), intent(in) :: TFN6_vr(JZ1)
@@ -467,6 +473,7 @@ module NoduleBGCMod
   integer  :: NE
   character(len=*), parameter :: subname='RootNodulBiochemistry'
 !     begin_execution
+  call PrintInfo('beg '//subname)
   associate(                                                       &
     NU                      => plt_site%NU                        ,& !input  :current soil surface layer number, [-]
     AREA3                   => plt_site%AREA3                     ,& !input  :soil cross section area (vertical plane defined by its normal direction), [m2]
@@ -500,7 +507,6 @@ module NoduleBGCMod
     RootN2Fix_pvr           => plt_bgcr%RootN2Fix_pvr              & !output :root N2 fixation, [gN d-2 h-1]
   )
 
-  call PrintInfo('beg '//subname)
   !     iPlantNfixType_pft=N2 fixation: 1,2,3=rapid to slow root symbiosis
   !     WTNDL,WTNDLN,WTNDLP=bacterial C,N,P mass
   !     NodulBiomCatInfection=initial bacterial mass at infection
@@ -547,7 +553,7 @@ module NoduleBGCMod
         !
         !     NodulNonstElmConc(ielmc),NodulNonstElmConc(ielmn),NodulNonstElmConc(ielmp)=nonstructural C,N,P concn in bacteria
         !     CNKI,CPKI=nonstructural N,P inhibition constant on growth
-        !     FCNPF=N,P constraint to bacterial activity
+        !     FCNPF=N,P constraint to bacterial growth and N2 fixation
         !
         IF(RootNodulStrutElms_rpvr(ielmc,L,NZ).GT.ZERO4Groth_pft(NZ))THEN
           DO NE=1,NumPlantChemElms
@@ -578,21 +584,21 @@ module NoduleBGCMod
         ENDIF
         SPNDLI=NodulNonstElmConc(ielmc)/(NodulNonstElmConc(ielmc)+SPNDLK)
         !
-        !     RESPIRATION FROM NON-STRUCTURAL C DETERMINED BY TEMPERATURE,
-        !     NON-STRUCTURAL C:N:P
+        !     Potential C mobilization before the growth/fixation N/P factor.
+        !     Carbon supply, temperature, water and oxygen still limit maintenance.
         !
         !     RespNonst_OUltd=respiration from non-structural C unltd by O2
         !     CPOOLN,ZPOOLN,PPOOLN=nonstructural C,N,P in bacteria
         !     VMXO=specific respiration rate by bacterial N2 fixers
         !     WTNDL=bacterial C mass
         !     fTgrowRootP_vr=temperature function for root growth
-        !     FCNPF=N,P constraint to bacterial activity
+        !     FCNPF=N,P constraint to growth and fixation, excluding maintenance
         !     fRootGrowPSISense=growth function of root water potential
 !
         CPOOLNX         = RootNodulNonstElms_rpvr(ielmc,L,NZ)
         !Cap the adjusted demand before applying the physiological oxygen factor below.
         RespNonst_OUltd = AZMAX1(AMIN1(RootNodulNonstElms_rpvr(ielmc,L,NZ) &
-          ,VMXO*RootNodulStrutElms_rpvr(ielmc,L,NZ)*FCNPF*fTgrowRootP_vr(L,NZ) &
+          ,VMXO*RootNodulStrutElms_rpvr(ielmc,L,NZ)*fTgrowRootP_vr(L,NZ) &
           *fRootGrowPSISense_pvr(ipltroot,L,NZ)))*SPNDLI
         !
         !     O2-LIMITED NODULE RESPIRATION FROM 'WFR' IN 'UPTAKE'
@@ -616,13 +622,13 @@ module NoduleBGCMod
         !     IF > 0 DRIVES GROWTH, IF < 0 DRIVES REMOBILIZATION
         !
         !     RXNDLM,RXNDL=difference between non-structural C respn and mntc respn unltd,ltd by O2
-        !     RGNDLM,RGNDL=growth respiration unlimited by N,P and unltd,ltd by O2
+        !     RGNDLM,RGNDL=nutrient-limited growth/fixation respiration, unltd,ltd by O2
         !     RSNDLM,RSNDL=excess maintenance respiration unltd,ltd by O2
         !
         RXNDLM = RespNonst_OUltd-Rmaint
         RXNDL  = RespNonst_Oltd-Rmaint
-        RGNDLM = AZMAX1(RXNDLM)
-        RGNDL  = AZMAX1(RXNDL)     !respiration available for growth and N fixation
+        RGNDLM = AZMAX1(RXNDLM)*FCNPF
+        RGNDL  = AZMAX1(RXNDL)*FCNPF !respiration available for growth and N fixation
         RSNDLM = AZMAX1(-RXNDLM)
         RSNDL  = AZMAX1(-RXNDL)
         !
@@ -634,7 +640,7 @@ module NoduleBGCMod
         !     WTNDL,WTNDLN=bacterial C,N mass
         !     rNCNodule_pft=bacterial N:C ratio from PFT file
         !     EN2F=N fixation yield from C oxidation (g N g-1 C)
-        !     RGNDL=growth respiration unlimited by N,P
+        !     RGNDL=nutrient-limited respiration available after maintenance
         !     Rauto4Nfix_rvr=respiration for N2 fixation
         !     RootN2Fix_pvr,RootN2Fix_pft=layer,total root N2 fixation
         !
@@ -847,11 +853,8 @@ module NoduleBGCMod
     ENDDO D5400
   ENDIF
 
-  call PrintInfo('end '//subname)
-  return
-  call SumRootNoduleBiome(I,J,NZ,RootNoduleElms_end)
-
   end associate
+  call PrintInfo('end '//subname)
   end subroutine RootNodulBiochemistry
 !----------------------------------------------------------------------------------------------------
   subroutine SumRootNoduleBiome(I,J,NZ,RootNoduleElms_pft)

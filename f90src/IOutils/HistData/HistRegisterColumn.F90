@@ -596,6 +596,14 @@ contains
   call hist_addfld1d(fname='ECO_RADSW_col',units='W/m2',avgflag='A',&
     long_name='Shortwave radiation absorbed by the ecosystem',ptr_col=data1d_ptr)
 
+  data1d_ptr => this%h1D_ECO_SWOUT_col(beg_col:end_col)
+  call hist_addfld1d(fname='ECO_SWOUT_col',units='W/m2',avgflag='A',&
+    long_name='Shortwave radiation reflected by the ecosystem (incoming - absorbed)',ptr_col=data1d_ptr)
+
+  data1d_ptr => this%h1D_ECO_LWOUT_col(beg_col:end_col)
+  call hist_addfld1d(fname='ECO_LWOUT_col',units='W/m2',avgflag='A',&
+    long_name='Longwave radiation leaving the ecosystem (sky longwave + absorbed shortwave - net radiation)',ptr_col=data1d_ptr)
+
   data1d_ptr => this%h1D_N2O_LITR_col(beg_col:end_col)
   call hist_addfld1d(fname='N2O_LITR_col',units='g/m3',avgflag='A',&
     long_name='N2O solute concentration in soil micropores',ptr_col=data1d_ptr,default='inactive')

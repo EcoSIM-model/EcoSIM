@@ -58,6 +58,7 @@ implicit none
   public :: UpdateSurfaceGasConductancesM
   public :: StageSurfacePhysModel
   public :: SetCanopyProperty
+  public :: Radiation2Surface
   public :: LocalCopySoilVars
   public :: CorrectSoilSurfaceHeatM
   public :: RunSurfacePhysModelM
